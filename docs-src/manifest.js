@@ -605,6 +605,78 @@ export const CONFIG_SCREENS = [
         roles: "HR User and HR Manager can both fully manage statements, including delete — the one " +
             "screen in this group where HR User isn't more restricted than HR Manager.",
     },
+    {
+        key: "grievance-type",
+        config: "grievanceTypeConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A classification master for employee grievances (e.g. Harassment, Workplace Safety).",
+        when: "Set these up once, before staff start filing grievances, so every grievance can be categorized.",
+        roles: "HR User and HR Manager can fully manage grievance types.",
+    },
+    {
+        key: "employee-grievance",
+        config: "employeeGrievanceConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A filed workplace grievance and its investigation/resolution.",
+        when: "Log a grievance as soon as it's raised, then update its Status as it's investigated and resolved.",
+        gotchas: [
+            "Cause of Grievance becomes required once Status is Investigated or Resolved.",
+            "Resolved By, Resolution Date and Resolution Detail all become required once Status is Resolved.",
+            "\"Grievance Against\" can name a specific employee or just be typed as free text — use whichever fits.",
+        ],
+        roles: "HR User, HR Manager and the Employee role can all fully manage grievances, including delete.",
+    },
+    {
+        key: "employee-transfer",
+        config: "employeeTransferConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Records a department, designation or branch change for an employee, and updates their record immediately.",
+        when: "Create one when an employee moves department, designation or branch within the same company.",
+        gotchas: [
+            "Only Active employees can be transferred.",
+            "Inter-company transfers aren't supported — this only changes department/designation/branch within the same company.",
+            "Applying the change happens immediately on creation and is logged — this record can't be edited afterward, only deleted.",
+        ],
+        roles: "HR Manager can add and delete transfers; HR User can create and view but not edit or delete.",
+    },
+    {
+        key: "employee-promotion",
+        config: "employeePromotionConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Records a department, designation, grade or CTC change for an employee, and updates their record immediately.",
+        when: "Create one when an employee is promoted or given a compensation change.",
+        gotchas: [
+            "Blocked for employees whose status is Inactive.",
+            "Current CTC is fetched automatically from the employee's record if left blank, and is never overwritten once entered.",
+            "Applying the change happens immediately on creation and is logged — this record can't be edited afterward, only deleted.",
+        ],
+        roles: "HR Manager can add and delete promotions; HR User can create and view but not edit or delete.",
+    },
+    {
+        key: "employee-referral",
+        config: "employeeReferralConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "An employee-submitted candidate referral, which can be converted into a real Job Applicant.",
+        when: "Log a referral as soon as an employee submits one.",
+        gotchas: [
+            "Only one referral is allowed per email address at a time.",
+            "\"Create Job Applicant\" turns this referral into a real candidate in the Recruitment pipeline and sets this record to In Process.",
+        ],
+        roles: "HR User and HR Manager can both manage referrals; only HR Manager can delete one.",
+    },
+    {
+        key: "staffing-plan",
+        config: "staffingPlanConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Plans headcount and budget by designation for a company over a date range, and caps how many job openings/offers can be created for that designation while the plan is active.",
+        when: "Set one up before a hiring push, so Recruitment can't accidentally over-hire past what's budgeted.",
+        gotchas: [
+            "Blocks a second active plan for the same company and designation in an overlapping date range.",
+            "Current count, current openings, number of positions and estimated cost are all calculated automatically from real Employee and Job Opening data — don't try to type them in.",
+            "Designation rows are entered by the Designation's id — there's no picker for this field yet.",
+        ],
+        roles: "HR Manager can fully manage staffing plans; HR User can create and edit but not delete.",
+    },
 ];
 
 /**

@@ -3,15 +3,39 @@
  * public-listing slug, server-generated when publish is set. Closing an
  * opening linked to a Job Requisition marks that requisition Filled
  * (application-code side effect, not a docstatus hook — ADR-016).
+ *
+ * Vacancy-cap check against Staffing Plan added by ADR-021 (module 5),
+ * closing OPEN-QUESTIONS.md Q-8: if an active plan covers this designation
+ * + company, a new/reopened Open posting can't push the count past the
+ * plan's numberOfPositions. No plan for that designation+company means no
+ * cap — unchanged from module 3's original behavior.
  */
 import { runListQuery } from "../../utils/listQuery.js";
 import JobOpening from "../../models/JobOpening.js";
 import Company from "../../models/Company.js";
 import JobRequisition from "../../models/JobRequisition.js";
+import { findActivePlanDetail, getDesignationCounts } from "./staffingPlan.controller.js";
 import {
   getReferencingCounts,
   formatReferenceMessage,
 } from "../../utils/referenceHelper.js";
+
+// Source: Job Opening.validate_current_vacancies — current live usage
+// (Active employees + other Open postings for the designation, excluding
+// self) compared against the plan's numberOfPositions (as of that plan's
+// own last save). No plan for this designation+company means no cap.
+const validateVacancyCap = async (doc, excludeSelfId = null) => {
+  if (doc.status !== "Open") return null;
+  const found = await findActivePlanDetail(doc.designationId, doc.companyId, doc.postedOn || new Date());
+  if (!found) return null;
+  const { plan, detail } = found;
+  if (!detail.numberOfPositions) return null;
+  const { employeeCount, jobOpenings } = await getDesignationCounts(doc.designationId, doc.companyId, excludeSelfId);
+  if (employeeCount + jobOpenings >= detail.numberOfPositions) {
+    return `Job Openings for this designation are already open or hiring is complete as per Staffing Plan ${plan._id}`;
+  }
+  return null;
+};
 
 const REQUIRED_FIELDS = ["jobTitle", "designationId", "companyId"];
 const OPTIONAL_FIELDS = [
@@ -61,6 +85,10 @@ export const createJobOpening = async (req, res) => {
     const doc = new JobOpening(pickFields(req.body));
     await ensureRoute(doc);
     await syncRequisitionOnClose(doc, null);
+    const vacancyError = await validateVacancyCap(doc);
+    if (vacancyError) {
+      return res.status(409).json({ isOk: false, status: 409, message: vacancyError });
+    }
     await doc.save();
     return res.status(201).json({ isOk: true, status: 201, message: "Job Opening created successfully" });
   } catch (error) {
@@ -83,6 +111,12 @@ export const updateJobOpening = async (req, res) => {
     Object.assign(doc, pickFields(req.body));
     await ensureRoute(doc);
     await syncRequisitionOnClose(doc, previousStatus);
+    if (doc.status === "Open" && previousStatus !== "Open") {
+      const vacancyError = await validateVacancyCap(doc, doc._id);
+      if (vacancyError) {
+        return res.status(409).json({ isOk: false, status: 409, message: vacancyError });
+      }
+    }
     await doc.save();
     return res.status(200).json({ isOk: true, status: 200, message: "Job Opening updated successfully" });
   } catch (error) {

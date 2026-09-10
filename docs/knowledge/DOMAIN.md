@@ -420,6 +420,38 @@ are gated on the existing "edit" key rather than a stricter HR-Manager-only acti
 restricts some of these to HR Manager alone; here HR User can also call them wherever HR User has
 edit rights on the underlying screen. Recorded here, not silently narrowed to match source exactly.
 
+### Employee Career Events (module 5, built 2026-09-10 — ADR-021)
+
+`GrievanceType` (simple master), `EmployeeGrievance` (subject/raisedBy/status/grievanceType —
+grievance-against is a plain optional Employee ref + free-text fallback, not a generic polymorphic
+reference), `EmployeeTransfer`/`EmployeePromotion` (explicit typed department/designation/branch/
+grade/CTC fields, applied immediately on create — no generic setattr mechanism, no edit-after-create,
+only delete), `EmployeePropertyChange` (the append-only change-log these two write to — replaces
+source's generic `Employee Property History`), `EmployeeReferral` (three source bugs fixed, not
+reproduced: `status` now actually persists instead of force-resetting to Pending every save;
+`departmentId` fetches from the real `referrerId` instead of a nonexistent field; `createAdditionalSalary`
+isn't built at all, Payroll doesn't exist yet), `StaffingPlan`/`StaffingPlanDetail` (embedded array —
+no parent/subsidiary-company validation, this project's `Company` is flat, not a tree; `currentCount`/
+`currentOpenings`/`numberOfPositions`/`totalEstimatedCost` recomputed server-side on every save from
+live `Employee`/`JobOpening` counts).
+
+`Employee` gained two things this module needed: `ctc` (optional number — a plain "current total
+comp" figure, not a Payroll concept; only writable via `EmployeePromotion`'s own controller, not the
+generic Employee edit endpoint) and the `EmployeePropertyChange` back-reference.
+
+**Recruitment retrofit (closes `OPEN-QUESTIONS.md` Q-8)**: `jobOpening.controller.js`/
+`jobOffer.controller.js` (module 3) now check for an active `StaffingPlan` covering their
+designation+company; if one exists and current usage (Active employees + other Open postings for
+that designation) would reach or exceed the plan's `numberOfPositions`, the create is rejected 409.
+No plan for that designation+company means no cap — unchanged from module 3's original behavior.
+Confirmed live: a plan capped at 2 positions allowed a first Open posting, rejected a second, and
+rejected a Job Offer for the same exhausted designation.
+
+**Deferred, out of scope for this module**: inter-company transfer (source's `create_new_employee_id`
+— deep-clones the Employee to a new company, relieves the old one); referral bonus payout
+(`Additional Salary`, Payroll-dependent); source's parent/subsidiary-company Staffing Plan validation
+(no company hierarchy exists to validate against).
+
 ## Not modelled
 
 <!-- Things the client talks about that deliberately have no collection, and why. -->

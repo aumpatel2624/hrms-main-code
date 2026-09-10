@@ -58,6 +58,15 @@ import {
     createFullAndFinalStatement, deleteFullAndFinalStatement, getFullAndFinalStatementById,
     updateFullAndFinalStatement, searchFullAndFinalStatements, markStatementAsPaid,
 } from "../api/onboardingSeparation.api";
+import {
+    createGrievanceType, deleteGrievanceType, getGrievanceTypeById, updateGrievanceType, searchGrievanceTypes, getAllGrievanceTypes,
+    createEmployeeGrievance, deleteEmployeeGrievance, getEmployeeGrievanceById, updateEmployeeGrievance, searchEmployeeGrievances,
+    createEmployeeTransfer, deleteEmployeeTransfer, getEmployeeTransferById, searchEmployeeTransfers,
+    createEmployeePromotion, deleteEmployeePromotion, getEmployeePromotionById, searchEmployeePromotions,
+    createEmployeeReferral, deleteEmployeeReferral, getEmployeeReferralById, updateEmployeeReferral,
+    searchEmployeeReferrals, createJobApplicantFromReferral,
+    createStaffingPlan, deleteStaffingPlan, getStaffingPlanById, updateStaffingPlan, searchStaffingPlans,
+} from "../api/employeeCareerEvents.api";
 import PasswordResetSection from "@/components/crud/password-reset-section";
 import EmailTemplateMergeFields from "@/components/crud/email-template-merge-fields";
 import SimpleArrayField from "@/components/crud/simple-array-field";
@@ -1392,6 +1401,282 @@ export const fullAndFinalStatementConfig = {
     toForm: (data) => ({ ...data, employeeId: refId(data.employeeId) }),
 };
 
+// ---------------------------------------------------------- HRMS module 5 (ADR-021) --
+
+export const grievanceTypeConfig = {
+    filterFields: [
+        { name: "grievanceTypeName", label: "Name", type: "string" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "grievance-type",
+    path: "/grievance-type",
+    section: "Employee Career Events",
+    singular: "Grievance Type",
+    plural: "Grievance Types",
+    api: {
+        search: searchGrievanceTypes, getById: getGrievanceTypeById,
+        create: createGrievanceType, update: updateGrievanceType, remove: deleteGrievanceType,
+    },
+    fields: [
+        { name: "grievanceTypeName", icon: Tag01, label: "Name", type: "text", required: true, section: "details", error: "Name is required!" },
+        { name: "description", label: "Description", type: "textarea", section: "details" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Name", selector: (row) => row.grievanceTypeName, minWidth: "200px" },
+        { name: "Active", selector: (row) => (row.isActive ? "Yes" : "No"), minWidth: "90px" },
+    ],
+    recordTitle: (r) => r.grievanceTypeName,
+};
+
+export const employeeGrievanceConfig = {
+    filterFields: [
+        { name: "raisedByEmployeeId", label: "Raised By", type: "objectId" },
+        { name: "grievanceTypeId", label: "Grievance Type", type: "objectId" },
+        { name: "status", label: "Status", type: "enum" },
+        { name: "date", label: "Date", type: "date" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "employee-grievance",
+    path: "/employee-grievance",
+    section: "Employee Career Events",
+    singular: "Employee Grievance",
+    plural: "Employee Grievances",
+    description: "Cause of Grievance is required once Investigated/Resolved; Resolved By, Resolution Date and Resolution Detail are required once Resolved.",
+    api: {
+        search: searchEmployeeGrievances, getById: getEmployeeGrievanceById,
+        create: createEmployeeGrievance, update: updateEmployeeGrievance, remove: deleteEmployeeGrievance,
+    },
+    lookups: {
+        raisedByEmployeeId: asOptions(getAllEmployees, "employeeName"),
+        grievanceAgainstEmployeeId: asOptions(getAllEmployees, "employeeName"),
+        employeeResponsibleId: asOptions(getAllEmployees, "employeeName"),
+        grievanceTypeId: asOptions(getAllGrievanceTypes, "grievanceTypeName"),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "investigation", title: "Investigation & Resolution" }],
+    fields: [
+        { name: "subject", icon: Type01, label: "Subject", type: "text", required: true, section: "details", error: "Subject is required!" },
+        { name: "raisedByEmployeeId", icon: User01, label: "Raised By", type: "select", required: true, section: "details", error: "Raised By is required!", optionsFrom: "raisedByEmployeeId" },
+        { name: "date", label: "Date", type: "date", required: true, section: "details", error: "Date is required!" },
+        { name: "status", label: "Status", type: "select", options: ["Open", "Investigated", "Resolved", "Invalid", "Cancelled"], default: "Open", section: "details" },
+        { name: "grievanceTypeId", label: "Grievance Type", type: "select", required: true, section: "details", error: "Grievance Type is required!", optionsFrom: "grievanceTypeId" },
+        { name: "grievanceAgainstEmployeeId", label: "Grievance Against (Employee)", type: "select", section: "details", optionsFrom: "grievanceAgainstEmployeeId" },
+        { name: "grievanceAgainstText", label: "Grievance Against (free text, if not a specific employee)", type: "text", section: "details" },
+        { name: "description", label: "Description", type: "textarea", required: true, section: "details", error: "Description is required!" },
+        { name: "causeOfGrievance", label: "Cause of Grievance", type: "textarea", section: "investigation" },
+        { name: "resolvedByUserId", label: "Resolved By (User id)", type: "text", section: "investigation" },
+        { name: "resolutionDate", label: "Resolution Date", type: "date", section: "investigation" },
+        { name: "resolutionDetail", label: "Resolution Detail", type: "textarea", section: "investigation" },
+        { name: "employeeResponsibleId", label: "Employee Responsible", type: "select", section: "investigation", optionsFrom: "employeeResponsibleId" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Subject", selector: (row) => row.subject, minWidth: "200px" },
+        { name: "Status", selector: (row) => row.status, minWidth: "110px" },
+        { name: "Date", selector: (row) => row.date?.slice?.(0, 10) ?? "—", minWidth: "110px" },
+    ],
+    recordTitle: (r) => r.subject,
+    toForm: (data) => ({
+        ...data,
+        raisedByEmployeeId: refId(data.raisedByEmployeeId),
+        grievanceAgainstEmployeeId: refId(data.grievanceAgainstEmployeeId),
+        grievanceTypeId: refId(data.grievanceTypeId),
+        employeeResponsibleId: refId(data.employeeResponsibleId),
+    }),
+};
+
+const PROPERTY_CHANGE_NOTE = "Any changes you set below are applied to the Employee record and logged on creation — this record cannot be edited afterward, only deleted.";
+
+export const employeeTransferConfig = {
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "transferDate", label: "Transfer Date", type: "date" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "employee-transfer",
+    path: "/employee-transfer",
+    section: "Employee Career Events",
+    singular: "Employee Transfer",
+    plural: "Employee Transfers",
+    description: `Only Active employees can be transferred. Same-company only — inter-company transfer is not supported. ${PROPERTY_CHANGE_NOTE}`,
+    api: {
+        search: searchEmployeeTransfers, getById: getEmployeeTransferById,
+        create: createEmployeeTransfer, remove: deleteEmployeeTransfer,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        newDepartmentId: asOptions(getAllDepartments, "departmentName"),
+        newDesignationId: asOptions(getAllDesignations, "designationName"),
+        newBranchId: asOptions(getAllBranches, "branchName"),
+    },
+    fields: [
+        { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
+        { name: "transferDate", label: "Transfer Date", type: "date", required: true, section: "details", error: "Transfer Date is required!" },
+        { name: "newDepartmentId", label: "New Department", type: "select", section: "details", optionsFrom: "newDepartmentId" },
+        { name: "newDesignationId", label: "New Designation", type: "select", section: "details", optionsFrom: "newDesignationId" },
+        { name: "newBranchId", label: "New Branch", type: "select", section: "details", optionsFrom: "newBranchId" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Transfer Date", selector: (row) => row.transferDate?.slice?.(0, 10) ?? "—", minWidth: "130px" },
+    ],
+    recordTitle: (r) => `Transfer — ${r._id}`,
+    toForm: (data) => ({ ...data, employeeId: refId(data.employeeId) }),
+};
+
+export const employeePromotionConfig = {
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "promotionDate", label: "Promotion Date", type: "date" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "employee-promotion",
+    path: "/employee-promotion",
+    section: "Employee Career Events",
+    singular: "Employee Promotion",
+    plural: "Employee Promotions",
+    description: `Blocked for Inactive employees. Current CTC is fetched from the Employee once, and never overwritten by a later fetch once entered. ${PROPERTY_CHANGE_NOTE}`,
+    api: {
+        search: searchEmployeePromotions, getById: getEmployeePromotionById,
+        create: createEmployeePromotion, remove: deleteEmployeePromotion,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        newDepartmentId: asOptions(getAllDepartments, "departmentName"),
+        newDesignationId: asOptions(getAllDesignations, "designationName"),
+        newGradeId: asOptions(getAllEmployeeGrades, "gradeName"),
+    },
+    fields: [
+        { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
+        { name: "promotionDate", label: "Promotion Date", type: "date", required: true, section: "details", error: "Promotion Date is required!" },
+        { name: "newDepartmentId", label: "New Department", type: "select", section: "details", optionsFrom: "newDepartmentId" },
+        { name: "newDesignationId", label: "New Designation", type: "select", section: "details", optionsFrom: "newDesignationId" },
+        { name: "newGradeId", label: "New Grade", type: "select", section: "details", optionsFrom: "newGradeId" },
+        { name: "currentCtc", label: "Current CTC (leave blank to fetch from Employee)", type: "number", section: "details" },
+        { name: "revisedCtc", label: "Revised CTC", type: "number", section: "details" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Promotion Date", selector: (row) => row.promotionDate?.slice?.(0, 10) ?? "—", minWidth: "130px" },
+        { name: "Revised CTC", selector: (row) => row.revisedCtc ?? "—", minWidth: "110px" },
+    ],
+    recordTitle: (r) => `Promotion — ${r._id}`,
+    toForm: (data) => ({ ...data, employeeId: refId(data.employeeId) }),
+};
+
+export const employeeReferralConfig = {
+    filterFields: [
+        { name: "status", label: "Status", type: "enum" },
+        { name: "referrerId", label: "Referrer", type: "objectId" },
+        { name: "forDesignationId", label: "For Designation", type: "objectId" },
+        { name: "date", label: "Date", type: "date" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "employee-referral",
+    path: "/employee-referral",
+    section: "Employee Career Events",
+    singular: "Employee Referral",
+    plural: "Employee Referrals",
+    api: {
+        search: searchEmployeeReferrals, getById: getEmployeeReferralById,
+        create: createEmployeeReferral, update: updateEmployeeReferral, remove: deleteEmployeeReferral,
+    },
+    lookups: {
+        referrerId: asOptions(getAllEmployees, "employeeName"),
+        forDesignationId: asOptions(getAllDesignations, "designationName"),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "actions", title: "Actions" }],
+    fields: [
+        { name: "firstName", icon: User01, label: "First Name", type: "text", required: true, section: "details", error: "First Name is required!" },
+        { name: "lastName", label: "Last Name", type: "text", required: true, section: "details", error: "Last Name is required!" },
+        { name: "email", icon: Mail01, label: "Email", type: "text", required: true, section: "details", error: "Email is required!", validate: (v) => (isValidEmail(v) ? undefined : "Enter a valid email") },
+        { name: "contactNo", icon: Phone, label: "Contact No.", type: "text", section: "details" },
+        { name: "currentEmployer", label: "Current Employer", type: "text", section: "details" },
+        { name: "currentJobTitle", label: "Current Job Title", type: "text", section: "details" },
+        { name: "date", label: "Date", type: "date", required: true, section: "details", error: "Date is required!" },
+        { name: "status", label: "Status", type: "select", options: ["Pending", "In Process", "Accepted", "Rejected", "Cancelled"], default: "Pending", section: "details" },
+        { name: "forDesignationId", label: "For Designation", type: "select", required: true, section: "details", error: "Designation is required!", optionsFrom: "forDesignationId" },
+        { name: "referrerId", label: "Referrer", type: "select", required: true, section: "details", error: "Referrer is required!", optionsFrom: "referrerId" },
+        { name: "resumeLink", label: "Resume Link", type: "text", section: "details" },
+        { name: "workReferences", label: "Work References", type: "textarea", section: "details" },
+        { name: "qualificationReason", label: "Why is this candidate qualified?", type: "textarea", section: "details" },
+        { name: "isApplicableForReferralBonus", label: "Applicable for Referral Bonus", type: "checkbox", default: true, section: "details" },
+        ACTIVE,
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        mode === "edit" && id && (
+            <SimpleActionButton
+                label="Create Job Applicant" description={`Status: ${values.status ?? "Pending"}. Creates a real Job Applicant from this referral and sets this record to In Process.`}
+                onRun={() => createJobApplicantFromReferral(id)}
+                onResult={() => window.location.reload()}
+            />
+        )
+    ),
+    columns: [
+        { name: "Name", selector: (row) => row.fullName ?? `${row.firstName} ${row.lastName}`, minWidth: "170px" },
+        { name: "Status", selector: (row) => row.status, minWidth: "110px" },
+        { name: "Email", selector: (row) => row.email, minWidth: "180px" },
+    ],
+    recordTitle: (r) => r.fullName ?? `${r.firstName} ${r.lastName}`,
+    toForm: (data) => ({ ...data, referrerId: refId(data.referrerId), forDesignationId: refId(data.forDesignationId) }),
+};
+
+const STAFFING_DETAIL_COLUMNS = [
+    { name: "designationId", label: "Designation (id)", type: "text" },
+    { name: "vacancies", label: "Vacancies", type: "number" },
+    { name: "estimatedCostPerPosition", label: "Est. Cost / Position", type: "number" },
+];
+
+export const staffingPlanConfig = {
+    filterFields: [
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "departmentId", label: "Department", type: "objectId" },
+        { name: "fromDate", label: "From Date", type: "date" },
+        { name: "toDate", label: "To Date", type: "date" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "staffing-plan",
+    path: "/staffing-plan",
+    section: "Employee Career Events",
+    singular: "Staffing Plan",
+    plural: "Staffing Plans",
+    description: "Blocks a second active plan for the same company + designation in an overlapping date range. Designation rows use the Designation's id (no company-hierarchy validation — this project's companies are a flat list, not a tree, per ADR-021).",
+    api: {
+        search: searchStaffingPlans, getById: getStaffingPlanById,
+        create: createStaffingPlan, update: updateStaffingPlan, remove: deleteStaffingPlan,
+    },
+    lookups: {
+        companyId: asOptions(getAllCompanies, "companyName"),
+        departmentId: asOptions(getAllDepartments, "departmentName"),
+    },
+    fields: [
+        { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "details", error: "Company is required!", optionsFrom: "companyId" },
+        { name: "departmentId", label: "Department", type: "select", section: "details", optionsFrom: "departmentId" },
+        { name: "fromDate", label: "From Date", type: "date", required: true, section: "details", error: "From Date is required!" },
+        { name: "toDate", label: "To Date", type: "date", required: true, section: "details", error: "To Date is required!" },
+        ACTIVE,
+    ],
+    renderExtra: ({ values, setValues }) => (
+        <SimpleArrayField
+            title="Staffing Details" description={`Total estimated budget: ${values.totalEstimatedBudget ?? 0}. Paste a Designation's id into each row — current count/openings/positions/cost are computed on save.`}
+            fieldName="staffingDetails" columns={STAFFING_DETAIL_COLUMNS} values={values} setValues={setValues}
+        />
+    ),
+    columns: [
+        { name: "From", selector: (row) => row.fromDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
+        { name: "To", selector: (row) => row.toDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
+        { name: "Budget", selector: (row) => row.totalEstimatedBudget ?? 0, minWidth: "110px" },
+    ],
+    recordTitle: (r) => `Staffing Plan — ${r._id}`,
+    toForm: (data) => ({ ...data, companyId: refId(data.companyId), departmentId: refId(data.departmentId) }),
+};
+
 export const ADVANCED_ENTITIES = [
     adminUserConfig, userConfig, menuMasterConfig, emailTemplateConfig,
     departmentConfig, branchConfig, designationConfig, employeeConfig,
@@ -1401,4 +1686,6 @@ export const ADVANCED_ENTITIES = [
     employeeOnboardingTemplateConfig, employeeOnboardingConfig,
     employeeSeparationTemplateConfig, employeeSeparationConfig,
     exitInterviewConfig, fullAndFinalStatementConfig,
+    grievanceTypeConfig, employeeGrievanceConfig, employeeTransferConfig,
+    employeePromotionConfig, employeeReferralConfig, staffingPlanConfig,
 ];

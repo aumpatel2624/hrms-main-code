@@ -129,6 +129,15 @@ const EmployeeSchema = new mongoose.Schema(
       trim: true,
       required: false,
     },
+    // Plain "current total comp" figure (ADR-021) — Payroll's real Salary
+    // Structure is modules away; Employee Promotion needs somewhere to
+    // read/write this today. Revisit when Payroll exists.
+    ctc: {
+      type: Number,
+      required: false,
+      default: null,
+      min: 0,
+    },
     // Set when this Employee originated from a hired candidate (ADR-019,
     // Recruitment module). Drives the reverse hook in
     // employee.controller.js's create path: flips the linked JobApplicant

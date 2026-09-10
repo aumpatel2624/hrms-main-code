@@ -159,6 +159,42 @@ export const ENDPOINTS = {
         MARK_AS_PAID: (id) => `${V1}/full-and-final-statements/${id}/mark-as-paid`,
     },
 
+    // HRMS module 5 (ADR-021)
+    GRIEVANCE_TYPES: {
+        BASE: `${V1}/grievance-types`,
+        BY_ID: (id) => `${V1}/grievance-types/${id}`,
+        SEARCH: `${V1}/grievance-types/search`,
+    },
+    EMPLOYEE_GRIEVANCES: {
+        BASE: `${V1}/employee-grievances`,
+        BY_ID: (id) => `${V1}/employee-grievances/${id}`,
+        SEARCH: `${V1}/employee-grievances/search`,
+    },
+    EMPLOYEE_TRANSFERS: {
+        BASE: `${V1}/employee-transfers`,
+        BY_ID: (id) => `${V1}/employee-transfers/${id}`,
+        SEARCH: `${V1}/employee-transfers/search`,
+    },
+    EMPLOYEE_PROMOTIONS: {
+        BASE: `${V1}/employee-promotions`,
+        BY_ID: (id) => `${V1}/employee-promotions/${id}`,
+        SEARCH: `${V1}/employee-promotions/search`,
+    },
+    EMPLOYEE_PROPERTY_CHANGES: {
+        SEARCH: `${V1}/employee-property-changes/search`,
+    },
+    EMPLOYEE_REFERRALS: {
+        BASE: `${V1}/employee-referrals`,
+        BY_ID: (id) => `${V1}/employee-referrals/${id}`,
+        SEARCH: `${V1}/employee-referrals/search`,
+        CREATE_JOB_APPLICANT: (id) => `${V1}/employee-referrals/${id}/create-job-applicant`,
+    },
+    STAFFING_PLANS: {
+        BASE: `${V1}/staffing-plans`,
+        BY_ID: (id) => `${V1}/staffing-plans/${id}`,
+        SEARCH: `${V1}/staffing-plans/search`,
+    },
+
     // User endpoints
     USERS: {
         BASE: `${V1}/users`,

@@ -279,3 +279,39 @@ Department Approver (originally sketched for module 2) do not belong here either
       to every current and future embedded-array model in this project, not just this module's
 - [ ] Client-facing documentation screenshots actually captured (`npm run docs`) — same gap modules
       1-3 left; manifest entries exist (6 new screens) for a future run to pick up
+
+## Employee Career Events (module 5, ADR-021)
+
+- [x] `npm test` green (10/10) throughout
+- [x] `npm run seed` idempotent ×2 (5 Grievance Types both times; 13 role-matrix grants added once,
+      0 on rerun)
+- [x] `npm run build` green
+- [x] Full live-HTTP walk against the real dev database: Employee Transfer applied a department
+      change to a real seeded employee immediately, one `EmployeePropertyChange` row logged with
+      correct old/new values → Employee Promotion applied a revised CTC to `Employee.ctc`,
+      Inactive-employee guard confirmed (400, named the employee) → Employee Referral duplicate-email
+      guard confirmed (409), `departmentId` confirmed correctly fetched from the referrer (the
+      source-bug fix) → `createJobApplicant` produced a real `JobApplicant` with the "Referral"
+      source and flipped the referral to In Process → Employee Grievance's two conditional-required
+      guards confirmed (400 both: Cause of Grievance when Investigated/Resolved, resolution fields
+      when Resolved) → Staffing Plan's computed fields verified against live Employee/JobOpening
+      counts (`currentCount`/`numberOfPositions` correct), overlap guard confirmed (409) →
+      **the Recruitment retrofit confirmed end to end**: a 2-position-capped Staffing Plan allowed a
+      first Open Job Opening, rejected a second (409, cited the plan), and rejected a Job Offer for
+      the same exhausted designation (409) → role-permission checks confirmed live with throwaway
+      accounts (HR User: 201 creating a Transfer, 403 deleting it; Employee role: 201 creating a
+      Grievance, 403 writing a Referral) → all throwaway data (Transfers/Promotions/Grievances/
+      Referrals/Staffing Plans/Job Openings/Job Applicants, plus a throwaway country/state/city/HR
+      User/Employee-role account, same starter-generic-`User` caveat as modules 3-4) cleaned up,
+      employee count confirmed back to 195, the transferred employee's department restored
+- [x] Three deviations found while building, recorded in `DECISIONS.md` ADR-021's As-built note:
+      `EmployeeReferral.email` uniqueness couldn't be scoped to non-Cancelled rows at the index level
+      (MongoDB partial indexes don't support `$ne`), fell back to a global unique index plus the
+      controller's own duplicate check; `widgetSources.js`'s `aggregatable` shape corrected from an
+      object to a plain label string after checking the actual UI consumer, not just the doc comment;
+      `Employee.ctc` is only writable via `EmployeePromotion`, not the generic Employee edit endpoint
+      (module 2's controller predates the field)
+- [ ] Client-facing documentation screenshots actually captured (`npm run docs`) — same gap modules
+      1-4 left; manifest entries exist (6 new screens) for a future run to pick up
+- [ ] Found, not fixed (pre-existing, unrelated): `POST /cities` leaks a raw Mongoose validation
+      message on a 500 instead of the generic error — the starter's own City controller, not HRMS

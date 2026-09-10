@@ -242,6 +242,56 @@ export const ENDPOINTS = {
         SEARCH: `${V1}/travel-requests/search`,
     },
 
+    // HRMS module 8 foundation (ADR-024) — LeaveAdjustment/CompensatoryLeaveRequest/
+    // LeaveApplication/LeaveEncashment/LeaveBlockList are the second fork's work.
+    LEAVE_TYPES: {
+        BASE: `${V1}/leave-types`,
+        BY_ID: (id) => `${V1}/leave-types/${id}`,
+        SEARCH: `${V1}/leave-types/search`,
+    },
+    LEAVE_PERIODS: {
+        BASE: `${V1}/leave-periods`,
+        BY_ID: (id) => `${V1}/leave-periods/${id}`,
+        SEARCH: `${V1}/leave-periods/search`,
+    },
+    HOLIDAY_LISTS: {
+        BASE: `${V1}/holiday-lists`,
+        BY_ID: (id) => `${V1}/holiday-lists/${id}`,
+        SEARCH: `${V1}/holiday-lists/search`,
+    },
+    HOLIDAY_LIST_ASSIGNMENTS: {
+        BASE: `${V1}/holiday-list-assignments`,
+        BY_ID: (id) => `${V1}/holiday-list-assignments/${id}`,
+        SEARCH: `${V1}/holiday-list-assignments/search`,
+    },
+    LEAVE_POLICIES: {
+        BASE: `${V1}/leave-policies`,
+        BY_ID: (id) => `${V1}/leave-policies/${id}`,
+        SEARCH: `${V1}/leave-policies/search`,
+    },
+    LEAVE_POLICY_ASSIGNMENTS: {
+        BASE: `${V1}/leave-policy-assignments`,
+        BY_ID: (id) => `${V1}/leave-policy-assignments/${id}`,
+        SEARCH: `${V1}/leave-policy-assignments/search`,
+        GRANT_ALLOCATIONS: (id) => `${V1}/leave-policy-assignments/${id}/grant-allocations`,
+    },
+    LEAVE_ALLOCATIONS: {
+        BASE: `${V1}/leave-allocations`,
+        BY_ID: (id) => `${V1}/leave-allocations/${id}`,
+        SEARCH: `${V1}/leave-allocations/search`,
+        ADJUST: (id) => `${V1}/leave-allocations/${id}/adjust`,
+    },
+    LEAVE_LEDGER_ENTRIES: {
+        BY_ID: (id) => `${V1}/leave-ledger-entries/${id}`,
+        SEARCH: `${V1}/leave-ledger-entries/search`,
+    },
+    LEAVE_BALANCE: `${V1}/leave-balance`,
+    ATTENDANCES: {
+        BASE: `${V1}/attendances`,
+        BY_ID: (id) => `${V1}/attendances/${id}`,
+        SEARCH: `${V1}/attendances/search`,
+    },
+
     // User endpoints
     USERS: {
         BASE: `${V1}/users`,

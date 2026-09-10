@@ -2351,4 +2351,138 @@ Copy this block. Number sequentially.
     exercised against the real seeded Apidel department hierarchy as well as synthetic fixtures. Full
     browser UI click-through was not performed (Playwright's browser binary could not be downloaded in
     this sandbox) — relied on a clean Vite build plus manual config review instead.
+- **As built (module complete)** — `LeaveAdjustment`, `CompensatoryLeaveRequest`, `LeaveApplication`,
+  `LeaveEncashment`, `LeaveBlockList` (+`blockDates[]`/`allowList[]`), the two Leave Control Panel
+  bulk-action endpoints, and `generateLeaveEncashments` all built on `feat/leaves-transactions`. Model,
+  controller (grouped in a sibling `leavesTransactions.controller.js`/`.routes.js` rather than growing
+  the foundation's `leaves.controller.js` further — same "large module, own file" precedent as
+  `travel.controller.js`), swagger, admin API client, entity-config screen (custom page only for Leave
+  Control Panel, matching source's stateless-Single shape), `widgetSources.js` entry and `docs-src/
+  manifest.js` entry for every one of the five. This closes the module — `STATE.md`'s Leaves row moves
+  to `done` across every phase except Shipped.
+  - **The Q-4 scoping judgment call, now that Leave Application exists to make it meaningful**:
+    `Employee` and the pre-existing-but-until-now-ungranted `Leave Approver` role both get
+    `dataScope: SCOPES.APPROVER` on `/leave-application` (and `Employee` alone on
+    `/compensatory-leave-request`) — one scope value covers both "my own records" and "my own plus
+    everyone I approve for" instead of introducing a separate plain-`own` case, because
+    `buildScopeFilter`'s `own` dimension compares against the login `User`'s own id (`reqUser.id`),
+    which is NOT what `LeaveApplication.employeeId` stores (`Employee._id`) — `approver` was already
+    built to read `reqUser.employeeId` instead (`utils/requestEmployee.js`), which is the one that
+    resolves correctly here. For a plain Employee, `getEmployeesApprovedBy` returns `[]`, so the filter
+    degenerates to exactly "my own applications" — verified live, not just reasoned about (see Verified
+    live below). `HR User`/`HR Manager` stay unscoped (`all`, the role-level default — no per-menu-row
+    override needed).
+  - **Block-date enforcement is a hard block at CREATE, not only at approve** — a deliberate choice
+    where the task brief's own distillation and this ADR's design both left room to interpret source's
+    `validate_block_days()` (which only blocks when transitioning to `status=="Approved"`) literally.
+    Blocking at create instead means an employee can never even file a leave application for a blocked
+    date unless they're on that block list's `allowList[]` — stricter than source, but simpler to
+    reason about given this project's create-is-mostly-the-action shape, and the allow-list bypass
+    still gives HR/approvers an escape hatch. Recorded as a deviation, not silently matched to source.
+  - **`LeaveBlockList.allowList[]` is a single `allowUserId` ref**, not the role-or-user shape a
+    summary of the task implied — the real port-spec file (`Leave Block List Allow.md`) documents only
+    one field, `allow_user` (Link to User), no role option. Ground truth is the spec file, read
+    directly, not a paraphrase of it.
+  - **`LeaveBlockList.departmentId` is a field on the block list itself, not a `Department.
+    leaveBlockList` single-FK the way source models it** — this project's precedent for "X applies to
+    department Y" is an assignment-shaped collection (`HolidayListAssignment`), not a single link field
+    on `Department`, so `LeaveBlockList` follows that same shape: one company/department/leave-type
+    combination per document, multiple block lists may legitimately target the same department. A
+    deliberate simplification, not an oversight.
+  - **`LeaveEncashment.perDayEncashmentAmount` is a manually-entered field**, matching Travel's
+    `expenseType`/Interview Type's `expectedSkillSet` forward-dependency-gap precedent — source derives
+    it from `Salary Structure Assignment.leave_encashment_amount_per_day`, and Payroll doesn't exist in
+    this project yet (module 11+). Recorded as an `OPEN-QUESTIONS.md` row (Q-14) for the eventual
+    retrofit. The negative ledger debit is written at CREATE (not at `/mark-paid`) — source's own
+    `create_leave_ledger_entry()` runs at `on_submit`, and this project folds "submit" into "create" for
+    every doctype simple enough not to need a separate draft stage (the same call already made for
+    `LeaveAdjustment`) — `LeaveEncashment`'s Draft/Unpaid/Paid lifecycle collapses to
+    pending/paid, with the ledger debit happening once, at creation, not re-derived at mark-paid.
+  - **`LeaveApplication`'s validation chain is an idiomatic rebuild of the task's own distilled list**,
+    not source's full ~19-step chain (ADR-016 precedent, same as the foundation half's pro-ration
+    math): active-employee, half-day date sanity (in-range, not itself a holiday), balance sufficiency
+    via `getLeaveBalance` with the `allowNegative` override, overlap with the half-day-adjacency
+    carve-out, max-consecutive-days (one-hop adjacency merge, not source's full recursive chain walk —
+    documented in code, a real simplification), block-date enforcement, `applicableAfter` vs. joining
+    date, `isOptionalLeave` against the covering Leave Period's optional Holiday List. Approve splits
+    the ledger debit across an allocation boundary when the application's range crosses one; when the
+    two allocations aren't back-to-back (a gap between them), this port posts what each allocation
+    actually covers rather than throwing source's hard "non-consecutive allocations" error — blocking
+    approval entirely over a date-range gap seemed worse than posting the two partial entries. Cancel
+    reverses via soft-delete (ADR-024's own reversal rule) of both the `LeaveLedgerEntry` rows and the
+    `Attendance` rows the approval created.
+  - **`CompensatoryLeaveRequest` approve's missing-Attendance case is a hard block, not an auto-create**
+    (the task's own named judgment call) — this project has no Attendance data populated by anything
+    yet, and silently fabricating a Present record to let approval through would mask that gap rather
+    than surface it. The error names which day(s) are missing.
+  - **Two real pre-existing bugs found live-testing this work, filed and fixed**:
+    - **#12** — `utils/scope.js`'s `buildScopeFilter` `APPROVER` branch returned `{ $in: [] }`
+      (matches nothing) as soon as `reqUser.employeeId` was missing, WITHOUT ever consulting
+      `scopeable.approverIds` — meaning a Leave Approver with no Employee record of their own (a real,
+      expected case, Q-10) always saw zero rows regardless of who they actually approve for. This was
+      the foundation half's own code, built for this exact scope value, but never exercised live until
+      this module wired it onto a real screen. Fixed to build the `$in` list from whichever of
+      `employeeId`/`approverIds` are present, falling through to "matches nothing" only when both are
+      empty. Regression case added to `utils/scope.test.js` (wired into `npm test`).
+    - **#13** — `leaves.controller.js`'s `getLeaveAllocationById` (foundation half) unconditionally
+      500'd: it `.populate()`s `employeeId`/`leaveTypeId` and THEN passes the now-populated
+      sub-documents into `getLeaveBalance`, whose `new mongoose.Types.ObjectId(String(...))` throws on
+      anything that isn't already a hex string. Fixed to compute the balance from the raw ids first,
+      populate only afterward for display. The exact same trap existed in this fork's own brand-new
+      `getLeaveApplicationById` — caught and fixed in the same pass before it ever shipped, no separate
+      issue needed for that one.
+    - **#11** (not a data bug, a UI gap) — `CrudForm` only guarded the **add** path against a missing
+      permission; a direct URL visit to `/:path/:id/edit` reached the full edit form regardless of the
+      `edit` permission, and for any entity config with no `api.update` (this fork's own
+      `LeaveEncashment`/`LeaveAdjustment`, and the pre-existing `trainingFeedbackConfig`), clicking Save
+      threw a raw `TypeError` instead of a permission message. Added the matching edit-mode guard, plus
+      a defense-in-depth `updateLeaveEncashment` endpoint that always 400s cleanly (`LeaveEncashment`
+      needs `edit` permission granted for its own `/mark-paid` action, which makes the generic edit form
+      reachable even though there's deliberately no real update path).
+  - **Verified live**: `npm test` green (new pure-logic tests for `leaveDayCalculation.js` and
+    `leaveBlockList.js`'s `listApplies`, plus the `scope.test.js` regression case for issue #12), `npm
+    run seed` twice (idempotent — 0 new grants and 195 employees both times), `npm run build` green. A
+    full HTTP walk against the real running server, logged in as `admin@example.com` plus three
+    throwaway Users (an `Employee`-role and two `Leave Approver`-role accounts, all deleted afterward):
+    `LeaveApplication` create → balance-sufficiency confirmed against a real `grant-allocations` output
+    (6 days pro-rated for a real mid-year joiner), overlap rejection, self-approval rejection (a
+    dedicated fixture where the employee's own resolved approver pointed at their own linked account),
+    max-consecutive-days rejection (5+6=11 > a 10-day cap), block-date rejection AND its allow-list
+    bypass (same date, same employee, succeeds only for the allow-listed user) — approve → `Attendance`
+    rows created (`On Leave`, correctly linked back) and the ledger entry written (`-2`, matching the
+    `+6` allocation grant) — reject on a second application → zero `Attendance`/ledger rows, confirmed
+    by an empty search result — cancel the approved one → ledger entry soft-deleted and `Attendance`
+    rows soft-deleted, balance verified back at its pre-approval value via `getLeaveBalance`. The Q-4
+    scoping confirmed from both directions over real HTTP: the `Employee` account's `/leave-applications/
+    search` returned only their own row; the `Leave Approver` account (deliberately given NO linked
+    Employee, to hit issue #12's exact shape) returned exactly the one application they're the resolved
+    approver for and nothing else, both before (empty, the bug) and after (correct) the fix.
+    `CompensatoryLeaveRequest` approve confirmed against a real constructed Holiday List +
+    `HolidayListAssignment` + `Attendance` fixture (allocation created a day after the worked holiday,
+    per spec); the missing-Attendance hard block and the not-a-holiday hard block both confirmed
+    separately. `LeaveAdjustment` create confirmed to write exactly one ledger entry (`+3`) while
+    `LeaveAllocation.newLeavesAllocated`/`totalLeavesAllocated` stayed at their original cached `6` —
+    the ledger-vs-cache invariant checked directly via `GET /leave-allocations/:id`'s `currentBalance`
+    (`9`) vs. its own `totalLeavesAllocated` (`6`), not just asserted. `LeaveEncashment` create (balance
+    debited, amount computed as `days × rate`) and `/mark-paid` (idempotency guard, and the issue #11
+    defense-in-depth `updateLeaveEncashment` guard confirmed to 400 cleanly instead of crashing) both
+    confirmed. Leave Control Panel's both bulk endpoints confirmed with mixed batches — 2 successes + 1
+    deliberate overlap failure for `bulk-allocations`, one success for `bulk-policy-assignments` left
+    correctly unallocated (`status: "pending"`). `runDueJobs()` manually triggered (via a direct script
+    call after resetting `SchedulerRunLog`, not waiting for the 5-minute interval) against a constructed
+    near-expiry `LeaveAllocation` fixture with its ledger entry's `createdAt` deliberately backdated (a
+    real historical allocation would have been granted months before its `toDate`, not created via API
+    "today" with a backdated `toDate` — the raw-collection backdate was necessary because Mongoose
+    treats `createdAt` as immutable on `updateMany`) — confirmed `processExpiredAllocations` flipped it
+    to `expired` and `generateLeaveEncashments` drafted a `pending` `LeaveEncashment` in the same pass,
+    then confirmed re-running was a no-op (`skipped: 1`) via the `leaveAllocationId`-exists idempotency
+    guard. The allocation-boundary-splitting approve case (two adjacent allocations, one application
+    spanning both) was code-reviewed against the ledger-write logic but not separately live-fixtured —
+    flagged here rather than silently claimed as tested. Every throwaway fixture was cleaned up
+    afterward via the app's own delete endpoints and status transitions (employee count back to 195,
+    zero `User` documents — matching this project's pre-existing state, issue #7); the two
+    `LeaveAllocation` rows this session created that carry an irreversible `LeaveAdjustment`/
+    `LeaveEncashment` reference could not be deleted (both collections are deliberately undeletable —
+    that block IS the working reference guard) and remain as real, harmless historical test
+    transactions, same as any real HR action would leave behind.
 

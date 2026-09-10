@@ -512,12 +512,11 @@ everywhere else (no per-row self-only scoping yet, per the still-open Q-4).
 `totalAmount` on a costing row (manually entered, despite the field name implying a sum) and no
 date-order validation on itinerary rows (departure/arrival, check-in/check-out).
 
-### Leaves — foundation half (module 8, built 2026-09-10 — ADR-024, `feat/leaves`)
+### Leaves (module 8, complete 2026-09-10 — ADR-024, `feat/leaves` + `feat/leaves-transactions`)
 
-The largest module yet, deliberately split into two stacked forks. This half built the
-infrastructure every other half depends on, plus the "configuration" doctypes; the "transactional"
-doctypes (`LeaveAdjustment`, `CompensatoryLeaveRequest`, `LeaveApplication`, `LeaveEncashment`,
-`LeaveBlockList`) are the still-pending second fork.
+The largest module yet, deliberately split into two stacked forks — both now built. The foundation
+fork built the infrastructure every other half depends on, plus the "configuration" doctypes; the
+second fork built the "transactional" doctypes below.
 
 **Two cross-cutting mechanisms, not specific to Leaves at all**, finally answer `OPEN-QUESTIONS.md`
 Q-4 and Q-5: `UserRoles.roles[].dataScope` (per-menu-row scope override — a role can now be
@@ -567,8 +566,64 @@ resolves an employee's approver: their own direct field if set, otherwise the un
 array across their whole department ancestor chain.
 
 `Attendance` — a deliberately minimal one-row-per-employee-per-day model (module 9, Shift &
-Attendance, extends it with shift/check-in/geolocation later), built now only because the second
-fork's Leave Application/Compensatory Leave Request need something to reference.
+Attendance, extends it with shift/check-in/geolocation later), built by the foundation fork only
+because Leave Application/Compensatory Leave Request (below) need something to reference.
+
+`LeaveAdjustment` — a one-off manual balance correction. Create *is* the action (ADR-024): saving
+writes one signed `LeaveLedgerEntry` immediately (positive for Allocate, negative for Reduce); no
+update, no delete — it does **not** touch `LeaveAllocation.totalLeavesAllocated`, matching source
+exactly (the ledger is the only thing that changes).
+
+`CompensatoryLeaveRequest` — a request for comp-off leave for a day worked on a holiday.
+`leaveTypeId` must be `isCompensatory`. `/approve` validates active-employee, date order, that every
+worked day is a real holiday per the employee's resolved Holiday List (new `utils/
+holidayResolution.js`, employee-then-company fallback), and that matching `Attendance` rows exist for
+the whole range — a hard block, not an auto-create, since nothing populates Attendance yet. On
+success it finds/extends or creates a `LeaveAllocation` dated the day after the worked range and
+writes a ledger entry; `/reject` has no side effects.
+
+`LeaveApplication` — the module's centerpiece, an employee's request for time off.
+`totalLeaveDays` is always server-recomputed (new `utils/leaveDayCalculation.js`), never trusted from
+the client. `leaveApproverId` auto-resolves via `resolveApprovers` when omitted, or is validated
+against that resolved set when supplied — either way, the resolved/supplied approver's own linked
+Employee can never be the applicant themself (self-approval prevention). Create validates, in order:
+active-employee, half-day date sanity, balance sufficiency (`allowNegative` override), overlap with a
+half-day-adjacency carve-out, max-consecutive-days (a one-hop adjacency merge — a documented
+simplification of source's full recursive chain walk), block-date enforcement (`LeaveBlockList`,
+below — a hard block at create, stricter than source's approve-time-only check), `applicableAfter`
+vs. joining date, and `isOptionalLeave` against the covering Leave Period's optional Holiday List.
+`/approve` re-checks balance, creates/updates `Attendance` rows for the range, and writes 1-2
+`LeaveLedgerEntry` rows (split across an allocation boundary when the range crosses one). `/reject`
+has no side effects. `/cancel` (approved applications only) reverses both the ledger entries and the
+`Attendance` rows via soft-delete.
+
+`LeaveEncashment` — cashes out unused leave for a Leave Type with `allowEncashment` set. Balance and
+eligible days are computed via `getLeaveBalance` at creation, capped by the Leave Type's
+`nonEncashableLeaves`/`maxEncashableLeaves`. `perDayEncashmentAmount` is manually entered — this
+project has no Payroll module yet to derive it from (`OPEN-QUESTIONS.md` Q-14). Create is the action
+(writes the debiting ledger entry immediately, same as `LeaveAdjustment`); `/mark-paid` records
+amount/date/reference only — no GL, no Payment Entry (the same manual substitute Full & Final
+Statement established in module 4).
+
+`LeaveBlockList` (+embedded `blockDates[]`, +embedded `allowList[]` — a single `allowUserId` ref,
+matching the real source spec exactly, not a role-or-user shape) — dates on which leave applications
+are blocked, for a company and optionally one department and/or one Leave Type; a user on the allow
+list bypasses the block. New `utils/leaveBlockList.js` (`listApplies`/`getApplicableBlockLists`/
+`getBlockedDatesInRange`/`isDateBlocked`) is shared by `LeaveApplication`'s validation chain.
+
+**Leave Control Panel** — no stored model (a stateless bulk-action form in source too, a Frappe
+Single). Two endpoints, both with per-item try/catch isolation so one employee's failure never aborts
+the batch: `bulk-policy-assignments` creates `LeavePolicyAssignment` rows left unallocated;
+`bulk-allocations` additionally calls the same `grantAllocationsForAssignment` logic
+(`leaves.controller.js`, extracted from the single-assignment `/grant-allocations` route handler so
+both share one implementation) per employee immediately after. A lightweight custom admin page
+(`pages/Leaves/LeaveControlPanel.jsx`), not entity-config CRUD.
+
+`generateLeaveEncashments` (the third of the module's three scheduled jobs, `jobs/leaveScheduler.js`)
+reads `LeaveAllocation` rows `processExpiredAllocations` just expired in the same scheduler pass
+(ordering matters — matched on `status: "expired"`) whose Leave Type allows encashment, and drafts one
+`pending` `LeaveEncashment` per eligible allocation (idempotent via a `leaveAllocationId`-exists
+check) — left for HR to fill in the real per-day rate and confirm before marking paid.
 
 ## Not modelled
 

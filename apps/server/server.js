@@ -223,7 +223,11 @@ import dashboardsRoutes from "./routes/v1/dashboards.routes.js";
 import otpRoutes from "./routes/v1/otp.routes.js";
 import seoRoutes from "./routes/v1/seo.routes.js";
 import auditLogsRoutes from "./routes/v1/auditLogs.routes.js";
+import recruitmentPipelineRoutes from "./routes/v1/recruitmentPipeline.routes.js";
+import interviewsRoutes from "./routes/v1/interviews.routes.js";
+import jobOffersRoutes from "./routes/v1/jobOffers.routes.js";
 import seoPublicRoutes from "./routes/v1/seoPublic.routes.js";
+import jobsPublicRoutes from "./routes/v1/jobsPublic.routes.js";
 
 app.use("/api/v1", authRoutes);
 app.use("/api/v1", adminUsersRoutes);
@@ -240,11 +244,17 @@ app.use("/api/v1", rolesRoutes);
 app.use("/api/v1", dashboardsRoutes);
 app.use("/api/v1", seoRoutes);
 app.use("/api/v1", auditLogsRoutes);
+app.use("/api/v1", recruitmentPipelineRoutes);
+app.use("/api/v1", interviewsRoutes);
+app.use("/api/v1", jobOffersRoutes);
 app.use("/api/v1/otp", otpRoutes);
 
 // Unauthenticated on purpose — the public website has no session. See
 // routes/v1/seoPublic.routes.js for why, and what is guarded instead.
 app.use("/api/v1", seoPublicRoutes);
+// Second public router (ADR-019) — same reasoning, different shape (a
+// listing, not resolve-by-key). See routes/v1/jobsPublic.routes.js.
+app.use("/api/v1", jobsPublicRoutes);
 
 console.log("✅ V1 API routes loaded");
 

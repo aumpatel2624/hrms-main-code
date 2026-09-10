@@ -57,7 +57,7 @@ grill-me round-1 summary in Log below. Not designed end-to-end: each module gets
 |---|---|---|---|---|---|---|---|---|
 | Organization Setup (Company, Branch, Department, Designation, Employment Type, Employee Grade — HR Settings deferred, ADR-017) | done | done | done | done | done | done | local-only | grill-me 2026-09-10 |
 | Employee Records (Employee core, Employee Health Insurance — ADR-018) | done | done | done | done | done | done | local-only | grill-me 2026-09-10 |
-| Recruitment (Job Requisition → Opening → Applicant → Interview → Offer, public job board) | - | - | - | - | - | - | - | grill-me 2026-09-10 |
+| Recruitment (Job Requisition → Opening → Applicant → Interview → Offer, public job *listing* — ADR-019) | - | - | - | - | - | - | - | grill-me 2026-09-10; public *apply* flow deferred (OPEN-QUESTIONS Q-7), vacancy checks/Employee Referral/Skill Assessment deferred to modules 5/6 (Q-8/Q-9) |
 | Onboarding & Separation (Onboarding+Template, Boarding Activity, Separation+Template, Exit Interview, Full & Final Statement/Asset/Outstanding) | - | - | - | - | - | - | - | grill-me 2026-09-10 |
 | Employee Career Events (Transfer, Promotion, Employee Property History, Referral, Grievance+Type, Staffing Plan+Detail) | - | - | - | - | - | - | - | grill-me 2026-09-10; Property History moved here from module 2 by ADR-018 (its only writers are Transfer/Promotion, both here) |
 | Training & Skills (Program, Event, Result, Feedback, Skill, Designation Skill, Expected Skill Set, Employee Skill Map, Skill Assessment) | - | - | - | - | - | - | - | grill-me 2026-09-10 |

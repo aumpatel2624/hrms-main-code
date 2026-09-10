@@ -18,7 +18,7 @@ import { getAllCountries, getStatesByCountry, getCitiesByState } from "../api/lo
 import {
     createAdminUser, deleteAdminUser, getAdminUserById, updateAdminUser, searchAdminUsers, resetAdminUserPassword,
 } from "../api/adminUsers.api";
-import { createUser, deleteUser, getUserById, updateUser, searchUsers, resetUserPassword } from "../api/users.api";
+import { createUser, deleteUser, getUserById, updateUser, searchUsers, resetUserPassword, getAllUsers } from "../api/users.api";
 import {
     createMenu, deleteMenu, getMenuById, updateMenu, searchMenus, getAllMenuGroups, getAllMenus,
 } from "../api/menus.api";
@@ -27,6 +27,24 @@ import {
     deleteEmailTemplate, getEmailTemplateById, updateEmailTemplate,
 } from "../api/emails.api";
 import { deleteSeoPage, getSeoPageById, searchSeoPages } from "../api/seo.api";
+import {
+    createJobRequisition, deleteJobRequisition, getJobRequisitionById, updateJobRequisition,
+    searchJobRequisitions, getAllJobRequisitions, makeJobOpeningFromRequisition,
+    createJobOpening, deleteJobOpening, getJobOpeningById, updateJobOpening, searchJobOpenings, getAllJobOpenings,
+    createJobApplicant, deleteJobApplicant, getJobApplicantById, updateJobApplicant, searchJobApplicants, getAllJobApplicants,
+    createJobApplicantSource, deleteJobApplicantSource, getJobApplicantSourceById, updateJobApplicantSource,
+    searchJobApplicantSources, getAllJobApplicantSources,
+} from "../api/recruitmentPipeline.api";
+import {
+    createInterviewType, deleteInterviewType, getInterviewTypeById, updateInterviewType, searchInterviewTypes, getAllInterviewTypes,
+    createInterview, deleteInterview, getInterviewById, updateInterview, searchInterviews, getAllInterviews,
+    createInterviewFeedback, deleteInterviewFeedback, getInterviewFeedbackById, updateInterviewFeedback, searchInterviewFeedbacks,
+} from "../api/interviews.api";
+import {
+    createJobOffer, deleteJobOffer, getJobOfferById, updateJobOffer, searchJobOffers, makeEmployeeFromJobOffer,
+    createJobOfferTermTemplate, deleteJobOfferTermTemplate, getJobOfferTermTemplateById, updateJobOfferTermTemplate,
+    searchJobOfferTermTemplates, getAllJobOfferTermTemplates,
+} from "../api/jobOffers.api";
 import PasswordResetSection from "@/components/crud/password-reset-section";
 import EmailTemplateMergeFields from "@/components/crud/email-template-merge-fields";
 
@@ -596,7 +614,427 @@ export const employeeConfig = {
     }),
 };
 
+// ---------------------------------------------------------- Recruitment (ADR-019) --
+// Interviewers/defaultInterviewers (arrays of User refs) are schema-ready but
+// not exposed on these quick-entry forms — this admin has no multi-select
+// field type precedent to build against yet; a known simplification, not an
+// oversight.
+
+export const jobApplicantSourceConfig = {
+    filterFields: [
+        { name: "sourceName", label: "Source Name", type: "string" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "job-applicant-source",
+    path: "/job-applicant-source",
+    section: "Recruitment",
+    singular: "Job Applicant Source",
+    plural: "Job Applicant Sources",
+    description: "Where a candidate came from (referral, job board, ...).",
+    api: { search: searchJobApplicantSources, getById: getJobApplicantSourceById, create: createJobApplicantSource, update: updateJobApplicantSource, remove: deleteJobApplicantSource },
+    sections: [{ id: "details", title: "Details" }, { id: "status", title: "Status" }],
+    fields: [
+        { name: "sourceName", icon: Link01, label: "Source Name", required: true, section: "details", error: "Source Name is required!", placeholder: "Enter source name" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Source Name", selector: (row) => row.sourceName, minWidth: "180px" },
+        { name: "Status", selector: (row) => (row.isActive ? "Active" : "Inactive"), minWidth: "130px" },
+    ],
+    recordTitle: (r) => r.sourceName,
+};
+
+export const interviewTypeConfig = {
+    filterFields: [
+        { name: "interviewTypeName", label: "Interview Type", type: "string" },
+        { name: "designationId", label: "Designation", type: "objectId" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "interview-type",
+    path: "/interview-type",
+    section: "Recruitment",
+    singular: "Interview Type",
+    plural: "Interview Types",
+    description: "A reusable interview round definition.",
+    api: { search: searchInterviewTypes, getById: getInterviewTypeById, create: createInterviewType, update: updateInterviewType, remove: deleteInterviewType },
+    lookups: { designationId: asOptions(getAllDesignations, "designationName") },
+    sections: [{ id: "details", title: "Details" }, { id: "status", title: "Status" }],
+    fields: [
+        { name: "interviewTypeName", icon: Type01, label: "Interview Type Name", required: true, section: "details", error: "Interview Type Name is required!", placeholder: "e.g. Technical Round 1" },
+        { name: "designationId", icon: User01, label: "Designation", type: "select", section: "details", optionsFrom: "designationId" },
+        { name: "expectedAverageRating", label: "Expected Average Rating", type: "number", section: "details", placeholder: "0-5" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Interview Type", selector: (row) => row.interviewTypeName, minWidth: "180px" },
+        { name: "Status", selector: (row) => (row.isActive ? "Active" : "Inactive"), minWidth: "130px" },
+    ],
+    recordTitle: (r) => r.interviewTypeName,
+    toForm: (data) => ({ ...data, designationId: refId(data.designationId) }),
+};
+
+export const jobOfferTermTemplateConfig = {
+    filterFields: [
+        { name: "templateName", label: "Template Name", type: "string" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "job-offer-term-template",
+    path: "/job-offer-term-template",
+    section: "Recruitment",
+    singular: "Job Offer Term Template",
+    plural: "Job Offer Term Templates",
+    description: "A reusable set of Job Offer terms.",
+    api: { search: searchJobOfferTermTemplates, getById: getJobOfferTermTemplateById, create: createJobOfferTermTemplate, update: updateJobOfferTermTemplate, remove: deleteJobOfferTermTemplate },
+    sections: [{ id: "details", title: "Details" }, { id: "status", title: "Status" }],
+    fields: [
+        { name: "templateName", icon: Type01, label: "Template Name", required: true, section: "details", error: "Template Name is required!", placeholder: "Enter template name" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Template Name", selector: (row) => row.templateName, minWidth: "180px" },
+        { name: "Status", selector: (row) => (row.isActive ? "Active" : "Inactive"), minWidth: "130px" },
+    ],
+    recordTitle: (r) => r.templateName,
+};
+
+export const jobRequisitionConfig = {
+    filterFields: [
+        { name: "designationId", label: "Designation", type: "objectId" },
+        { name: "departmentId", label: "Department", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "status", label: "Status", type: "enum" },
+        { name: "requestedById", label: "Requested By", type: "objectId" },
+        { name: "postingDate", label: "Posting Date", type: "date" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "job-requisition",
+    path: "/job-requisition",
+    section: "Recruitment",
+    singular: "Job Requisition",
+    plural: "Job Requisitions",
+    description: "A headcount request — the first stage of the hiring funnel.",
+    api: { search: searchJobRequisitions, getById: getJobRequisitionById, create: createJobRequisition, update: updateJobRequisition, remove: deleteJobRequisition },
+    lookups: {
+        designationId: asOptions(getAllDesignations, "designationName"),
+        departmentId: asOptions(getAllDepartments, "departmentName"),
+        companyId: asOptions(getAllCompanies, "companyName"),
+        requestedById: employeeOptionsLoader,
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "timeline", title: "Timeline" }, { id: "status", title: "Status" }],
+    fields: [
+        { name: "designationId", icon: User01, label: "Designation", type: "select", required: true, section: "details", error: "Designation is required!", optionsFrom: "designationId" },
+        { name: "departmentId", icon: Building07, label: "Department", type: "select", section: "details", optionsFrom: "departmentId" },
+        { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "details", error: "Company is required!", optionsFrom: "companyId" },
+        { name: "requestedById", icon: User01, label: "Requested By", type: "select", required: true, section: "details", error: "Requested By is required!", optionsFrom: "requestedById" },
+        { name: "noOfPositions", icon: Hash02, label: "No. of Positions", type: "number", required: true, section: "details", error: "No. of Positions is required!" },
+        { name: "expectedCompensation", label: "Expected Compensation", type: "number", required: true, section: "details", error: "Expected Compensation is required!" },
+        { name: "description", label: "Job Description", type: "textarea", section: "details" },
+        { name: "reasonForRequesting", label: "Reason for Requesting", type: "textarea", section: "details" },
+
+        { name: "postingDate", label: "Posting Date", type: "date", section: "timeline" },
+        { name: "expectedBy", label: "Expected By", type: "date", section: "timeline" },
+        { name: "completedOn", label: "Completed On", type: "date", section: "timeline" },
+
+        {
+            name: "status", label: "Status", type: "select", section: "status",
+            options: ["Pending", "Open & Approved", "Rejected", "Filled", "On Hold", "Cancelled"].map((v) => ({ value: v, label: v })),
+        },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Designation", selector: (row) => row.designationName ?? "—", minWidth: "160px" },
+        { name: "Company", selector: (row) => row.companyName ?? "—", minWidth: "160px" },
+        { name: "Positions", selector: (row) => row.noOfPositions, minWidth: "100px" },
+        { name: "Status", selector: (row) => row.status, minWidth: "140px" },
+    ],
+    recordTitle: (r) => `Requisition — ${r.designationName ?? r.designationId}`,
+    toForm: (data) => ({
+        ...data,
+        designationId: refId(data.designationId), departmentId: refId(data.departmentId),
+        companyId: refId(data.companyId), requestedById: refId(data.requestedById),
+    }),
+};
+
+export const jobOpeningConfig = {
+    filterFields: [
+        { name: "jobTitle", label: "Job Title", type: "string" },
+        { name: "designationId", label: "Designation", type: "objectId" },
+        { name: "status", label: "Status", type: "enum" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "departmentId", label: "Department", type: "objectId" },
+        { name: "employmentTypeId", label: "Employment Type", type: "objectId" },
+        { name: "branchId", label: "Location", type: "objectId" },
+        { name: "publish", label: "Published", type: "boolean" },
+        { name: "postedOn", label: "Posted On", type: "date" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "job-opening",
+    path: "/job-opening",
+    section: "Recruitment",
+    singular: "Job Opening",
+    plural: "Job Openings",
+    description: "A vacancy posting — publish it to list it on the public job board.",
+    api: { search: searchJobOpenings, getById: getJobOpeningById, create: createJobOpening, update: updateJobOpening, remove: deleteJobOpening },
+    lookups: {
+        designationId: asOptions(getAllDesignations, "designationName"),
+        companyId: asOptions(getAllCompanies, "companyName"),
+        departmentId: asOptions(getAllDepartments, "departmentName"),
+        employmentTypeId: asOptions(getAllEmploymentTypes, "employmentTypeName"),
+        branchId: asOptions(getAllBranches, "branchName"),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "publishing", title: "Publishing" }, { id: "pay", title: "Pay details" }, { id: "status", title: "Status" }],
+    fields: [
+        { name: "jobTitle", icon: Type01, label: "Job Title", required: true, section: "details", error: "Job Title is required!", placeholder: "Enter job title" },
+        { name: "designationId", icon: User01, label: "Designation", type: "select", required: true, section: "details", error: "Designation is required!", optionsFrom: "designationId" },
+        { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "details", error: "Company is required!", optionsFrom: "companyId" },
+        { name: "departmentId", icon: Building07, label: "Department", type: "select", section: "details", optionsFrom: "departmentId" },
+        { name: "employmentTypeId", icon: Tag01, label: "Employment Type", type: "select", section: "details", optionsFrom: "employmentTypeId" },
+        { name: "branchId", icon: MarkerPin01, label: "Location", type: "select", section: "details", optionsFrom: "branchId" },
+        { name: "description", label: "Job Description", type: "textarea", section: "details" },
+        {
+            name: "status", label: "Status", type: "select", section: "details",
+            options: [{ value: "Open", label: "Open" }, { value: "Closed", label: "Closed" }],
+        },
+        { name: "closesOn", label: "Closes On", type: "date", section: "details" },
+
+        { name: "publish", label: "Publish on job board", type: "checkbox", section: "publishing" },
+        { name: "preventDuplicateApplicant", label: "Prevent duplicate applications", type: "checkbox", section: "publishing" },
+        { name: "publishSalaryRange", label: "Publish salary range", type: "checkbox", section: "publishing" },
+        { name: "publishApplicationsReceived", label: "Publish applications-received count", type: "checkbox", section: "publishing" },
+
+        { name: "currency", label: "Currency", section: "pay", placeholder: "e.g. USD" },
+        { name: "lowerRange", label: "Lower Range", type: "number", section: "pay" },
+        { name: "upperRange", label: "Upper Range", type: "number", section: "pay" },
+        { name: "salaryPer", label: "Salary Per", type: "select", section: "pay", options: [{ value: "Month", label: "Month" }, { value: "Year", label: "Year" }] },
+
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Job Title", selector: (row) => row.jobTitle, minWidth: "180px" },
+        { name: "Company", selector: (row) => row.companyName ?? "—", minWidth: "150px" },
+        { name: "Status", selector: (row) => row.status, minWidth: "110px" },
+        { name: "Published", selector: (row) => (row.publish ? "Yes" : "No"), minWidth: "100px" },
+    ],
+    recordTitle: (r) => r.jobTitle,
+    toForm: (data) => ({
+        ...data,
+        designationId: refId(data.designationId), companyId: refId(data.companyId),
+        departmentId: refId(data.departmentId), employmentTypeId: refId(data.employmentTypeId),
+        branchId: refId(data.branchId),
+    }),
+};
+
+export const jobApplicantConfig = {
+    filterFields: [
+        { name: "applicantName", label: "Applicant Name", type: "string" },
+        { name: "emailId", label: "Email", type: "string" },
+        { name: "jobOpeningId", label: "Job Opening", type: "objectId" },
+        { name: "designationId", label: "Designation", type: "objectId" },
+        { name: "status", label: "Status", type: "enum" },
+        { name: "sourceId", label: "Source", type: "objectId" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "job-applicant",
+    path: "/job-applicant",
+    section: "Recruitment",
+    singular: "Job Applicant",
+    plural: "Job Applicants",
+    description: "A candidate's application.",
+    api: { search: searchJobApplicants, getById: getJobApplicantById, create: createJobApplicant, update: updateJobApplicant, remove: deleteJobApplicant },
+    lookups: {
+        jobOpeningId: asOptions(getAllJobOpenings, "jobTitle"),
+        designationId: asOptions(getAllDesignations, "designationName"),
+        sourceId: asOptions(getAllJobApplicantSources, "sourceName"),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "resume", title: "Resume" }, { id: "salary", title: "Salary Expectation" }, { id: "status", title: "Status" }],
+    fields: [
+        { name: "applicantName", icon: User01, label: "Applicant Name", section: "details", placeholder: "Auto-filled from email if left blank" },
+        { name: "emailId", icon: Mail01, label: "Email Address", required: true, section: "details", error: "Email Address is required!", placeholder: "candidate@example.com" },
+        { name: "phoneNumber", icon: Phone, label: "Phone Number", section: "details" },
+        { name: "jobOpeningId", icon: Building07, label: "Job Opening", type: "select", section: "details", optionsFrom: "jobOpeningId" },
+        { name: "designationId", icon: User01, label: "Designation", type: "select", section: "details", optionsFrom: "designationId" },
+        { name: "sourceId", icon: Link01, label: "Source", type: "select", section: "details", optionsFrom: "sourceId" },
+        {
+            name: "status", label: "Status", type: "select", section: "status",
+            options: ["Open", "Replied", "Shortlisted", "Rejected", "Hold", "Accepted"].map((v) => ({ value: v, label: v })),
+        },
+        { name: "applicantRating", label: "Applicant Rating", type: "number", section: "status", placeholder: "0-5" },
+
+        { name: "resumeLink", label: "Resume Link", section: "resume", placeholder: "https://..." },
+        { name: "coverLetter", label: "Cover Letter", type: "textarea", section: "resume" },
+        { name: "notes", label: "Notes", type: "textarea", section: "resume" },
+
+        { name: "currency", label: "Currency", section: "salary", placeholder: "e.g. USD" },
+        { name: "lowerRange", label: "Lower Range", type: "number", section: "salary" },
+        { name: "upperRange", label: "Upper Range", type: "number", section: "salary" },
+
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Applicant Name", selector: (row) => row.applicantName, minWidth: "180px" },
+        { name: "Email", selector: (row) => row.emailId, minWidth: "200px" },
+        { name: "Job Opening", selector: (row) => row.jobOpeningTitle ?? "—", minWidth: "160px" },
+        { name: "Status", selector: (row) => row.status, minWidth: "120px" },
+    ],
+    recordTitle: (r) => r.applicantName,
+    toForm: (data) => ({ ...data, jobOpeningId: refId(data.jobOpeningId), designationId: refId(data.designationId), sourceId: refId(data.sourceId) }),
+};
+
+export const interviewConfig = {
+    filterFields: [
+        { name: "interviewTypeId", label: "Interview Type", type: "objectId" },
+        { name: "jobApplicantId", label: "Job Applicant", type: "objectId" },
+        { name: "designationId", label: "Designation", type: "objectId" },
+        { name: "status", label: "Status", type: "enum" },
+        { name: "scheduledOn", label: "Scheduled On", type: "date" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "interview",
+    path: "/interview",
+    section: "Recruitment",
+    singular: "Interview",
+    plural: "Interviews",
+    description: "A scheduled interview round for a candidate.",
+    api: { search: searchInterviews, getById: getInterviewById, create: createInterview, update: updateInterview, remove: deleteInterview },
+    lookups: {
+        interviewTypeId: asOptions(getAllInterviewTypes, "interviewTypeName"),
+        jobApplicantId: asOptions(getAllJobApplicants, "applicantName"),
+        designationId: asOptions(getAllDesignations, "designationName"),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "schedule", title: "Schedule" }, { id: "status", title: "Status" }],
+    fields: [
+        { name: "interviewTypeId", icon: Type01, label: "Interview Type", type: "select", required: true, section: "details", error: "Interview Type is required!", optionsFrom: "interviewTypeId" },
+        { name: "jobApplicantId", icon: User01, label: "Job Applicant", type: "select", required: true, section: "details", error: "Job Applicant is required!", optionsFrom: "jobApplicantId" },
+        { name: "designationId", icon: User01, label: "Designation", type: "select", section: "details", optionsFrom: "designationId" },
+        { name: "interviewSummary", label: "Interview Summary", type: "textarea", section: "details" },
+
+        { name: "scheduledOn", label: "Scheduled On", type: "date", required: true, section: "schedule", error: "Scheduled On is required!" },
+        { name: "fromTime", label: "From Time", required: true, section: "schedule", error: "From Time is required!", placeholder: "HH:MM" },
+        { name: "toTime", label: "To Time", required: true, section: "schedule", error: "To Time is required!", placeholder: "HH:MM" },
+
+        {
+            name: "status", label: "Status", type: "select", section: "status",
+            options: ["Pending", "Under Review", "Cleared", "Rejected", "Cancelled"].map((v) => ({ value: v, label: v })),
+        },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Job Applicant", selector: (row) => row.jobApplicantName ?? "—", minWidth: "170px" },
+        { name: "Interview Type", selector: (row) => row.interviewTypeName ?? "—", minWidth: "170px" },
+        { name: "Scheduled On", selector: (row) => row.scheduledOn?.slice?.(0, 10) ?? "—", minWidth: "130px" },
+        { name: "Status", selector: (row) => row.status, minWidth: "120px" },
+    ],
+    recordTitle: (r) => `${r.jobApplicantName ?? "Interview"} — ${r.interviewTypeName ?? ""}`,
+    toForm: (data) => ({ ...data, interviewTypeId: refId(data.interviewTypeId), jobApplicantId: refId(data.jobApplicantId), designationId: refId(data.designationId) }),
+};
+
+// Interview's own list rows carry no human-readable label (jobApplicantId
+// is an id, not a name) — a small custom loader instead of asOptions.
+const interviewOptionsLoader = () =>
+    getAllInterviews().then((res) =>
+        (res.data?.data ?? []).map((x) => ({ value: x._id, label: `Interview — ${x.scheduledOn?.slice?.(0, 10) ?? ""} (${x.status})` })));
+
+export const interviewFeedbackConfig = {
+    filterFields: [
+        { name: "interviewId", label: "Interview", type: "objectId" },
+        { name: "interviewerId", label: "Interviewer", type: "objectId" },
+        { name: "result", label: "Result", type: "enum" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "interview-feedback",
+    path: "/interview-feedback",
+    section: "Recruitment",
+    singular: "Interview Feedback",
+    plural: "Interview Feedback",
+    description: "A per-interviewer scorecard for one Interview.",
+    api: { search: searchInterviewFeedbacks, getById: getInterviewFeedbackById, create: createInterviewFeedback, update: updateInterviewFeedback, remove: deleteInterviewFeedback },
+    lookups: {
+        interviewId: interviewOptionsLoader,
+        interviewerId: asOptions(getAllUsers, "userName"),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "status", title: "Status" }],
+    fields: [
+        { name: "interviewId", icon: Type01, label: "Interview", type: "select", required: true, section: "details", error: "Interview is required!", optionsFrom: "interviewId" },
+        { name: "interviewerId", icon: User01, label: "Interviewer", type: "select", required: true, section: "details", error: "Interviewer is required!", optionsFrom: "interviewerId" },
+        {
+            name: "result", label: "Result", type: "select", required: true, section: "details", error: "Result is required!",
+            options: [{ value: "Cleared", label: "Cleared" }, { value: "Rejected", label: "Rejected" }],
+        },
+        { name: "feedback", label: "Feedback", type: "textarea", section: "details" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Interviewer", selector: (row) => row.interviewerId, minWidth: "160px" },
+        { name: "Result", selector: (row) => row.result, minWidth: "120px" },
+    ],
+    recordTitle: (r) => `Feedback — ${r.result ?? ""}`,
+    toForm: (data) => ({ ...data, interviewId: refId(data.interviewId), interviewerId: refId(data.interviewerId) }),
+};
+
+export const jobOfferConfig = {
+    filterFields: [
+        { name: "jobApplicantId", label: "Job Applicant", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "designationId", label: "Designation", type: "objectId" },
+        { name: "status", label: "Status", type: "enum" },
+        { name: "offerDate", label: "Offer Date", type: "date" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "job-offer",
+    path: "/job-offer",
+    section: "Recruitment",
+    singular: "Job Offer",
+    plural: "Job Offers",
+    description: "A compensation/terms offer extended to a candidate.",
+    api: { search: searchJobOffers, getById: getJobOfferById, create: createJobOffer, update: updateJobOffer, remove: deleteJobOffer },
+    lookups: {
+        jobApplicantId: asOptions(getAllJobApplicants, "applicantName"),
+        companyId: asOptions(getAllCompanies, "companyName"),
+        designationId: asOptions(getAllDesignations, "designationName"),
+        jobOfferTermTemplateId: asOptions(getAllJobOfferTermTemplates, "templateName"),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "terms", title: "Terms" }, { id: "status", title: "Status" }],
+    fields: [
+        { name: "jobApplicantId", icon: User01, label: "Job Applicant", type: "select", required: true, section: "details", error: "Job Applicant is required!", optionsFrom: "jobApplicantId" },
+        { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "details", error: "Company is required!", optionsFrom: "companyId" },
+        { name: "designationId", icon: User01, label: "Designation", type: "select", section: "details", optionsFrom: "designationId" },
+        { name: "offerDate", label: "Offer Date", type: "date", required: true, section: "details", error: "Offer Date is required!" },
+        {
+            name: "status", label: "Status", type: "select", section: "status",
+            options: ["Awaiting Response", "Accepted", "Rejected", "Cancelled"].map((v) => ({ value: v, label: v })),
+        },
+
+        { name: "jobOfferTermTemplateId", icon: Type01, label: "Term Template", type: "select", section: "terms", optionsFrom: "jobOfferTermTemplateId" },
+        { name: "terms", label: "Terms and Conditions", type: "textarea", section: "terms" },
+
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Applicant", selector: (row) => row.applicantName ?? "—", minWidth: "170px" },
+        { name: "Company", selector: (row) => row.companyName ?? "—", minWidth: "150px" },
+        { name: "Offer Date", selector: (row) => row.offerDate?.slice?.(0, 10) ?? "—", minWidth: "120px" },
+        { name: "Status", selector: (row) => row.status ?? "—", minWidth: "140px" },
+    ],
+    recordTitle: (r) => `Offer — ${r.applicantName ?? r.jobApplicantId}`,
+    toForm: (data) => ({
+        ...data, jobApplicantId: refId(data.jobApplicantId), companyId: refId(data.companyId),
+        designationId: refId(data.designationId), jobOfferTermTemplateId: refId(data.jobOfferTermTemplateId),
+    }),
+};
+
 export const ADVANCED_ENTITIES = [
     adminUserConfig, userConfig, menuMasterConfig, emailTemplateConfig,
     departmentConfig, branchConfig, designationConfig, employeeConfig,
+    jobApplicantSourceConfig, interviewTypeConfig, jobOfferTermTemplateConfig,
+    jobRequisitionConfig, jobOpeningConfig, jobApplicantConfig,
+    interviewConfig, interviewFeedbackConfig, jobOfferConfig,
 ];

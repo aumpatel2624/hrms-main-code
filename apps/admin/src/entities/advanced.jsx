@@ -76,6 +76,13 @@ import {
     createEmployeeSkillMap, deleteEmployeeSkillMap, getEmployeeSkillMapById, updateEmployeeSkillMap,
     searchEmployeeSkillMaps, populateEmployeeSkillMapFromDesignation,
 } from "../api/trainingSkills.api";
+import {
+    createPurposeOfTravel, deletePurposeOfTravel, getPurposeOfTravelById, updatePurposeOfTravel,
+    searchPurposeOfTravels, getAllPurposeOfTravels,
+    createIdentificationDocumentType, deleteIdentificationDocumentType, getIdentificationDocumentTypeById,
+    updateIdentificationDocumentType, searchIdentificationDocumentTypes, getAllIdentificationDocumentTypes,
+    createTravelRequest, deleteTravelRequest, getTravelRequestById, updateTravelRequest, searchTravelRequests,
+} from "../api/travel.api";
 import PasswordResetSection from "@/components/crud/password-reset-section";
 import EmailTemplateMergeFields from "@/components/crud/email-template-merge-fields";
 import SimpleArrayField from "@/components/crud/simple-array-field";
@@ -1922,6 +1929,149 @@ export const employeeSkillMapConfig = {
     toForm: (data) => ({ ...data, employeeId: refId(data.employeeId) }),
 };
 
+// ---------------------------------------------------------------------------
+// Travel (ADR-023). Two one-field masters (ADMIN-only per RoleMaster — no
+// grants seeded for either, matching source's own literal permission table)
+// plus Travel Request, whose itinerary/costings arrays reuse SimpleArrayField
+// the same way modules 4-6 do. No rollup total and no date-order validation
+// here on purpose — source has neither; see DECISIONS.md ADR-023.
+// ---------------------------------------------------------------------------
+
+const TRAVEL_ITINERARY_COLUMNS = [
+    { name: "travelFrom", label: "From", type: "text" },
+    { name: "travelTo", label: "To", type: "text" },
+    { name: "modeOfTravel", label: "Mode", type: "select", options: ["Flight", "Train", "Taxi", "Rented Car"] },
+    { name: "mealPreference", label: "Meal Preference", type: "select", options: ["Vegetarian", "Non-Vegetarian", "Gluten Free", "Non Diary"] },
+    { name: "travelAdvanceRequired", label: "Advance Required", type: "checkbox" },
+    { name: "advanceAmount", label: "Advance Amount", type: "number" },
+    { name: "departureDate", label: "Departure Date", type: "date" },
+    { name: "arrivalDate", label: "Arrival Date", type: "date" },
+    { name: "lodgingRequired", label: "Lodging Required", type: "checkbox" },
+    { name: "preferredAreaForLodging", label: "Preferred Area for Lodging", type: "text" },
+    { name: "checkInDate", label: "Check-in Date", type: "date" },
+    { name: "checkOutDate", label: "Check-out Date", type: "date" },
+    { name: "otherDetails", label: "Other Details", type: "text" },
+];
+
+const TRAVEL_COSTING_COLUMNS = [
+    { name: "expenseType", label: "Expense Type", type: "text" },
+    { name: "sponsoredAmount", label: "Sponsored Amount", type: "number" },
+    { name: "fundedAmount", label: "Funded Amount", type: "number" },
+    { name: "totalAmount", label: "Total Amount", type: "number" },
+    { name: "comments", label: "Comments", type: "text" },
+];
+
+export const purposeOfTravelConfig = {
+    filterFields: [
+        { name: "purposeOfTravelName", label: "Name", type: "string" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "purpose-of-travel",
+    path: "/purpose-of-travel",
+    section: "Travel",
+    singular: "Purpose of Travel",
+    plural: "Purposes of Travel",
+    api: {
+        search: searchPurposeOfTravels, getById: getPurposeOfTravelById,
+        create: createPurposeOfTravel, update: updatePurposeOfTravel, remove: deletePurposeOfTravel,
+    },
+    fields: [
+        { name: "purposeOfTravelName", icon: Tag01, label: "Purpose of Travel Name", type: "string", required: true, section: "details", error: "Purpose of Travel Name is required!" },
+        ACTIVE,
+    ],
+    columns: [{ name: "Name", selector: (row) => row.purposeOfTravelName, minWidth: "220px" }],
+    recordTitle: (r) => r.purposeOfTravelName,
+};
+
+export const identificationDocumentTypeConfig = {
+    filterFields: [
+        { name: "identificationDocumentTypeName", label: "Name", type: "string" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "identification-document-type",
+    path: "/identification-document-type",
+    section: "Travel",
+    singular: "Identification Document Type",
+    plural: "Identification Document Types",
+    api: {
+        search: searchIdentificationDocumentTypes, getById: getIdentificationDocumentTypeById,
+        create: createIdentificationDocumentType, update: updateIdentificationDocumentType, remove: deleteIdentificationDocumentType,
+    },
+    fields: [
+        { name: "identificationDocumentTypeName", icon: Tag01, label: "Identification Document Type Name", type: "string", required: true, section: "details", error: "Identification Document Type Name is required!" },
+        ACTIVE,
+    ],
+    columns: [{ name: "Name", selector: (row) => row.identificationDocumentTypeName, minWidth: "220px" }],
+    recordTitle: (r) => r.identificationDocumentTypeName,
+};
+
+export const travelRequestConfig = {
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "travelType", label: "Travel Type", type: "string" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "travel-request",
+    path: "/travel-request",
+    section: "Travel",
+    singular: "Travel Request",
+    plural: "Travel Requests",
+    description: "Total Amount is not auto-summed from Sponsored/Funded — source has no rollup formula despite the field names.",
+    api: {
+        search: searchTravelRequests, getById: getTravelRequestById,
+        create: createTravelRequest, update: updateTravelRequest, remove: deleteTravelRequest,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        purposeOfTravelId: asOptions(getAllPurposeOfTravels, "purposeOfTravelName"),
+        personalIdTypeId: asOptions(getAllIdentificationDocumentTypes, "identificationDocumentTypeName"),
+        companyId: asOptions(getAllCompanies, "companyName"),
+    },
+    fields: [
+        { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
+        { name: "travelType", label: "Travel Type", type: "select", required: true, section: "details", error: "Travel Type is required!", options: ["Domestic", "International"] },
+        { name: "travelFunding", label: "Travel Funding", type: "select", section: "details", options: ["Require Full Funding", "Fully Sponsored", "Partially Sponsored, Require Partial Funding"] },
+        { name: "purposeOfTravelId", label: "Purpose of Travel", type: "select", required: true, section: "details", error: "Purpose of Travel is required!", optionsFrom: "purposeOfTravelId" },
+        { name: "detailsOfSponsor", label: "Details of Sponsor", type: "string", section: "details" },
+        { name: "description", label: "Description", type: "textarea", section: "details" },
+        { name: "personalIdTypeId", label: "Identification Document Type", type: "select", section: "details", optionsFrom: "personalIdTypeId" },
+        { name: "personalIdNumber", label: "Personal ID Number", type: "string", section: "details" },
+        { name: "companyId", icon: Building07, label: "Company", type: "select", section: "details", optionsFrom: "companyId" },
+        { name: "status", label: "Status", type: "select", section: "details", options: ["Draft", "Submitted", "Cancelled"] },
+        ACTIVE,
+    ],
+    sections: [{ id: "details", title: "Details" }, { id: "itinerary", title: "Itinerary" }, { id: "costings", title: "Costings" }],
+    renderExtra: ({ values, setValues }) => (
+        <>
+            <SimpleArrayField
+                title="Itinerary" description="One row per travel leg."
+                fieldName="itinerary" columns={TRAVEL_ITINERARY_COLUMNS} values={values} setValues={setValues}
+            />
+            <SimpleArrayField
+                title="Costings" description="Total Amount is entered manually, not computed."
+                fieldName="costings" columns={TRAVEL_COSTING_COLUMNS} values={values} setValues={setValues}
+            />
+        </>
+    ),
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "200px" },
+        { name: "Type", selector: (row) => row.travelType, minWidth: "120px" },
+        { name: "Status", selector: (row) => row.status, minWidth: "120px" },
+    ],
+    recordTitle: (r) => `Travel Request — ${r._id}`,
+    toForm: (data) => ({
+        ...data,
+        employeeId: refId(data.employeeId),
+        purposeOfTravelId: refId(data.purposeOfTravelId),
+        personalIdTypeId: refId(data.personalIdTypeId),
+        companyId: refId(data.companyId),
+    }),
+};
+
 export const ADVANCED_ENTITIES = [
     adminUserConfig, userConfig, menuMasterConfig, emailTemplateConfig,
     departmentConfig, branchConfig, designationConfig, employeeConfig,
@@ -1935,4 +2085,5 @@ export const ADVANCED_ENTITIES = [
     employeePromotionConfig, employeeReferralConfig, staffingPlanConfig,
     trainingProgramConfig, trainingEventConfig, trainingFeedbackConfig,
     skillConfig, employeeSkillMapConfig,
+    purposeOfTravelConfig, identificationDocumentTypeConfig, travelRequestConfig,
 ];

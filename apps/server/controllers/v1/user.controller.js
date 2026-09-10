@@ -69,10 +69,14 @@ export const updateUser = async (req, res) => {
       isActive,
     } = req.body;
 
-    const user = await User.findOne({
-      _id: userId,
-      ...(buildScopeFilter(req.user, { department: "departmentId", owner: "_id" }) ?? {}),
-    });
+    // GitHub issue: `{ _id: userId, ...scopeFilter }` silently drops the
+    // param's _id whenever the "own" dimension is declared against _id
+    // (as it is here) — the scopeFilter's own `_id` key just overwrites it
+    // in the object literal, so the route ignored :userId entirely under
+    // an "own"-scoped role and always resolved to the caller's own record.
+    // $and keeps both conditions instead of colliding on the same key.
+    const scopeFilter = buildScopeFilter(req.user, { department: "departmentId", owner: "_id" });
+    const user = await User.findOne(scopeFilter ? { $and: [{ _id: userId }, scopeFilter] } : { _id: userId });
     if (!user) {
       return res
         .status(404)
@@ -115,11 +119,11 @@ export const updateUser = async (req, res) => {
 
 export const deleteUser = async (req, res) => {
   try {
+    // See the matching comment in updateUser — $and avoids the same _id
+    // key-collision bug for the "own" scope dimension.
+    const scopeFilter = buildScopeFilter(req.user, { department: "departmentId", owner: "_id" });
     const user = await User.findOneAndUpdate(
-      {
-        _id: req.params.userId,
-        ...(buildScopeFilter(req.user, { department: "departmentId", owner: "_id" }) ?? {}),
-      },
+      scopeFilter ? { $and: [{ _id: req.params.userId }, scopeFilter] } : { _id: req.params.userId },
       { isDeleted: true },
     );
 
@@ -144,10 +148,10 @@ export const deleteUser = async (req, res) => {
 
 export const getUserById = async (req, res) => {
   try {
-    const user = await User.findOne({
-      _id: req.params.userId,
-      ...(buildScopeFilter(req.user, { department: "departmentId", owner: "_id" }) ?? {}),
-    })
+    // See the matching comment in updateUser — $and avoids the same _id
+    // key-collision bug for the "own" scope dimension.
+    const scopeFilter = buildScopeFilter(req.user, { department: "departmentId", owner: "_id" });
+    const user = await User.findOne(scopeFilter ? { $and: [{ _id: req.params.userId }, scopeFilter] } : { _id: req.params.userId })
       .select("-password")
       .populate("departmentId")
       .populate("countryId")

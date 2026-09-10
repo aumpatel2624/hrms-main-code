@@ -286,6 +286,44 @@ export const ENDPOINTS = {
         SEARCH: `${V1}/leave-ledger-entries/search`,
     },
     LEAVE_BALANCE: `${V1}/leave-balance`,
+
+    // HRMS module 8, transactional fork (ADR-024 module complete).
+    LEAVE_ADJUSTMENTS: {
+        BASE: `${V1}/leave-adjustments`,
+        BY_ID: (id) => `${V1}/leave-adjustments/${id}`,
+        SEARCH: `${V1}/leave-adjustments/search`,
+    },
+    COMPENSATORY_LEAVE_REQUESTS: {
+        BASE: `${V1}/compensatory-leave-requests`,
+        BY_ID: (id) => `${V1}/compensatory-leave-requests/${id}`,
+        SEARCH: `${V1}/compensatory-leave-requests/search`,
+        APPROVE: (id) => `${V1}/compensatory-leave-requests/${id}/approve`,
+        REJECT: (id) => `${V1}/compensatory-leave-requests/${id}/reject`,
+    },
+    LEAVE_APPLICATIONS: {
+        BASE: `${V1}/leave-applications`,
+        BY_ID: (id) => `${V1}/leave-applications/${id}`,
+        SEARCH: `${V1}/leave-applications/search`,
+        APPROVE: (id) => `${V1}/leave-applications/${id}/approve`,
+        REJECT: (id) => `${V1}/leave-applications/${id}/reject`,
+        CANCEL: (id) => `${V1}/leave-applications/${id}/cancel`,
+    },
+    LEAVE_ENCASHMENTS: {
+        BASE: `${V1}/leave-encashments`,
+        BY_ID: (id) => `${V1}/leave-encashments/${id}`,
+        SEARCH: `${V1}/leave-encashments/search`,
+        MARK_PAID: (id) => `${V1}/leave-encashments/${id}/mark-paid`,
+    },
+    LEAVE_BLOCK_LISTS: {
+        BASE: `${V1}/leave-block-lists`,
+        BY_ID: (id) => `${V1}/leave-block-lists/${id}`,
+        SEARCH: `${V1}/leave-block-lists/search`,
+    },
+    LEAVE_CONTROL_PANEL: {
+        BULK_POLICY_ASSIGNMENTS: `${V1}/leave-control-panel/bulk-policy-assignments`,
+        BULK_ALLOCATIONS: `${V1}/leave-control-panel/bulk-allocations`,
+    },
+
     ATTENDANCES: {
         BASE: `${V1}/attendances`,
         BY_ID: (id) => `${V1}/attendances/${id}`,

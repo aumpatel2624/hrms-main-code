@@ -847,6 +847,68 @@ export const CONFIG_SCREENS = [
         gotchas: ["Only one Attendance row is allowed per employee per day."],
         roles: "HR User and HR Manager only.",
     },
+    {
+        key: "leave-adjustment",
+        config: "leaveAdjustmentConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A one-off manual correction to an employee's leave balance.",
+        when: "Use this for a one-off correction the normal allocation/application flow doesn't cover — saving is the action, there is nothing to approve afterward.",
+        gotchas: [
+            "Create is the action — saving writes one signed entry to the Leave Ledger immediately. There is no edit or delete afterward.",
+            "Does not change the Leave Allocation's own cached total — the real balance is always the Leave Ledger.",
+        ],
+        roles: "HR User and HR Manager only — no Employee access.",
+    },
+    {
+        key: "compensatory-leave-request",
+        config: "compensatoryLeaveRequestConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A request for comp-off leave for a day (or range) worked on a holiday.",
+        when: "An employee raises one for themselves after working a holiday or weekend; HR or a manager approves it.",
+        gotchas: [
+            "Approving checks that every day in the range is actually a holiday on the employee's Holiday List, and that matching Attendance records exist for the whole range — both are hard blocks, not warnings.",
+            "The Leave Type must have Is Compensatory set.",
+        ],
+        roles: "HR User and HR Manager have full access; Employees can create, read and edit (not delete once approved) their own requests, but cannot approve or reject.",
+    },
+    {
+        key: "leave-application",
+        config: "leaveApplicationConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "The centerpiece of Leaves — an employee's request for time off.",
+        when: "An employee (or someone on their behalf) creates one for a date range; their Leave Approver — or HR — approves or rejects it.",
+        gotchas: [
+            "Total Leave Days and the Leave Approver (when left blank) are always computed/resolved on save — a typed value is never trusted.",
+            "Approving creates Attendance records for the range and posts to the Leave Ledger; Cancelling an approved application reverses both.",
+            "An Employee sees only their own applications here; a Leave Approver sees their own plus everyone they're the resolved approver for.",
+        ],
+        roles: "Employee: own applications only (create/read/edit, no delete). Leave Approver: read/approve/reject/cancel on their own plus everyone they approve for. HR User and HR Manager: everyone's.",
+    },
+    {
+        key: "leave-encashment",
+        config: "leaveEncashmentConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Cashes out unused leave for a Leave Type that allows it.",
+        when: "Use this to pay an employee for leave they won't use, instead of letting it expire or carry forward.",
+        gotchas: [
+            "Create is the action — saving computes the eligible days and debits the Leave Ledger immediately.",
+            "Per Day Encashment Amount is entered by hand — this project has no Payroll module yet to look it up from.",
+            "Mark as Paid records the payment manually (amount, date, reference) — there is no GL posting or Payment Entry.",
+        ],
+        roles: "HR User and HR Manager only — no Employee access.",
+    },
+    {
+        key: "leave-block-list",
+        config: "leaveBlockListConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Dates on which Leave Applications are blocked, for a company and optionally one department and/or one Leave Type.",
+        when: "Set one up before a blackout period (year-end close, a busy season) so leave can't be applied for on those dates.",
+        gotchas: [
+            "Users on the Allow list bypass the block entirely for that list.",
+            "At least one Block Date row is required.",
+        ],
+        roles: "HR User and HR Manager only — no Employee access.",
+    },
 ];
 
 /**
@@ -1098,6 +1160,40 @@ export const CUSTOM_SCREENS = [
                 text:
                     "Like the Audit Log, this is read-only for everyone, including administrators — " +
                     "there is no add, edit or delete button, because an editable ledger is not a ledger.",
+            },
+        ],
+    },
+    {
+        key: "leave-control-panel",
+        title: "Leave Control Panel",
+        path: "/leave-control-panel",
+        source: "apps/admin/src/pages/Leaves/LeaveControlPanel.jsx",
+        intro:
+            "Assign a Leave Policy to many employees at once, and optionally grant the resulting " +
+            "leave allocations in the same step.",
+        body: [
+            {
+                heading: "Two buttons, two outcomes",
+                text:
+                    "\"Assign Policy Only\" creates the Leave Policy Assignment records and stops there — " +
+                    "nobody has any leave yet. \"Assign + Grant Allocations\" does that and immediately " +
+                    "runs the allocation step too, the same as opening each assignment afterward and " +
+                    "clicking Grant Allocations by hand.",
+            },
+            {
+                heading: "One failure doesn't stop the rest",
+                text:
+                    "Each selected employee is processed on its own. If one already has an overlapping " +
+                    "assignment, or something else about them is wrong, only that row shows Failed — " +
+                    "everyone else still goes through. The results table after a run shows exactly who " +
+                    "succeeded and who didn't, and why.",
+            },
+            {
+                heading: "Nothing is saved here",
+                text:
+                    "This page holds no records of its own — it is a form that dispatches individual " +
+                    "Leave Policy Assignment (and, on the fuller path, Leave Allocation) records per " +
+                    "employee. Refreshing the page clears your selection.",
             },
         ],
     },

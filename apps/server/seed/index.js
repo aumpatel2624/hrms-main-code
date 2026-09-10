@@ -30,6 +30,8 @@ import Branch from "../models/Branch.js";
 import Department from "../models/Department.js";
 import Designation from "../models/Designation.js";
 import EmploymentType from "../models/EmploymentType.js";
+import Employee from "../models/Employee.js";
+import EmployeeHealthInsurance from "../models/EmployeeHealthInsurance.js";
 import RoleMaster from "../models/RoleMaster.js";
 import UserRoles from "../models/UserRoles.js";
 import { PERMISSION_KEYS } from "@demo-panel/shared/permissions";
@@ -77,7 +79,12 @@ const parseCsvLine = (line) => {
  */
 const readOrgChartRows = () => {
   const csvPath = path.join(import.meta.dirname, "../../../docs/knowledge/apidel-org-chart.csv");
-  const lines = fs.readFileSync(csvPath, "utf8").trim().split("\n");
+  // The file was written by Python's csv module, which defaults to CRLF line
+  // endings regardless of platform — normalize before splitting, or the last
+  // column of every row (and the header) carries a trailing \r, which turned
+  // "gender" into a header nothing could look up (found by spot-checking
+  // seeded data, not by the row/link counts alone).
+  const lines = fs.readFileSync(csvPath, "utf8").replace(/\r\n/g, "\n").trim().split("\n");
   const headers = parseCsvLine(lines[0]);
   return lines.slice(1).map((line) => {
     const values = parseCsvLine(line);
@@ -137,6 +144,18 @@ const MENU_GROUPS = [
       { menuName: "Designation", menuUrl: "/designation", icon: "ri-user-star-line" },
       { menuName: "Employment Type", menuUrl: "/employment-type", icon: "ri-briefcase-line" },
       { menuName: "Employee Grade", menuUrl: "/employee-grade", icon: "ri-medal-line" },
+    ],
+  },
+  // HRMS module 2 (ADR-018). Separate from "HR Setup" (module 1's pure
+  // configuration masters) — Employee is the actual employee master, not
+  // setup, so it gets its own group rather than crowding into HR Setup.
+  {
+    menuGroupName: "HR Core",
+    sequence: 2.6,
+    icon: "ri-team-line",
+    menus: [
+      { menuName: "Employee", menuUrl: "/employee", icon: "ri-user-3-line" },
+      { menuName: "Employee Health Insurance", menuUrl: "/employee-health-insurance", icon: "ri-heart-pulse-line" },
     ],
   },
   {
@@ -544,6 +563,187 @@ const seedOrganizationSetupData = async (companyId) => {
 };
 
 /**
+ * ADR-018 (Employee Records). Not derived from the CSV — it has no insurance
+ * data. A small reasonable starter set the client can edit, same pattern as
+ * Employment Type in ADR-017.
+ */
+const seedEmployeeHealthInsuranceData = async () => {
+  const PROVIDERS = ["Aetna", "Cigna", "Star Health", "ICICI Lombard"];
+  let count = 0;
+  for (const providerName of PROVIDERS) {
+    await EmployeeHealthInsurance.findOneAndUpdate(
+      { providerName },
+      { providerName, isActive: true },
+      { upsert: true, setDefaultsOnInsert: true },
+    );
+    count += 1;
+  }
+  console.log(`✅ Employee health insurance: ${count} providers`);
+};
+
+const MONTH_INDEX = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+};
+
+/** Parses the org-chart CSV's "D-Mon-YY" dates (e.g. "2-Aug-12" → 2012-08-02).
+ * Every date in this file falls between 2012 and 2026, so `YY` → `20YY`. */
+const parseOrgChartDate = (value) => {
+  const [day, mon, yy] = value.split("-");
+  const month = MONTH_INDEX[mon.trim().toLowerCase()];
+  if (month === undefined || !day || !yy) {
+    throw new Error(`Unparseable date_of_joining value: "${value}"`);
+  }
+  return new Date(Date.UTC(2000 + Number(yy), month, Number(day)));
+};
+
+const GENDER_MAP = { male: "Male", female: "Female" };
+const WORK_MODE_VALUES = new Set(["WFO", "WFH"]);
+const SHIFT_PREFERENCE_VALUES = new Set(["Day", "Night", "UK"]);
+
+/**
+ * Real Apidel employees (ADR-018), 195 rows from apidel-org-chart.csv.
+ * Two-pass: pass 1 creates every row (companyId fixed to the seeded Apidel
+ * company; departmentId/designationId/branchId resolved against module 1's
+ * seeded rows — same normalizeDepartmentName() module 1 uses, so lookups
+ * agree); pass 2 resolves reportsToId by employeeName (confirmed clean data:
+ * 195 unique names, zero collisions, every manager_name value resolves to
+ * another row in this same file, only 2 rows have no manager).
+ *
+ * Upserts by employeeCode, so safe to re-run. A lookup that fails to resolve
+ * is a real bug (module 1's seed covers every distinct department/
+ * designation/branch value in this CSV) — fails loudly, not skipped.
+ */
+const seedEmployees = async (companyId) => {
+  const rows = readOrgChartRows();
+
+  const [departments, designations, branches] = await Promise.all([
+    Department.find({ companyId }).lean(),
+    Designation.find({ companyId }).lean(),
+    Branch.find({ companyId }).lean(),
+  ]);
+  const departmentByName = new Map(departments.map((d) => [d.departmentName, d._id]));
+  const designationByName = new Map(designations.map((d) => [d.designationName, d._id]));
+  const branchByName = new Map(branches.map((b) => [b.branchName, b._id]));
+
+  // Pass 1 — create/update every row, reportsToId left untouched here.
+  let created = 0;
+  let updated = 0;
+  for (const row of rows) {
+    const departmentId = departmentByName.get(normalizeDepartmentName(row.department));
+    const designationId = designationByName.get(row.title);
+    const branchId = branchByName.get(row.location);
+
+    if (!departmentId) {
+      throw new Error(`seedEmployees: no Department found for "${row.department}" (employee ${row.code})`);
+    }
+    if (!designationId) {
+      throw new Error(`seedEmployees: no Designation found for "${row.title}" (employee ${row.code})`);
+    }
+    if (!branchId) {
+      throw new Error(`seedEmployees: no Branch found for "${row.location}" (employee ${row.code})`);
+    }
+
+    const doc = {
+      employeeCode: row.code,
+      employeeName: row.name,
+      companyId,
+      departmentId,
+      designationId,
+      branchId,
+      dateOfJoining: parseOrgChartDate(row.date_of_joining),
+      gender: GENDER_MAP[row.gender?.trim().toLowerCase()] ?? null,
+      workMode: WORK_MODE_VALUES.has(row.work_mode) ? row.work_mode : null,
+      shiftPreference: SHIFT_PREFERENCE_VALUES.has(row.shift) ? row.shift : null,
+      isActive: true,
+    };
+
+    const existing = await Employee.findOne({ employeeCode: row.code });
+    if (existing) {
+      Object.assign(existing, doc);
+      await existing.save();
+      updated += 1;
+    } else {
+      await Employee.create(doc);
+      created += 1;
+    }
+  }
+
+  // Pass 2 — resolve reportsToId by employeeName.
+  const employees = await Employee.find({ companyId }).lean();
+  const employeeIdByName = new Map(employees.map((e) => [e.employeeName, e._id]));
+
+  let reportsToSet = 0;
+  for (const row of rows) {
+    if (!row.manager_name) continue;
+    const managerId = employeeIdByName.get(row.manager_name);
+    if (!managerId) {
+      throw new Error(`seedEmployees: manager "${row.manager_name}" not found for employee ${row.code}`);
+    }
+    const employeeId = employeeIdByName.get(row.name);
+    await Employee.updateOne({ _id: employeeId }, { $set: { reportsToId: managerId } });
+    reportsToSet += 1;
+  }
+
+  console.log(
+    `✅ Employees: ${created} created, ${updated} updated, ${reportsToSet} reports-to link(s) resolved`,
+  );
+};
+
+/**
+ * Extends the HRMS role matrix (ADR-018) — HR User and HR Manager get full
+ * access to Employee; Employee Health Insurance is HR-Manager-full/
+ * HR-User-**read-only**, the one doctype so far with an asymmetric split
+ * (matches the source permissions table exactly). The other 4 roles get no
+ * matrix row for either screen in this module, same reasoning as ADR-017.
+ */
+const seedEmployeeRecordsRoles = async () => {
+  const FULL_ACCESS_ROLES = ["HR User", "HR Manager"];
+  const EMPLOYEE_MENU_URL = "/employee";
+  const HEALTH_INSURANCE_MENU_URL = "/employee-health-insurance";
+
+  const [employeeMenu, healthInsuranceMenu] = await Promise.all([
+    MenuMaster.findOne({ menuUrl: EMPLOYEE_MENU_URL }).lean(),
+    MenuMaster.findOne({ menuUrl: HEALTH_INSURANCE_MENU_URL }).lean(),
+  ]);
+  if (!employeeMenu || !healthInsuranceMenu) {
+    console.log("⚠️  Employee records roles: HR Core menu rows don't exist yet — run seedMenus first");
+    return;
+  }
+
+  const allPermTrue = Object.fromEntries(PERMISSION_KEYS.map((key) => [key, key === "read" || key === "write" || key === "edit" || key === "delete"]));
+  const readOnlyPerm = Object.fromEntries(PERMISSION_KEYS.map((key) => [key, key === "read"]));
+
+  let matrixRowsAdded = 0;
+  for (const roleName of FULL_ACCESS_ROLES) {
+    const role = await RoleMaster.findOne({ roleName });
+    if (!role) continue;
+    const userRoles = await UserRoles.findOne({ roleId: role._id });
+    if (!userRoles) continue;
+
+    let changed = false;
+    const hasEmployeeRow = userRoles.roles.some((r) => String(r.menuId) === String(employeeMenu._id));
+    if (!hasEmployeeRow) {
+      userRoles.roles.push({ menuId: employeeMenu._id, menuGroupId: employeeMenu.menuGroup, ...allPermTrue });
+      matrixRowsAdded += 1;
+      changed = true;
+    }
+
+    const hasHealthInsuranceRow = userRoles.roles.some((r) => String(r.menuId) === String(healthInsuranceMenu._id));
+    if (!hasHealthInsuranceRow) {
+      const perm = roleName === "HR User" ? readOnlyPerm : allPermTrue;
+      userRoles.roles.push({ menuId: healthInsuranceMenu._id, menuGroupId: healthInsuranceMenu.menuGroup, ...perm });
+      matrixRowsAdded += 1;
+      changed = true;
+    }
+
+    if (changed) await userRoles.save();
+  }
+
+  console.log(`✅ Employee records roles: ${matrixRowsAdded} menu grant(s) added`);
+};
+
+/**
  * The 6 HRMS roles below System Manager (ADR-017 — System Manager maps to
  * this starter's existing ADMIN account type, already unrestricted, so it
  * gets no RoleMaster row). Grants full read/write/edit/delete on this
@@ -644,6 +844,9 @@ const run = async () => {
   await seedAdminUser();
   await seedOrganizationSetupData(companyId);
   await seedOrganizationSetupRoles();
+  await seedEmployeeHealthInsuranceData();
+  await seedEmployees(companyId);
+  await seedEmployeeRecordsRoles();
 
   await mongoose.disconnect();
   console.log("✅ Seeding complete");

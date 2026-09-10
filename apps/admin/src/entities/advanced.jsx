@@ -6,10 +6,13 @@ import {
     createDepartment, deleteDepartment, getDepartmentById, updateDepartment, searchDepartments, getAllDepartments,
 } from "../api/departments.api";
 import {
-    createBranch, deleteBranch, getBranchById, updateBranch, searchBranches,
-    createDesignation, deleteDesignation, getDesignationById, updateDesignation, searchDesignations,
-    getAllCompanies,
+    createBranch, deleteBranch, getBranchById, updateBranch, searchBranches, getAllBranches,
+    createDesignation, deleteDesignation, getDesignationById, updateDesignation, searchDesignations, getAllDesignations,
+    getAllCompanies, getAllEmploymentTypes, getAllEmployeeGrades, getAllEmployeeHealthInsurances,
 } from "../api/organizationSetup.api";
+import {
+    createEmployee, deleteEmployee, getEmployeeById, updateEmployee, searchEmployees, getAllEmployees,
+} from "../api/employees.api";
 import { getAllRoles } from "../api/roles.api";
 import { getAllCountries, getStatesByCountry, getCitiesByState } from "../api/locations.api";
 import {
@@ -504,7 +507,96 @@ export const designationConfig = {
     toForm: (data) => ({ ...data, companyId: refId(data.companyId) }),
 };
 
+// Reports-to needs a combined "code — name" label, unlike asOptions' single
+// labelKey — a small custom loader instead of reusing that helper.
+const employeeOptionsLoader = () =>
+    getAllEmployees().then((res) =>
+        (res.data?.data ?? []).map((x) => ({ value: x._id, label: `${x.employeeCode} — ${x.employeeName}` })));
+
+export const employeeConfig = {
+    filterFields: [
+        { name: "employeeCode", label: "Employee Code", type: "string" },
+        { name: "employeeName", label: "Employee Name", type: "string" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "departmentId", label: "Department", type: "objectId" },
+        { name: "designationId", label: "Designation", type: "objectId" },
+        { name: "branchId", label: "Branch", type: "objectId" },
+        { name: "status", label: "Status", type: "enum" },
+        { name: "dateOfJoining", label: "Date of Joining", type: "date" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "employee",
+    path: "/employee",
+    section: "HR Core",
+    singular: "Employee",
+    plural: "Employees",
+    description: "The employee master — the hub every other HRMS record links to.",
+    api: { search: searchEmployees, getById: getEmployeeById, create: createEmployee, update: updateEmployee, remove: deleteEmployee },
+    lookups: {
+        companyId: asOptions(getAllCompanies, "companyName"),
+        departmentId: asOptions(getAllDepartments, "departmentName"),
+        designationId: asOptions(getAllDesignations, "designationName"),
+        branchId: asOptions(getAllBranches, "branchName"),
+        reportsToId: employeeOptionsLoader,
+        employmentTypeId: asOptions(getAllEmploymentTypes, "employmentTypeName"),
+        gradeId: asOptions(getAllEmployeeGrades, "gradeName"),
+        healthInsuranceProviderId: asOptions(getAllEmployeeHealthInsurances, "providerName"),
+    },
+    sections: [
+        { id: "identity", title: "Identity" },
+        { id: "organization", title: "Organization" },
+        { id: "employment", title: "Employment" },
+        { id: "other", title: "Other" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "employeeCode", icon: Hash02, label: "Employee Code", required: true, section: "identity", error: "Employee Code is required!", placeholder: "e.g. A005" },
+        { name: "employeeName", icon: User01, label: "Employee Name", required: true, section: "identity", error: "Employee Name is required!", placeholder: "Enter employee name" },
+        { name: "gender", label: "Gender", type: "select", section: "identity", options: [{ value: "Male", label: "Male" }, { value: "Female", label: "Female" }, { value: "Other", label: "Other" }] },
+        { name: "dateOfBirth", label: "Date of Birth", type: "date", section: "identity" },
+
+        { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "organization", error: "Company is required!", optionsFrom: "companyId" },
+        { name: "departmentId", icon: Building07, label: "Department", type: "select", required: true, section: "organization", error: "Department is required!", optionsFrom: "departmentId" },
+        { name: "designationId", icon: User01, label: "Designation", type: "select", required: true, section: "organization", error: "Designation is required!", optionsFrom: "designationId" },
+        { name: "branchId", icon: MarkerPin01, label: "Branch", type: "select", required: true, section: "organization", error: "Branch is required!", optionsFrom: "branchId" },
+        { name: "reportsToId", icon: User01, label: "Reports To", type: "select", section: "organization", optionsFrom: "reportsToId" },
+
+        { name: "status", label: "Status", type: "select", section: "employment", options: [{ value: "Active", label: "Active" }, { value: "Inactive", label: "Inactive" }, { value: "Suspended", label: "Suspended" }, { value: "Left", label: "Left" }] },
+        { name: "dateOfJoining", label: "Date of Joining", type: "date", required: true, section: "employment", error: "Date of Joining is required!" },
+        { name: "relievingDate", label: "Relieving Date", type: "date", section: "employment" },
+        { name: "employmentTypeId", icon: Tag01, label: "Employment Type", type: "select", section: "employment", optionsFrom: "employmentTypeId" },
+        { name: "gradeId", icon: Tag01, label: "Employee Grade", type: "select", section: "employment", optionsFrom: "gradeId" },
+        { name: "workMode", label: "Work Mode", type: "select", section: "employment", options: [{ value: "WFO", label: "Work From Office" }, { value: "WFH", label: "Work From Home" }] },
+        { name: "shiftPreference", label: "Shift", type: "select", section: "employment", options: [{ value: "Day", label: "Day" }, { value: "Night", label: "Night" }, { value: "UK", label: "UK" }] },
+
+        { name: "healthInsuranceProviderId", icon: Tag01, label: "Health Insurance Provider", type: "select", section: "other", optionsFrom: "healthInsuranceProviderId" },
+        { name: "healthInsuranceNo", label: "Health Insurance No.", section: "other", placeholder: "Enter policy/member number" },
+
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Employee Code", selector: (row) => row.employeeCode, minWidth: "130px" },
+        { name: "Employee Name", selector: (row) => row.employeeName, minWidth: "180px" },
+        { name: "Department", selector: (row) => row.departmentName ?? "—", minWidth: "160px" },
+        { name: "Designation", selector: (row) => row.designationName ?? "—", minWidth: "160px" },
+        { name: "Status", selector: (row) => row.status, minWidth: "120px" },
+    ],
+    recordTitle: (r) => `${r.employeeCode} — ${r.employeeName}`,
+    toForm: (data) => ({
+        ...data,
+        companyId: refId(data.companyId),
+        departmentId: refId(data.departmentId),
+        designationId: refId(data.designationId),
+        branchId: refId(data.branchId),
+        reportsToId: refId(data.reportsToId),
+        employmentTypeId: refId(data.employmentTypeId),
+        gradeId: refId(data.gradeId),
+        healthInsuranceProviderId: refId(data.healthInsuranceProviderId),
+    }),
+};
+
 export const ADVANCED_ENTITIES = [
     adminUserConfig, userConfig, menuMasterConfig, emailTemplateConfig,
-    departmentConfig, branchConfig, designationConfig,
+    departmentConfig, branchConfig, designationConfig, employeeConfig,
 ];

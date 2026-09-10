@@ -1195,3 +1195,156 @@ Copy this block. Number sequentially.
   (2 users, 2 extra companies, 1 branch, 1 department) deleted, collection counts confirmed back to
   the seeded baseline. `npm run build` green throughout.
 
+---
+
+### ADR-018 — Employee Records: Employee core model + Employee Health Insurance; three sibling doctypes rescoped to the modules that actually consume them
+
+- **Date**: 2026-09-10
+- **Status**: accepted
+- **Context**: `system-design` for HRMS module 2, written and self-approved under the same standing
+  overnight/autonomous authorization as ADR-017 (module 1's implementation fork finished clean —
+  10/10 tests, idempotent seed x2, live-HTTP matrix checks, `npm run build` green — reviewed before
+  starting this one). Read `HRMS-Port-Spec/02-Cross-Cutting/Employee Core Model.md` (already read
+  during grilling) plus, newly, the four `HR-Core` per-doctype files this module's original STATE.md
+  scope named: `Employee Property History.md`, `Employee Health Insurance.md`,
+  `Identification Document Type.md`, `Department Approver.md`.
+- **Scope correction from the original STATE.md module list**: three of the four sibling doctypes
+  named in module 2's original one-line description don't belong here — this is exactly the "first
+  module teaches you things that change the rest" case AGENTS.md warns about, so the module list is
+  being corrected now rather than building orphaned infrastructure to match a rough Day-1 sketch:
+  - **Employee Property History** is a pure diff-log child table with **no independent existence** —
+    its only writers are `Employee Promotion`/`Employee Transfer.on_submit`/`on_cancel`
+    (`update_employee_work_history`), both in module 5 (Employee Career Events), which doesn't exist
+    yet. Building it now means a collection nothing writes to. **Moved to module 5.**
+  - **Identification Document Type** is a one-field master whose only named consumer is
+    `Travel Request.personal_id_type` (module 6, Travel) — Employee's own identification-document
+    fields are ERPNext-core and explicitly out of this spec's traced scope. **Moved to module 6.**
+  - **Department Approver** is the schema (three approver-list child tables on `Department`) behind
+    the `get_approvers` fallback query — but that query is only ever called from Leave
+    Application/Expense Claim/Shift Request (modules 8, 16, and part of 9), and designing it in
+    isolation risks getting the shape wrong before `OPEN-QUESTIONS.md` Q-4 (the per-screen/company
+    scoping mechanism itself) is actually designed. **Moved to module 8 (Leaves)**, the first and
+    largest consumer, where Q-4 gets answered for real.
+  - **Employee Health Insurance stays** — genuinely self-contained (a lookup master plus two Employee
+    fields, per Employee Core Model Part A), no dependency on anything unbuilt.
+  - `STATE.md`'s module 2 row description is being corrected in the same commit as this ADR.
+- **Options considered**:
+  - _Build all four as originally scoped, to match the Day-1 module list_ — lost. That list was
+    written before any per-doctype detail was read (grill-me round, deliberately shallow at that
+    depth) — treating it as fixed now would be cargo-culting a rough sketch over what the actual
+    source dependencies say. AGENTS.md explicitly expects module boundaries to move as building
+    teaches you things.
+  - _Bulk-create a `User` login account for all 195 seeded employees_ — lost. That means generating
+    195 real people's login credentials without their knowledge or consent — a real-world problem,
+    not just a technical one, and out of proportion to what this module needs to prove. `Employee`
+    gets an optional, nullable `userId` (ref `User`) — schema-ready for self-service, seeded as
+    `null` for every real employee. Provisioning a specific person's login is a deliberate future
+    action (a module or a button), not a bulk seed step.
+  - _Require `employmentTypeId`/`gradeId` on Employee, defaulted to a guess_ — lost. The org-chart CSV
+    has no employment-type or grade data per employee; forcing a value means inventing HR
+    classification facts about real people with no source for them. Both fields are optional/unseeded
+    (`null`) — visibly incomplete rather than silently wrong. `companyId`/`departmentId`/
+    `designationId`/`branchId` ARE required — the CSV has real data for all 195 rows on all four.
+  - _Model the CSV's `shift` (Day/Night/UK) and `work_mode` (WFO/WFH) columns by building the Shift &
+    Attendance module's `ShiftType`/`ShiftAssignment` early_ — lost, but the real data is too good to
+    drop. Kept as two plain descriptive fields on Employee (`shiftPreference` enum-ish string,
+    `workMode` enum `WFO`/`WFH`) — explicitly documented in `DOMAIN.md` as a placeholder superseded by
+    real `ShiftAssignment` once module 9 (Shift & Attendance) is built, not a preview of that module's
+    design.
+  - _Naming-series-style employee codes (`HR-EMP-2026-00001`)_ — lost, per ADR-016's idiomatic-rebuild
+    decision (no naming-series engine). The real org-chart data already has real employee codes
+    (`A005`, `U001`, ...) — used directly as `employeeCode`, globally unique, instead of inventing a
+    new numbering scheme for data that already has one.
+- **Decision**:
+  1. **`Employee`** (new): `employeeCode` (required, trim, globally unique — real CSV codes, e.g.
+     `A005`), `employeeName` (required, trim — Employee's own name, independent of any linked login
+     account), `userId` (ref `User`, optional, unique when set, null for every seeded row per above),
+     `companyId`/`departmentId`/`designationId`/`branchId` (all ref, all required — CSV has complete
+     data for all 195 rows on all four), `reportsToId` (ref `Employee`, self-referential, optional —
+     null only for the 2 top-of-hierarchy rows), `status` (enum `Active`/`Inactive`/`Suspended`/
+     `Left`, default `Active`), `dateOfJoining` (required date, from CSV), `relievingDate` (optional
+     date, null — set later by the Separation module), `gender` (optional enum, from CSV where
+     present), `dateOfBirth` (optional date, not in CSV, kept for future manual entry),
+     `employmentTypeId`/`gradeId` (both ref, both optional/unseeded per above),
+     `expenseApproverId`/`leaveApproverId`/`shiftRequestApproverId` (all ref `User`, all optional,
+     unseeded — the fields exist now per Employee Core Model Part A so Leaves/Expenses/Shift-Request
+     don't need a later Employee schema change, but the scoping *mechanism* that reads them is still
+     `OPEN-QUESTIONS.md` Q-4, unresolved), `healthInsuranceProviderId` (ref `EmployeeHealthInsurance`,
+     optional), `healthInsuranceNo` (optional string, `depends_on` pattern from source — only
+     meaningful once a provider is set), `shiftPreference` (optional string enum `Day`/`Night`/`UK`,
+     placeholder per Options above), `workMode` (optional enum `WFO`/`WFH`), `isActive`.
+  2. **`EmployeeHealthInsurance`** (new): `providerName` (required, trim, globally unique — e.g.
+     "Aetna"), `isActive`. Matches source permissions exactly: HR Manager full CRUD, HR User
+     read-only (no write/create/delete matrix row) — the one doctype in this spec so far with an
+     asymmetric HR User/HR Manager split; most Organization Setup masters gave both full access.
+  3. **Seed**: real `Employee` rows from `apidel-org-chart.csv` (195 rows) — two-pass insert
+     (confirmed clean data: 195 unique names, zero manager-name collisions, every `manager_name`
+     resolves to another row in the same file, only 2 rows with no manager) so `reportsToId` resolves
+     correctly on the second pass. `departmentId`/`designationId`/`branchId` resolved against the
+     Organization Setup rows seeded in module 1 (same normalized names — reuse that lookup, don't
+     re-normalize). `EmployeeHealthInsurance`: seed a small reasonable starter set (not sourced from
+     the CSV — it has no insurance data) the client can edit, same pattern as Employment Type in
+     ADR-017.
+  4. **Roles/permissions**: extend the `UserRoles` matrix seeded in module 1 — HR User and HR Manager
+     get full access to the new Employee and Employee Health Insurance screens (Employee Health
+     Insurance: HR User read-only, per source, per point 2). The other four roles get no matrix row
+     for these screens in this module — `Employee` (the role)'s own self-only access to *their own*
+     Employee record is part of the still-open per-screen scoping mechanism (Q-4), not this module.
+  5. **Menu**: add Employee and Employee Health Insurance to the "HR Setup" menu group created in
+     module 1 (or a new "HR Core" group if "HR Setup" reads wrong for a transactional-feeling
+     screen like Employee — implementer's call, note which was chosen).
+  6. **Reporting**: `widgetSources.js` entries for `employees` (groupable by `companyId`,
+     `departmentId`, `designationId`, `status`, each with a lookup; `dateFields`: `dateOfJoining` —
+     headcount-over-time becomes buildable) and `employee-health-insurances` (groupable only, no
+     aggregatable fields on either — headcount is a count-of-records stat, no numeric field to sum).
+- **Consequences**:
+  - Every later module's per-employee doctypes now have a real `Employee` collection to foreign-key
+    to — this was the actual point of putting Organization Setup before this module and this module
+    before everything else, per the dependency graph.
+  - `STATE.md`'s module 3 onward descriptions are unaffected by the module-2 scope correction except
+    where they already expected to depend on Property History/ID Document Type/Department Approver —
+    module 5, 6 and 8's descriptions get a one-line note that those doctypes arrive with them now,
+    not from module 2.
+  - `employeeCode` uniqueness is global, not per-company (unlike Department/Designation/Branch in
+    module 1) — matches Frappe's own single global `name` namespace; revisit only if Apidel says two
+    different companies can legitimately reuse the same employee code.
+- **Deviates from convention**: none beyond what ADR-016/ADR-017 already cover (Company-scoped refs,
+  no naming series). No new deviation from `docs/conventions/` introduced by this module itself.
+- **As built**: as decided, plus what building surfaced:
+  - The org-chart CSV turned out to have Windows (`\r\n`) line endings (Python's `csv.writer`
+    default) — the seed's minimal CSV parser split only on `\n`, so the last column's header
+    (`gender`) carried a trailing `\r` and never matched during lookup. Every seeded employee had
+    `gender: null` on the first `npm run seed` run despite the CSV having real values for all 195
+    rows. Found by spot-checking three known employees against the raw CSV after seeding — the
+    create/update counts alone (195 created, 193 reports-to links resolved) looked completely
+    correct and would not have surfaced this. Fixed by normalizing line endings before splitting;
+    re-verified against the same three rows plus a full `gender` distribution count (112 Male / 83
+    Female / 0 null, sums to 195).
+  - `EmployeeHealthInsurance` CRUD folded into the existing `organizationSetup.controller.js`/
+    `.routes.js` (grouped-masters file from module 1) rather than a new file — genuinely the same
+    shape as `EmploymentType`/`EmployeeGrade`, and `Employee` itself was substantial enough to
+    justify its own `employee.controller.js`/`.routes.js` as planned.
+  - Menu placement: put Employee and Employee Health Insurance in a new "HR Core" group, separate
+    from module 1's "HR Setup" — Employee is the actual employee master, not configuration, and
+    crowding it into HR Setup would have made that group read as "everything HR" rather than "the
+    masters you configure once."
+  - Verify results: `npm test` 10/10 green throughout. `npm run seed` run twice against the real dev
+    DB — first run: 195 created, 193 reports-to links (matches 195 minus the 2 top-of-hierarchy
+    rows with no manager); second run: 0 created / 195 updated, same 193 links — idempotent. Spot
+    checks: Hemant Patel/Amita Patel (the 2 top-of-hierarchy rows) confirmed `reportsToId: null`;
+    date parsing confirmed correct (`2-Aug-12` → `2012-08-02`, `7-Apr-14` → `2014-04-07`). Live HTTP
+    verify (throwaway HR User and Employee-role accounts, throwaway Country/State/City since none
+    were seeded in this dev DB for the starter's own generic `User` model — all deleted afterward,
+    idempotent pre-cleanup added to the verify script after an early run's failure skipped its own
+    cleanup): missing-required-fields create → 400; valid create → 201; **deleting a Department that
+    now has an Employee correctly 409s** — the cross-module regression check, confirming
+    `getReferencingCounts` picked up Employee's new `departmentId` ref with no registration needed;
+    HR User read-only on Employee Health Insurance confirmed (200 GET, 403 POST); Employee-role
+    correctly 403'd on both new screens' search endpoints and correctly allowed through the
+    matrix-free dropdown `GET /employees`. All throwaway data cleaned up; Employee count back to 195.
+    `npm run build` green. `npm run docs` (Playwright screenshot capture) was not run — manifest
+    entries added and `npm test`'s fingerprint check passes, but no screenshots exist yet for these
+    two screens, same gap module 1 left.
+  - Not done, flagged for later: `Employee.userId` self-service linking has no UI action yet (create
+    a `User` for a specific `Employee`) — schema-ready, deliberately not built this module.
+

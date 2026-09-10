@@ -8,3 +8,4 @@ apps/admin/.env
 .env.local
 *.log
 .DS_Store
+.claude/scheduled_tasks.lock

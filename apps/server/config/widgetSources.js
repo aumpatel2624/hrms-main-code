@@ -175,4 +175,55 @@ export const WIDGET_SOURCES = Object.freeze({
       createdAt: "date",
     },
   },
+
+  // Employee Records (ADR-018). Headcount is a count-of-records stat — no
+  // numeric field on either collection to sum/average.
+  employees: {
+    label: "Employees",
+    model: "Employee",
+    aggregatable: {},
+    groupable: {
+      departmentId: {
+        label: "Department",
+        lookup: { from: "departments", labelField: "departmentName" },
+      },
+      designationId: {
+        label: "Designation",
+        lookup: { from: "designations", labelField: "designationName" },
+      },
+      companyId: {
+        label: "Company",
+        lookup: { from: "companies", labelField: "companyName" },
+      },
+      status: { label: "Status" },
+    },
+    dateFields: { dateOfJoining: "Date of Joining", createdAt: "Created" },
+    filterable: {
+      employeeCode: "string",
+      employeeName: "string",
+      companyId: "objectId",
+      departmentId: "objectId",
+      designationId: "objectId",
+      branchId: "objectId",
+      status: "enum",
+      dateOfJoining: "date",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
+
+  "employee-health-insurances": {
+    label: "Employee Health Insurances",
+    model: "EmployeeHealthInsurance",
+    aggregatable: {},
+    groupable: {
+      isActive: { label: "Active status" },
+    },
+    dateFields: { createdAt: "Created" },
+    filterable: {
+      providerName: "string",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
 });

@@ -172,6 +172,37 @@ export const CONFIG_SCREENS = [
         roles: "Only HR User and HR Manager can add or edit employee grades.",
     },
     {
+        key: "employee",
+        config: "employeeConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro:
+            "An employee is the hub every other HR record links to — leave, payroll, performance and " +
+            "everything else eventually refers back to this record. Real employee codes and reporting " +
+            "lines carry over from the org chart, so most employees are already here.",
+        when: "Add an employee when someone new joins, before creating any other record about them.",
+        gotchas: [
+            "Company, Department, Designation, Branch and Date of Joining are all required — an " +
+                "employee cannot be saved without them.",
+            "You cannot delete an employee while other records still reference them.",
+            "Employment Type, Grade and the three approver fields are optional and are not " +
+                "pre-filled — set them here if you use them.",
+            "This screen does not create a login for the employee. Self-service login is separate, " +
+                "future work — most employees here have no login yet.",
+        ],
+        roles: "Only HR User and HR Manager can add or edit employees.",
+    },
+    {
+        key: "employee-health-insurance",
+        config: "employeeHealthInsuranceConfig",
+        source: "apps/admin/src/entities/index.js",
+        intro:
+            "A health insurance provider is a lookup list — Aetna, Cigna, and so on — an employee's " +
+            "insurance can be set against.",
+        when: "Add a provider before assigning an employee's health insurance to it.",
+        gotchas: ["You cannot delete a provider while records still reference it."],
+        roles: "HR Manager can add, edit and delete providers; HR User can view them but not change them.",
+    },
+    {
         key: "user",
         config: "userConfig",
         source: "apps/admin/src/entities/advanced.jsx",

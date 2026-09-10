@@ -48,3 +48,11 @@ export const getEmployeeGradeById = async (id) => api.get(ENDPOINTS.EMPLOYEE_GRA
 export const updateEmployeeGrade = async (id, data) => api.put(ENDPOINTS.EMPLOYEE_GRADES.BY_ID(id), data);
 export const deleteEmployeeGrade = async (id) => api.delete(ENDPOINTS.EMPLOYEE_GRADES.BY_ID(id));
 export const searchEmployeeGrades = async (params) => api.post(ENDPOINTS.EMPLOYEE_GRADES.SEARCH, params);
+
+// ------------------------------------------------ Employee Health Insurance --
+export const createEmployeeHealthInsurance = async (data) => api.post(ENDPOINTS.EMPLOYEE_HEALTH_INSURANCES.BASE, data);
+export const getAllEmployeeHealthInsurances = async () => api.get(ENDPOINTS.EMPLOYEE_HEALTH_INSURANCES.BASE);
+export const getEmployeeHealthInsuranceById = async (id) => api.get(ENDPOINTS.EMPLOYEE_HEALTH_INSURANCES.BY_ID(id));
+export const updateEmployeeHealthInsurance = async (id, data) => api.put(ENDPOINTS.EMPLOYEE_HEALTH_INSURANCES.BY_ID(id), data);
+export const deleteEmployeeHealthInsurance = async (id) => api.delete(ENDPOINTS.EMPLOYEE_HEALTH_INSURANCES.BY_ID(id));
+export const searchEmployeeHealthInsurances = async (params) => api.post(ENDPOINTS.EMPLOYEE_HEALTH_INSURANCES.SEARCH, params);

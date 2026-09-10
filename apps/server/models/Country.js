@@ -13,7 +13,7 @@ const CountrySchema = new mongoose.Schema(
     },
     isActive: {
       type: Boolean,
-      default: false,
+      default: true,
       required: true,
     },
   },

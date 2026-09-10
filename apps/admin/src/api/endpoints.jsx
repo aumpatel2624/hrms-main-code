@@ -195,6 +195,36 @@ export const ENDPOINTS = {
         SEARCH: `${V1}/staffing-plans/search`,
     },
 
+    // HRMS module 6 (ADR-022)
+    TRAINING_PROGRAMS: {
+        BASE: `${V1}/training-programs`,
+        BY_ID: (id) => `${V1}/training-programs/${id}`,
+        SEARCH: `${V1}/training-programs/search`,
+    },
+    TRAINING_EVENTS: {
+        BASE: `${V1}/training-events`,
+        BY_ID: (id) => `${V1}/training-events/${id}`,
+        SEARCH: `${V1}/training-events/search`,
+        MARK_COMPLETED: (id) => `${V1}/training-events/${id}/mark-completed`,
+        MARK_SCHEDULED: (id) => `${V1}/training-events/${id}/mark-scheduled`,
+    },
+    TRAINING_FEEDBACKS: {
+        BASE: `${V1}/training-feedbacks`,
+        BY_ID: (id) => `${V1}/training-feedbacks/${id}`,
+        SEARCH: `${V1}/training-feedbacks/search`,
+    },
+    SKILLS: {
+        BASE: `${V1}/skills`,
+        BY_ID: (id) => `${V1}/skills/${id}`,
+        SEARCH: `${V1}/skills/search`,
+    },
+    EMPLOYEE_SKILL_MAPS: {
+        BASE: `${V1}/employee-skill-maps`,
+        BY_ID: (id) => `${V1}/employee-skill-maps/${id}`,
+        SEARCH: `${V1}/employee-skill-maps/search`,
+        POPULATE_FROM_DESIGNATION: (id) => `${V1}/employee-skill-maps/${id}/populate-from-designation`,
+    },
+
     // User endpoints
     USERS: {
         BASE: `${V1}/users`,

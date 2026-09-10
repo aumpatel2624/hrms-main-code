@@ -125,7 +125,7 @@ export const listJobApplicantSourcesByParams = async (req, res) => {
 
 export const createInterviewType = async (req, res) => {
   try {
-    const { interviewTypeName, designationId, expectedAverageRating, defaultInterviewers, isActive } = req.body;
+    const { interviewTypeName, designationId, expectedAverageRating, defaultInterviewers, expectedSkillSet, isActive } = req.body;
     if (!interviewTypeName) {
       return res.status(400).json({ isOk: false, status: 400, message: "Interview type name is required" });
     }
@@ -133,7 +133,7 @@ export const createInterviewType = async (req, res) => {
     if (existing) {
       return res.status(400).json({ isOk: false, status: 400, message: "Interview Type already exists" });
     }
-    await InterviewType.create({ interviewTypeName, designationId, expectedAverageRating, defaultInterviewers, isActive });
+    await InterviewType.create({ interviewTypeName, designationId, expectedAverageRating, defaultInterviewers, expectedSkillSet, isActive });
     return res.status(201).json({ isOk: true, status: 201, message: "Interview Type created successfully" });
   } catch (error) {
     console.log("Error in createInterviewType", error);
@@ -148,8 +148,15 @@ export const updateInterviewType = async (req, res) => {
     if (!interviewType) {
       return res.status(404).json({ isOk: false, status: 404, message: "Interview Type not found" });
     }
-    const { interviewTypeName, designationId, expectedAverageRating, defaultInterviewers, isActive } = req.body;
-    Object.assign(interviewType, { interviewTypeName, designationId, expectedAverageRating, defaultInterviewers, isActive });
+    // Merge only fields actually sent — Object.assign-ing a destructure that
+    // omits a field would set it to `undefined` and, for interviewTypeName,
+    // fail its `required` validator on save. Same class of bug fixed live
+    // on Designation's updateDesignation while wiring this same retrofit
+    // (ADR-022) — fixed here too rather than left to be found again.
+    const fields = ["interviewTypeName", "designationId", "expectedAverageRating", "defaultInterviewers", "expectedSkillSet", "isActive"];
+    for (const key of fields) {
+      if (req.body[key] !== undefined) interviewType[key] = req.body[key];
+    }
     await interviewType.save();
     return res.status(200).json({ isOk: true, status: 200, message: "Interview Type updated successfully" });
   } catch (error) {

@@ -712,6 +712,70 @@ const options = {
           },
         },
         // Auth schemas
+        // Travel schemas (ADR-023). Note: modules 3-6 (Recruitment onward)
+        // didn't add their own schemas here despite the convention — a
+        // pre-existing gap, not introduced or fixed by this module.
+        PurposeOfTravel: {
+          type: "object",
+          properties: {
+            _id: { type: "string" },
+            purposeOfTravelName: { type: "string" },
+            isActive: { type: "boolean" },
+          },
+        },
+        CreatePurposeOfTravel: {
+          type: "object",
+          required: ["purposeOfTravelName"],
+          properties: {
+            purposeOfTravelName: { type: "string", example: "Client Visit" },
+            isActive: { type: "boolean", default: true },
+          },
+        },
+        IdentificationDocumentType: {
+          type: "object",
+          properties: {
+            _id: { type: "string" },
+            identificationDocumentTypeName: { type: "string" },
+            isActive: { type: "boolean" },
+          },
+        },
+        CreateIdentificationDocumentType: {
+          type: "object",
+          required: ["identificationDocumentTypeName"],
+          properties: {
+            identificationDocumentTypeName: { type: "string", example: "Passport" },
+            isActive: { type: "boolean", default: true },
+          },
+        },
+        TravelRequest: {
+          type: "object",
+          properties: {
+            _id: { type: "string" },
+            employeeId: { type: "string" },
+            travelType: { type: "string", enum: ["Domestic", "International"] },
+            travelFunding: { type: "string" },
+            purposeOfTravelId: { type: "string" },
+            detailsOfSponsor: { type: "string" },
+            description: { type: "string" },
+            personalIdTypeId: { type: "string" },
+            personalIdNumber: { type: "string" },
+            itinerary: { type: "array", items: { type: "object" } },
+            costings: { type: "array", items: { type: "object" } },
+            status: { type: "string", enum: ["Draft", "Submitted", "Cancelled"] },
+            companyId: { type: "string" },
+            isActive: { type: "boolean" },
+          },
+        },
+        CreateTravelRequest: {
+          type: "object",
+          required: ["employeeId", "travelType", "purposeOfTravelId"],
+          properties: {
+            employeeId: { type: "string" },
+            travelType: { type: "string", enum: ["Domestic", "International"] },
+            purposeOfTravelId: { type: "string" },
+            status: { type: "string", default: "Draft" },
+          },
+        },
         LoginRequest: {
           type: "object",
           required: ["email", "password"],

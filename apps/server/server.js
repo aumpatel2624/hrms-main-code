@@ -230,6 +230,7 @@ import onboardingRoutes from "./routes/v1/onboarding.routes.js";
 import separationRoutes from "./routes/v1/separation.routes.js";
 import employeeCareerEventsRoutes from "./routes/v1/employeeCareerEvents.routes.js";
 import trainingSkillsRoutes from "./routes/v1/trainingSkills.routes.js";
+import travelRoutes from "./routes/v1/travel.routes.js";
 import seoPublicRoutes from "./routes/v1/seoPublic.routes.js";
 import jobsPublicRoutes from "./routes/v1/jobsPublic.routes.js";
 
@@ -255,6 +256,7 @@ app.use("/api/v1", onboardingRoutes);
 app.use("/api/v1", separationRoutes);
 app.use("/api/v1", employeeCareerEventsRoutes);
 app.use("/api/v1", trainingSkillsRoutes);
+app.use("/api/v1", travelRoutes);
 app.use("/api/v1/otp", otpRoutes);
 
 // Unauthenticated on purpose — the public website has no session. See

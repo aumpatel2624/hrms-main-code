@@ -1844,5 +1844,68 @@ Copy this block. Number sequentially.
 - **Deviates from convention**: none new beyond ADR-016/017's already-approved patterns. The
   bug-fixes-not-reproduced decisions are corrections within the idiomatic-rebuild mandate, not a new
   deviation from `docs/conventions/`.
-- **As built**: pending — implementation follows in the same session.
+- **As built**: as decided, plus three deviations found while building:
+  1. `EmployeeReferral.email`'s uniqueness couldn't be scoped to
+     "non-Cancelled rows" at the index level — MongoDB partial indexes don't
+     support `$ne`/`$in`, only `$eq`/`$exists`/`$gt(e)`/`$lt(e)`/`$type`
+     under a top-level `$and`. Fell back to a plain `unique: true` (merged
+     with the soft-delete plugin's own `isDeleted: false`, same as every
+     other unique index in this project); the "not unique among Cancelled
+     rows" refinement stays enforced in the controller's own duplicate
+     check only. A narrow gap (re-referring the same email after a prior
+     referral was cancelled would hit the DB constraint), not the common
+     path.
+  2. `widgetSources.js`'s doc comment says `aggregatable` values are plain
+     label strings (`{ field: label }`), matching `dateFields`'s shape —
+     written as `{ field: { label, type } }` first, caught before commit by
+     checking `DashboardSectionEditor.jsx`'s actual consumption
+     (`Object.entries(...).map(([field, label]) => ...)`, which would have
+     rendered `[object Object]` as the dropdown label). Fixed to the plain
+     string shape.
+  3. `Employee.ctc` (added by this ADR) is only ever written by
+     `EmployeePromotion`'s controller directly — it was never added to
+     `employee.controller.js`'s own `OPTIONAL_FIELDS` allowlist (that
+     controller predates this field, module 2), so it can't be set or
+     cleared through the generic Employee edit endpoint. Consistent with
+     the intent (CTC changes should go through Promotion, matching real HR
+     process) but means a stray test CTC value can't be cleared through the
+     API afterward — left as real, correctly-applied data on the test
+     employee rather than forced clean via a workaround; noted, not fixed,
+     since deciding whether `ctc` should also be directly editable is a
+     product question, not a bug.
+- **Verified live** against the real dev database: `npm test` 10/10 throughout,
+  `npm run seed` run twice (idempotent — 0 new on the second run; 5
+  Grievance Types both times), `npm run build` green. Full HTTP walk:
+  Transfer (department change applied to the Employee immediately, one
+  `EmployeePropertyChange` row logged, old/new values correct), Promotion
+  (revised CTC applied to `Employee.ctc`, Inactive-employee guard confirmed
+  with a real 400), Referral (duplicate-email 409, `departmentId` correctly
+  fetched from the referrer — confirming the bug-not-reproduced fix —
+  `createJobApplicant` producing a real `JobApplicant` with the "Referral"
+  source and flipping the referral to In Process), Grievance (both
+  conditional-required-field guards confirmed with real 400s), Staffing
+  Plan (`currentCount`/`numberOfPositions` computed correctly against live
+  Employee counts, overlap guard confirmed with a real 409). **The
+  Recruitment retrofit (closing Q-8) confirmed end to end**: with a
+  Staffing Plan capping a designation at 2 positions (1 existing employee +
+  1 vacancy), a first Open Job Opening for that designation succeeded, a
+  second was rejected 409, and a Job Offer for the same exhausted
+  designation was also rejected 409 — both citing the Staffing Plan by id.
+  Role-permission checks confirmed live with throwaway accounts: HR User
+  could create an Employee Transfer but not delete it (create-read-only,
+  per source's asymmetric table), the Employee role could create an
+  Employee Grievance but was 403'd attempting to write an Employee
+  Referral. All test data cleaned up (Employee Transfers/Promotions/
+  Grievances/Referrals/Staffing Plans/Job Openings/Job Applicants deleted;
+  throwaway Country/State/City/Users — this dev DB had none, confirming
+  `OPEN-QUESTIONS.md` Q-10 is still open — created and deleted); Employee
+  count confirmed back to 195, the transferred employee's department
+  restored to its original value.
+- **Found, not fixed** (pre-existing, unrelated to this module): `POST
+  /cities` 500s with a raw Mongoose validation message
+  (`City validation failed: countryId: Path 'countryId' is required.`)
+  leaked directly to the client instead of the generic "Internal server
+  error" — violates `30-api.md`'s "never leak `error.message` on a 500"
+  rule. Pre-existing in the starter's own City controller, unrelated to
+  HRMS; not touched here.
 

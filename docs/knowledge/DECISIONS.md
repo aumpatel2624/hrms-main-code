@@ -1667,5 +1667,31 @@ Copy this block. Number sequentially.
 - **Deviates from convention**: adds a guard source doesn't have (Employee Separation duplicate
   check) — the "deliberate improvement" case AGENTS.md rule 8 anticipates (source flagged it as a
   real gap, not a considered omission), recorded here rather than silently added.
-- **As built**: pending — implementation follows in the same session.
+- **As built**: as decided, with two things found only by actually running it:
+  1. **A real, general bug in shipped starter infrastructure**: `models/auditPlugin.js`'s global
+     `mongoose.plugin()` registration reaches embedded subdocument schemas, not just top-level
+     models — its pre/post-`save` hooks ran per-row on this module's `activities`/`payables`/
+     `receivables`/`assetsAllocated` arrays, and crashed (`this.constructor.findById is not a
+     function`) whenever an *existing* document's array was modified and re-saved (creating one
+     fresh never hit it — `isNew` short-circuits past the crashing line). Fixed with a
+     `this.$isSubdocument` guard at the top of both hooks, in its own commit — this protects every
+     current and future embedded-array model in the project, not just this module's, and is exactly
+     the kind of "unrelated-but-found bug gets its own commit" case `git-flow` names.
+  2. **Action-endpoint role gating uses "edit," not a dedicated "submit" key**, because this
+     starter's permission matrix has no submit/cancel/amend dimension the way source's does — where
+     source restricts `markAsCompleted`/`makeEmployee`/`makeAsPaid`-equivalent actions to HR Manager
+     alone, HR User can also call them here wherever HR User already has edit rights on the
+     underlying screen. A deliberate, named simplification (`DOMAIN.md`'s "Known simplification"),
+     not an oversight — closing it exactly would mean adding a 7th permission key project-wide for
+     one module's benefit.
+  Otherwise built exactly as designed: `EmployeeBoardingActivity` shape embedded on 4 parents (not
+  Project/Task), `boardingStatus` derived from activity rows, `EmployeeOnboardingTemplate`/
+  `EmployeeSeparationTemplate` copy activities in server-side, `Full and Final Statement` as a manual
+  worksheet with server-computed totals and a real settlement guard, the Employee Separation
+  duplicate-guard improvement. `npm test` (10/10), `npm run seed` (idempotent ×2, no real data to
+  seed for this module — same as Recruitment), `npm run build` all green. Full live-HTTP verification
+  of every guard and both action flows (Onboarding→Employee, Full and Final Statement settlement→
+  markAsPaid) against the real dev database, plus the role-permission asymmetries confirmed with
+  throwaway accounts — see `CHECKLISTS.md`'s "Onboarding & Separation" section for the full walk.
+  All throwaway test data cleaned up, employee count confirmed back to 195.
 

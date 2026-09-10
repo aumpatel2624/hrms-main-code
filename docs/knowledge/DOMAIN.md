@@ -358,6 +358,68 @@ CRUD on Interview. No matrix row for Employee/Leave Approver/Expense Approver on
 User refs) are schema-ready but not exposed on the admin forms yet — no multi-select field precedent
 existed to build against. Assign interviewers via a direct API call/update for now.
 
+### Onboarding & Separation (module 4, built 2026-09-10 — ADR-020)
+
+No docstatus, no naming series, **no Project/Task** (ADR-020's central decision) — Onboarding and
+Separation each own an `activities` array directly; each activity carries its own `status`
+(Pending/Completed/Cancelled), and the parent's `boardingStatus` (Pending/In Process/Completed) is
+derived straight from them (`deriveBoardingStatus` in each controller) rather than from a linked
+Project's percent-complete. Full and Final Statement is a manual worksheet, not an accounting
+document — no Journal Entry/GL, no auto-population from Salary Slip/Gratuity/Asset Movement (none of
+those exist here); HR enters payable/receivable/asset rows by hand, but totals are still
+server-computed on every save and the settlement guard (every line Settled, every returned asset
+Returned) still gates `markAsPaid`.
+
+| Entity | Is a | Owned by | Identified by | Deletable |
+|---|---|---|---|---|
+| EmployeeOnboarding | A hire's onboarding checklist | one JobApplicant | `jobApplicantId`, unique | guarded, not by HR User/HR Manager (System Manager only, matches source) |
+| EmployeeOnboardingTemplate | A reusable onboarding checklist | global | `title`, unique | guarded |
+| EmployeeSeparation | A departing employee's checklist | one Employee | `employeeId`, unique | guarded, not by HR User/HR Manager (deliberate improvement over a source gap) |
+| EmployeeSeparationTemplate | A reusable separation checklist | global | `title`, unique | guarded, HR Manager only |
+| ExitInterview | A standalone exit interview record | one Employee | — | guarded |
+| FullAndFinalStatement | A final-settlement worksheet | one Employee | — | guarded |
+
+**Real guards, enforced server-side, confirmed live in `verify`**:
+- EmployeeOnboarding: a second onboarding for the same `jobApplicantId` → 409 (DB unique index, not
+  just a controller check). Template selection copies `activities` in server-side (source only did
+  this client-side). `makeEmployee` blocked until every `requiredForEmployeeCreation` activity is
+  Completed → 409, message names the incomplete ones.
+- EmployeeSeparation: a second separation for the same `employeeId` → 409 — **this guard doesn't
+  exist in source** (flagged there as a gap the port should decide on deliberately); added here as a
+  real improvement, recorded in ADR-020, not silently copied from nothing.
+- ExitInterview: the linked Employee must have `relievingDate` set → 400 if not; a second
+  non-Cancelled interview for the same employee → 409.
+- FullAndFinalStatement: same relieving-date guard as ExitInterview. `cost` required on any
+  `assetsAllocated` row with `action = "Recover Cost"` → 400. `markAsPaid` blocked unless every
+  `payables`/`receivables` row is `Settled` and every `Return`-action asset row is `Returned` → 409,
+  message lists the blocking rows by name. Totals (`totalPayableAmount`, `totalReceivableAmount`,
+  `totalAssetRecoveryCost`) recomputed server-side on every save — confirmed live: a 500-receivable
+  row plus a 300-cost recover-cost asset produced `totalReceivableAmount = 800`.
+
+**A real bug found and fixed in shipped starter infrastructure, own commit**: `models/auditPlugin.js`
+registers its pre/post-`save` hooks globally (`mongoose.plugin(auditPlugin)`), which reaches embedded
+*subdocument* schemas too — any array-of-subdocuments field (this module's `activities`,
+`payables`/`receivables`/`assetsAllocated`) got the same hooks run per-row when the parent saved. A
+subdocument's `this.constructor` isn't a real Model (no `.findById`), so modifying an *existing*
+document's array and re-saving crashed with `TypeError: this.constructor.findById is not a function`
+— creating one fresh never hit it, since `isNew` short-circuits past the crashing line. Fixed with a
+`this.$isSubdocument` guard at the top of both hooks (a subdocument-level audit entry would be
+redundant anyway — the parent's own diff already captures whole-array changes). This is a **general**
+fix, not module-4-specific — it protects every future embedded-array model in this project, not just
+this one's.
+
+**Permissions**: not the usual full-HR-User-and-HR-Manager pattern — several of these differ, matching
+source's real (asymmetric) permission tables: neither HR User nor HR Manager can delete
+EmployeeOnboarding or EmployeeSeparation (System Manager/ADMIN only); EmployeeSeparationTemplate and
+ExitInterview give HR User read-only; FullAndFinalStatement is the one screen here where HR User also
+gets delete. All confirmed live with throwaway HR User/Employee-role accounts.
+
+**Known simplification**: this starter's permission matrix has no "submit" dimension the way source's
+submit/cancel/amend columns do, so the `markAsCompleted`/`makeEmployee`/`markAsPaid` action endpoints
+are gated on the existing "edit" key rather than a stricter HR-Manager-only action right — source
+restricts some of these to HR Manager alone; here HR User can also call them wherever HR User has
+edit rights on the underlying screen. Recorded here, not silently narrowed to match source exactly.
+
 ## Not modelled
 
 <!-- Things the client talks about that deliberately have no collection, and why. -->

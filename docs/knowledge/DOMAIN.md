@@ -246,11 +246,66 @@ Manager are granted read/write/edit/delete on this module's 6 screens (Company, 
 Designation, Employment Type, Employee Grade) — the other four roles have no matrix row for them
 (fail-closed default: no row = no access), confirmed live in `verify` (see `STATE.md` log).
 
-#### Employee (not built yet — module 2)
+### Employee Records (module 2, built 2026-09-10 — ADR-018)
 
-Not a Frappe-authored doctype (core ERPNext) — its expected field shape is reconstructed in
-`HRMS-Port-Spec/02-Cross-Cutting/Employee Core Model.md`; treat that file as the starting field list
-when Employee Records (module 2) is designed.
+Property History, Identification Document Type and Department Approver — named in the original
+module list — moved to modules 5, 6 and 8 respectively; see ADR-018 for why.
+
+#### Employee
+
+- **Is a**: The hub every other HRMS module foreign-keys to. Not a Frappe-authored doctype (core
+  ERPNext) — its field shape is reconstructed in
+  `HRMS-Port-Spec/02-Cross-Cutting/Employee Core Model.md`.
+- **Owned by / scoped to**: one Company. Self-scoped to `userId` for future self-service (not built
+  yet — see below).
+- **Identified by**: `employeeCode`, globally unique (real values from the org chart — `A005`,
+  `U001`, ... — no naming-series engine, ADR-016).
+- **Lifecycle**: `status` (`Active`/`Inactive`/`Suspended`/`Left`, default `Active`) — no illegal
+  transitions enforced yet; set by hand until a module (Separation, module 4) needs to enforce one.
+- **Deletable**: only when nothing references it (`getReferencingCounts` — confirmed live: deleting a
+  Department that has an Employee now correctly 409s, with no registration needed since Employee's
+  `departmentId` ref is enough).
+
+| Field | Type | Notes |
+|---|---|---|
+| employeeCode | String, required | trimmed, globally unique |
+| employeeName | String, required | trimmed — independent of any linked login |
+| userId | ref User, optional | unique when set (custom partial index, not `sparse`); null on every seeded row — see "Not built" below |
+| companyId, departmentId, designationId, branchId | ref, all required | CSV has complete data for all 195 rows on all four |
+| reportsToId | ref Employee, optional | self-referential; null only for the 2 top-of-hierarchy rows |
+| status | enum, default Active | Active / Inactive / Suspended / Left |
+| dateOfJoining | Date, required | parsed from the CSV's `D-Mon-YY` format |
+| relievingDate, dateOfBirth | Date, optional | both null on every seeded row |
+| gender | enum, optional | Male / Female / Other — from CSV where present |
+| employmentTypeId, gradeId | ref, optional | unseeded — CSV has no data for either |
+| expenseApproverId, leaveApproverId, shiftRequestApproverId | ref User, optional | unseeded — fields exist for Leaves/Expenses/Shift Request, the scoping mechanism that reads them is still open (`OPEN-QUESTIONS.md` Q-4) |
+| healthInsuranceProviderId | ref EmployeeHealthInsurance, optional | |
+| healthInsuranceNo | String, optional | |
+| shiftPreference | enum, optional | Day / Night / UK — placeholder ahead of the real Shift & Attendance module |
+| workMode | enum, optional | WFO / WFH — from CSV |
+| isActive | Boolean | default true |
+
+Seed data: all 195 real Apidel employees from `apidel-org-chart.csv`, including the real reporting
+hierarchy (`reportsToId`). **Not built**: bulk-creating 195 real people's login credentials was
+explicitly rejected (ADR-018) — provisioning a specific person's self-service login is deliberate
+future work, not part of this module.
+
+#### Employee Health Insurance
+
+- **Is a**: A lookup master of insurance providers (Aetna, Cigna, ...).
+- **Owned by / scoped to**: global — same reasoning as Employment Type/Employee Grade.
+- **Identified by**: `providerName`, globally unique.
+- **Deletable**: only when nothing references it.
+- **Permissions**: the one doctype so far with an asymmetric split — HR Manager full CRUD, **HR User
+  read-only** (no write/create/delete), matching the source exactly. Confirmed live in `verify`.
+
+| Field | Type | Notes |
+|---|---|---|
+| providerName | String, required | trimmed, unique |
+| isActive | Boolean | default true |
+
+Seed data: a small starter set (Aetna, Cigna, Star Health, ICICI Lombard) — not derived from the CSV,
+which has no insurance data.
 
 ## Not modelled
 

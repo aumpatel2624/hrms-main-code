@@ -1310,5 +1310,41 @@ Copy this block. Number sequentially.
     different companies can legitimately reuse the same employee code.
 - **Deviates from convention**: none beyond what ADR-016/ADR-017 already cover (Company-scoped refs,
   no naming series). No new deviation from `docs/conventions/` introduced by this module itself.
-- **As built**: pending — implementation follows in the same session.
+- **As built**: as decided, plus what building surfaced:
+  - The org-chart CSV turned out to have Windows (`\r\n`) line endings (Python's `csv.writer`
+    default) — the seed's minimal CSV parser split only on `\n`, so the last column's header
+    (`gender`) carried a trailing `\r` and never matched during lookup. Every seeded employee had
+    `gender: null` on the first `npm run seed` run despite the CSV having real values for all 195
+    rows. Found by spot-checking three known employees against the raw CSV after seeding — the
+    create/update counts alone (195 created, 193 reports-to links resolved) looked completely
+    correct and would not have surfaced this. Fixed by normalizing line endings before splitting;
+    re-verified against the same three rows plus a full `gender` distribution count (112 Male / 83
+    Female / 0 null, sums to 195).
+  - `EmployeeHealthInsurance` CRUD folded into the existing `organizationSetup.controller.js`/
+    `.routes.js` (grouped-masters file from module 1) rather than a new file — genuinely the same
+    shape as `EmploymentType`/`EmployeeGrade`, and `Employee` itself was substantial enough to
+    justify its own `employee.controller.js`/`.routes.js` as planned.
+  - Menu placement: put Employee and Employee Health Insurance in a new "HR Core" group, separate
+    from module 1's "HR Setup" — Employee is the actual employee master, not configuration, and
+    crowding it into HR Setup would have made that group read as "everything HR" rather than "the
+    masters you configure once."
+  - Verify results: `npm test` 10/10 green throughout. `npm run seed` run twice against the real dev
+    DB — first run: 195 created, 193 reports-to links (matches 195 minus the 2 top-of-hierarchy
+    rows with no manager); second run: 0 created / 195 updated, same 193 links — idempotent. Spot
+    checks: Hemant Patel/Amita Patel (the 2 top-of-hierarchy rows) confirmed `reportsToId: null`;
+    date parsing confirmed correct (`2-Aug-12` → `2012-08-02`, `7-Apr-14` → `2014-04-07`). Live HTTP
+    verify (throwaway HR User and Employee-role accounts, throwaway Country/State/City since none
+    were seeded in this dev DB for the starter's own generic `User` model — all deleted afterward,
+    idempotent pre-cleanup added to the verify script after an early run's failure skipped its own
+    cleanup): missing-required-fields create → 400; valid create → 201; **deleting a Department that
+    now has an Employee correctly 409s** — the cross-module regression check, confirming
+    `getReferencingCounts` picked up Employee's new `departmentId` ref with no registration needed;
+    HR User read-only on Employee Health Insurance confirmed (200 GET, 403 POST); Employee-role
+    correctly 403'd on both new screens' search endpoints and correctly allowed through the
+    matrix-free dropdown `GET /employees`. All throwaway data cleaned up; Employee count back to 195.
+    `npm run build` green. `npm run docs` (Playwright screenshot capture) was not run — manifest
+    entries added and `npm test`'s fingerprint check passes, but no screenshots exist yet for these
+    two screens, same gap module 1 left.
+  - Not done, flagged for later: `Employee.userId` self-service linking has no UI action yet (create
+    a `User` for a specific `Employee`) — schema-ready, deliberately not built this module.
 

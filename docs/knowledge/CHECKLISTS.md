@@ -109,7 +109,52 @@ module (ADR-017 — nothing to configure yet).
       exist and the fingerprint test passes, but the Playwright capture run itself was not executed
       this session (flagged for follow-up, not silently skipped)
 - [ ] Per-screen/company-confinement scoping mechanism (INV-8b, `OPEN-QUESTIONS.md` Q-4) — explicitly
-      out of scope for this module, first needed by Employee Records (module 2)
+      out of scope for this module; also out of scope for Employee Records (module 2, ADR-018) —
+      first needed by Leaves (module 8), alongside Department Approver
+
+### Employee Records (HRMS module 2 — Employee, Employee Health Insurance)
+
+Scope: the employee master everything downstream links to. See ADR-018 — Property History,
+Identification Document Type and Department Approver, named in the original module list, moved to
+modules 5, 6 and 8 (the modules that actually consume them).
+
+- [x] `Employee` model — new, `employeeCode` globally unique (real org-chart codes, no naming
+      series), 4 required refs (`companyId`/`departmentId`/`designationId`/`branchId`), self-referential
+      optional `reportsToId`, `userId` optional/nullable (unique-when-set via a custom partial index)
+- [x] `EmployeeHealthInsurance` model — new, simple master, same shape as `EmploymentType`/
+      `EmployeeGrade`
+- [x] `employee.controller.js`/`.routes.js` — its own file (substantial enough), 6 endpoints,
+      `filterable`/`stages` with `$lookup`s for department/designation/branch/company/reports-to
+      display names on the list
+- [x] `EmployeeHealthInsurance` CRUD folded into the existing `organizationSetup.controller.js`/
+      `.routes.js` (module 1's grouped-masters file) — same shape as its siblings there
+- [x] Real Apidel employee data seeded in `seed/index.js` (idempotent): 195 employees from
+      `apidel-org-chart.csv`, two-pass (create, then resolve `reportsToId` by name) — 193 reports-to
+      links resolved, matching 195 minus the 2 top-of-hierarchy rows
+- [x] **Bug found and fixed via spot-check, not caught by row/link counts alone**: the CSV's Windows
+      line endings left `gender` unparseable on the first seed run (every employee got `gender: null`
+      despite the CSV having real values) — see ADR-018's As-built note
+- [x] `RoleMaster`/`UserRoles` extended: HR User + HR Manager get Employee; Employee Health Insurance
+      is HR-Manager-full/**HR-User-read-only** (PERM-2), the first asymmetric split in this project
+- [x] "HR Core" menu group added (separate from module 1's "HR Setup" — Employee is the master, not
+      configuration)
+- [x] Admin entity configs: `employeeConfig` (advanced tier — 8 lookup selects including a
+      combined-label reports-to picker) and `employeeHealthInsuranceConfig` (uniform tier)
+- [x] `widgetSources.js`: `employees` (groupable by department/designation/company with lookups,
+      `dateFields: dateOfJoining`) and `employee-health-insurances` (groupable only)
+- [x] `docs-src/manifest.js`: entries for both new screens
+- [x] Acceptance check (live HTTP against the real dev database): missing-required-fields create →
+      400 → valid create → 201 → **deleting a Department that now has an Employee → 409, the
+      cross-module regression check** (module 1's generic delete-guard picked up module 2's new ref
+      with zero registration) → HR User read-only confirmed on Employee Health Insurance (200 GET,
+      403 POST) → Employee-role blocked (403) on both new screens' search endpoints → Employee-role's
+      dropdown `GET /employees` still works (matrix-free) → all throwaway data deleted, Employee count
+      back to 195
+- [ ] Client-facing documentation screenshots actually captured (`npm run docs`) — same gap module 1
+      left, not run this session either
+- [ ] `Employee.userId` self-service login provisioning — schema-ready (optional, nullable), no UI
+      action to actually create/link a `User` for a specific `Employee` yet (deliberate, ADR-018)
+- [ ] Per-screen/company-confinement scoping + Department Approver — deferred to Leaves (module 8)
 
 ### Email trigger system (dynamic form → template routing)
 

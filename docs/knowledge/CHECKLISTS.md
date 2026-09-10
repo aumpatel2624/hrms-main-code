@@ -351,3 +351,28 @@ Department Approver (originally sketched for module 2) do not belong here either
       Q-12
 - [ ] Client-facing documentation screenshots actually captured (`npm run docs`) — same gap modules
       1-5 left; manifest entries exist (5 new screens) for a future run to pick up
+
+## Travel (module 7, ADR-023)
+
+- [x] `npm test` green throughout
+- [x] `npm run seed` idempotent ×2 (5 Purposes of Travel + 4 Identification Document Types both
+      "created" only on the first run, 0 new on the second; 3 role-matrix grants added once, 0 on
+      rerun)
+- [x] `npm run build` green
+- [x] Full live-HTTP walk against the real dev database: Purpose of Travel/Identification Document
+      Type confirmed readable and ADMIN-only for writes (403 for both Employee and HR User) → a real
+      Travel Request created for a real seeded Employee with populated `itinerary[]`/`costings[]`
+      sub-documents (round-tripped correctly via `getById`, `companyId` auto-filled from the
+      employee) → missing-required-fields guard confirmed (400) → Inactive-employee guard confirmed
+      (400, exact message format) by temporarily flipping a real employee to Inactive and back →
+      reference-guarded delete on Purpose of Travel confirmed (409, blocked while a Travel Request
+      referenced it) → role-permission checks confirmed live with three throwaway accounts (Employee/
+      HR User/HR Manager): Employee could create/read/edit but was refused delete (403) and refused
+      write on Purpose of Travel (403); HR User was also refused write on Purpose of Travel (403);
+      HR Manager could delete a Travel Request (200) → all test data (3 throwaway users, every Travel
+      Request created during verify) cleaned up, employee count confirmed back to 195, master lists
+      back to their 5/4 seeded rows
+- [x] No new bugs found this module — a genuinely clean build, unlike modules 1/3/6 which each
+      surfaced a real pre-existing bug while wiring something in
+- [ ] Client-facing documentation screenshots actually captured (`npm run docs`) — same gap modules
+      1-6 left; manifest entries exist (3 new screens) for a future run to pick up

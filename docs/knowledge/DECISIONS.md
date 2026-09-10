@@ -2120,5 +2120,24 @@ Copy this block. Number sequentially.
 - **Deviates from convention**: none new — the access-opening call is the same "deliberate
   improvement over a flagged source gap" category ADR-021 already established a precedent for, not a
   new kind of deviation.
-- **As built**: pending — implementation follows in the same session.
+- **As built**: `PurposeOfTravel`, `IdentificationDocumentType`, `TravelRequest` (embedded
+  `itinerary[]`/`costings[]`) built exactly as designed above — no scope changes during
+  implementation. New "Travel" menu group (3 screens); roles per the access-opening decision
+  (`Employee` full-minus-delete, `HR User`/`HR Manager` full, on `/travel-request` only — the two
+  masters get no RoleMaster grants for any of the six HRMS roles). One `widgetSources.js` entry for
+  `travel-requests` (groupable by status/travelType/companyId). Starter master data seeded (5
+  Purposes of Travel, 4 Identification Document Types) since neither list had any real-world source
+  data to draw from, unlike other modules' masters. `OPEN-QUESTIONS.md` Q-13 already covers the
+  `TravelRequestCosting.expenseType` → real `ExpenseClaimType` ref retrofit — no new row needed.
+  Verified live: `npm test` all green, `npm run seed` twice (idempotent — second run added 0 new
+  masters), `npm run build` green, and a full HTTP walk — Travel Request created with populated
+  itinerary/costing sub-documents and an auto-filled `companyId`; the Inactive-employee guard
+  confirmed (400, exact message format); the missing-required-fields guard confirmed (400); the
+  reference-guarded delete on `PurposeOfTravel` confirmed (409, blocked while referenced); role
+  checks confirmed end to end with three throwaway `User` accounts (Employee/HR User/HR Manager) —
+  Employee could create/read/edit but not delete a Travel Request and was refused write access to
+  Purpose of Travel (403); HR User was refused write access to Purpose of Travel too (403, ADMIN-only
+  holds for every non-admin role, not just Employee); HR Manager could delete. All test data (3
+  users, all Travel Requests created during verify) cleaned up afterward — employee count back to
+  195, master lists back to their 5/4 seeded rows, no stray test rows anywhere.
 

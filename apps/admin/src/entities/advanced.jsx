@@ -94,6 +94,14 @@ import {
     updateLeavePolicyAssignment, searchLeavePolicyAssignments, grantLeavePolicyAssignmentAllocations,
     createLeaveAllocation, deleteLeaveAllocation, getLeaveAllocationById, updateLeaveAllocation,
     searchLeaveAllocations, adjustLeaveAllocation,
+    createLeaveAdjustment, getLeaveAdjustmentById, searchLeaveAdjustments,
+    createCompensatoryLeaveRequest, updateCompensatoryLeaveRequest, deleteCompensatoryLeaveRequest,
+    getCompensatoryLeaveRequestById, searchCompensatoryLeaveRequests,
+    approveCompensatoryLeaveRequest, rejectCompensatoryLeaveRequest,
+    createLeaveApplication, updateLeaveApplication, getLeaveApplicationById, searchLeaveApplications,
+    approveLeaveApplication, rejectLeaveApplication, cancelLeaveApplication,
+    createLeaveEncashment, updateLeaveEncashment, getLeaveEncashmentById, searchLeaveEncashments, markLeaveEncashmentPaid,
+    createLeaveBlockList, updateLeaveBlockList, deleteLeaveBlockList, getLeaveBlockListById, searchLeaveBlockLists,
 } from "../api/leaves.api";
 import {
     createAttendance, deleteAttendance, getAttendanceById, updateAttendance, searchAttendances,
@@ -103,6 +111,7 @@ import EmailTemplateMergeFields from "@/components/crud/email-template-merge-fie
 import SimpleArrayField from "@/components/crud/simple-array-field";
 import SimpleActionButton from "@/components/crud/simple-action-button";
 import AdjustAllocationPanel from "@/components/crud/adjust-allocation-panel";
+import MarkEncashmentPaidPanel from "@/components/crud/mark-encashment-paid-panel";
 
 const ACTIVE = { name: "isActive", label: "Is Active", type: "checkbox", section: "status", default: false };
 const asOptions = (loader, labelKey) => () =>
@@ -2491,6 +2500,314 @@ export const attendanceConfig = {
     }),
 };
 
+// ---------------------------------------------------------------------------
+// Leaves — transactional fork (ADR-024, module complete). LeaveAdjustment/
+// LeaveEncashment are create-only from this admin (no update/remove in
+// `api` — the ledger they write is immutable once posted, matching
+// LeaveLedgerEntry's own append-only precedent); the seed roles never grant
+// edit/delete on either menu row, so the missing api.update/api.remove is
+// never actually reached from the UI.
+// ---------------------------------------------------------------------------
+
+const BLOCK_DATE_COLUMNS = [
+    { name: "blockDate", label: "Block Date (YYYY-MM-DD)", type: "text" },
+    { name: "reason", label: "Reason", type: "text" },
+];
+const ALLOW_LIST_COLUMNS = [
+    { name: "allowUserId", label: "Allowed User (id)", type: "text" },
+];
+
+export const leaveAdjustmentConfig = {
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "leaveTypeId", label: "Leave Type", type: "objectId" },
+        { name: "leaveAllocationId", label: "Leave Allocation", type: "objectId" },
+        { name: "adjustmentType", label: "Adjustment Type", type: "string" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "leave-adjustment",
+    path: "/leave-adjustment",
+    section: "Leaves",
+    singular: "Leave Adjustment",
+    plural: "Leave Adjustments",
+    description: "A one-off manual correction to an employee's leave balance. Create is the action — saving writes one signed entry to the Leave Ledger immediately; there is nothing to edit or delete afterward.",
+    api: { search: searchLeaveAdjustments, getById: getLeaveAdjustmentById, create: createLeaveAdjustment },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        leaveTypeId: asOptions(getAllLeaveTypes, "leaveTypeName"),
+        leaveAllocationId: () => getAllLeaveAllocations().then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: `${row.fromDate?.slice?.(0, 10)} – ${row.toDate?.slice?.(0, 10)}` }))),
+    },
+    fields: [
+        { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
+        { name: "leaveTypeId", icon: Tag01, label: "Leave Type", type: "select", required: true, section: "details", error: "Leave Type is required!", optionsFrom: "leaveTypeId" },
+        { name: "leaveAllocationId", label: "Allocation to Adjust (optional)", type: "select", section: "details", optionsFrom: "leaveAllocationId" },
+        { name: "postingDate", label: "Posting Date", type: "date", section: "details" },
+        { name: "leavesToAdjust", label: "Leaves to Adjust", type: "number", required: true, section: "details", error: "Leaves to Adjust is required!" },
+        { name: "adjustmentType", label: "Adjustment Type", type: "select", required: true, section: "details", error: "Adjustment Type is required!", options: ["Allocate", "Reduce"] },
+        { name: "reasonForAdjustment", label: "Reason for Adjustment", type: "textarea", section: "details" },
+    ],
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "180px" },
+        { name: "Type", selector: (row) => row.adjustmentType, minWidth: "100px" },
+        { name: "Leaves", selector: (row) => row.leavesToAdjust, minWidth: "90px" },
+        { name: "Posting Date", selector: (row) => row.postingDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
+    ],
+    recordTitle: (r) => `Leave Adjustment — ${r._id}`,
+    toForm: (data) => ({ ...data, employeeId: refId(data.employeeId), leaveTypeId: refId(data.leaveTypeId), leaveAllocationId: refId(data.leaveAllocationId) }),
+};
+
+export const compensatoryLeaveRequestConfig = {
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "leaveTypeId", label: "Leave Type", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "workFromDate", label: "Work From Date", type: "date" },
+        { name: "workEndDate", label: "Work End Date", type: "date" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "compensatory-leave-request",
+    path: "/compensatory-leave-request",
+    section: "Leaves",
+    singular: "Compensatory Leave Request",
+    plural: "Compensatory Leave Requests",
+    description: "A request for comp-off leave for a day (or range) worked on a holiday. Approving validates the worked range against the employee's Holiday List and matching Attendance records, then grants the leave.",
+    api: {
+        search: searchCompensatoryLeaveRequests, getById: getCompensatoryLeaveRequestById,
+        create: createCompensatoryLeaveRequest, update: updateCompensatoryLeaveRequest, remove: deleteCompensatoryLeaveRequest,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        leaveTypeId: asOptions(getAllLeaveTypes, "leaveTypeName"),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "status", title: "Status" }, { id: "actions", title: "Actions" }],
+    fields: [
+        { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
+        { name: "leaveTypeId", icon: Tag01, label: "Leave Type (must be Is Compensatory)", type: "select", required: true, section: "details", error: "Leave Type is required!", optionsFrom: "leaveTypeId" },
+        { name: "workFromDate", label: "Work From Date", type: "date", required: true, section: "details", error: "Work From Date is required!" },
+        { name: "workEndDate", label: "Work End Date", type: "date", required: true, section: "details", error: "Work End Date is required!" },
+        { name: "halfDay", label: "Half Day", type: "checkbox", section: "details" },
+        { name: "halfDayDate", label: "Half Day Date", type: "date", section: "details", disabled: (values) => !values.halfDay },
+        { name: "reason", label: "Reason", type: "textarea", required: true, section: "details", error: "Reason is required!" },
+        { name: "status", label: "Status", type: "select", section: "status", options: ["open", "approved", "rejected"], disabled: () => true, hint: "Set by the Approve/Reject actions below." },
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        mode === "edit" && id && values.status === "open" && (
+            <>
+                <SimpleActionButton
+                    label="Approve" description="Validates the worked range against the Holiday List and Attendance, then grants the resulting leave."
+                    onRun={() => approveCompensatoryLeaveRequest(id)}
+                    onResult={() => window.location.reload()}
+                />
+                <SimpleActionButton
+                    label="Reject" description="No side effects — nothing was granted yet."
+                    onRun={() => rejectCompensatoryLeaveRequest(id)}
+                    onResult={() => window.location.reload()}
+                />
+            </>
+        )
+    ),
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "180px" },
+        { name: "Work From", selector: (row) => row.workFromDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
+        { name: "Work End", selector: (row) => row.workEndDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
+        { name: "Status", selector: (row) => row.status, minWidth: "100px" },
+    ],
+    recordTitle: (r) => `Compensatory Leave Request — ${r._id}`,
+    toForm: (data) => ({ ...data, employeeId: refId(data.employeeId), leaveTypeId: refId(data.leaveTypeId) }),
+};
+
+export const leaveApplicationConfig = {
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "leaveTypeId", label: "Leave Type", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "leaveApproverId", label: "Leave Approver", type: "objectId" },
+        { name: "fromDate", label: "From Date", type: "date" },
+        { name: "toDate", label: "To Date", type: "date" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "leave-application",
+    path: "/leave-application",
+    section: "Leaves",
+    singular: "Leave Application",
+    plural: "Leave Applications",
+    description: "The centerpiece of Leaves. Total Leave Days and the Leave Approver (when left blank) are computed/resolved automatically on save. An Employee sees only their own applications; a Leave Approver sees their own plus everyone they approve for.",
+    api: {
+        search: searchLeaveApplications, getById: getLeaveApplicationById,
+        create: createLeaveApplication, update: updateLeaveApplication,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        leaveTypeId: asOptions(getAllLeaveTypes, "leaveTypeName"),
+        leaveApproverId: asOptions(getAllUsers, "userName"),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "approval", title: "Approval" }, { id: "status", title: "Status" }, { id: "actions", title: "Actions" }],
+    fields: [
+        { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
+        { name: "leaveTypeId", icon: Tag01, label: "Leave Type", type: "select", required: true, section: "details", error: "Leave Type is required!", optionsFrom: "leaveTypeId" },
+        { name: "fromDate", label: "From Date", type: "date", required: true, section: "details", error: "From Date is required!" },
+        { name: "toDate", label: "To Date", type: "date", required: true, section: "details", error: "To Date is required!" },
+        { name: "halfDay", label: "Half Day", type: "checkbox", section: "details" },
+        { name: "halfDayDate", label: "Half Day Date", type: "date", section: "details", disabled: (values) => !values.halfDay },
+        { name: "description", label: "Reason", type: "textarea", section: "details" },
+        { name: "totalLeaveDays", label: "Total Leave Days (computed)", type: "number", section: "details", disabled: () => true, hint: "Always recomputed server-side on save — never trust a typed value here." },
+        { name: "leaveApproverId", label: "Leave Approver (leave blank to auto-resolve)", type: "select", section: "approval", optionsFrom: "leaveApproverId" },
+        { name: "postingDate", label: "Posting Date", type: "date", section: "approval" },
+        { name: "status", label: "Status", type: "select", section: "status", options: ["open", "approved", "rejected", "cancelled"], disabled: () => true, hint: "Set by the Approve/Reject/Cancel actions below." },
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        mode === "edit" && id && (
+            <>
+                {values.status === "open" && (
+                    <>
+                        <SimpleActionButton
+                            label="Approve" description="Re-checks the leave balance, creates/updates Attendance rows for the range, and writes 1-2 Leave Ledger Entry rows."
+                            onRun={() => approveLeaveApplication(id)}
+                            onResult={() => window.location.reload()}
+                        />
+                        <SimpleActionButton
+                            label="Reject" description="No side effects — nothing was ever consumed."
+                            onRun={() => rejectLeaveApplication(id)}
+                            onResult={() => window.location.reload()}
+                        />
+                    </>
+                )}
+                {values.status === "approved" && (
+                    <SimpleActionButton
+                        label="Cancel" description="Reverses the Leave Ledger Entry rows (soft-deleted, never hard-removed) and the Attendance rows this application created."
+                        onRun={() => cancelLeaveApplication(id)}
+                        onResult={() => window.location.reload()}
+                    />
+                )}
+            </>
+        )
+    ),
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "180px" },
+        { name: "From", selector: (row) => row.fromDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
+        { name: "To", selector: (row) => row.toDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
+        { name: "Days", selector: (row) => row.totalLeaveDays, minWidth: "80px" },
+        { name: "Status", selector: (row) => row.status, minWidth: "100px" },
+    ],
+    recordTitle: (r) => `Leave Application — ${r._id}`,
+    toForm: (data) => ({ ...data, employeeId: refId(data.employeeId), leaveTypeId: refId(data.leaveTypeId), leaveApproverId: refId(data.leaveApproverId) }),
+};
+
+export const leaveEncashmentConfig = {
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "leaveTypeId", label: "Leave Type", type: "objectId" },
+        { name: "leaveAllocationId", label: "Leave Allocation", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "encashmentDate", label: "Encashment Date", type: "date" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "leave-encashment",
+    path: "/leave-encashment",
+    section: "Leaves",
+    singular: "Leave Encashment",
+    plural: "Leave Encashments",
+    description: "Cashes out unused leave for a Leave Type with Allow Encashment set. Create is the action — saving computes the balance/eligible days and writes the debiting Leave Ledger Entry immediately. Per Day Encashment Amount is entered manually — this project has no Payroll module yet to derive it from.",
+    api: { search: searchLeaveEncashments, getById: getLeaveEncashmentById, create: createLeaveEncashment, update: updateLeaveEncashment },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        leaveTypeId: asOptions(getAllLeaveTypes, "leaveTypeName"),
+        leaveAllocationId: () => getAllLeaveAllocations().then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: `${row.fromDate?.slice?.(0, 10)} – ${row.toDate?.slice?.(0, 10)}` }))),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "computed", title: "Computed (read-only)" }, { id: "payment", title: "Payment" }],
+    fields: [
+        { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
+        { name: "leaveTypeId", icon: Tag01, label: "Leave Type (must Allow Encashment)", type: "select", required: true, section: "details", error: "Leave Type is required!", optionsFrom: "leaveTypeId" },
+        { name: "leaveAllocationId", label: "Leave Allocation (optional — auto-resolved by date if blank)", type: "select", section: "details", optionsFrom: "leaveAllocationId" },
+        { name: "encashmentDate", label: "Encashment Date", type: "date", section: "details" },
+        { name: "encashmentDays", label: "Encashment Days (blank = full eligible balance)", type: "number", section: "details" },
+        { name: "perDayEncashmentAmount", label: "Per Day Encashment Amount", type: "number", required: true, section: "details", error: "Per Day Encashment Amount is required!" },
+        { name: "leaveBalance", label: "Leave Balance (at encashment time)", type: "number", section: "computed", disabled: () => true },
+        { name: "actualEncashableDays", label: "Actual Encashable Days", type: "number", section: "computed", disabled: () => true },
+        { name: "encashmentAmount", label: "Encashment Amount", type: "number", section: "computed", disabled: () => true },
+        { name: "status", label: "Status", type: "select", section: "payment", options: ["pending", "paid"], disabled: () => true },
+        { name: "paymentDate", label: "Payment Date", type: "date", section: "payment", disabled: () => true },
+        { name: "paymentReference", label: "Payment Reference", type: "text", section: "payment", disabled: () => true },
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        mode === "edit" && id && values.status === "pending" && (
+            <MarkEncashmentPaidPanel
+                defaultAmount={values.encashmentAmount}
+                onMarkPaid={(data) => markLeaveEncashmentPaid(id, data)}
+                onResult={() => window.location.reload()}
+            />
+        )
+    ),
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "180px" },
+        { name: "Date", selector: (row) => row.encashmentDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
+        { name: "Days", selector: (row) => row.encashmentDays, minWidth: "80px" },
+        { name: "Amount", selector: (row) => row.encashmentAmount, minWidth: "100px" },
+        { name: "Status", selector: (row) => row.status, minWidth: "90px" },
+    ],
+    recordTitle: (r) => `Leave Encashment — ${r._id}`,
+    toForm: (data) => ({ ...data, employeeId: refId(data.employeeId), leaveTypeId: refId(data.leaveTypeId), leaveAllocationId: refId(data.leaveAllocationId) }),
+};
+
+export const leaveBlockListConfig = {
+    filterFields: [
+        { name: "leaveBlockListName", label: "Name", type: "string" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "departmentId", label: "Department", type: "objectId" },
+        { name: "leaveTypeId", label: "Leave Type", type: "objectId" },
+        { name: "appliesToAllDepartments", label: "Applies to All Departments", type: "boolean" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "leave-block-list",
+    path: "/leave-block-list",
+    section: "Leaves",
+    singular: "Leave Block List",
+    plural: "Leave Block Lists",
+    description: "Dates on which leave applications are blocked, for a company (and optionally one department and/or one Leave Type). Users on the Allow list bypass the block.",
+    api: {
+        search: searchLeaveBlockLists, getById: getLeaveBlockListById,
+        create: createLeaveBlockList, update: updateLeaveBlockList, remove: deleteLeaveBlockList,
+    },
+    lookups: {
+        companyId: asOptions(getAllCompanies, "companyName"),
+        departmentId: asOptions(getAllDepartments, "departmentName"),
+        leaveTypeId: asOptions(getAllLeaveTypes, "leaveTypeName"),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "dates", title: "Block Days" }, { id: "allow", title: "Allow Users" }],
+    fields: [
+        { name: "leaveBlockListName", icon: Tag01, label: "Name", required: true, section: "details", error: "Name is required!" },
+        { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "details", error: "Company is required!", optionsFrom: "companyId" },
+        { name: "appliesToAllDepartments", label: "Applies to All Departments", type: "checkbox", section: "details", clears: ["departmentId"] },
+        { name: "departmentId", label: "Department", type: "select", section: "details", optionsFrom: "departmentId", disabled: (values) => Boolean(values.appliesToAllDepartments) },
+        { name: "leaveTypeId", label: "Leave Type (blank = blocks every type)", type: "select", section: "details", optionsFrom: "leaveTypeId" },
+        ACTIVE,
+    ],
+    renderExtra: ({ values, setValues }) => (
+        <>
+            <SimpleArrayField
+                title="Block Dates" description="At least one row is required. Stop users from making Leave Applications on these dates."
+                fieldName="blockDates" columns={BLOCK_DATE_COLUMNS} values={values} setValues={setValues}
+            />
+            <SimpleArrayField
+                title="Allow Users" description="Paste a User's id into each row — these users may still approve/apply for leave on the block dates above."
+                fieldName="allowList" columns={ALLOW_LIST_COLUMNS} values={values} setValues={setValues}
+            />
+        </>
+    ),
+    columns: [
+        { name: "Name", selector: (row) => row.leaveBlockListName, minWidth: "200px" },
+        { name: "Applies to All", selector: (row) => (row.appliesToAllDepartments ? "Yes" : "No"), minWidth: "110px" },
+        { name: "Block Dates", selector: (row) => row.blockDates?.length ?? 0, minWidth: "100px" },
+    ],
+    recordTitle: (r) => r.leaveBlockListName,
+    toForm: (data) => ({ ...data, companyId: refId(data.companyId), departmentId: refId(data.departmentId), leaveTypeId: refId(data.leaveTypeId) }),
+};
+
 export const ADVANCED_ENTITIES = [
     adminUserConfig, userConfig, menuMasterConfig, emailTemplateConfig,
     departmentConfig, branchConfig, designationConfig, employeeConfig,
@@ -2507,4 +2824,6 @@ export const ADVANCED_ENTITIES = [
     purposeOfTravelConfig, identificationDocumentTypeConfig, travelRequestConfig,
     leaveTypeConfig, leavePeriodConfig, holidayListConfig, holidayListAssignmentConfig,
     leavePolicyConfig, leavePolicyAssignmentConfig, leaveAllocationConfig, attendanceConfig,
+    leaveAdjustmentConfig, compensatoryLeaveRequestConfig, leaveApplicationConfig,
+    leaveEncashmentConfig, leaveBlockListConfig,
 ];

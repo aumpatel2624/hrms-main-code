@@ -82,10 +82,26 @@ assert.equal(
   null,
 );
 
-// approver scope with no employeeId on the user (no linked Employee) matches nothing.
+// approver scope with no employeeId on the user (no linked Employee) matches nothing,
+// when there are no approverIds either.
 assert.deepEqual(
   buildScopeFilter({ dataScope: "approver" }, { owner: "employeeId" }),
   { employeeId: { $in: [] } },
 );
+
+// Issue #12 regression: a User with NO linked Employee (a real, expected
+// case — OPEN-QUESTIONS.md Q-10) but WITH resolved approverIds must still
+// see the employees they approve for. The original version short-circuited
+// to `{ $in: [] }` as soon as employeeId was missing and never looked at
+// approverIds at all.
+{
+  const APPROVEE_1 = "64b000000000000000000004";
+  const APPROVEE_2 = "64b000000000000000000005";
+  const filter = buildScopeFilter(
+    { dataScope: "approver" }, // no employeeId — no linked Employee
+    { owner: "employeeId", approverIds: [APPROVEE_1, APPROVEE_2] },
+  );
+  assert.deepEqual(filter.employeeId.$in.map(String).sort(), [APPROVEE_1, APPROVEE_2].sort());
+}
 
 console.log("scope: all checks passed");

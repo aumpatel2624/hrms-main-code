@@ -19,19 +19,118 @@
  * log every 5 minutes), not a bug.
  */
 import SchedulerRunLog from "../models/SchedulerRunLog.js";
+import LeaveAllocation from "../models/LeaveAllocation.js";
+import LeaveType from "../models/LeaveType.js";
+import LeaveEncashment from "../models/LeaveEncashment.js";
+import LeaveLedgerEntry from "../models/LeaveLedgerEntry.js";
+import { getLeaveBalance } from "../utils/leaveBalance.js";
 import { processExpiredAllocations } from "./processExpiredAllocations.js";
 import { allocateEarnedLeaves } from "./allocateEarnedLeaves.js";
 
 /**
- * Placeholder for the second fork — depends on `LeaveEncashment`, which
- * doesn't exist in this branch. Participates in SchedulerRunLog bookkeeping
- * like a real job so the second fork's real implementation slots into this
- * same ordered list without touching the runner itself.
+ * ADR-024 (module complete, second fork). Idiomatic-rebuild version of
+ * source's `generate_leave_encashment` (`Leave Encashment.md` Scheduled
+ * Jobs): for every `LeaveType.allowEncashment` type, finds `LeaveAllocation`
+ * rows whose `toDate` was yesterday and drafts a `LeaveEncashment` for each,
+ * skipping employees who already have one for that allocation (idempotent
+ * across runs, mirroring the job's own daily-once bookkeeping in
+ * `runDueJobs`).
+ *
+ * **Ordering matters here** (see the file-level comment on `JOBS` below):
+ * this runs AFTER `processExpiredAllocations` in the same pass, so an
+ * allocation whose `toDate` was yesterday has already been flipped from
+ * `active` to `expired` by the time this queries — matched on `status:
+ * "expired"`, not `"active"`.
+ *
+ * Source's `create_leave_encashment` skips an allocation entirely when no
+ * Salary Structure Assignment exists to derive a per-day rate from — this
+ * project has no Payroll module yet (same gap as the manual create
+ * endpoint), so every drafted row instead gets `perDayEncashmentAmount: 0`
+ * and is left `pending` for HR to fill in the real rate before marking it
+ * paid, rather than being silently skipped. The ledger debit is written
+ * immediately, exactly like a manually-created encashment (ADR-024's
+ * "create is the action" precedent) — so the balance reflects the draft
+ * right away; HR correcting `perDayEncashmentAmount` later only changes the
+ * money, never the days already debited.
+ *
+ * Per-item failure isolation, matching `processExpiredAllocations`/
+ * `allocateEarnedLeaves`'s own pattern — one allocation's failure doesn't
+ * block the rest.
  */
-const generateLeaveEncashments = async () => {
-  // TODO(second fork): read LeaveAllocation rows expiring yesterday whose
-  // LeaveType.allowEncashment is set and draft LeaveEncashment documents.
-  // No-op until LeaveEncashment exists.
+export const generateLeaveEncashments = async () => {
+  const today = new Date();
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+  const startOfYesterday = new Date(Date.UTC(yesterday.getUTCFullYear(), yesterday.getUTCMonth(), yesterday.getUTCDate()));
+  const endOfYesterday = new Date(startOfYesterday.getTime() + 24 * 60 * 60 * 1000 - 1);
+
+  const encashableTypes = await LeaveType.find({ allowEncashment: true }).lean();
+  if (encashableTypes.length === 0) return { attempted: 0, created: 0, skipped: 0, failed: 0 };
+  const leaveTypeById = new Map(encashableTypes.map((lt) => [String(lt._id), lt]));
+
+  const allocations = await LeaveAllocation.find({
+    status: "expired",
+    leaveTypeId: { $in: encashableTypes.map((lt) => lt._id) },
+    toDate: { $gte: startOfYesterday, $lte: endOfYesterday },
+  });
+
+  let attempted = 0;
+  let created = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const allocation of allocations) {
+    attempted += 1;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const existing = await LeaveEncashment.findOne({ leaveAllocationId: allocation._id });
+      if (existing) { skipped += 1; continue; } // eslint-disable-line no-continue
+
+      const leaveType = leaveTypeById.get(String(allocation.leaveTypeId));
+      // eslint-disable-next-line no-await-in-loop
+      const leaveBalance = await getLeaveBalance(allocation.employeeId, allocation.leaveTypeId, allocation.toDate);
+
+      let actualEncashableDays = Math.max(leaveBalance, 0);
+      if (leaveType.nonEncashableLeaves) actualEncashableDays = Math.max(actualEncashableDays - leaveType.nonEncashableLeaves, 0);
+      if (leaveType.maxEncashableLeaves) actualEncashableDays = Math.min(actualEncashableDays, leaveType.maxEncashableLeaves);
+
+      if (actualEncashableDays <= 0) { skipped += 1; continue; } // eslint-disable-line no-continue
+
+      // eslint-disable-next-line no-await-in-loop
+      const doc = await LeaveEncashment.create({
+        employeeId: allocation.employeeId,
+        leaveTypeId: allocation.leaveTypeId,
+        leaveAllocationId: allocation._id,
+        leavePeriodId: allocation.leavePeriodId || null,
+        companyId: allocation.companyId,
+        encashmentDate: allocation.toDate,
+        leaveBalance,
+        actualEncashableDays,
+        encashmentDays: actualEncashableDays,
+        perDayEncashmentAmount: 0,
+        encashmentAmount: 0,
+      });
+
+      // eslint-disable-next-line no-await-in-loop
+      await LeaveLedgerEntry.create({
+        employeeId: allocation.employeeId,
+        leaveTypeId: allocation.leaveTypeId,
+        transactionType: "LeaveEncashment",
+        transactionId: doc._id,
+        leaves: -actualEncashableDays,
+        fromDate: allocation.toDate,
+        toDate: allocation.toDate,
+        isCarryForward: false,
+        companyId: allocation.companyId,
+      });
+
+      created += 1;
+    } catch (error) {
+      failed += 1;
+      console.error(`generateLeaveEncashments: failed for allocation ${allocation._id}:`, error);
+    }
+  }
+
+  return { attempted, created, skipped, failed };
 };
 
 // Fixed order (ADR-016/ADR-024) — later jobs in a run can depend on side

@@ -39,16 +39,24 @@ export const buildScopeFilter = (reqUser, scopeable = {}) => {
   if (scope === SCOPES.APPROVER) {
     if (!scopeable.owner) return null; // dimension not declared for this model
     const employeeId = reqUser?.employeeId;
-    if (!employeeId || !mongoose.Types.ObjectId.isValid(employeeId)) {
-      return { [scopeable.owner]: { $in: [] } }; // no linked Employee — matches nothing
-    }
+    // Issue #12: a User with no linked Employee is a real, expected case
+    // (OPEN-QUESTIONS.md Q-10) — an HR/approver login often has no Employee
+    // row of their own. The previous version returned `{ $in: [] }`
+    // (matches nothing) as soon as `employeeId` was missing, WITHOUT ever
+    // looking at `approverIds` — so a pure approver with nobody of their
+    // own to see got zero results instead of the set they approve for.
+    // Build the id list from whichever of the two components are present
+    // instead, and only fall through to "matches nothing" when BOTH are
+    // empty.
     const ids = [
-      new mongoose.Types.ObjectId(String(employeeId)),
+      ...(employeeId && mongoose.Types.ObjectId.isValid(employeeId)
+        ? [new mongoose.Types.ObjectId(String(employeeId))]
+        : []),
       ...(scopeable.approverIds || [])
         .filter((id) => mongoose.Types.ObjectId.isValid(id))
         .map((id) => new mongoose.Types.ObjectId(String(id))),
     ];
-    return { [scopeable.owner]: { $in: ids } };
+    return { [scopeable.owner]: { $in: ids } }; // ids may be [] — still correctly matches nothing
   }
 
   const field =

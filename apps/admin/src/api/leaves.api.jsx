@@ -62,3 +62,41 @@ export const searchLeaveLedgerEntries = async (params) => api.post(ENDPOINTS.LEA
 
 export const getLeaveBalance = async (employeeId, leaveTypeId) =>
     api.get(ENDPOINTS.LEAVE_BALANCE, { params: { employeeId, leaveTypeId } });
+
+// ---- Transactional fork (ADR-024 module complete) -------------------------
+
+export const createLeaveAdjustment = async (data) => api.post(ENDPOINTS.LEAVE_ADJUSTMENTS.BASE, data);
+export const getLeaveAdjustmentById = async (id) => api.get(ENDPOINTS.LEAVE_ADJUSTMENTS.BY_ID(id));
+export const searchLeaveAdjustments = async (params) => api.post(ENDPOINTS.LEAVE_ADJUSTMENTS.SEARCH, params);
+
+export const createCompensatoryLeaveRequest = async (data) => api.post(ENDPOINTS.COMPENSATORY_LEAVE_REQUESTS.BASE, data);
+export const getCompensatoryLeaveRequestById = async (id) => api.get(ENDPOINTS.COMPENSATORY_LEAVE_REQUESTS.BY_ID(id));
+export const updateCompensatoryLeaveRequest = async (id, data) => api.put(ENDPOINTS.COMPENSATORY_LEAVE_REQUESTS.BY_ID(id), data);
+export const deleteCompensatoryLeaveRequest = async (id) => api.delete(ENDPOINTS.COMPENSATORY_LEAVE_REQUESTS.BY_ID(id));
+export const searchCompensatoryLeaveRequests = async (params) => api.post(ENDPOINTS.COMPENSATORY_LEAVE_REQUESTS.SEARCH, params);
+export const approveCompensatoryLeaveRequest = async (id) => api.post(ENDPOINTS.COMPENSATORY_LEAVE_REQUESTS.APPROVE(id));
+export const rejectCompensatoryLeaveRequest = async (id) => api.post(ENDPOINTS.COMPENSATORY_LEAVE_REQUESTS.REJECT(id));
+
+export const createLeaveApplication = async (data) => api.post(ENDPOINTS.LEAVE_APPLICATIONS.BASE, data);
+export const getLeaveApplicationById = async (id) => api.get(ENDPOINTS.LEAVE_APPLICATIONS.BY_ID(id));
+export const updateLeaveApplication = async (id, data) => api.put(ENDPOINTS.LEAVE_APPLICATIONS.BY_ID(id), data);
+export const searchLeaveApplications = async (params) => api.post(ENDPOINTS.LEAVE_APPLICATIONS.SEARCH, params);
+export const approveLeaveApplication = async (id) => api.post(ENDPOINTS.LEAVE_APPLICATIONS.APPROVE(id));
+export const rejectLeaveApplication = async (id) => api.post(ENDPOINTS.LEAVE_APPLICATIONS.REJECT(id));
+export const cancelLeaveApplication = async (id) => api.post(ENDPOINTS.LEAVE_APPLICATIONS.CANCEL(id));
+
+export const createLeaveEncashment = async (data) => api.post(ENDPOINTS.LEAVE_ENCASHMENTS.BASE, data);
+// Defense-in-depth guard only (issue #11) — always 400s, see the controller's own doc comment.
+export const updateLeaveEncashment = async (id, data) => api.put(ENDPOINTS.LEAVE_ENCASHMENTS.BY_ID(id), data);
+export const getLeaveEncashmentById = async (id) => api.get(ENDPOINTS.LEAVE_ENCASHMENTS.BY_ID(id));
+export const searchLeaveEncashments = async (params) => api.post(ENDPOINTS.LEAVE_ENCASHMENTS.SEARCH, params);
+export const markLeaveEncashmentPaid = async (id, data) => api.post(ENDPOINTS.LEAVE_ENCASHMENTS.MARK_PAID(id), data);
+
+export const createLeaveBlockList = async (data) => api.post(ENDPOINTS.LEAVE_BLOCK_LISTS.BASE, data);
+export const getLeaveBlockListById = async (id) => api.get(ENDPOINTS.LEAVE_BLOCK_LISTS.BY_ID(id));
+export const updateLeaveBlockList = async (id, data) => api.put(ENDPOINTS.LEAVE_BLOCK_LISTS.BY_ID(id), data);
+export const deleteLeaveBlockList = async (id) => api.delete(ENDPOINTS.LEAVE_BLOCK_LISTS.BY_ID(id));
+export const searchLeaveBlockLists = async (params) => api.post(ENDPOINTS.LEAVE_BLOCK_LISTS.SEARCH, params);
+
+export const bulkCreatePolicyAssignments = async (items) => api.post(ENDPOINTS.LEAVE_CONTROL_PANEL.BULK_POLICY_ASSIGNMENTS, { items });
+export const bulkAllocateLeaves = async (items) => api.post(ENDPOINTS.LEAVE_CONTROL_PANEL.BULK_ALLOCATIONS, { items });

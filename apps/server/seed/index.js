@@ -250,6 +250,85 @@ const MENU_GROUPS = [
   },
 ];
 
+/**
+ * Collapse duplicate active MenuMaster rows sharing a menuUrl (found live,
+ * OPEN-QUESTIONS.md Q-1 / GitHub #6) — the seeder used to upsert by
+ * `{ menuName, menuGroup }`, so moving a screen to a different group (or a
+ * non-idempotent reseed) left two active rows for the same URL under two
+ * different MenuGroupMaster documents. Server-side `checkPermission` reads
+ * `UserRoles` directly and is unaffected, but the admin client's own
+ * menu-id-to-permission resolution (`MenuContext.findMenuIdByUrl`,
+ * first-match-wins) can silently resolve the stale row, so a role granted
+ * access via the role editor may not show write buttons the server would
+ * actually allow.
+ *
+ * Keeps the newest row per URL, soft-deletes the rest, and re-points every
+ * `UserRoles.roles[]` entry that referenced a removed row's `menuId` onto the
+ * survivor — merging permission flags (OR'd) into the survivor's own row if
+ * the matrix already had one, so no role silently loses a grant it had on
+ * either copy. Must run before `seedMenus` adds the real unique index on
+ * `menuUrl`, which would otherwise fail to build over existing duplicates.
+ *
+ * Idempotent: once each URL has one live row, this matches nothing.
+ */
+const dedupeMenuMasterByUrl = async () => {
+  const menus = mongoose.connection.collection("menumasters");
+  const userRoles = mongoose.connection.collection("userroles");
+
+  const duplicates = await menus
+    .aggregate([
+      { $match: { isDeleted: { $ne: true } } },
+      { $sort: { updatedAt: -1 } },
+      { $group: { _id: "$menuUrl", ids: { $push: "$_id" } } },
+      { $match: { $expr: { $gt: [{ $size: "$ids" }, 1] } } },
+    ])
+    .toArray();
+
+  let collapsed = 0;
+  let matricesRepointed = 0;
+  for (const group of duplicates) {
+    const [surviving, ...removed] = group.ids; // newest first — keep it
+
+    for (const doc of await userRoles.find({ "roles.menuId": { $in: removed } }).toArray()) {
+      const survivorRow = doc.roles.find((r) => String(r.menuId) === String(surviving));
+      const nextRoles = [];
+      let changed = false;
+      for (const row of doc.roles) {
+        const isRemoved = removed.some((id) => String(id) === String(row.menuId));
+        if (!isRemoved) {
+          nextRoles.push(row);
+          continue;
+        }
+        changed = true;
+        if (survivorRow) {
+          // Merge into the survivor's own row (OR each permission flag);
+          // drop this duplicate row rather than keeping two for one URL.
+          for (const key of PERMISSION_KEYS) survivorRow[key] = survivorRow[key] || row[key];
+        } else {
+          // No row for the survivor yet on this matrix — repoint this one.
+          nextRoles.push({ ...row, menuId: surviving });
+        }
+      }
+      if (changed) {
+        await userRoles.updateOne({ _id: doc._id }, { $set: { roles: nextRoles } });
+        matricesRepointed += 1;
+      }
+    }
+
+    const result = await menus.updateMany(
+      { _id: { $in: removed } },
+      { $set: { isDeleted: true } },
+    );
+    collapsed += result.modifiedCount;
+  }
+
+  if (collapsed) {
+    console.log(
+      `✅ Menu master: collapsed ${collapsed} duplicate row(s) across ${duplicates.length} URL(s), re-pointed ${matricesRepointed} role matrix document(s)`,
+    );
+  }
+};
+
 const seedMenus = async () => {
   let groupCount = 0;
   let menuCount = 0;
@@ -264,7 +343,7 @@ const seedMenus = async () => {
 
     for (const [index, menu] of menus.entries()) {
       await MenuMaster.findOneAndUpdate(
-        { menuName: menu.menuName, menuGroup: savedGroup._id },
+        { menuUrl: menu.menuUrl },
         {
           ...menu,
           menuGroup: savedGroup._id,
@@ -1212,6 +1291,7 @@ const run = async () => {
   console.log("✅ DB connected");
 
   await dedupeUserRoles();
+  await dedupeMenuMasterByUrl();
   await backfillEmailForTriggerKeys();
   await dedupeActiveEmailTemplates();
   const companyId = await ensureApidelCompany();

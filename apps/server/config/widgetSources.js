@@ -64,4 +64,115 @@ export const WIDGET_SOURCES = Object.freeze({
     },
     scopeable: { owner: "userId" },
   },
+
+  // Organization Setup (ADR-017). Pure masters with no numeric field yet —
+  // no `aggregatable` on any of them. Company is the top of the hierarchy so
+  // it has nothing to group by; the rest group by companyId once a project
+  // seeds more than one.
+  companies: {
+    label: "Companies",
+    model: "Company",
+    aggregatable: {},
+    groupable: {
+      isActive: { label: "Active status" },
+    },
+    dateFields: { createdAt: "Created" },
+    filterable: {
+      companyName: "string",
+      companyCode: "string",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
+
+  branches: {
+    label: "Branches",
+    model: "Branch",
+    aggregatable: {},
+    groupable: {
+      companyId: {
+        label: "Company",
+        lookup: { from: "companies", labelField: "companyName" },
+      },
+      isActive: { label: "Active status" },
+    },
+    dateFields: { createdAt: "Created" },
+    filterable: {
+      branchName: "string",
+      companyId: "objectId",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
+
+  departments: {
+    label: "Departments",
+    model: "Department",
+    aggregatable: {},
+    groupable: {
+      companyId: {
+        label: "Company",
+        lookup: { from: "companies", labelField: "companyName" },
+      },
+      isActive: { label: "Active status" },
+    },
+    dateFields: { createdAt: "Created" },
+    filterable: {
+      departmentName: "string",
+      departmentCode: "string",
+      companyId: "objectId",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
+
+  designations: {
+    label: "Designations",
+    model: "Designation",
+    aggregatable: {},
+    groupable: {
+      companyId: {
+        label: "Company",
+        lookup: { from: "companies", labelField: "companyName" },
+      },
+      isActive: { label: "Active status" },
+    },
+    dateFields: { createdAt: "Created" },
+    filterable: {
+      designationName: "string",
+      companyId: "objectId",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
+
+  "employment-types": {
+    label: "Employment Types",
+    model: "EmploymentType",
+    aggregatable: {},
+    groupable: {
+      isActive: { label: "Active status" },
+    },
+    dateFields: { createdAt: "Created" },
+    filterable: {
+      employmentTypeName: "string",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
+
+  "employee-grades": {
+    label: "Employee Grades",
+    model: "EmployeeGrade",
+    aggregatable: {},
+    groupable: {
+      isActive: { label: "Active status" },
+    },
+    dateFields: { createdAt: "Created" },
+    filterable: {
+      gradeName: "string",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
 });

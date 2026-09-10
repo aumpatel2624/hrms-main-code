@@ -307,6 +307,57 @@ future work, not part of this module.
 Seed data: a small starter set (Aetna, Cigna, Star Health, ICICI Lombard) — not derived from the CSV,
 which has no insurance data.
 
+### Recruitment (module 3, built 2026-09-10 — ADR-019)
+
+No docstatus, no naming series (ADR-016) — every doctype below keeps only its own `status`/`result`
+field as the state machine. Public job listing lives at `/api/v1/public/jobs` (unauthenticated,
+field-allowlisted, hardcoded to `status="Open" AND publish=true`) — see ADR-019 for why this is a
+deliberate second exception to the public-endpoint gate in `30-api.md`. The public *apply* flow,
+Staffing Plan vacancy checks, Employee Referral status sync and Skill Assessment ratings are all
+deferred — `OPEN-QUESTIONS.md` Q-7/Q-8/Q-9.
+
+| Entity | Is a | Owned by | Identified by | Deletable |
+|---|---|---|---|---|
+| JobRequisition | A headcount request | Company | — | guarded |
+| JobOpening | A vacancy posting | Company | `route` (server-generated slug, unique, only set when published) | guarded |
+| JobApplicant | A candidate's application | — (global) | — | guarded |
+| JobApplicantSource | Lookup master (Referral, Job Board, ...) | global | `sourceName`, unique | guarded |
+| InterviewType | A reusable interview round definition | global | `interviewTypeName`, unique | guarded |
+| Interview | One scheduled round | — | — | guarded |
+| InterviewFeedback | A per-interviewer scorecard | one Interview | `(interviewId, interviewerId)`, unique compound | guarded |
+| JobOffer | A compensation/terms offer | Company | — | guarded |
+| JobOfferTermTemplate | A reusable set of offer terms | global | `templateName`, unique | guarded |
+
+**Real guards, enforced server-side, confirmed live in `verify`**:
+- JobApplicant: creating against a Closed JobOpening → 409; against an opening with
+  `preventDuplicateApplicant` and a matching `(emailId, jobOpeningId)` → 409.
+- Interview: a second Interview for the same `(jobApplicantId, interviewTypeId)` while one already
+  exists with `status != "Cancelled"` → 409. Designation mismatch against the Job Applicant's own → 400.
+- InterviewFeedback: interviewer not in the parent Interview's `interviewers` array → 403; before the
+  Interview's `scheduledOn` → 400; a second feedback from the same interviewer for the same interview
+  → 409 (also a DB unique index, belt and suspenders).
+- JobOffer: a second non-Cancelled offer for the same `jobApplicantId` → 409. Status change to
+  Accepted/Rejected syncs the linked JobApplicant's status.
+- JobOpening → JobRequisition: closing an opening linked to a requisition marks that requisition
+  `Filled` with `completedOn = today`.
+- **The integration point**: `Employee.jobApplicantId` (optional, added this module) — creating an
+  Employee with it set flips the linked JobApplicant and its most recent non-Cancelled JobOffer to
+  Accepted (`employee.controller.js`'s `syncJobApplicantAndOffer`, called from `createEmployee`).
+  Confirmed live: creating a real Employee from an accepted offer's `makeEmployee` payload correctly
+  left both the applicant and offer as Accepted.
+- Public listing: an expired-but-still-Open posting (`closesOn` in the past) stops appearing on
+  `/api/v1/public/jobs` without anything needing to flip its stored `status` — the query filters
+  `closesOn is null OR closesOn >= today` directly (no daily job, per ADR-016/019).
+
+**Permissions**: HR User/HR Manager get full CRUD everywhere in this module except
+InterviewFeedback, where **both are read-only** and only the `Interviewer` role writes (matches
+source exactly — confirmed live: HR User read succeeds, write 403s). `Interviewer` also gets full
+CRUD on Interview. No matrix row for Employee/Leave Approver/Expense Approver on anything here.
+
+**Known simplification**: `Interview.interviewers` and `InterviewType.defaultInterviewers` (arrays of
+User refs) are schema-ready but not exposed on the admin forms yet — no multi-select field precedent
+existed to build against. Assign interviewers via a direct API call/update for now.
+
 ## Not modelled
 
 <!-- Things the client talks about that deliberately have no collection, and why. -->

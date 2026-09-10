@@ -1497,5 +1497,41 @@ Copy this block. Number sequentially.
   "by exception"; this is the second, justified the same way ADR-004 justified the first) and,
   narrower, a public route that's a listing rather than resolve-by-key (gate criterion 2 not met,
   reasoned through above rather than silently waived).
-- **As built**: pending — implementation follows in the same session.
+- **As built**: as decided, with two small runtime adjustments. Interview's `interview_details` and
+  Job Offer's `offer_terms` child tables became plain embedded arrays as planned; Frappe's separate
+  `Interview Detail`/`Job Offer Term` doctypes were never built at all (correctly — nothing needed
+  them independently). `Employee.jobApplicantId` (optional) was added as planned to carry the
+  reverse-hook integration. Deviations found only during implementation: (1) `Company.companyCode`/
+  `Department.departmentCode`'s existing non-`sparse` partial-unique-index pattern (module 1) was
+  reused for `JobOpening.route` and `Employee.userId`-style optional-unique fields, not called out by
+  name in the ADR but the same established fix; (2) a real bug, not a design deviation — the public
+  listing's `buildLookups()` stringified `null` refs before filtering, producing the literal string
+  `"null"` in a Mongoose `$in` ObjectId query, which throws; fixed in its own commit
+  (`fix(server): public job listing 500s when a Job Opening has no employment type/branch`), found by
+  actually exercising the public endpoint with a real opening missing those optional fields, not by
+  reading the code.
+  **Verified**: `npm test` (10/10) green throughout. `npm run seed` run twice, identical counts on the
+  second run (idempotent) — 1 Apidel company/12 branches/24 departments/29 designations/4 employment
+  types (module 1), 195 employees (module 2), 5 Job Applicant Sources (module 3), unchanged. Live HTTP
+  walk of the full funnel end to end: Job Requisition → `makeJobOpening` mapping → published Job
+  Opening → confirmed visible on the **unauthenticated** `/api/v1/public/jobs` listing and its
+  by-route detail endpoint, with salary correctly hidden when `publishSalaryRange` is false → Job
+  Applicant created against it (name auto-derived from email) → closing the opening both blocked a new
+  applicant (409) and cascaded the linked Job Requisition to `Filled` → Interview created, duplicate-
+  type guard confirmed (409) → Interview Feedback: non-assigned interviewer rejected (403), assigned
+  interviewer accepted (201), duplicate rejected (409) → Job Offer created, duplicate-per-applicant
+  guard confirmed (409), status change to Accepted synced the Job Applicant → `makeEmployee` mapping →
+  real Employee created with `jobApplicantId` set, confirmed the reverse hook flipped both the
+  applicant and the (already-Accepted) offer correctly → confirmed with throwaway HR User/Employee-role
+  accounts that HR User can read but not write Interview Feedback (asymmetric permission, 403 on
+  write) and Employee-role is 403'd on Job Applicant. All throwaway test data (job requisitions,
+  openings, applicants, interview types, interviews, feedback, offers, one employee, users, and the
+  throwaway country/state/city created solely to satisfy the starter-generic `User` model's required
+  geography fields — this dev DB had none seeded) cleaned up afterward; collection counts confirmed
+  back to baseline (195 employees, 5 sources, zero in every purely-transactional collection). `npm run
+  build` green before and after. `npm run docs` (screenshot capture) not run — same gap modules 1-2
+  left; manifest entries exist so a future run can pick them up.
+  **Not done, flagged for the user**: the public *apply* flow, Staffing-Plan vacancy checks, Employee
+  Referral status sync and Skill Assessment ratings remain exactly as deferred in this ADR
+  (`OPEN-QUESTIONS.md` Q-7/Q-8/Q-9) — nothing new deferred beyond what was already planned.
 

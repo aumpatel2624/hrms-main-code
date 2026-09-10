@@ -25,6 +25,10 @@ Format: one rule per row, stable id, so a commit or a test can cite it.
 | INV-8c | Only HR User and HR Manager may read/write Company, Branch, Department, Designation, Employment Type or Employee Grade. Employee, Leave Approver, Expense Approver and Interviewer have no matrix row for these 6 screens. | `UserRoles.roles[]` matrix rows seeded in `apps/server/seed/index.js`'s `seedOrganizationSetupRoles`, enforced by the existing `checkPermission` middleware (ADR-002) — no new enforcement code, confirmed live in `verify` (403 for Employee, 200 for HR User) |
 | INV-9 | Every Employee belongs to exactly one Company, Department, Designation and Branch (all required refs); `employeeCode` is globally unique (real org-chart codes, no naming series — ADR-016). | Mongoose required refs + unique index on `employeeCode` (`apps/server/models/Employee.js`); enforced on create/update in `employee.controller.js` |
 | INV-9b | Deleting a Department (or Company/Designation/Branch) that has Employees is blocked, same as any other reference — this is a cross-module regression risk (module 1's guard needs to still catch module 2's new ref with zero registration) confirmed working live in `verify`, not assumed. | `getReferencingCounts` (generic, walks `mongoose.modelNames()`/schema refs at runtime — `apps/server/utils/referenceHelper.js`) |
+| INV-10 | A Job Applicant cannot be created against a Closed Job Opening; against a `preventDuplicateApplicant` opening, the same `(emailId, jobOpeningId)` pair cannot apply twice. | `jobApplicant.controller.js` `createJobApplicant`, confirmed live (409 both cases) |
+| INV-11 | A candidate cannot have two non-Cancelled Interviews for the same Interview Type, and cannot have two non-Cancelled Job Offers at once. | `interview.controller.js`/`jobOffer.controller.js` `create*`, confirmed live (409 both) |
+| INV-12 | Interview Feedback: one per `(interviewId, interviewerId)` pair, only from an interviewer named in the parent Interview's `interviewers` array, never before the Interview's `scheduledOn`. | `interviewFeedback.controller.js` `createInterviewFeedback` + a DB unique compound index on `InterviewFeedback` (belt and suspenders); confirmed live (403/400/409) |
+| INV-13 | Company/Employee HRMS entities are only "gone" from the public job board, never physically closed by a job — an expired (`closesOn` passed) Job Opening stops appearing in `/api/v1/public/jobs` purely by the read-time query filter, whether or not its stored `status` was ever flipped to Closed. | `jobsPublic.controller.js` `baseMatch()` — no scheduled job exists (ADR-016/019) |
 
 ## Permissions
 
@@ -36,6 +40,7 @@ Format: one rule per row, stable id, so a commit or a test can cite it.
 |---|---|---|
 | PERM-1 | HRMS roles take one of three shapes: **self-only** (Employee — sees/edits only records about themself), **approver-scoped** (Leave/Expense/Shift Approver — sees records for employees who name them, or their department, as approver), **global-within-company** (HR User, HR Manager, System Manager — see everything for their own Company; System Manager sees every Company). See `DOMAIN.md` HRMS vocabulary and ADR-016. | The 6 roles exist (`RoleMaster`, seeded by Organization Setup) and every HRMS screen so far uses the plain global shape (INV-8c/INV-9c) — self-only and approver-scoped are **not yet built**, first needed by the Leaves module |
 | PERM-2 | Employee Health Insurance is the first HRMS screen with an asymmetric HR role split: HR Manager gets full read/write/edit/delete, **HR User is read-only** (no write/create/delete) — matches the Frappe source permissions table exactly, unlike every other Organization Setup/Employee Records screen where HR User and HR Manager are equal. | `UserRoles.roles[]` matrix row seeded in `apps/server/seed/index.js`'s `seedEmployeeRecordsRoles`; confirmed live in `verify` (HR User: 200 GET, 403 POST) |
+| PERM-3 | Interview Feedback: HR User and HR Manager are **both read-only** — only the `Interviewer` role can create/edit/delete. Every other Recruitment screen gives HR User/HR Manager full CRUD. Matches Frappe source exactly. | `seedRecruitmentRoles` in `apps/server/seed/index.js`; confirmed live in `verify` (HR User: 200 GET, 403 PUT) |
 
 ## Workflow and state
 
@@ -44,7 +49,9 @@ Format: one rule per row, stable id, so a commit or a test can cite it.
 
 | ID | Rule | Enforced in |
 |---|---|---|
-| FLOW-1 | | |
+| FLOW-1 | JobOpening.status: Open ↔ Closed, either direction, no controller-enforced transition graph (matches source — no restrictions invented). Closing an opening linked to a JobRequisition cascades that requisition to `Filled` + `completedOn = today`. | `jobOpening.controller.js` `syncRequisitionOnClose` |
+| FLOW-2 | JobOffer.status → Accepted or Rejected syncs the linked JobApplicant.status to match. Creating an Employee with `jobApplicantId` set (the accepted-offer → hire path) flips both the JobApplicant and its most recent non-Cancelled JobOffer to Accepted, regardless of what triggered the Employee creation. | `jobOffer.controller.js` `syncApplicantStatus`; `employee.controller.js` `syncJobApplicantAndOffer` |
+| FLOW-3 | No automatic Interview.status transition from Pending to Under Review when the first Interview Feedback is submitted — deliberately not invented; source has no such code path either (flagged in the Port-Spec's own Port Notes). Moving to Under Review is a manual HR action. | Absence is deliberate — `interviewFeedback.controller.js`'s `createInterviewFeedback` does not touch the parent Interview's status |
 
 ## Calculations
 

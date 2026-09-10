@@ -203,6 +203,121 @@ export const CONFIG_SCREENS = [
         roles: "HR Manager can add, edit and delete providers; HR User can view them but not change them.",
     },
     {
+        key: "job-requisition",
+        config: "jobRequisitionConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro:
+            "A Job Requisition is a headcount request — who's asking, for which role, and why. It's " +
+            "the first stage of the hiring funnel, before a vacancy is posted.",
+        when: "Add one when a department needs to ask for a new hire.",
+        gotchas: [
+            "Completed On is required once Status is set to Filled.",
+            "\"Create Job Opening\" builds a draft posting from this requisition — review and save it " +
+                "on the Job Opening screen, it isn't created automatically.",
+        ],
+        roles: "Only HR User and HR Manager can add or edit job requisitions.",
+    },
+    {
+        key: "job-opening",
+        config: "jobOpeningConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro:
+            "A Job Opening is a vacancy posting. Publish it to list it on the public job board; closing " +
+            "it removes it from that listing.",
+        when: "Add one to start collecting applicants for a role — either from a Job Requisition or directly.",
+        gotchas: [
+            "Publishing generates a public web address from the company and job title automatically.",
+            "An expired posting (past its Closes On date) stops appearing on the public board even if " +
+                "its Status still reads Open here.",
+            "Closing an opening linked to a Job Requisition marks that requisition Filled automatically.",
+        ],
+        roles: "Only HR User and HR Manager can add or edit job openings.",
+    },
+    {
+        key: "job-applicant",
+        config: "jobApplicantConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro:
+            "A Job Applicant is a candidate's application against a Job Opening.",
+        when: "Add one when a candidate applies — by email, referral, or however they reached you.",
+        gotchas: [
+            "You cannot add an applicant against a closed Job Opening.",
+            "If the opening has duplicate-application prevention on, the same email can't apply twice " +
+                "for it.",
+            "Applicant Name is filled in from the email address automatically if left blank.",
+        ],
+        roles: "Only HR User and HR Manager can add or edit job applicants.",
+    },
+    {
+        key: "job-applicant-source",
+        config: "jobApplicantSourceConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A lookup list of where candidates come from — referral, job board, and so on.",
+        when: "Add a source before assigning an applicant's source to it.",
+        gotchas: ["You cannot delete a source while records still reference it."],
+        roles: "Only HR User and HR Manager can add or edit sources.",
+    },
+    {
+        key: "interview-type",
+        config: "interviewTypeConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A reusable interview round definition — technical round, HR round, and so on.",
+        when: "Add one before scheduling an interview of that kind.",
+        gotchas: ["You cannot delete an interview type while records still reference it."],
+        roles: "Only HR User and HR Manager can add or edit interview types.",
+    },
+    {
+        key: "interview",
+        config: "interviewConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A scheduled interview round for a candidate against an Interview Type.",
+        when: "Add one to schedule a candidate's next interview round.",
+        gotchas: [
+            "A candidate cannot be scheduled twice for the same Interview Type while an earlier one " +
+                "for it is still active.",
+            "If the Interview Type is tied to a designation, it must match the applicant's own — a " +
+                "mismatch is rejected.",
+        ],
+        roles: "HR User, HR Manager and Interviewer can all add or edit interviews.",
+    },
+    {
+        key: "interview-feedback",
+        config: "interviewFeedbackConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A single interviewer's scorecard for one Interview — a result plus free-text feedback.",
+        when: "Add one after conducting an interview round.",
+        gotchas: [
+            "Only an interviewer assigned to the Interview can submit feedback for it.",
+            "Feedback cannot be submitted before the Interview's scheduled date.",
+            "Only one feedback per interviewer per interview is allowed.",
+        ],
+        roles: "Only the Interviewer role can add or edit feedback here — HR User and HR Manager can view it but not change it.",
+    },
+    {
+        key: "job-offer",
+        config: "jobOfferConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A compensation and terms offer extended to a candidate.",
+        when: "Add one once a candidate is selected to hire.",
+        gotchas: [
+            "Only one active offer per applicant is allowed — cancel the earlier one to issue a new one.",
+            "Setting Status to Accepted or Rejected updates the linked Job Applicant's status to match.",
+            "\"Create Employee\" (once Accepted) builds a draft employee record from the offer — review " +
+                "and save it on the Employee screen, it isn't created automatically. Creating that " +
+                "Employee record is what actually marks the offer and applicant Accepted for good.",
+        ],
+        roles: "Only HR User and HR Manager can add or edit job offers.",
+    },
+    {
+        key: "job-offer-term-template",
+        config: "jobOfferTermTemplateConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A reusable set of terms an offer can copy from, instead of retyping them each time.",
+        when: "Add one when you have a standard set of offer terms worth reusing.",
+        gotchas: ["You cannot delete a template while records still reference it."],
+        roles: "Only HR User and HR Manager can add or edit templates.",
+    },
+    {
         key: "user",
         config: "userConfig",
         source: "apps/admin/src/entities/advanced.jsx",

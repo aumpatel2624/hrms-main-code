@@ -226,4 +226,58 @@ export const WIDGET_SOURCES = Object.freeze({
       createdAt: "date",
     },
   },
+
+  // ---- Recruitment (ADR-019) ----
+  "job-openings": {
+    label: "Job Openings",
+    model: "JobOpening",
+    aggregatable: {},
+    groupable: {
+      status: { label: "Status" },
+      companyId: {
+        label: "Company",
+        lookup: { from: "companies", labelField: "companyName" },
+      },
+      departmentId: {
+        label: "Department",
+        lookup: { from: "departments", labelField: "departmentName" },
+      },
+      publish: { label: "Published" },
+    },
+    dateFields: { postedOn: "Posted On", createdAt: "Created" },
+    filterable: {
+      jobTitle: "string",
+      designationId: "objectId",
+      status: "enum",
+      companyId: "objectId",
+      departmentId: "objectId",
+      publish: "boolean",
+      postedOn: "date",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
+
+  "job-applicants": {
+    label: "Job Applicants",
+    model: "JobApplicant",
+    aggregatable: {},
+    groupable: {
+      status: { label: "Status" },
+      sourceId: {
+        label: "Source",
+        lookup: { from: "jobapplicantsources", labelField: "sourceName" },
+      },
+    },
+    dateFields: { createdAt: "Applied On" },
+    filterable: {
+      applicantName: "string",
+      emailId: "string",
+      jobOpeningId: "objectId",
+      status: "enum",
+      sourceId: "objectId",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
 });

@@ -61,6 +61,18 @@ export const ENDPOINTS = {
         BY_ID: (id) => `${V1}/employee-grades/${id}`,
         SEARCH: `${V1}/employee-grades/search`,
     },
+    EMPLOYEE_HEALTH_INSURANCES: {
+        BASE: `${V1}/employee-health-insurances`,
+        BY_ID: (id) => `${V1}/employee-health-insurances/${id}`,
+        SEARCH: `${V1}/employee-health-insurances/search`,
+    },
+
+    // Employee Records endpoints (ADR-018)
+    EMPLOYEES: {
+        BASE: `${V1}/employees`,
+        BY_ID: (id) => `${V1}/employees/${id}`,
+        SEARCH: `${V1}/employees/search`,
+    },
 
     // User endpoints
     USERS: {

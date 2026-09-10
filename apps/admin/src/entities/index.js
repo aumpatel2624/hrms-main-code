@@ -15,6 +15,8 @@ import {
     createCompany, deleteCompany, getCompanyById, updateCompany, searchCompanies,
     createEmploymentType, deleteEmploymentType, getEmploymentTypeById, updateEmploymentType, searchEmploymentTypes,
     createEmployeeGrade, deleteEmployeeGrade, getEmployeeGradeById, updateEmployeeGrade, searchEmployeeGrades,
+    createEmployeeHealthInsurance, deleteEmployeeHealthInsurance, getEmployeeHealthInsuranceById,
+    updateEmployeeHealthInsurance, searchEmployeeHealthInsurances,
 } from "../api/organizationSetup.api";
 import {
     createEmailFor, deleteEmailFor, getEmailForById, updateEmailFor, searchEmailFor, getEmailTriggers,
@@ -293,6 +295,37 @@ export const employeeGradeConfig = {
     recordTitle: (r) => r.gradeName,
 };
 
+export const employeeHealthInsuranceConfig = {
+    filterFields: [
+        { name: "providerName", label: "Provider Name", type: "string" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "employee-health-insurance",
+    path: "/employee-health-insurance",
+    section: "HR Core",
+    singular: "Employee Health Insurance",
+    plural: "Employee Health Insurances",
+    description: "Health insurance providers employees can be enrolled with.",
+    api: {
+        search: searchEmployeeHealthInsurances, getById: getEmployeeHealthInsuranceById, create: createEmployeeHealthInsurance,
+        update: updateEmployeeHealthInsurance, remove: deleteEmployeeHealthInsurance,
+    },
+    sections: [
+        { id: "details", title: "Provider details" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "providerName", icon: Tag01, label: "Provider Name", required: true, section: "details", error: "Provider Name is required!", placeholder: "Enter provider name" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Provider Name", selector: (row) => row.providerName, minWidth: "200px" },
+        { name: "Status", selector: (row) => (row.isActive ? "Active" : "Inactive"), minWidth: "130px" },
+    ],
+    recordTitle: (r) => r.providerName,
+};
+
 export const emailForConfig = {
     filterFields: [
         { name: "emailFor", label: "Email For", type: "string" },
@@ -504,5 +537,5 @@ export const UNIFORM_ENTITIES = [
     countryConfig, stateConfig, cityConfig, currencyConfig,
     roleConfig, emailForConfig, emailSetupConfig, menuGroupConfig,
     seoRedirectConfig,
-    companyConfig, employmentTypeConfig, employeeGradeConfig,
+    companyConfig, employmentTypeConfig, employeeGradeConfig, employeeHealthInsuranceConfig,
 ];

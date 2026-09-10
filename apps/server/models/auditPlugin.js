@@ -64,6 +64,19 @@ const record = async (entry) => {
 export const auditPlugin = (schema) => {
   // ---- document writes: Model.create() and doc.save() ----
   schema.pre("save", async function () {
+    // `mongoose.plugin()` reaches every schema compiled afterward, embedded
+    // (subdocument) schemas included — an array-of-subdocuments field (e.g.
+    // Employee Onboarding's `activities`) gets this same pre/post-save
+    // middleware run per-row when the parent saves. A subdocument's
+    // `this.constructor` is not a real Model (no `.findById`), so this must
+    // bail out before touching it — found live (HRMS module 4, ADR-020)
+    // when an existing document's embedded array was modified and re-saved;
+    // creating one fresh never hit it, since `isNew` short-circuits the
+    // `findById` call. The parent document's own diff already captures
+    // whole-array changes (`diffDocuments` treats arrays as opaque, per
+    // 20-schema.md's audit-trail notes), so a subdocument-level entry would
+    // be redundant even if this didn't crash.
+    if (this.$isSubdocument) return;
     if (!auditable(this.constructor.modelName) || !getAuditContext()?.actor) return;
     // $locals survives to the post hook; isNew does not.
     this.$locals.auditWasNew = this.isNew;
@@ -73,6 +86,7 @@ export const auditPlugin = (schema) => {
   });
 
   schema.post("save", async function (doc) {
+    if (this.$isSubdocument) return;
     const context = getAuditContext();
     if (!auditable(this.constructor.modelName) || !context?.actor) return;
 

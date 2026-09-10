@@ -124,6 +124,41 @@ export const ENDPOINTS = {
         SEARCH: `${V1}/job-offer-term-templates/search`,
     },
 
+    // Onboarding & Separation endpoints (ADR-020)
+    EMPLOYEE_ONBOARDINGS: {
+        BASE: `${V1}/employee-onboardings`,
+        BY_ID: (id) => `${V1}/employee-onboardings/${id}`,
+        SEARCH: `${V1}/employee-onboardings/search`,
+        MARK_AS_COMPLETED: (id) => `${V1}/employee-onboardings/${id}/mark-as-completed`,
+        MAKE_EMPLOYEE: (id) => `${V1}/employee-onboardings/${id}/make-employee`,
+    },
+    EMPLOYEE_ONBOARDING_TEMPLATES: {
+        BASE: `${V1}/employee-onboarding-templates`,
+        BY_ID: (id) => `${V1}/employee-onboarding-templates/${id}`,
+        SEARCH: `${V1}/employee-onboarding-templates/search`,
+    },
+    EMPLOYEE_SEPARATIONS: {
+        BASE: `${V1}/employee-separations`,
+        BY_ID: (id) => `${V1}/employee-separations/${id}`,
+        SEARCH: `${V1}/employee-separations/search`,
+    },
+    EMPLOYEE_SEPARATION_TEMPLATES: {
+        BASE: `${V1}/employee-separation-templates`,
+        BY_ID: (id) => `${V1}/employee-separation-templates/${id}`,
+        SEARCH: `${V1}/employee-separation-templates/search`,
+    },
+    EXIT_INTERVIEWS: {
+        BASE: `${V1}/exit-interviews`,
+        BY_ID: (id) => `${V1}/exit-interviews/${id}`,
+        SEARCH: `${V1}/exit-interviews/search`,
+    },
+    FULL_AND_FINAL_STATEMENTS: {
+        BASE: `${V1}/full-and-final-statements`,
+        BY_ID: (id) => `${V1}/full-and-final-statements/${id}`,
+        SEARCH: `${V1}/full-and-final-statements/search`,
+        MARK_AS_PAID: (id) => `${V1}/full-and-final-statements/${id}/mark-as-paid`,
+    },
+
     // User endpoints
     USERS: {
         BASE: `${V1}/users`,

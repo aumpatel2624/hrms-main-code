@@ -35,6 +35,7 @@ import EmployeeHealthInsurance from "../models/EmployeeHealthInsurance.js";
 import RoleMaster from "../models/RoleMaster.js";
 import UserRoles from "../models/UserRoles.js";
 import JobApplicantSource from "../models/JobApplicantSource.js";
+import GrievanceType from "../models/GrievanceType.js";
 import { PERMISSION_KEYS } from "@demo-panel/shared/permissions";
 import { SCOPES } from "@demo-panel/shared/scopes";
 
@@ -191,6 +192,20 @@ const MENU_GROUPS = [
       { menuName: "Separation Template", menuUrl: "/employee-separation-template", icon: "ri-file-copy-2-line" },
       { menuName: "Exit Interview", menuUrl: "/exit-interview", icon: "ri-chat-off-line" },
       { menuName: "Full and Final Statement", menuUrl: "/full-and-final-statement", icon: "ri-file-list-3-line" },
+    ],
+  },
+  // HRMS module 5 (ADR-021).
+  {
+    menuGroupName: "Employee Career Events",
+    sequence: 2.9,
+    icon: "ri-git-branch-line",
+    menus: [
+      { menuName: "Grievance Type", menuUrl: "/grievance-type", icon: "ri-price-tag-3-line" },
+      { menuName: "Employee Grievance", menuUrl: "/employee-grievance", icon: "ri-alarm-warning-line" },
+      { menuName: "Employee Transfer", menuUrl: "/employee-transfer", icon: "ri-shuffle-line" },
+      { menuName: "Employee Promotion", menuUrl: "/employee-promotion", icon: "ri-arrow-up-circle-line" },
+      { menuName: "Employee Referral", menuUrl: "/employee-referral", icon: "ri-user-shared-line" },
+      { menuName: "Staffing Plan", menuUrl: "/staffing-plan", icon: "ri-organization-chart" },
     ],
   },
   {
@@ -1003,6 +1018,96 @@ const seedOnboardingSeparationRoles = async () => {
   console.log(`✅ Onboarding & Separation roles: ${matrixRowsAdded} menu grant(s) added`);
 };
 
+/**
+ * Grievance Type starter set (ADR-021) — not derived from any real data,
+ * the org-chart CSV has no grievance data. Upserted by name.
+ */
+const seedEmployeeCareerEventsMasters = async () => {
+  const TYPES = [
+    { grievanceTypeName: "Harassment", description: "Workplace harassment or bullying" },
+    { grievanceTypeName: "Workplace Safety", description: "Safety or working-conditions concerns" },
+    { grievanceTypeName: "Compensation", description: "Pay, benefits or compensation disputes" },
+    { grievanceTypeName: "Discrimination", description: "Discrimination on any protected ground" },
+    { grievanceTypeName: "Policy Violation", description: "A colleague or manager violating company policy" },
+  ];
+  let created = 0;
+  for (const type of TYPES) {
+    const result = await GrievanceType.findOneAndUpdate(
+      { grievanceTypeName: type.grievanceTypeName },
+      { ...type, isActive: true },
+      { upsert: true, setDefaultsOnInsert: true, new: false },
+    );
+    if (!result) created += 1;
+  }
+  console.log(`✅ Employee Career Events masters: ${created} new Grievance Type(s), ${TYPES.length} ensured`);
+};
+
+/**
+ * Employee Career Events roles (ADR-021). Reproduces each doctype's real,
+ * not-symmetric source permission table: Staffing Plan has no System
+ * Manager row in source (ADMIN/System-Manager-equivalent still bypasses
+ * the matrix regardless — this starter's own convention, not omitted) and
+ * HR User gets a submit-equivalent right there (here: full "edit", same
+ * key everything else uses since this matrix has no separate submit
+ * dimension) that HR User doesn't get on Employee Transfer/Promotion
+ * (create+read only, no edit/delete in source — HR Manager alone gets
+ * full control there). Employee Grievance's Employee role gets write+
+ * delete on their own screen access (per source's literal permission
+ * table — not an "only mine" restriction, that mechanism is still open,
+ * OPEN-QUESTIONS.md Q-4) but the matrix only grants roles here, not a
+ * scoped subset — Employee gets the same full-within-menu grant HR does.
+ */
+const seedEmployeeCareerEventsRoles = async () => {
+  const perm = (write, edit, del) =>
+    Object.fromEntries(PERMISSION_KEYS.map((key) => [key, key === "read" || (key === "write" && write) || (key === "edit" && edit) || (key === "delete" && del)]));
+  const full = perm(true, true, true);
+  const fullNoDelete = perm(true, true, false);
+  const createReadOnly = perm(true, false, false);
+
+  // { menuUrl: { roleName: permObject } }
+  const GRANTS = {
+    "/grievance-type": { "HR User": full, "HR Manager": full },
+    "/employee-grievance": { "HR User": full, "HR Manager": full, Employee: full },
+    "/employee-transfer": { "HR User": createReadOnly, "HR Manager": full },
+    "/employee-promotion": { "HR User": createReadOnly, "HR Manager": full },
+    "/employee-referral": { "HR User": fullNoDelete, "HR Manager": full },
+    "/staffing-plan": { "HR User": fullNoDelete, "HR Manager": full },
+  };
+
+  const allMenuUrls = Object.keys(GRANTS);
+  const menus = await MenuMaster.find({ menuUrl: { $in: allMenuUrls } }).lean();
+  if (menus.length !== allMenuUrls.length) {
+    console.log("⚠️  Employee Career Events roles: not every menu row exists yet — run seedMenus first");
+    return;
+  }
+  const menuByUrl = Object.fromEntries(menus.map((m) => [m.menuUrl, m]));
+
+  const addRow = (userRoles, menu, permObj) => {
+    if (userRoles.roles.some((r) => String(r.menuId) === String(menu._id))) return false;
+    userRoles.roles.push({ menuId: menu._id, menuGroupId: menu.menuGroup, ...permObj });
+    return true;
+  };
+
+  let matrixRowsAdded = 0;
+  const roleNames = ["Employee", "HR User", "HR Manager"];
+  for (const roleName of roleNames) {
+    const role = await RoleMaster.findOne({ roleName });
+    if (!role) continue;
+    const userRoles = await UserRoles.findOne({ roleId: role._id });
+    if (!userRoles) continue;
+
+    let changed = false;
+    for (const [menuUrl, grantByRole] of Object.entries(GRANTS)) {
+      const permObj = grantByRole[roleName];
+      if (!permObj) continue;
+      if (addRow(userRoles, menuByUrl[menuUrl], permObj)) { matrixRowsAdded += 1; changed = true; }
+    }
+    if (changed) await userRoles.save();
+  }
+
+  console.log(`✅ Employee Career Events roles: ${matrixRowsAdded} menu grant(s) added`);
+};
+
 const run = async () => {
   if (!process.env.DATABASE) {
     console.error("❌ DATABASE is not set in .env");
@@ -1033,6 +1138,8 @@ const run = async () => {
   await seedRecruitmentMasters();
   await seedRecruitmentRoles();
   await seedOnboardingSeparationRoles();
+  await seedEmployeeCareerEventsMasters();
+  await seedEmployeeCareerEventsRoles();
 
   await mongoose.disconnect();
   console.log("✅ Seeding complete");

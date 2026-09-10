@@ -677,6 +677,60 @@ export const CONFIG_SCREENS = [
         ],
         roles: "HR Manager can fully manage staffing plans; HR User can create and edit but not delete.",
     },
+    {
+        key: "training-program",
+        config: "trainingProgramConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A training curriculum, e.g. a recurring course or workshop series.",
+        when: "Set one up before scheduling individual Training Events under it.",
+        roles: "HR Manager can fully manage training programs; HR User can edit existing ones but not create or delete.",
+    },
+    {
+        key: "training-event",
+        config: "trainingEventConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A single scheduled training session, with its attendee list and per-attendee scoring.",
+        when: "Create one to schedule a session; add attendees, then mark it Completed once it's happened.",
+        gotchas: [
+            "End Time must be strictly after Start Time.",
+            "\"Mark as Completed\" moves every Present, not-yet-feedback-submitted attendee to Completed and moves the event to Completed — it doesn't touch Absent attendees.",
+            "\"Reopen as Scheduled\" resets every attendee row back to Open.",
+            "Attendee rows are entered by the Employee's id — there's no picker for this field yet.",
+        ],
+        roles: "HR Manager can fully manage training events; HR User can edit existing ones but not create or delete.",
+    },
+    {
+        key: "training-feedback",
+        config: "trainingFeedbackConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "An employee's feedback on a training session they attended.",
+        when: "Collect this after a Training Event is marked Completed.",
+        gotchas: [
+            "Only allowed once the Training Event is Completed, the employee is one of its attendees, and they weren't marked Absent.",
+            "Submitting feedback marks that attendee's row \"Feedback Submitted\" on the Training Event.",
+        ],
+        roles: "HR Manager can fully manage training feedback; HR User can edit existing entries but not create or delete; Employees can create, read and edit (not delete) their own.",
+    },
+    {
+        key: "skill",
+        config: "skillConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A named skill (e.g. Communication, MS Excel) used across Employee Skill Maps and Recruitment's interview screens.",
+        when: "Set these up once, before mapping employee skills or scoring interviews against them.",
+        roles: "HR Manager can fully manage skills; HR User can only view them.",
+    },
+    {
+        key: "employee-skill-map",
+        config: "employeeSkillMapConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "One employee's skill profile — a list of skills and a 1-5 proficiency rating for each.",
+        when: "Create one per employee, then use \"Populate from Designation\" to pull in the skills expected for their Designation.",
+        gotchas: [
+            "\"Populate from Designation\" clears and replaces the skill list — any manually added rows are lost.",
+            "Skill rows are entered by the Skill's id — there's no picker for this field yet.",
+        ],
+        roles: "HR Manager can fully manage skill maps; HR User can create and edit but not delete.",
+    },
 ];
 
 /**

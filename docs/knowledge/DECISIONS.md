@@ -1695,3 +1695,154 @@ Copy this block. Number sequentially.
   throwaway accounts — see `CHECKLISTS.md`'s "Onboarding & Separation" section for the full walk.
   All throwaway test data cleaned up, employee count confirmed back to 195.
 
+---
+
+### ADR-021 — Employee Career Events: explicit-field history over generic setattr; Staffing Plan without a company hierarchy; source bugs fixed, not reproduced
+
+- **Date**: 2026-09-10
+- **Status**: accepted
+- **Context**: `system-design` for HRMS module 5, same standing overnight authorization, modules 1-4
+  reviewed clean before starting this one (module 4 also fixed a real, general `auditPlugin` bug
+  affecting embedded arrays — noted, not re-litigated here). Read all source files in full: `Employee
+  Transfer.md`, `Employee Promotion.md`, `Employee Referral.md`, `Grievance Type.md`, `Employee
+  Grievance.md`, `Staffing Plan.md`, `Staffing Plan Detail.md`. `Employee Property History` was
+  already read in full during module 2's research (ADR-018) — not re-read, referenced from memory.
+- **The big call: Transfer/Promotion don't get a generic "pick any Employee field and setattr it"
+  mechanism.** Source's `Employee Property History` is a generic `{fieldname, property, current, new}`
+  row that a shared `update_employee_work_history()` applies via Python `setattr` onto the live
+  Employee document — source's own Port Notes call out that the exclusion list protecting fields like
+  `status`/`ctc`/`date_of_joining` from being targeted this way is **client-only, not enforced
+  server-side**, i.e. the real app already has a data-integrity gap here. Building a generic
+  reflection-style field-setter into this stack to support one feature is the wrong shape of reuse —
+  it would be a second, narrower version of "edit an Employee," open to exactly the abuse source's own
+  notes flag. Instead: **`EmployeeTransfer` and `EmployeePromotion` each carry explicit typed fields**
+  for the small, real set of things they actually change (Transfer: department/designation/branch;
+  Promotion: department/designation/grade/CTC), and applying them is a plain, explicit field
+  assignment in the controller — safe by construction, no setattr, no exclusion list needed because
+  there's nothing generic to exclude from.
+  - **`EmployeePropertyHistory` becomes a plain, append-only change-log array on `Employee`** (or its
+    own collection with an `employeeId` back-ref — implementer's call, `20-schema.md`'s "no unbounded
+    arrays" rule likely favors a collection since this grows for the life of an active employee),
+    written by Transfer/Promotion with the specific field, before-value, after-value, effective date,
+    and which document caused it — a narrower, safer version of the same audit intent, not the
+    generic mechanism.
+  - **`Employee` gains one new field this module needs and doesn't have yet: `ctc`** (optional
+    number) — Promotion's whole `current_ctc`/`revised_ctc` mechanism needs somewhere to read/write a
+    "current total comp" figure, and nothing else has created one yet (Payroll's real Salary
+    Structure is modules away). A plain optional number, not a Payroll concept — revisit when Payroll
+    exists and decide whether `ctc` becomes derived from a Salary Structure Assignment instead.
+  - **Inter-company transfer (source's `create_new_employee_id` — deep-clones the Employee into a new
+    record at a different company, relieves the old one, blocks cancel until the clone is deleted) is
+    deliberately out of scope.** This is real functionality, but it's the rare edge case (an employee
+    legally re-employed under a different Apidel entity) that adds real complexity (deep-clone,
+    dual-employee-record bookkeeping, a cancel-time delete-first guard) for a path a small HR team can
+    still just do by hand today (deactivate one record, create another). `EmployeeTransfer` in this
+    module only changes department/designation/branch **within the same company**; `companyId`
+    changes are not supported by this action. Named as a deferred feature, not a silent gap.
+- **Staffing Plan loses its entire parent/subsidiary-company validation layer, because there is no
+  company hierarchy to validate against.** Source's real complexity here — `validate_with_parent_
+  plan`/`validate_with_subsidiary_plans`, walking a nested-set Company tree, checking a plan's
+  vacancies/budget against parent- and sibling-company plans — all assumes Frappe's Company doctype
+  supports a tree (`parent_company`, `lft`/`rgt`). This project's `Company` (ADR-017) is a flat list —
+  multi-company, but not hierarchical, and nothing in grilling asked for a parent/subsidiary
+  relationship between Apidel entities. Building tree-validation logic against a hierarchy that
+  doesn't exist would be pure speculation. **Kept**: the one guard that doesn't need a hierarchy —
+  `validateOverlap`, same company + same designation + overlapping date range blocks a second active
+  plan (source's own real, working same-company check). **Also kept**: the live-computed
+  `currentCount`/`currentOpenings`/`numberOfPositions`/`totalEstimatedCost` per row, recomputed on
+  every save from real `Employee`/`JobOpening` counts (both exist now) — genuinely useful, no
+  hierarchy needed. **Dropped**: `parent_company` walking, sibling-company aggregation, the whole
+  `ParentCompanyError`/`SubsidiaryCompanyError` pair. Also dropped: `set_job_requisitions`'s
+  bulk-multiselect-from-Job-Requisition convenience action (a nice-to-have UI affordance, not core to
+  the planning function) and the "prompt"-style user-typed primary key (this stack uses `_id` like
+  every other collection, per ADR-016 — no naming-series-adjacent user-typed-name pattern anywhere in
+  this project so far, no reason to start here).
+- **Closing `OPEN-QUESTIONS.md` Q-8**: now that `StaffingPlan`/`StaffingPlanDetail` are real, this
+  module also retrofits the vacancy checks Recruitment (module 3, ADR-019) deliberately skipped:
+  `JobOpening` creation/update checks the active Staffing Plan for its designation+company (if one
+  exists — no plan means no cap, matching source's own "only checked when a plan exists" behavior) and
+  `JobOffer` submission does the same. Both reuse the same `get_designation_counts`-equivalent
+  (`Employee.status=Active` count + `JobOpening.status=Open` count for the designation/company).
+- **Source bugs fixed, not reproduced.** `Employee Referral`'s source has three confirmed bugs, called
+  out by name in its own spec file: `status` is unconditionally forced back to `"Pending"` on every
+  `validate()` (so "Rejected"/"Accepted" never actually persists through a normal save — only a
+  `db_set` bypass works), `department`'s `fetch_from` references a nonexistent `employee` field
+  (dead, should be `referrer.department`), and `create_additional_salary` throws an unbound-variable
+  error whenever an Additional Salary already exists for the referral. ADR-016 already committed this
+  project to idiomatic, *working* behavior over bug-for-bug fidelity — building any of these three in
+  is pure downside with no compatibility benefit (there's no existing installation's data to stay
+  bug-compatible with). Fixed: `status` persists whatever it's set to (no forced reset);
+  `departmentId` is fetched from `referrer.departmentId` (the evidently-intended source); referral
+  bonus payout (`createAdditionalSalary`) is dropped entirely for now, same reasoning as Transfer's
+  inter-company case — it's an `Additional Salary` (Payroll) concept that doesn't exist yet, not a bug
+  fix decision.
+- **Employee Grievance's polymorphic `grievance_against_party`/`grievance_against` (any DocType, any
+  record) becomes a plain optional `Employee` reference plus a free-text fallback.** A generic
+  "grievance against any document in the system" field is more genericism than this project's actual
+  entity set can meaningfully target (this app has nowhere near Frappe's full doctype registry) — the
+  real cases are "against a specific employee" or "general/systemic," both served by an optional ref
+  plus text. `associated_document_type`/`associated_document` (a second, unrelated polymorphic pair)
+  is dropped entirely — no identified real consumer, pure generic-reference speculation.
+- **Decision** (schema, one line each):
+  1. `GrievanceType` — simple master (name, description, isActive) — same shape as `EmploymentType`.
+  2. `EmployeeGrievance` — subject, raisedByEmployeeId (required ref), date (required), status enum
+     (Open/Investigated/Resolved/Invalid/Cancelled, default Open), grievanceTypeId (required ref),
+     grievanceAgainstEmployeeId (optional ref) + grievanceAgainstText (optional free text, "against"
+     fallback when not a specific employee), description (required), causeOfGrievance (required when
+     status is Investigated or Resolved), resolvedByUserId/resolutionDate/resolutionDetail (all
+     required when status is Resolved), employeeResponsibleId (optional ref). No docstatus/submit
+     gate — status transitions freely per source's own lack of a state machine, this project just
+     drops the extra submit axis on top of it.
+  3. `EmployeeTransfer` — employeeId (required ref, Active employees only per source's own UI filter,
+     enforced here server-side too), transferDate (required), newDepartmentId/newDesignationId/
+     newBranchId (all optional — apply whichever are set), a written history entry per applied change.
+     No `newCompanyId`/inter-company path (deferred, see above).
+  4. `EmployeePromotion` — employeeId (required ref; guard: Employee.status must not be Inactive, a
+     real source rule, kept), promotionDate (required), newDepartmentId/newDesignationId/newGradeId
+     (all optional), currentCtc (fetched from Employee.ctc if empty, not overwritten once set — real
+     source semantic, kept), revisedCtc (optional; when set, applies to Employee.ctc on save).
+  5. Employee gains: `ctc` (optional number, see above) and a `propertyHistory` array/collection
+     (employeeId back-ref if separate collection; field, oldValue, newValue, effectiveDate,
+     sourceDocType/sourceDocId) written by Transfer/Promotion.
+  6. `EmployeeReferral` — firstName/lastName (required) + computed fullName, contactNo,
+     currentEmployer, date (required), status enum (Pending/In Process/Accepted/Rejected/Cancelled,
+     default Pending, persists normally — bug not reproduced), currentJobTitle, resume/resumeLink,
+     departmentId (fetched from referrerId, bug fixed), workReferences, forDesignationId (required),
+     email (required), referrerId (required ref Employee), referrerName (fetched), isApplicableFor
+     ReferralBonus (bool), qualificationReason. Action `createJobApplicant` (maps into a real
+     `JobApplicant` per module 3's model, sets this referral's status to In Process on success — real,
+     working version of source's intent). No `createAdditionalSalary` (deferred, Payroll-dependent).
+  7. `StaffingPlan` — companyId (required), departmentId (optional), fromDate/toDate (required, from
+     <= to), staffingDetails[] (designationId, vacancies, estimatedCostPerPosition — currentCount/
+     currentOpenings/numberOfPositions/totalEstimatedCost all server-computed on every save from live
+     Employee/JobOpening counts, never client-supplied), totalEstimatedBudget (server-summed). Guard:
+     `validateOverlap` (same company + designation + overlapping date range blocks a second plan) —
+     the one source guard that survives without a company hierarchy.
+  8. Recruitment retrofit (closes Q-8): `JobOpening` create/update and `JobOffer` submit both check
+     for an active `StaffingPlan` covering their designation+company; if one exists and the requested
+     vacancy would exceed `numberOfPositions` minus current count, reject; if no plan exists for that
+     designation+company, no cap applies (unchanged from module 3's original no-op).
+  9. Roles: reproduce each doctype's real permission table from source (they're not all the same
+     shape — Staffing Plan notably has no System Manager row in source and HR User gets a
+     submit-equivalent right HR User doesn't get elsewhere; Employee Grievance's Employee role gets
+     write+delete but not the finalize-equivalent action). Employee/Referrer self-service visibility
+     (Employee role reading their own Transfer/Promotion/Grievance/Referral rows) is the same
+     per-screen scoping mechanism already deferred to Leaves (Q-4) — this module's Employee-role grant
+     stays a plain, unscoped read grant matching source's own literal permission table, not an
+     "only mine" restriction (source doesn't have one either, confirmed in each file).
+  10. Menu: new "Employee Career Events" menu group (Transfer, Promotion, Referral, Grievance Type,
+      Employee Grievance, Staffing Plan — 6 screens). Reporting: `widgetSources.js` entries for
+      `employee-grievances` (groupable by status/grievanceTypeId) and `staffing-plans` (groupable by
+      companyId/departmentId).
+- **Consequences**: `OPEN-QUESTIONS.md` Q-8 (Staffing Plan vacancy checks) closes — answer recorded
+  here and the Recruitment retrofit lands in this module's own commits, touching module 3's
+  `jobOpening`/`jobOffer` controllers. Q-9 (Employee Referral source-sync, Skill Assessment) stays
+  open — this module builds `EmployeeReferral` fully but the *Job Applicant*-side
+  `source == "Employee Referral"` status-sync (writing back onto this new collection from module 3)
+  is still deferred, now that the referral collection this sync would target actually exists; note
+  this explicitly rather than silently building half of a two-sided sync.
+- **Deviates from convention**: none new beyond ADR-016/017's already-approved patterns. The
+  bug-fixes-not-reproduced decisions are corrections within the idiomatic-rebuild mandate, not a new
+  deviation from `docs/conventions/`.
+- **As built**: pending — implementation follows in the same session.
+

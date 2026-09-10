@@ -39,6 +39,7 @@ const TrainingProgramSchema = new mongoose.Schema(
 
 TrainingProgramSchema.index({ trainingProgramName: 1 }, { unique: true });
 TrainingProgramSchema.index({ companyId: 1 });
+TrainingProgramSchema.index({ status: 1 });
 TrainingProgramSchema.index({ isActive: 1, createdAt: -1 });
 TrainingProgramSchema.index({ createdAt: -1 });
 

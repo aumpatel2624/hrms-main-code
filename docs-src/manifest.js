@@ -81,23 +81,95 @@ export const CONFIG_SCREENS = [
     {
         key: "department",
         config: "departmentConfig",
-        source: "apps/admin/src/entities/index.js",
+        source: "apps/admin/src/entities/advanced.jsx",
         intro:
             "Departments are the teams people belong to — Sales, Finance, Warehouse. Every user is " +
             "assigned to exactly one, and that assignment does more than label them: it decides who " +
-            "can see their records.",
+            "can see their records. Every department now also belongs to a company — see Company below.",
         when:
             "Add a department when a new team is formed. Mark one inactive when a team is wound down — " +
             "that keeps its history intact while removing it from the dropdowns on other screens.",
         gotchas: [
             "You cannot delete a department while users are still assigned to it. The panel will tell " +
                 "you how many, so move those people first.",
-            "Department codes are short labels used in reports and exports. Keep them stable — " +
-                "changing one changes how older reports read.",
+            "Department codes are optional and short — used in reports and exports where you have " +
+                "one. Keep them stable once set; changing one changes how older reports read.",
+            "Department names only have to be unique within the same company — two companies can each " +
+                "have their own \"Finance\" department.",
         ],
         roles:
             "If your role is limited to your own department, this screen shows only your department " +
             "rather than the full list.",
+    },
+    {
+        key: "company",
+        config: "companyConfig",
+        source: "apps/admin/src/entities/index.js",
+        intro:
+            "A company is a legal entity within Apidel. Every branch, department and designation " +
+            "belongs to exactly one company, so this is the first thing to set up in a new deployment.",
+        when:
+            "Add a company before adding anything else under it. Mark one inactive rather than " +
+            "deleting it if it stops being used — its history (branches, departments, records) stays " +
+            "intact and out of the dropdowns.",
+        gotchas: [
+            "You cannot delete a company while anything still belongs to it — branches, departments, " +
+                "designations. The panel tells you what and how many.",
+            "The company code is optional. If you use one, it must be unique across every company.",
+        ],
+        roles: "Only HR User and HR Manager can add or edit companies.",
+    },
+    {
+        key: "branch",
+        config: "branchConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro:
+            "A branch is a site or location under a company — a city, a region, a work-from-home " +
+            "pool. It is a simple named label, not a full address.",
+        when:
+            "Add a branch for each location the company operates from or hires into.",
+        gotchas: [
+            "You cannot delete a branch while records still reference it.",
+            "A branch name only has to be unique within its own company.",
+        ],
+        roles: "Only HR User and HR Manager can add or edit branches.",
+    },
+    {
+        key: "designation",
+        config: "designationConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro:
+            "A designation is a job title — Manager, Executive, Vice President. Every employee will " +
+            "eventually be assigned one.",
+        when: "Add a designation for each job title the company uses.",
+        gotchas: [
+            "You cannot delete a designation while records still reference it.",
+            "A designation name only has to be unique within its own company.",
+        ],
+        roles: "Only HR User and HR Manager can add or edit designations.",
+    },
+    {
+        key: "employment-type",
+        config: "employmentTypeConfig",
+        source: "apps/admin/src/entities/index.js",
+        intro:
+            "An employment type classifies how someone works for the company — Full-time, Part-time, " +
+            "Contract, Intern. Unlike branches and designations, employment types are shared across " +
+            "every company, not scoped to one.",
+        when: "Add an employment type if the ones already here don't cover a category you hire under.",
+        gotchas: ["You cannot delete an employment type while records still reference it."],
+        roles: "Only HR User and HR Manager can add or edit employment types.",
+    },
+    {
+        key: "employee-grade",
+        config: "employeeGradeConfig",
+        source: "apps/admin/src/entities/index.js",
+        intro:
+            "An employee grade is a pay-band label — L1, L2, Senior, and so on. Like employment " +
+            "types, grades are shared across every company.",
+        when: "Add a grade before assigning employees to it.",
+        gotchas: ["You cannot delete a grade while records still reference it."],
+        roles: "Only HR User and HR Manager can add or edit employee grades.",
     },
     {
         key: "user",

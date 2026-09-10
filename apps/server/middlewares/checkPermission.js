@@ -143,8 +143,12 @@ export const checkPermission = (menuUrl, action) => {
         });
       }
 
-      // Downstream scope filters read this — see utils/scope.js.
-      req.user.dataScope = roleDoc.dataScope || SCOPES.ALL;
+      // Downstream scope filters read this — see utils/scope.js. ADR-024
+      // (Q-4): a menu row's own dataScope, when set, overrides the role's
+      // default — that's how one role can be "own"/"approver"-scoped on
+      // one screen and "all" on the rest. null/absent (every pre-ADR-024
+      // row) falls through to the role-level value exactly as before.
+      req.user.dataScope = row.dataScope || roleDoc.dataScope || SCOPES.ALL;
       return next();
     } catch (error) {
       console.error("Error in checkPermission:", error);

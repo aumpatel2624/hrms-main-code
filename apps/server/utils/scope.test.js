@@ -51,4 +51,41 @@ assert.deepEqual(
   { createdBy: { $in: [] } },
 );
 
+// approver scope (ADR-024) matches the user's own employeeId plus every
+// pre-resolved approverId, when the owner field is declared.
+{
+  const EMP = "64b000000000000000000003";
+  const APPROVEE_1 = "64b000000000000000000004";
+  const APPROVEE_2 = "64b000000000000000000005";
+  const filter = buildScopeFilter(
+    { dataScope: "approver", employeeId: EMP },
+    { owner: "employeeId", approverIds: [APPROVEE_1, APPROVEE_2] },
+  );
+  assert.deepEqual(Object.keys(filter), ["employeeId"]);
+  const ids = filter.employeeId.$in.map(String);
+  assert.deepEqual(ids.sort(), [EMP, APPROVEE_1, APPROVEE_2].sort());
+}
+
+// approver scope with no approverIds still matches the user's own employeeId.
+{
+  const EMP = "64b000000000000000000003";
+  const filter = buildScopeFilter(
+    { dataScope: "approver", employeeId: EMP },
+    { owner: "employeeId" },
+  );
+  assert.deepEqual(filter.employeeId.$in.map(String), [EMP]);
+}
+
+// approver scope stays unscoped when the model doesn't declare `owner`.
+assert.equal(
+  buildScopeFilter({ dataScope: "approver", employeeId: "64b000000000000000000003" }, {}),
+  null,
+);
+
+// approver scope with no employeeId on the user (no linked Employee) matches nothing.
+assert.deepEqual(
+  buildScopeFilter({ dataScope: "approver" }, { owner: "employeeId" }),
+  { employeeId: { $in: [] } },
+);
+
 console.log("scope: all checks passed");

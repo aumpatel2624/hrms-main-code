@@ -281,16 +281,23 @@ export const createDesignation = async (req, res) => {
 export const updateDesignation = async (req, res) => {
   try {
     const { designationId } = req.params;
-    const { designationName, companyId, isActive } = req.body;
+    // Merge only the fields the caller actually sent — the previous version
+    // unconditionally overwrote designationName/companyId with `undefined`
+    // whenever a caller (e.g. a skills[]-only update, ADR-022) omitted them,
+    // failing their `required` validators with an uncaught-looking 500. Real
+    // bug, found live wiring the Designation.skills[] retrofit, not part of
+    // that retrofit's own scope — fixed here since it blocks it outright.
+    const { designationName, companyId, isActive, skills } = req.body;
 
     const designation = await Designation.findById(designationId);
     if (!designation) {
       return res.status(404).json({ isOk: false, status: 404, message: "Designation not found" });
     }
 
-    designation.designationName = designationName;
-    designation.companyId = companyId;
-    designation.isActive = isActive;
+    if (designationName !== undefined) designation.designationName = designationName;
+    if (companyId !== undefined) designation.companyId = companyId;
+    if (isActive !== undefined) designation.isActive = isActive;
+    if (skills !== undefined) designation.skills = skills;
     await designation.save();
 
     return res.status(200).json({ isOk: true, status: 200, message: "Designation updated successfully" });

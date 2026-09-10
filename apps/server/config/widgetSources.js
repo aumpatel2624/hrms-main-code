@@ -323,4 +323,51 @@ export const WIDGET_SOURCES = Object.freeze({
       createdAt: "date",
     },
   },
+
+  // HRMS module 5 (ADR-021).
+  "employee-grievances": {
+    label: "Employee Grievances",
+    model: "EmployeeGrievance",
+    aggregatable: {},
+    groupable: {
+      status: { label: "Status" },
+      grievanceTypeId: {
+        label: "Grievance Type",
+        lookup: { from: "grievancetypes", labelField: "grievanceTypeName" },
+      },
+    },
+    dateFields: { date: "Date Raised", createdAt: "Created" },
+    filterable: {
+      raisedByEmployeeId: "objectId",
+      grievanceTypeId: "objectId",
+      status: "enum",
+      date: "date",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
+  "staffing-plans": {
+    label: "Staffing Plans",
+    model: "StaffingPlan",
+    aggregatable: { totalEstimatedBudget: "Total Estimated Budget" },
+    groupable: {
+      companyId: {
+        label: "Company",
+        lookup: { from: "companies", labelField: "companyName" },
+      },
+      departmentId: {
+        label: "Department",
+        lookup: { from: "departments", labelField: "departmentName" },
+      },
+    },
+    dateFields: { fromDate: "From Date", createdAt: "Created" },
+    filterable: {
+      companyId: "objectId",
+      departmentId: "objectId",
+      fromDate: "date",
+      toDate: "date",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
 });

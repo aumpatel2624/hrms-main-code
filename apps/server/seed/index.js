@@ -42,6 +42,7 @@ import State from "../models/State.js";
 import City from "../models/City.js";
 import PurposeOfTravel from "../models/PurposeOfTravel.js";
 import IdentificationDocumentType from "../models/IdentificationDocumentType.js";
+import LeaveType from "../models/LeaveType.js";
 import { PERMISSION_KEYS } from "@demo-panel/shared/permissions";
 import { SCOPES } from "@demo-panel/shared/scopes";
 
@@ -238,6 +239,25 @@ const MENU_GROUPS = [
       { menuName: "Travel Request", menuUrl: "/travel-request", icon: "ri-suitcase-3-line" },
       { menuName: "Purpose of Travel", menuUrl: "/purpose-of-travel", icon: "ri-flag-line" },
       { menuName: "Identification Document Type", menuUrl: "/identification-document-type", icon: "ri-id-card-line" },
+    ],
+  },
+  // HRMS module 8 foundation (ADR-024). LeaveAdjustment/CompensatoryLeaveRequest/
+  // LeaveApplication/LeaveEncashment/LeaveBlockList/Leave Control Panel are the
+  // second fork's work, stacked on this branch — no menu rows for them yet.
+  {
+    menuGroupName: "Leaves",
+    sequence: 2.97,
+    icon: "ri-calendar-check-line",
+    menus: [
+      { menuName: "Leave Type", menuUrl: "/leave-type", icon: "ri-price-tag-3-line" },
+      { menuName: "Leave Period", menuUrl: "/leave-period", icon: "ri-calendar-2-line" },
+      { menuName: "Holiday List", menuUrl: "/holiday-list", icon: "ri-calendar-event-line" },
+      { menuName: "Holiday List Assignment", menuUrl: "/holiday-list-assignment", icon: "ri-calendar-todo-line" },
+      { menuName: "Leave Policy", menuUrl: "/leave-policy", icon: "ri-file-list-3-line" },
+      { menuName: "Leave Policy Assignment", menuUrl: "/leave-policy-assignment", icon: "ri-file-user-line" },
+      { menuName: "Leave Allocation", menuUrl: "/leave-allocation", icon: "ri-calendar-check-line" },
+      { menuName: "Leave Ledger Entry", menuUrl: "/leave-ledger-entry", icon: "ri-file-list-line" },
+      { menuName: "Attendance", menuUrl: "/attendance", icon: "ri-user-follow-line" },
     ],
   },
   {
@@ -1483,6 +1503,113 @@ const seedTravelRoles = async () => {
   console.log(`✅ Travel roles: ${matrixRowsAdded} menu grant(s) added`);
 };
 
+/**
+ * Leave Type starter set (ADR-024, foundation half of module 8). NOT
+ * confirmed by the port spec — `Leave Type.md` documents the field schema
+ * but lists no named example leave types, unlike some other modules'
+ * masters. Seeded the same way Travel seeded a generic placeholder set:
+ * the five Frappe HRMS defaults (Casual/Sick/Earned/Compensatory Off/LWP),
+ * flagged here explicitly as a starting point, not a client-confirmed list.
+ * Upserted by natural key.
+ */
+const seedLeaveMasters = async () => {
+  const LEAVE_TYPES = [
+    { leaveTypeName: "Casual Leave", maxLeavesAllowed: 12 },
+    { leaveTypeName: "Sick Leave", maxLeavesAllowed: 12 },
+    {
+      leaveTypeName: "Earned Leave",
+      isEarnedLeave: true,
+      earnedLeaveFrequency: "Monthly",
+      allocateOnDay: "Last Day",
+      rounding: "0.5",
+      isCarryForward: true,
+      maximumCarryForwardedLeaves: 15,
+      expireCarryForwardedLeavesAfterDays: 365,
+      maxLeavesAllowed: 24,
+    },
+    { leaveTypeName: "Compensatory Off", isCompensatory: true },
+    { leaveTypeName: "Leave Without Pay", isLwp: true },
+  ];
+
+  let created = 0;
+  for (const leaveType of LEAVE_TYPES) {
+    const result = await LeaveType.findOneAndUpdate(
+      { leaveTypeName: leaveType.leaveTypeName },
+      { ...leaveType, isActive: true },
+      { upsert: true, setDefaultsOnInsert: true, new: false },
+    );
+    if (!result) created += 1;
+  }
+
+  console.log(`✅ Leave masters: ${created} new Leave Type(s)`);
+};
+
+/**
+ * Leaves roles (ADR-024). HR User/HR Manager get full read/write/edit/
+ * delete on every foundation-half screen except Leave Ledger Entry, which
+ * has no write endpoint at all regardless of the flags set here (matching
+ * the read-only-on-system-written-data precedent Employee Health Insurance
+ * established in module 2 — HR User read-only, HR Manager the rest too,
+ * even though neither flag is consumed by any route for this collection).
+ * Employee gets read on LeaveType/LeavePeriod/HolidayList only — what they
+ * need to understand their own balances, not the admin-configuration
+ * screens. No "own"/"approver" scoping wired on any screen yet (ADR-024) —
+ * there is no Leave Application in this fork for that scope to mean
+ * anything on.
+ */
+const seedLeaveRoles = async () => {
+  const perm = (write, edit, del) =>
+    Object.fromEntries(PERMISSION_KEYS.map((key) => [key, key === "read" || (key === "write" && write) || (key === "edit" && edit) || (key === "delete" && del)]));
+  const full = perm(true, true, true);
+  const readOnly = perm(false, false, false);
+
+  // { menuUrl: { roleName: permObject } }
+  const GRANTS = {
+    "/leave-type": { Employee: readOnly, "HR User": full, "HR Manager": full },
+    "/leave-period": { Employee: readOnly, "HR User": full, "HR Manager": full },
+    "/holiday-list": { Employee: readOnly, "HR User": full, "HR Manager": full },
+    "/holiday-list-assignment": { "HR User": full, "HR Manager": full },
+    "/leave-policy": { "HR User": full, "HR Manager": full },
+    "/leave-policy-assignment": { "HR User": full, "HR Manager": full },
+    "/leave-allocation": { "HR User": full, "HR Manager": full },
+    "/leave-ledger-entry": { "HR User": readOnly, "HR Manager": full },
+    "/attendance": { "HR User": full, "HR Manager": full },
+  };
+
+  const allMenuUrls = Object.keys(GRANTS);
+  const menus = await MenuMaster.find({ menuUrl: { $in: allMenuUrls } }).lean();
+  if (menus.length !== allMenuUrls.length) {
+    console.log("⚠️  Leaves roles: not every menu row exists yet — run seedMenus first");
+    return;
+  }
+  const menuByUrl = Object.fromEntries(menus.map((m) => [m.menuUrl, m]));
+
+  const addRow = (userRoles, menu, permObj) => {
+    if (userRoles.roles.some((r) => String(r.menuId) === String(menu._id))) return false;
+    userRoles.roles.push({ menuId: menu._id, menuGroupId: menu.menuGroup, ...permObj });
+    return true;
+  };
+
+  let matrixRowsAdded = 0;
+  const roleNames = ["Employee", "HR User", "HR Manager"];
+  for (const roleName of roleNames) {
+    const role = await RoleMaster.findOne({ roleName });
+    if (!role) continue;
+    const userRoles = await UserRoles.findOne({ roleId: role._id });
+    if (!userRoles) continue;
+
+    let changed = false;
+    for (const [menuUrl, grantByRole] of Object.entries(GRANTS)) {
+      const permObj = grantByRole[roleName];
+      if (!permObj) continue;
+      if (addRow(userRoles, menuByUrl[menuUrl], permObj)) { matrixRowsAdded += 1; changed = true; }
+    }
+    if (changed) await userRoles.save();
+  }
+
+  console.log(`✅ Leaves roles: ${matrixRowsAdded} menu grant(s) added`);
+};
+
 const run = async () => {
   if (!process.env.DATABASE) {
     console.error("❌ DATABASE is not set in .env");
@@ -1520,6 +1647,8 @@ const run = async () => {
   await seedTrainingSkillsRoles();
   await seedTravelMasters();
   await seedTravelRoles();
+  await seedLeaveMasters();
+  await seedLeaveRoles();
   await seedGeographyData();
 
   await mongoose.disconnect();

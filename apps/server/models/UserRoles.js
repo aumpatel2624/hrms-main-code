@@ -29,6 +29,19 @@ const UserRolesSchema = new mongoose.Schema(
             required: false,
             default: null,
           },
+          // ADR-024 (Q-4): per-menu-row scope override. null/absent means
+          // "inherit UserRoles.dataScope below" — every existing role/menu
+          // row across modules 1-7 keeps its current behavior with zero
+          // migration. Only set this on a row that needs a *different*
+          // scope than the rest of the role's screens (e.g. Leaves'
+          // "approver" scope on one screen while everything else stays
+          // "all").
+          dataScope: {
+            type: String,
+            enum: SCOPE_VALUES,
+            required: false,
+            default: null,
+          },
           ...permissionFields,
         },
       ],

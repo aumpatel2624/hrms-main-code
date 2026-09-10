@@ -760,6 +760,93 @@ export const CONFIG_SCREENS = [
         ],
         roles: "HR User and HR Manager have full access; Employees can create, read and edit (not delete) their own requests.",
     },
+    {
+        key: "leave-type",
+        config: "leaveTypeConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A category of leave (Casual, Sick, Earned, ...) and the rules that govern it — paid/unpaid, carry-forward, encashment, earned-leave accrual.",
+        when: "Set these up once, before building Leave Policies on top of them.",
+        gotchas: [
+            "The starter set (Casual/Sick/Earned/Compensatory Off/Leave Without Pay) is a generic placeholder, not confirmed against any client document — review and adjust before relying on it.",
+        ],
+        roles: "HR User and HR Manager can fully manage leave types; Employees can only view them.",
+    },
+    {
+        key: "leave-period",
+        config: "leavePeriodConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A named date range (e.g. a fiscal year) that Leave Policy Assignments and Leave Allocations scope to.",
+        when: "Create one per company per year before assigning leave policies for that year.",
+        gotchas: ["No two periods for the same company may overlap."],
+        roles: "HR User and HR Manager can fully manage leave periods; Employees can only view them.",
+    },
+    {
+        key: "holiday-list",
+        config: "holidayListConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A calendar of holidays for a company and date range.",
+        when: "Set one up per company before assigning it via Holiday List Assignment.",
+        gotchas: ["Total Holidays is computed automatically from the holiday rows — it can't be typed in directly."],
+        roles: "HR User and HR Manager can fully manage holiday lists; Employees can only view them.",
+    },
+    {
+        key: "holiday-list-assignment",
+        config: "holidayListAssignmentConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Assigns a Holiday List to an Employee or a Company, from a given date onward.",
+        when: "Use this to say which holiday calendar applies to whom.",
+        gotchas: [
+            "The From Date must fall within the assigned Holiday List's own date range.",
+            "Only one of Employee/Company may be set, matching Applicable For.",
+        ],
+        roles: "HR User and HR Manager only — no Employee access.",
+    },
+    {
+        key: "leave-policy",
+        config: "leavePolicyConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A named bundle of (Leave Type, annual allocation) pairs.",
+        when: "Build one per employee group/grade, then assign it via Leave Policy Assignment.",
+        gotchas: [
+            "Each row's annual allocation is capped at that Leave Type's own Maximum Leave Allocation Allowed, when set.",
+            "Leave Type rows are entered by id — there's no picker for this field yet.",
+        ],
+        roles: "HR User and HR Manager only — no Employee access.",
+    },
+    {
+        key: "leave-policy-assignment",
+        config: "leavePolicyAssignmentConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Assigns a Leave Policy to an Employee for a period, and is the trigger for actually creating Leave Allocations.",
+        when: "Create one per employee per period, then click Grant Allocations to create the real Leave Allocation records.",
+        gotchas: [
+            "Grant Allocations is idempotent — it can be clicked again safely, but it only ever allocates once per assignment.",
+            "Leave Without Pay leave types are never allocated through this flow, by design.",
+            "A zero computed allocation for a plain (non-earned, non-negative-allowed) leave type is skipped entirely rather than creating an empty allocation.",
+        ],
+        roles: "HR User and HR Manager only — no Employee access yet (own-scoping is a second-fork follow-up, once Leave Application exists).",
+    },
+    {
+        key: "leave-allocation",
+        config: "leaveAllocationConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "The actual per-employee, per-leave-type grant of N days.",
+        when: "Usually created automatically by a Leave Policy Assignment's Grant Allocations action — create one by hand only for a one-off manual grant.",
+        gotchas: [
+            "Total Leaves Allocated is a cached snapshot for display only — the real balance is always the sum of the Leave Ledger.",
+            "Once active, the allocated amount can only be changed via the Adjust panel on the edit screen, never by editing the field directly — it writes a signed entry to the ledger instead of silently overwriting a number.",
+        ],
+        roles: "HR User and HR Manager only — no Employee access yet (own-scoping is a second-fork follow-up).",
+    },
+    {
+        key: "attendance",
+        config: "attendanceConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "One row per employee per day, recording whether they were present, absent, on leave, etc.",
+        when: "Minimal for now — module 9 (Shift & Attendance) will extend this with shift assignment, check-in/out and geolocation.",
+        gotchas: ["Only one Attendance row is allowed per employee per day."],
+        roles: "HR User and HR Manager only.",
+    },
 ];
 
 /**
@@ -978,6 +1065,39 @@ export const CUSTOM_SCREENS = [
                 text:
                     "Some entries are automated scanning or mistyped addresses nobody will ever visit " +
                     "again. Sort by how often each was requested and work down from the top.",
+            },
+        ],
+    },
+    {
+        key: "leave-ledger-entry",
+        title: "Leave Ledger",
+        path: "/leave-ledger-entry",
+        source: "apps/admin/src/pages/Leaves/LeaveLedgerEntries.jsx",
+        intro:
+            "Every leave balance movement — allocation, adjustment, and (once built) leave " +
+            "application and encashment — as a single append-only list.",
+        body: [
+            {
+                heading: "The balance is always the sum of this table",
+                text:
+                    "An employee's real leave balance for a leave type is never stored as one number " +
+                    "anywhere — it is always the sum of every row here for that employee and leave " +
+                    "type. A cached total shown on a Leave Allocation is a snapshot for display, not " +
+                    "the source of truth.",
+            },
+            {
+                heading: "What creates a row",
+                text:
+                    "Granting a Leave Policy Assignment's allocations writes one row per leave type " +
+                    "(plus a second, carry-forward row when there are unused leaves brought forward). " +
+                    "Adjusting a Leave Allocation writes one signed delta row. Every future " +
+                    "balance-affecting action in this module writes here the same way.",
+            },
+            {
+                heading: "Nothing here can be edited or removed",
+                text:
+                    "Like the Audit Log, this is read-only for everyone, including administrators — " +
+                    "there is no add, edit or delete button, because an editable ledger is not a ledger.",
             },
         ],
     },

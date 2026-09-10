@@ -83,10 +83,26 @@ import {
     updateIdentificationDocumentType, searchIdentificationDocumentTypes, getAllIdentificationDocumentTypes,
     createTravelRequest, deleteTravelRequest, getTravelRequestById, updateTravelRequest, searchTravelRequests,
 } from "../api/travel.api";
+import {
+    createLeaveType, deleteLeaveType, getLeaveTypeById, updateLeaveType, searchLeaveTypes, getAllLeaveTypes,
+    createLeavePeriod, deleteLeavePeriod, getLeavePeriodById, updateLeavePeriod, searchLeavePeriods, getAllLeavePeriods,
+    createHolidayList, deleteHolidayList, getHolidayListById, updateHolidayList, searchHolidayLists, getAllHolidayLists,
+    createHolidayListAssignment, deleteHolidayListAssignment, getHolidayListAssignmentById,
+    updateHolidayListAssignment, searchHolidayListAssignments,
+    createLeavePolicy, deleteLeavePolicy, getLeavePolicyById, updateLeavePolicy, searchLeavePolicies, getAllLeavePolicies,
+    createLeavePolicyAssignment, deleteLeavePolicyAssignment, getLeavePolicyAssignmentById,
+    updateLeavePolicyAssignment, searchLeavePolicyAssignments, grantLeavePolicyAssignmentAllocations,
+    createLeaveAllocation, deleteLeaveAllocation, getLeaveAllocationById, updateLeaveAllocation,
+    searchLeaveAllocations, adjustLeaveAllocation,
+} from "../api/leaves.api";
+import {
+    createAttendance, deleteAttendance, getAttendanceById, updateAttendance, searchAttendances,
+} from "../api/attendance.api";
 import PasswordResetSection from "@/components/crud/password-reset-section";
 import EmailTemplateMergeFields from "@/components/crud/email-template-merge-fields";
 import SimpleArrayField from "@/components/crud/simple-array-field";
 import SimpleActionButton from "@/components/crud/simple-action-button";
+import AdjustAllocationPanel from "@/components/crud/adjust-allocation-panel";
 
 const ACTIVE = { name: "isActive", label: "Is Active", type: "checkbox", section: "status", default: false };
 const asOptions = (loader, labelKey) => () =>
@@ -481,7 +497,16 @@ export const departmentConfig = {
     plural: "Departments",
     description: "Departments users can be assigned to.",
     api: { search: searchDepartments, getById: getDepartmentById, create: createDepartment, update: updateDepartment, remove: deleteDepartment },
-    lookups: { companyId: asOptions(getAllCompanies, "companyName") },
+    lookups: {
+        companyId: asOptions(getAllCompanies, "companyName"),
+        // ADR-024 (Department Approver): a department's own approver-chain
+        // parent. leaveApprovers/expenseApprovers/shiftRequestApprovers
+        // (plain User-ref arrays) are schema-ready and API-accessible but,
+        // like Recruitment's interviewers/defaultInterviewers before them,
+        // not given a form field — this admin has no multi-select field
+        // type yet (a known simplification, not an oversight).
+        parentDepartmentId: asOptions(getAllDepartments, "departmentName"),
+    },
     sections: [
         { id: "details", title: "Department details" },
         { id: "status", title: "Status" },
@@ -490,6 +515,7 @@ export const departmentConfig = {
         { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "details", error: "Company is required!", optionsFrom: "companyId" },
         { name: "departmentName", icon: Building07, label: "Department Name", required: true, section: "details", error: "Department Name is required!", placeholder: "Enter department name" },
         { name: "departmentCode", icon: Hash02, label: "Department Code", section: "details", placeholder: "Enter department code (optional)" },
+        { name: "parentDepartmentId", icon: Building07, label: "Parent Department", type: "select", section: "details", optionsFrom: "parentDepartmentId", hint: "Used to resolve a Leave/Expense/Shift Request approver when the employee's own department has none set." },
         ACTIVE,
     ],
     columns: [
@@ -498,7 +524,7 @@ export const departmentConfig = {
         { name: "Status", selector: (row) => (row.isActive ? "Active" : "Inactive"), minWidth: "130px" },
     ],
     recordTitle: (r) => r.departmentName,
-    toForm: (data) => ({ ...data, companyId: refId(data.companyId) }),
+    toForm: (data) => ({ ...data, companyId: refId(data.companyId), parentDepartmentId: refId(data.parentDepartmentId) }),
 };
 
 export const branchConfig = {
@@ -2072,6 +2098,399 @@ export const travelRequestConfig = {
     }),
 };
 
+// ---------------------------------------------------------------------------
+// Leaves foundation (ADR-024, HRMS module 8). LeaveAdjustment/
+// CompensatoryLeaveRequest/LeaveApplication/LeaveEncashment/LeaveBlockList/
+// Leave Control Panel are the second fork's work, stacked on this branch.
+// LeaveLedgerEntry has no screen here — read-only/system-written, a custom
+// page (pages/Leaves/LeaveLedgerEntries.jsx), same reasoning as AuditLog.
+// ---------------------------------------------------------------------------
+
+const HOLIDAY_COLUMNS = [
+    { name: "holidayDate", label: "Holiday Date (YYYY-MM-DD)", type: "text" },
+    { name: "description", label: "Description", type: "text" },
+    { name: "weeklyOff", label: "Weekly Off", type: "checkbox" },
+];
+
+const LEAVE_POLICY_DETAIL_COLUMNS = [
+    { name: "leaveTypeId", label: "Leave Type (id)", type: "text" },
+    { name: "annualAllocation", label: "Annual Allocation", type: "number" },
+];
+
+export const leaveTypeConfig = {
+    filterFields: [
+        { name: "leaveTypeName", label: "Name", type: "string" },
+        { name: "isLwp", label: "Leave Without Pay", type: "boolean" },
+        { name: "isEarnedLeave", label: "Earned Leave", type: "boolean" },
+        { name: "isCompensatory", label: "Compensatory", type: "boolean" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "leave-type",
+    path: "/leave-type",
+    section: "Leaves",
+    singular: "Leave Type",
+    plural: "Leave Types",
+    description: "A category of leave (Casual, Sick, Earned, ...) and its rules — paid/unpaid, carry-forward, encashment, earned-leave accrual.",
+    api: { search: searchLeaveTypes, getById: getLeaveTypeById, create: createLeaveType, update: updateLeaveType, remove: deleteLeaveType },
+    sections: [
+        { id: "details", title: "Details" },
+        { id: "carryForward", title: "Carry Forward" },
+        { id: "encashment", title: "Encashment" },
+        { id: "earnedLeave", title: "Earned Leave" },
+        { id: "limits", title: "Limits" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "leaveTypeName", icon: Tag01, label: "Leave Type Name", required: true, section: "details", error: "Leave Type Name is required!" },
+        { name: "isCompensatory", label: "Is Compensatory", type: "checkbox", section: "details" },
+        { name: "isLwp", label: "Is Leave Without Pay", type: "checkbox", section: "details" },
+        { name: "isPpl", label: "Is Partially Paid Leave", type: "checkbox", section: "details" },
+        { name: "fractionOfDailySalaryPerLeave", label: "Fraction of Daily Salary per Leave", type: "number", section: "details", hint: "Required, 0-1, when Is Partially Paid Leave is set." },
+        { name: "allowNegative", label: "Allow Negative Balance", type: "checkbox", section: "details" },
+        { name: "allowOverAllocation", label: "Allow Over Allocation", type: "checkbox", section: "details" },
+        { name: "includeHoliday", label: "Include holidays within leaves as leaves", type: "checkbox", section: "details" },
+        { name: "isOptionalLeave", label: "Leave for optional holiday", type: "checkbox", section: "details" },
+        { name: "isCarryForward", label: "Carry Forward", type: "checkbox", section: "carryForward" },
+        { name: "maximumCarryForwardedLeaves", label: "Maximum Carry Forwarded Leaves", type: "number", section: "carryForward" },
+        { name: "expireCarryForwardedLeavesAfterDays", label: "Expire Carry Forwarded Leaves (Days)", type: "number", section: "carryForward" },
+        { name: "allowEncashment", label: "Allow Encashment", type: "checkbox", section: "encashment" },
+        { name: "maxEncashableLeaves", label: "Maximum Encashable Leaves", type: "number", section: "encashment" },
+        { name: "nonEncashableLeaves", label: "Non-Encashable Leaves", type: "number", section: "encashment" },
+        { name: "isEarnedLeave", label: "Is Earned Leave", type: "checkbox", section: "earnedLeave" },
+        { name: "earnedLeaveFrequency", label: "Earned Leave Frequency", type: "select", section: "earnedLeave", options: ["Monthly", "Quarterly", "Half-Yearly", "Yearly"] },
+        { name: "allocateOnDay", label: "Allocate on Day", type: "select", section: "earnedLeave", options: ["First Day", "Last Day", "Date of Joining"] },
+        { name: "rounding", label: "Rounding", type: "select", section: "earnedLeave", options: ["0.25", "0.5", "1.0"] },
+        { name: "maxLeavesAllowed", label: "Maximum Leave Allocation Allowed per Leave Period", type: "number", section: "limits" },
+        { name: "maxContinuousDaysAllowed", label: "Maximum Consecutive Leaves Allowed", type: "number", section: "limits" },
+        { name: "applicableAfter", label: "Allow Leave Application After (Calendar Days)", type: "number", section: "limits" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Name", selector: (row) => row.leaveTypeName, minWidth: "200px" },
+        { name: "LWP", selector: (row) => (row.isLwp ? "Yes" : "No"), minWidth: "80px" },
+        { name: "Earned", selector: (row) => (row.isEarnedLeave ? "Yes" : "No"), minWidth: "90px" },
+        { name: "Carry Fwd", selector: (row) => (row.isCarryForward ? "Yes" : "No"), minWidth: "100px" },
+    ],
+    recordTitle: (r) => r.leaveTypeName,
+};
+
+export const leavePeriodConfig = {
+    filterFields: [
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "fromDate", label: "From Date", type: "date" },
+        { name: "toDate", label: "To Date", type: "date" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "leave-period",
+    path: "/leave-period",
+    section: "Leaves",
+    singular: "Leave Period",
+    plural: "Leave Periods",
+    description: "A named date range (e.g. a fiscal year) leave policies and allocations scope to. No two periods for the same company may overlap.",
+    api: { search: searchLeavePeriods, getById: getLeavePeriodById, create: createLeavePeriod, update: updateLeavePeriod, remove: deleteLeavePeriod },
+    lookups: {
+        companyId: asOptions(getAllCompanies, "companyName"),
+        optionalHolidayListId: asOptions(getAllHolidayLists, "holidayListName"),
+    },
+    fields: [
+        { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "details", error: "Company is required!", optionsFrom: "companyId" },
+        { name: "fromDate", label: "From Date", type: "date", required: true, section: "details", error: "From Date is required!" },
+        { name: "toDate", label: "To Date", type: "date", required: true, section: "details", error: "To Date is required!" },
+        { name: "optionalHolidayListId", label: "Holiday List for Optional Leave", type: "select", section: "details", optionsFrom: "optionalHolidayListId" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "From", selector: (row) => row.fromDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
+        { name: "To", selector: (row) => row.toDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
+        { name: "Active", selector: (row) => (row.isActive ? "Yes" : "No"), minWidth: "90px" },
+    ],
+    recordTitle: (r) => `Leave Period — ${r.fromDate?.slice?.(0, 10) ?? ""} to ${r.toDate?.slice?.(0, 10) ?? ""}`,
+    toForm: (data) => ({ ...data, companyId: refId(data.companyId), optionalHolidayListId: refId(data.optionalHolidayListId) }),
+};
+
+export const holidayListConfig = {
+    filterFields: [
+        { name: "holidayListName", label: "Name", type: "string" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "holiday-list",
+    path: "/holiday-list",
+    section: "Leaves",
+    singular: "Holiday List",
+    plural: "Holiday Lists",
+    description: "A calendar of holidays for a company/date range. Total Holidays is computed automatically from the rows below.",
+    api: { search: searchHolidayLists, getById: getHolidayListById, create: createHolidayList, update: updateHolidayList, remove: deleteHolidayList },
+    lookups: { companyId: asOptions(getAllCompanies, "companyName") },
+    sections: [{ id: "details", title: "Details" }, { id: "holidays", title: "Holidays" }],
+    fields: [
+        { name: "holidayListName", icon: Tag01, label: "Holiday List Name", required: true, section: "details", error: "Holiday List Name is required!" },
+        { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "details", error: "Company is required!", optionsFrom: "companyId" },
+        { name: "fromDate", label: "From Date", type: "date", required: true, section: "details", error: "From Date is required!" },
+        { name: "toDate", label: "To Date", type: "date", required: true, section: "details", error: "To Date is required!" },
+        ACTIVE,
+    ],
+    renderExtra: ({ values, setValues }) => (
+        <SimpleArrayField
+            title="Holidays" description={`Total: ${values.totalHolidays ?? (values.holidays?.length ?? 0)} (computed on save).`}
+            fieldName="holidays" columns={HOLIDAY_COLUMNS} values={values} setValues={setValues}
+        />
+    ),
+    columns: [
+        { name: "Name", selector: (row) => row.holidayListName, minWidth: "200px" },
+        { name: "From", selector: (row) => row.fromDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
+        { name: "To", selector: (row) => row.toDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
+        { name: "Holidays", selector: (row) => row.totalHolidays ?? 0, minWidth: "100px" },
+    ],
+    recordTitle: (r) => r.holidayListName,
+    toForm: (data) => ({ ...data, companyId: refId(data.companyId) }),
+};
+
+export const holidayListAssignmentConfig = {
+    filterFields: [
+        { name: "holidayListId", label: "Holiday List", type: "objectId" },
+        { name: "applicableFor", label: "Applicable For", type: "string" },
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "fromDate", label: "From Date", type: "date" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "holiday-list-assignment",
+    path: "/holiday-list-assignment",
+    section: "Leaves",
+    singular: "Holiday List Assignment",
+    plural: "Holiday List Assignments",
+    description: "Assigns a Holiday List to an Employee or a Company from a given date onward.",
+    api: {
+        search: searchHolidayListAssignments, getById: getHolidayListAssignmentById,
+        create: createHolidayListAssignment, update: updateHolidayListAssignment, remove: deleteHolidayListAssignment,
+    },
+    lookups: {
+        holidayListId: asOptions(getAllHolidayLists, "holidayListName"),
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        companyId: asOptions(getAllCompanies, "companyName"),
+    },
+    fields: [
+        { name: "holidayListId", icon: Tag01, label: "Holiday List", type: "select", required: true, section: "details", error: "Holiday List is required!", optionsFrom: "holidayListId" },
+        { name: "applicableFor", label: "Applicable For", type: "select", required: true, section: "details", error: "Applicable For is required!", options: ["Employee", "Company"], clears: ["employeeId", "companyId"] },
+        { name: "employeeId", icon: User01, label: "Employee", type: "select", section: "details", optionsFrom: "employeeId", disabled: (values) => values.applicableFor !== "Employee" },
+        { name: "companyId", icon: Building07, label: "Company", type: "select", section: "details", optionsFrom: "companyId", disabled: (values) => values.applicableFor !== "Company" },
+        { name: "fromDate", label: "Assignment Starts From", type: "date", required: true, section: "details", error: "From Date is required!" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Holiday List", selector: (row) => row.holidayListId, minWidth: "180px" },
+        { name: "Applicable For", selector: (row) => row.applicableFor, minWidth: "130px" },
+        { name: "From", selector: (row) => row.fromDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
+    ],
+    recordTitle: (r) => `Holiday List Assignment — ${r._id}`,
+    toForm: (data) => ({ ...data, holidayListId: refId(data.holidayListId), employeeId: refId(data.employeeId), companyId: refId(data.companyId) }),
+};
+
+export const leavePolicyConfig = {
+    filterFields: [
+        { name: "title", label: "Title", type: "string" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "leave-policy",
+    path: "/leave-policy",
+    section: "Leaves",
+    singular: "Leave Policy",
+    plural: "Leave Policies",
+    description: "A named bundle of (Leave Type, annual allocation) pairs, assigned to employees via Leave Policy Assignment.",
+    api: { search: searchLeavePolicies, getById: getLeavePolicyById, create: createLeavePolicy, update: updateLeavePolicy, remove: deleteLeavePolicy },
+    fields: [
+        { name: "title", icon: Tag01, label: "Title", required: true, section: "details", error: "Title is required!" },
+        ACTIVE,
+    ],
+    renderExtra: ({ values, setValues }) => (
+        <SimpleArrayField
+            title="Leave Policy Details" description="One row per Leave Type this policy covers. Paste a Leave Type's id into each row; annual allocation is capped at that Leave Type's own Maximum Leave Allocation Allowed, when set."
+            fieldName="leavePolicyDetails" columns={LEAVE_POLICY_DETAIL_COLUMNS} values={values} setValues={setValues}
+        />
+    ),
+    columns: [
+        { name: "Title", selector: (row) => row.title, minWidth: "220px" },
+        { name: "Leave Types", selector: (row) => row.leavePolicyDetails?.length ?? 0, minWidth: "110px" },
+    ],
+    recordTitle: (r) => r.title,
+};
+
+export const leavePolicyAssignmentConfig = {
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "leavePolicyId", label: "Leave Policy", type: "objectId" },
+        { name: "leavePeriodId", label: "Leave Period", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "leave-policy-assignment",
+    path: "/leave-policy-assignment",
+    section: "Leaves",
+    singular: "Leave Policy Assignment",
+    plural: "Leave Policy Assignments",
+    description: "Assigns a Leave Policy to an Employee for a period. Use \"Grant Allocations\" once saved to create the actual Leave Allocations — idempotent, safe to click only once per assignment.",
+    api: {
+        search: searchLeavePolicyAssignments, getById: getLeavePolicyAssignmentById,
+        create: createLeavePolicyAssignment, update: updateLeavePolicyAssignment, remove: deleteLeavePolicyAssignment,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        leavePolicyId: asOptions(getAllLeavePolicies, "title"),
+        leavePeriodId: () => getAllLeavePeriods().then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: `${row.fromDate?.slice?.(0, 10)} – ${row.toDate?.slice?.(0, 10)}` }))),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "status", title: "Status" }],
+    fields: [
+        { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
+        { name: "leavePolicyId", icon: Tag01, label: "Leave Policy", type: "select", required: true, section: "details", error: "Leave Policy is required!", optionsFrom: "leavePolicyId" },
+        { name: "assignmentBasedOn", label: "Assignment based on", type: "select", section: "details", options: ["Leave Period", "Joining Date"], clears: ["leavePeriodId"] },
+        { name: "leavePeriodId", label: "Leave Period", type: "select", section: "details", optionsFrom: "leavePeriodId", disabled: (values) => values.assignmentBasedOn !== "Leave Period" },
+        { name: "effectiveFrom", label: "Effective From", type: "date", section: "details", disabled: (values) => Boolean(values.assignmentBasedOn) },
+        { name: "effectiveTo", label: "Effective To", type: "date", section: "details", disabled: (values) => values.assignmentBasedOn === "Leave Period" },
+        { name: "carryForward", label: "Add unused leaves from previous allocations", type: "checkbox", section: "details" },
+        { name: "status", label: "Status", type: "select", section: "status", options: ["pending", "allocated"], disabled: () => true, hint: "Set automatically by Grant Allocations." },
+        ACTIVE,
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        mode === "edit" && id && (
+            <AdjustAllocationPanel
+                currentValue={undefined}
+                onAdjust={() => grantLeavePolicyAssignmentAllocations(id)}
+                onResult={() => window.location.reload()}
+            />
+        )
+    ),
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "200px" },
+        { name: "Status", selector: (row) => row.status, minWidth: "110px" },
+        { name: "From", selector: (row) => row.effectiveFrom?.slice?.(0, 10) ?? "—", minWidth: "110px" },
+        { name: "To", selector: (row) => row.effectiveTo?.slice?.(0, 10) ?? "—", minWidth: "110px" },
+    ],
+    recordTitle: (r) => `Leave Policy Assignment — ${r._id}`,
+    toForm: (data) => ({
+        ...data,
+        employeeId: refId(data.employeeId),
+        leavePolicyId: refId(data.leavePolicyId),
+        leavePeriodId: refId(data.leavePeriodId),
+    }),
+};
+
+export const leaveAllocationConfig = {
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "leaveTypeId", label: "Leave Type", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "leavePolicyAssignmentId", label: "Leave Policy Assignment", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "leave-allocation",
+    path: "/leave-allocation",
+    section: "Leaves",
+    singular: "Leave Allocation",
+    plural: "Leave Allocations",
+    description: "The actual per-employee, per-leave-type grant of N days. Total Leaves Allocated is a cached snapshot — the balance is always the sum of the Leave Ledger. Use Adjust to change the allocated amount once active.",
+    api: {
+        search: searchLeaveAllocations, getById: getLeaveAllocationById,
+        create: createLeaveAllocation, update: updateLeaveAllocation, remove: deleteLeaveAllocation,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        leaveTypeId: asOptions(getAllLeaveTypes, "leaveTypeName"),
+        companyId: asOptions(getAllCompanies, "companyName"),
+        leavePeriodId: () => getAllLeavePeriods().then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: `${row.fromDate?.slice?.(0, 10)} – ${row.toDate?.slice?.(0, 10)}` }))),
+        leavePolicyId: asOptions(getAllLeavePolicies, "title"),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "status", title: "Status" }],
+    fields: [
+        { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
+        { name: "leaveTypeId", icon: Tag01, label: "Leave Type", type: "select", required: true, section: "details", error: "Leave Type is required!", optionsFrom: "leaveTypeId" },
+        { name: "companyId", icon: Building07, label: "Company", type: "select", section: "details", optionsFrom: "companyId" },
+        { name: "fromDate", label: "From Date", type: "date", required: true, section: "details", error: "From Date is required!" },
+        { name: "toDate", label: "To Date", type: "date", required: true, section: "details", error: "To Date is required!" },
+        { name: "newLeavesAllocated", label: "New Leaves Allocated", type: "number", section: "details", hint: "Only used on create — use Adjust below to change it afterward.", disabled: (values) => Boolean(values?._id) },
+        { name: "unusedLeaves", label: "Unused Leaves (carried forward)", type: "number", section: "details", disabled: (values) => Boolean(values?._id) },
+        { name: "carryForward", label: "Add unused leaves from previous allocations", type: "checkbox", section: "details" },
+        { name: "leavePeriodId", label: "Leave Period", type: "select", section: "details", optionsFrom: "leavePeriodId" },
+        { name: "leavePolicyId", label: "Leave Policy", type: "select", section: "details", optionsFrom: "leavePolicyId" },
+        { name: "status", label: "Status", type: "select", section: "status", options: ["active", "expired", "cancelled"] },
+        ACTIVE,
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        mode === "edit" && id && (
+            <AdjustAllocationPanel
+                currentValue={values.newLeavesAllocated}
+                onAdjust={(newLeavesAllocated) => adjustLeaveAllocation(id, { newLeavesAllocated })}
+                onResult={() => window.location.reload()}
+            />
+        )
+    ),
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "200px" },
+        { name: "New Leaves", selector: (row) => row.newLeavesAllocated, minWidth: "110px" },
+        { name: "Total (cached)", selector: (row) => row.totalLeavesAllocated, minWidth: "120px" },
+        { name: "Status", selector: (row) => row.status, minWidth: "100px" },
+    ],
+    recordTitle: (r) => `Leave Allocation — ${r._id}`,
+    toForm: (data) => ({
+        ...data,
+        employeeId: refId(data.employeeId),
+        leaveTypeId: refId(data.leaveTypeId),
+        companyId: refId(data.companyId),
+        leavePeriodId: refId(data.leavePeriodId),
+        leavePolicyId: refId(data.leavePolicyId),
+    }),
+};
+
+export const attendanceConfig = {
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "attendanceDate", label: "Attendance Date", type: "date" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "attendance",
+    path: "/attendance",
+    section: "Leaves",
+    singular: "Attendance",
+    plural: "Attendance",
+    description: "One row per employee per day. Minimal shape for now — module 9 (Shift & Attendance) extends this with shift assignment, check-in/out and geolocation.",
+    api: { search: searchAttendances, getById: getAttendanceById, create: createAttendance, update: updateAttendance, remove: deleteAttendance },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        companyId: asOptions(getAllCompanies, "companyName"),
+        leaveTypeId: asOptions(getAllLeaveTypes, "leaveTypeName"),
+    },
+    fields: [
+        { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
+        { name: "companyId", icon: Building07, label: "Company", type: "select", section: "details", optionsFrom: "companyId" },
+        { name: "attendanceDate", label: "Attendance Date", type: "date", required: true, section: "details", error: "Attendance Date is required!" },
+        { name: "status", label: "Status", type: "select", required: true, section: "details", error: "Status is required!", options: ["Present", "Absent", "On Leave", "Half Day", "Work From Home"] },
+        { name: "leaveTypeId", label: "Leave Type", type: "select", section: "details", optionsFrom: "leaveTypeId" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "200px" },
+        { name: "Date", selector: (row) => row.attendanceDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
+        { name: "Status", selector: (row) => row.status, minWidth: "130px" },
+    ],
+    recordTitle: (r) => `Attendance — ${r._id}`,
+    toForm: (data) => ({
+        ...data,
+        employeeId: refId(data.employeeId),
+        companyId: refId(data.companyId),
+        leaveTypeId: refId(data.leaveTypeId),
+    }),
+};
+
 export const ADVANCED_ENTITIES = [
     adminUserConfig, userConfig, menuMasterConfig, emailTemplateConfig,
     departmentConfig, branchConfig, designationConfig, employeeConfig,
@@ -2086,4 +2505,6 @@ export const ADVANCED_ENTITIES = [
     trainingProgramConfig, trainingEventConfig, trainingFeedbackConfig,
     skillConfig, employeeSkillMapConfig,
     purposeOfTravelConfig, identificationDocumentTypeConfig, travelRequestConfig,
+    leaveTypeConfig, leavePeriodConfig, holidayListConfig, holidayListAssignmentConfig,
+    leavePolicyConfig, leavePolicyAssignmentConfig, leaveAllocationConfig, attendanceConfig,
 ];

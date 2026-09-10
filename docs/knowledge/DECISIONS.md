@@ -2141,3 +2141,214 @@ Copy this block. Number sequentially.
   users, all Travel Requests created during verify) cleaned up afterward — employee count back to
   195, master lists back to their 5/4 seeded rows, no stray test rows anywhere.
 
+---
+
+### ADR-024 — Leaves: per-menu-row data scoping answers Q-4, a dependency-free scheduler answers Q-5, Department Approver built with a parent-chain walk, a minimal Attendance seed for module 9
+
+- **Date**: 2026-09-10
+- **Status**: accepted
+- **Context**: `system-design` for HRMS module 8, same standing overnight authorization, modules 1-7
+  reviewed clean before starting this one (module 7's Travel is ADR-023, merged, issue #9's
+  LoginAttempt collision fixed and merged separately). Read all 17 real per-doctype spec files under
+  `HRMS-Port-Spec/01-Modules/Leaves/` in full via a research fork, plus this project's own current
+  scoping/permission code (`utils/scope.js`, `middlewares/checkPermission.js`, `models/UserRoles.js`,
+  `models/Employee.js`, `models/Department.js`) read directly by this session, not delegated — this
+  ADR's two central calls (Q-4, Q-5) are exactly the kind of judgment AGENTS.md reserves for the
+  orchestrator, not a fork.
+- **This is the largest module yet by a wide margin, and the one `STATE.md` has been flagging since
+  module 2 as where two long-open questions finally have to get real answers**: Q-4 (per-screen/
+  company data scoping — this starter's `UserRoles.dataScope` is one value per *role*, not per
+  screen, so a role can't be `own`-scoped on Leave Application but `all`-scoped on Leave Type) and
+  Q-5 (this starter ships no background job scheduler at all, and Leaves is the first module with
+  jobs ADR-016 already committed to keeping: `process_expired_allocation` → `generate_leave_
+  encashment` → `allocate_earned_leaves`, in that fixed order, daily).
+- **Scope correction before code, same as module 2**: 17 raw doctypes is not 17 collections. Several
+  are child tables in source and get folded to embedded arrays here too, matching source's own
+  structure rather than inventing a shortcut: `Leave Policy Detail` → `LeavePolicy.leavePolicyDetails[]`,
+  `Earned Leave Schedule` → `LeaveAllocation.earnedLeaveSchedule[]`, `Leave Block List Date`/`Leave
+  Block List Allow` → `LeaveBlockList.blockDates[]`/`.allowList[]`, and the module needs a `Holiday`
+  concept that source treats as external — folded to `HolidayList.holidays[]`. `Leave Control Panel`
+  is a stateless bulk-action form in source too (a Frappe Single with `disable_save`), not a stored
+  entity — built as two bulk-action endpoints with per-item try/catch isolation and a lightweight
+  custom admin page, no entity-config CRUD screen. That leaves 13 real top-level collections/screens:
+  `LeaveType`, `LeavePeriod`, `HolidayList`, `HolidayListAssignment`, `LeavePolicy`, `LeavePolicy
+  Assignment`, `LeaveAllocation`, `LeaveLedgerEntry`, `LeaveAdjustment`, `CompensatoryLeaveRequest`,
+  `LeaveApplication`, `LeaveEncashment`, `LeaveBlockList` — plus a `Department` extension and a new
+  minimal `Attendance` model (below).
+- **Q-4 decision — per-menu-row scope override, additive and backward-compatible**: `UserRoles.
+  roles[]` (which already carries one row per (role, menu) pair) grows an optional `dataScope` field,
+  `enum: SCOPE_VALUES, default: null`. `null` means "inherit the role-level `UserRoles.dataScope`" —
+  every existing role/menu row across modules 1-7 keeps behaving exactly as today with zero migration.
+  `checkPermission` computes `row.dataScope || roleDoc.dataScope || SCOPES.ALL` once the matrix row is
+  resolved (it already fetches `row` for the permission-flag check; this is one more field read off
+  the same document, no extra query) and sets `req.user.dataScope` to that instead of the bare
+  role-level value. `SCOPES` (`packages/shared/src/scopes.js`) grows a fourth value, `APPROVER`,
+  alongside `all`/`department`/`own` — Leaves needs "my own records, plus records of people I resolve
+  as the approver for," which `own` alone can't express and `department` over-grants (an approver is
+  not necessarily the whole department's manager).
+  `utils/scope.js`'s `buildScopeFilter` stays synchronous and its existing call sites (7 modules) stay
+  untouched — it gains one more optional key, `approverIds` (a pre-resolved array the *caller*
+  computes), and when `scope === SCOPES.APPROVER` returns `{ [scopeable.owner]: { $in: [reqUser.
+  employeeId, ...(scopeable.approverIds || [])] } }`. Resolving `approverIds` needs an async DB call
+  (below), so it's computed once per request by the Leaves controllers that need it and passed in —
+  not baked into `buildScopeFilter` itself, which stays a pure synchronous function every other module
+  can keep trusting not to surprise-query.
+  A missing piece this ADR also closes: today `req.user.departmentId`/`.id` refer to the login
+  `User`, not `Employee` — Leaves' own data (`LeaveApplication.employeeId`, etc.) refs `Employee`, not
+  `User`. A new helper, `resolveRequestEmployee(req)`, looks up `Employee.findOne({ userId: req.user.
+  id })` once and memoizes it on `req.employee` for the life of the request — called lazily only by
+  controllers whose scope dimension needs it (own/department/approver), not as a global middleware,
+  so screens that don't need it never pay the extra query. `req.user.employeeId` is set from
+  `req.employee._id` at the same point for `buildScopeFilter` to read.
+- **Approver resolution — Department Approver, with a parent-chain walk instead of source's
+  nested-set**: source's `get_approvers()` walks a nested-set (`lft`/`rgt`) ancestor chain; this
+  project's `Department` (ADR-017) is flat. `Department` gains `parentDepartmentId` (optional
+  self-ref) and three embedded arrays — `leaveApprovers[]`, `expenseApprovers[]`, `shiftRequest
+  Approvers[]` (each `[{ type: ObjectId, ref: "User" }]`) — folding source's three separate
+  `Department Approver` child tables the same way every other child table in this project has been
+  folded, reusing the `SimpleArrayField` component module 4 built. Resolution (`utils/approvers.js`,
+  `resolveApprovers(employeeId, approverType)`): if the `Employee`'s own direct field (`leave
+  ApproverId`/`expenseApproverId`/`shiftRequestApproverId` — already built by module 2) is set,
+  that's the answer, full stop — matches source's actual behavior once the Employee-level field is
+  populated. Otherwise walk `parentDepartmentId` upward from the employee's department, bounded to
+  depth 10 (a hard cycle guard this flat model has no other protection against), collecting every
+  ancestor level's matching approver array and **union across the whole chain, not just the nearest
+  non-empty level** — matches source's own dedup-across-ancestors behavior. Throws a "Please set a
+  Leave Approver for this Employee or their Department" error (source's literal message, adapted)
+  when nothing resolves. The inverse query Leaves' own list screens need — "which Employees does the
+  logged-in User approve for" — is `getEmployeesApprovedBy(userId, approverType)`: direct matches
+  (`Employee[<type>ApproverId] === userId`) plus, for every `Department` where `userId` appears in its
+  approver array, every `Employee` in that department *or any of its descendants* whose own direct
+  approver field is unset (a direct override always wins, so an employee who has one is never covered
+  by their department's fallback approver).
+- **Q-5 decision — no new dependency, a minimal in-process day-granularity runner**: AGENTS.md's
+  working rules forbid adding a dependency without asking, and the user is offline — `node-cron` (the
+  obvious choice) is out under this session's standing authorization, which covers "ordinary
+  implementation decisions," not a new package. A new `SchedulerRunLog` collection (`jobName` unique,
+  `lastRunDate` at day granularity, `lastStatus`, `lastError`, `lastDurationMs`) backs a `setInterval`
+  in `server.js` (5-minute tick, started once after the DB connects) that runs any job whose
+  `lastRunDate` isn't today, in the fixed order ADR-016 already committed to:
+  `processExpiredAllocations` → `generateLeaveEncashments` → `allocateEarnedLeaves`, each wrapped in
+  its own try/catch so one job's failure doesn't block the next (mirrors source's per-employee
+  savepoint isolation, at job granularity instead). This is explicitly a **single-process** design —
+  `60-limits.md` already documents "single process assumed" as a starter-wide limit; a horizontally
+  scaled deployment would double-fire jobs in the race window between two processes' near-simultaneous
+  `lastRunDate` checks. Not solved here — named as the same known limitation, not a new gap.
+- **A minimal `Attendance` model, built now, extended by module 9**: `Leave Application`'s real
+  on-submit behavior creates/checks `Attendance` rows (On Leave / Half Day), and `Compensatory Leave
+  Request`'s validation chain checks for matching `Attendance` records against the worked date range —
+  Attendance doesn't exist yet (it's module 9, Shift & Attendance, next on the board). Rather than lose
+  that fidelity or reorder the whole module board, `Attendance` gets a minimal shape now — `employeeId`,
+  `companyId`, `attendanceDate`, `status` (Present/Absent/On Leave/Half Day/Work From Home),
+  `leaveApplicationId` (optional back-ref), `leaveTypeId` (optional) — unique on `(employeeId,
+  attendanceDate)`, matching source's real one-row-per-employee-per-day invariant. Module 9 extends
+  this with shift assignment, check-in/out and geolocation; it does not rebuild it. Same precedent as
+  module 2 adding Employee's three approver fields early for modules this one and Recruitment to
+  consume.
+- **Docstatus folding, per doctype (ADR-016)** — most of this module's real value is in `on_submit`
+  side effects, so the fold is to an explicit action endpoint that reproduces the side effect, not a
+  passive status flip: `LeavePolicyAssignment.status` (pending/allocated) + `POST .../grant-
+  allocations` (idempotent via a `leavesAllocated` flag; runs the pro-ration algorithm, creates
+  `LeaveAllocation` rows + opening ledger entries — tenure pro-ration rounds to whole numbers, earned-
+  leave pro-ration rounds to decimals, deliberately different per source); `LeaveAllocation.status`
+  (active/expired/cancelled) + `POST .../adjust` (source's `on_update_after_submit`: re-validates
+  `newLeavesAllocated` and writes a signed delta ledger entry, never a raw field PATCH);
+  `LeaveAdjustment` writes its one signed ledger entry on create (simple enough that create *is* the
+  action; source's own `leaves_after_adjustment` is informational, not authoritative — the ledger sum
+  is, matching Leave Allocation's own cached-total caveat below); `CompensatoryLeaveRequest.status`
+  (open/approved/rejected) + `POST .../approve` (validates active-employee, date order, that every day
+  in the worked range is a holiday per the Holiday List, and that matching `Attendance` rows exist,
+  then finds/extends or creates the resulting `LeaveAllocation` and writes a ledger entry);
+  `LeaveApplication.status` (open/approved/rejected/cancelled) + `POST .../approve` and `.../reject`
+  (approve runs the full ~14-step validation chain from source — active-employee, backdating gate,
+  half-day sanity, balance sufficiency with the negative-allowed override, overlap with the half-day
+  adjacency carve-out, max-consecutive-days, block-date enforcement, self-approval prevention, leave-
+  approver-mandatory, applicable-after-joining — then creates/updates `Attendance` rows and writes 1-2
+  ledger entries, splitting across allocation boundaries when the range crosses them);
+  `LeaveEncashment.status` (pending/paid) + `POST .../mark-paid` (amount/date/reference — the same
+  manual-action substitute for GL posting Full & Final Statement established in module 4, Q-3;
+  Leave Encashment inheriting `AccountsController` in source is exactly the "no GL" collision ADR-016
+  and Q-3 already anticipated, not a new one).
+- **`LeaveAllocation.totalLeavesAllocated` is a cached snapshot, never the source of truth — the
+  balance is always `SUM(LeaveLedgerEntry.leaves)` filtered by employee/leaveType/date, computed via
+  aggregation.** This matters concretely once `LeaveAdjustment` exists, because source's own
+  adjustment flow writes a ledger entry *without* touching the allocation's cached total — a UI that
+  trusted the cached field would silently show a stale balance. Flagged explicitly so nobody "fixes"
+  the cached field into looking consistent and breaks the real invariant.
+- **`LeaveLedgerEntry` reversal is soft-delete, not source's hard-DELETE-on-cancel** — a deliberate
+  deviation for consistency with this project's universal soft-delete convention (every other
+  collection in the codebase soft-deletes; a hard-delete carve-out for one collection would be a trap
+  for the next module). The one thing this requires getting right: the balance-`SUM` aggregation
+  **must** filter `isDeleted: { $ne: true }` in its own `$match` stage explicitly — Mongoose's
+  soft-delete query middleware hooks `find`/`findOne`, not `aggregate` pipelines, so this doesn't
+  happen automatically the way it would for a plain list query. Named here so the fork building it
+  doesn't discover this the hard way the way module 2's CSV line-ending bug or module 6's audit-plugin
+  subdocument crash were discovered — by testing, not by reading.
+- **Decision — models and menu**: `LeaveType`, `LeavePeriod`, `HolidayList` (+`holidays[]`),
+  `HolidayListAssignment`, `LeavePolicy` (+`leavePolicyDetails[]`), `LeavePolicyAssignment`,
+  `LeaveAllocation` (+`earnedLeaveSchedule[]`), `LeaveLedgerEntry`, `LeaveAdjustment`,
+  `CompensatoryLeaveRequest`, `LeaveApplication`, `LeaveEncashment`, `LeaveBlockList`
+  (+`blockDates[]`+`allowList[]`) — 13 new collections; `Department` extended (`parentDepartmentId`,
+  three approver arrays); `Attendance` — new, minimal, module 9 extends it. New "Leaves" menu group.
+  Two bulk-action endpoints for Leave Control Panel, no dedicated CRUD screen. `widgetSources.js`
+  entries for every screen except pure child-owning masters with nothing to group on their own
+  (Holiday List's own entry covers `holidays[]` implicitly the way other modules' embedded arrays do).
+- **Split into two stacked forks given the size** — `feat/leaves` (foundation: scoping infra,
+  approver resolution, scheduler infra, `LeaveType`/`LeavePeriod`/`HolidayList`/`HolidayList
+  Assignment`/`LeavePolicy`/`LeavePolicyAssignment`/`LeaveAllocation`/`LeaveLedgerEntry`/`Attendance`/
+  `Department` extension — independently mergeable and verifiable on its own) then a second stacked
+  branch (`LeaveAdjustment`/`CompensatoryLeaveRequest`/`LeaveApplication`/`LeaveEncashment`/
+  `LeaveBlockList`/Leave Control Panel, which all depend on the foundation's scoping/approver/
+  scheduler work and on `LeaveAllocation` existing) — same stacking pattern already used for
+  Recruitment → Onboarding/Separation → Career Events → Training & Skills.
+- **Consequences**: `OPEN-QUESTIONS.md` Q-4 and Q-5 both close, pointing here. `Department`'s
+  extension is the first change to a module-1 model since module 6's `Skill[]` retrofit pattern —
+  same "extend the spine, don't duplicate it" precedent.
+- **Deviates from convention**: none beyond what's named above (soft-delete reversal instead of
+  source's hard-delete; a bespoke scheduler instead of a library, forced by the no-new-dependency
+  rule colliding with an offline user who can't be asked).
+- **As built (foundation half only — `feat/leaves`)**: built exactly as designed above for the
+  foundation fork's scope — Q-4 scoping (`SCOPES.APPROVER`, `UserRoles.roles[].dataScope` per-menu-row
+  override, `checkPermission`/`buildScopeFilter`/`utils/requestEmployee.js`), Q-5 scheduler
+  (`SchedulerRunLog`, `jobs/leaveScheduler.js`, wired into `server.js`), Department Approver
+  (`parentDepartmentId` + three approver arrays, `utils/approvers.js`), minimal `Attendance`, and
+  `LeaveType`/`LeavePeriod`/`HolidayList`(+`holidays[]`)/`HolidayListAssignment`/`LeavePolicy`
+  (+`leavePolicyDetails[]`)/`LeavePolicyAssignment`(+`grant-allocations`)/`LeaveAllocation`
+  (+`earnedLeaveSchedule[]`,+`adjust`)/`LeaveLedgerEntry` (read-only) — 9 new models, full CRUD API/UI
+  for the 8 that need it. `LeaveAdjustment`/`CompensatoryLeaveRequest`/`LeaveApplication`/
+  `LeaveEncashment`/`LeaveBlockList`/Leave Control Panel are the still-pending second fork, exactly as
+  planned — this module does not reach `done` until that lands.
+  - **Two deviations from the design's implied precision, both deliberate, both flagged in code
+    comments (`utils/leaveProration.js`)**: the earned-leave schedule's sub-period boundaries are
+    calendar-months-from-`fromDate`, not source's quarter/half-year-calendar-anchored boundaries —
+    this ADR's own two named rounding rules (tenure whole-number, earned-leave decimal) are
+    reproduced exactly, but the elaborate `get_half_year_periods`/`get_semester_start` machinery is
+    not. Carry-forward computation uses `getLeaveBalance` as of the previous allocation's `toDate`
+    rather than source's period-scoped `get_unused_leaves` query — correct for this fork's own
+    single-allocation-per-period cases, worth revisiting once the second fork's Leave Application
+    introduces real consumption entries to net against.
+  - **A bug in this fork's own new code, found and fixed before it ever shipped**: the first draft of
+    `buildEarnedLeaveSchedule` only pro-rated the schedule's first row for a mid-period join date —
+    every calendar month between the schedule's `fromDate` and an employee's actual (later) join date
+    wrongly earned a full month's share instead of zero. Caught by hand-verifying the pro-ration math
+    against a real mid-year joiner during the HTTP walk, not by reading the diff; fixed to place the
+    join date per-row instead of only on the first, locked in with a new test case.
+  - **A pre-existing bug found while live-testing Q-4, unrelated to Leaves itself, filed as GitHub
+    #10 and fixed**: `apps/server/controllers/v1/user.controller.js`'s `getUserById`/`updateUser`/
+    `deleteUser` built their scope-guarded query as `{ _id: userId, ...buildScopeFilter(...) }` — when
+    the "own" dimension (declared against the field name `"_id"` on this one collection) is active,
+    the spread's own `_id` key silently overwrote the URL param's `_id`, so the route ignored
+    `:userId` entirely under an `own`-scoped role and always resolved to the caller's own account.
+    Fixed with `$and` instead of object-spread in all three functions.
+  - **Verified live** (full detail in `STATE.md`'s Log entry for this session): `npm test` green,
+    `npm run seed` twice (idempotent), `npm run build` green, a full `grant-allocations` cycle against
+    a real mid-year-joiner employee with hand-verified pro-ration math, the `/adjust` action and the
+    generic-PATCH rejection both confirmed, `runDueJobs()` manually exercised against constructed
+    fixtures for both `processExpiredAllocations` and `allocateEarnedLeaves` (including same-day
+    no-op idempotency), the Q-4 per-menu-row override confirmed live over real HTTP (before/after the
+    `#10` fix), an unrelated existing HR User account confirmed listing all seeded Departments
+    (module 1) to rule out a scoping regression, and `resolveApprovers`/`getEmployeesApprovedBy`
+    exercised against the real seeded Apidel department hierarchy as well as synthetic fixtures. Full
+    browser UI click-through was not performed (Playwright's browser binary could not be downloaded in
+    this sandbox) — relied on a clean Vite build plus manual config review instead.
+

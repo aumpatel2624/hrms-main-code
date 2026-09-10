@@ -512,6 +512,64 @@ everywhere else (no per-row self-only scoping yet, per the still-open Q-4).
 `totalAmount` on a costing row (manually entered, despite the field name implying a sum) and no
 date-order validation on itinerary rows (departure/arrival, check-in/check-out).
 
+### Leaves — foundation half (module 8, built 2026-09-10 — ADR-024, `feat/leaves`)
+
+The largest module yet, deliberately split into two stacked forks. This half built the
+infrastructure every other half depends on, plus the "configuration" doctypes; the "transactional"
+doctypes (`LeaveAdjustment`, `CompensatoryLeaveRequest`, `LeaveApplication`, `LeaveEncashment`,
+`LeaveBlockList`) are the still-pending second fork.
+
+**Two cross-cutting mechanisms, not specific to Leaves at all**, finally answer `OPEN-QUESTIONS.md`
+Q-4 and Q-5: `UserRoles.roles[].dataScope` (per-menu-row scope override — a role can now be
+`own`-scoped on one screen and `all` on the rest, `null` inherits the role default) plus a new
+`APPROVER` scope value (a person's own rows, plus everyone they resolve as the approver for); and
+`SchedulerRunLog` + `jobs/leaveScheduler.js` (a dependency-free, single-process, day-granularity
+background job runner — no `node-cron`, per AGENTS.md's no-new-dependency rule colliding with an
+offline user).
+
+`LeaveType` — the configuration doctype every other collection reads flags off of: paid/unpaid
+(`isLwp`), partial-pay (`isPpl` + `fractionOfDailySalaryPerLeave`), carry-forward (+ max/expiry-days),
+encashment (+ max/non-encashable), earned-leave accrual (`earnedLeaveFrequency`/`allocateOnDay`/
+`rounding`), `maxLeavesAllowed`/`maxContinuousDaysAllowed`/`applicableAfter`. Seeded with a generic
+5-type starter set (Casual/Sick/Earned/Compensatory Off/Leave Without Pay) — not confirmed against
+any client document, same caveat as Travel's masters.
+
+`LeavePeriod` — a named date range (e.g. a fiscal year) scoped to one Company, no two overlapping per
+company.
+
+`HolidayList` (+embedded `holidays[]`) and `HolidayListAssignment` — a calendar of holidays per
+company/date-range, assignable to an Employee or a Company (exactly one of the two, matching
+`applicableFor`) from a given date onward, within the assigned list's own date range.
+
+`LeavePolicy` (+embedded `leavePolicyDetails[]`, one `(LeaveType, annualAllocation)` pair per row,
+capped at that Leave Type's own `maxLeavesAllowed` when set) and `LeavePolicyAssignment` (assigns a
+policy to an employee for a period — `assignmentBasedOn` "Leave Period"/"Joining Date" auto-derives
+the effective dates, no two overlapping assignments per employee). Its `grant-allocations` action is
+the real trigger: creates one `LeaveAllocation` per non-LWP policy detail, tenure-pro-rated (whole
+numbers) for ordinary types or schedule-summed (decimals) for earned-leave types, idempotent via
+`leavesAllocated`.
+
+`LeaveAllocation` (+embedded `earnedLeaveSchedule[]`) — the actual per-employee, per-leave-type grant.
+`totalLeavesAllocated` is a cached display snapshot; the real balance is always the sum of
+`LeaveLedgerEntry` rows (`utils/leaveBalance.js`). Once `active`, the granted amount can only change
+via the `/adjust` action (a signed delta ledger entry) — the generic edit endpoint rejects a direct
+change.
+
+`LeaveLedgerEntry` — append-only, system-written, read-only from the API and the admin (a custom page,
+not a CRUD screen, same reasoning as Audit Log). Every balance-affecting action writes here; nothing
+else is ever trusted as a balance.
+
+`Department` (ADR-017) gained `parentDepartmentId` (optional self-ref, depth-10-bounded walk, no
+protection against anything but a direct self-cycle) and three approver arrays
+(`leaveApprovers`/`expenseApprovers`/`shiftRequestApprovers`, plain `User` ref arrays — schema-ready,
+not given a form field yet, same precedent as Recruitment's `interviewers`). `utils/approvers.js`
+resolves an employee's approver: their own direct field if set, otherwise the union of the matching
+array across their whole department ancestor chain.
+
+`Attendance` — a deliberately minimal one-row-per-employee-per-day model (module 9, Shift &
+Attendance, extends it with shift/check-in/geolocation later), built now only because the second
+fork's Leave Application/Compensatory Leave Request need something to reference.
+
 ## Not modelled
 
 <!-- Things the client talks about that deliberately have no collection, and why. -->

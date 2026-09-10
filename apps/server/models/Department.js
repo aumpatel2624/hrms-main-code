@@ -25,6 +25,37 @@ const DepartmentSchema = new mongoose.Schema(
       ref: "Company",
       required: true,
     },
+    // ADR-024 (Leaves, Department Approver). Self-ref, optional — most
+    // departments are flat (no parent). A direct self-reference
+    // (parentDepartmentId === _id) is rejected in the controller; a deeper
+    // cycle isn't practically preventable without a full graph walk on every
+    // write, so utils/approvers.js's chain-walk is depth-bounded instead —
+    // a manufactured deep cycle degrades to "approver not found", not an
+    // infinite loop. Documented limitation, not a bug.
+    parentDepartmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      required: false,
+      default: null,
+    },
+    // Three approver fallback lists (ADR-024) — plain arrays of User refs,
+    // not embedded objects. Matches this project's existing precedent for a
+    // bare ref array (Recruitment's Interviewer.interviewers/
+    // defaultInterviewers): schema-ready and API-accessible, but not given a
+    // multi-select field on the Department form — this admin has no
+    // multi-select field type yet, a known simplification, not an oversight.
+    leaveApprovers: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      default: [],
+    },
+    expenseApprovers: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      default: [],
+    },
+    shiftRequestApprovers: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      default: [],
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -51,6 +82,7 @@ DepartmentSchema.index(
   { unique: true, partialFilterExpression: { departmentCode: { $type: "string" } } },
 );
 DepartmentSchema.index({ companyId: 1 });
+DepartmentSchema.index({ parentDepartmentId: 1 });
 DepartmentSchema.index({ isActive: 1, createdAt: -1 });
 DepartmentSchema.index({ createdAt: -1 });
 

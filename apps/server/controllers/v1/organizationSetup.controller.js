@@ -4,6 +4,10 @@
  * location.controller.js groups Country/State/City — one small domain, not
  * five one-model controllers. Department stays in its own existing file
  * (department.controller.js) since it predates this module.
+ *
+ * Employee Health Insurance (ADR-018, module 2) joins this file too — a
+ * simple lookup master, same shape as Employment Type/Employee Grade, not
+ * substantial enough to earn its own file the way Employee itself did.
  */
 import { runListQuery } from "../../utils/listQuery.js";
 import Company from "../../models/Company.js";
@@ -11,6 +15,7 @@ import Branch from "../../models/Branch.js";
 import Designation from "../../models/Designation.js";
 import EmploymentType from "../../models/EmploymentType.js";
 import EmployeeGrade from "../../models/EmployeeGrade.js";
+import EmployeeHealthInsurance from "../../models/EmployeeHealthInsurance.js";
 import {
   getReferencingCounts,
   formatReferenceMessage,
@@ -556,6 +561,113 @@ export const listEmployeeGradeByParams = async (req, res) => {
       searchFields: ["gradeName"],
       filterable: {
         gradeName: "string",
+        isActive: "boolean",
+        createdAt: "date",
+      },
+    });
+    return res.status(200).json({ isOk: true, status: 200, data: list });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+  }
+};
+
+// ------------------------------------------------ Employee Health Insurance --
+
+export const createEmployeeHealthInsurance = async (req, res) => {
+  try {
+    const { providerName, isActive } = req.body;
+    if (!providerName) {
+      return res.status(400).json({ isOk: false, status: 400, message: "Provider name is required" });
+    }
+
+    const existing = await EmployeeHealthInsurance.findOne({ providerName });
+    if (existing) {
+      return res.status(400).json({ isOk: false, status: 400, message: "Health insurance provider already exists" });
+    }
+
+    await EmployeeHealthInsurance.create({ providerName, isActive });
+    return res.status(201).json({ isOk: true, status: 201, message: "Health insurance provider created successfully" });
+  } catch (error) {
+    console.log("Error in createEmployeeHealthInsurance", error);
+    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+  }
+};
+
+export const updateEmployeeHealthInsurance = async (req, res) => {
+  try {
+    const { employeeHealthInsuranceId } = req.params;
+    const { providerName, isActive } = req.body;
+
+    const provider = await EmployeeHealthInsurance.findById(employeeHealthInsuranceId);
+    if (!provider) {
+      return res.status(404).json({ isOk: false, status: 404, message: "Health insurance provider not found" });
+    }
+
+    provider.providerName = providerName;
+    provider.isActive = isActive;
+    await provider.save();
+
+    return res.status(200).json({ isOk: true, status: 200, message: "Health insurance provider updated successfully" });
+  } catch (error) {
+    console.log("Error in updateEmployeeHealthInsurance", error);
+    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+  }
+};
+
+export const deleteEmployeeHealthInsurance = async (req, res) => {
+  try {
+    const { employeeHealthInsuranceId } = req.params;
+    const provider = await EmployeeHealthInsurance.findById(employeeHealthInsuranceId);
+    if (!provider) {
+      return res.status(404).json({ isOk: false, status: 404, message: "Health insurance provider not found" });
+    }
+
+    const result = await referenceGuardedDelete(
+      EmployeeHealthInsurance,
+      "EmployeeHealthInsurance",
+      employeeHealthInsuranceId,
+      "health insurance provider",
+    );
+    if (result.blocked) return res.status(409).json(result.body);
+
+    return res.status(200).json({ isOk: true, status: 200, message: "Health insurance provider deleted successfully" });
+  } catch (error) {
+    console.log("Error in deleteEmployeeHealthInsurance", error);
+    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+  }
+};
+
+export const getEmployeeHealthInsuranceById = async (req, res) => {
+  try {
+    const { employeeHealthInsuranceId } = req.params;
+    const provider = await EmployeeHealthInsurance.findById(employeeHealthInsuranceId);
+    if (!provider) {
+      return res.status(404).json({ isOk: false, status: 404, message: "Health insurance provider not found" });
+    }
+    return res.status(200).json({ isOk: true, status: 200, data: provider });
+  } catch (error) {
+    console.log("Error in getEmployeeHealthInsuranceById", error);
+    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+  }
+};
+
+export const listEmployeeHealthInsurances = async (_req, res) => {
+  try {
+    const providers = await EmployeeHealthInsurance.find({ isActive: true });
+    return res.status(200).json({ isOk: true, status: 200, data: providers });
+  } catch (error) {
+    console.log("Error in listEmployeeHealthInsurances", error);
+    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+  }
+};
+
+export const listEmployeeHealthInsuranceByParams = async (req, res) => {
+  try {
+    const list = await runListQuery(EmployeeHealthInsurance, req.body, {
+      searchFields: ["providerName"],
+      filterable: {
+        providerName: "string",
         isActive: "boolean",
         createdAt: "date",
       },

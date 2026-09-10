@@ -8,6 +8,8 @@ import {
   createDesignation, updateDesignation, deleteDesignation, getDesignationById, listDesignations, listDesignationByParams,
   createEmploymentType, updateEmploymentType, deleteEmploymentType, getEmploymentTypeById, listEmploymentTypes, listEmploymentTypeByParams,
   createEmployeeGrade, updateEmployeeGrade, deleteEmployeeGrade, getEmployeeGradeById, listEmployeeGrades, listEmployeeGradeByParams,
+  createEmployeeHealthInsurance, updateEmployeeHealthInsurance, deleteEmployeeHealthInsurance,
+  getEmployeeHealthInsuranceById, listEmployeeHealthInsurances, listEmployeeHealthInsuranceByParams,
 } from "../../controllers/v1/organizationSetup.controller.js";
 
 const router = express.Router();
@@ -559,5 +561,138 @@ router.delete("/employee-grades/:employeeGradeId", authMiddleware(ANY_ROLE), che
  *       200: { description: Paginated list of employee grades }
  */
 router.post("/employee-grades/search", authMiddleware(ANY_ROLE), checkPermission("/employee-grade", "read"), listEmployeeGradeByParams);
+
+// ------------------------------------------------ Employee Health Insurance --
+
+/**
+ * @swagger
+ * /employee-health-insurances:
+ *   post:
+ *     summary: Create a new employee health insurance provider
+ *     tags: [Employee Records]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/CreateEmployeeHealthInsurance' }
+ *     responses:
+ *       201: { description: Health insurance provider created successfully }
+ */
+router.post(
+  "/employee-health-insurances",
+  authMiddleware(ANY_ROLE),
+  checkPermission("/employee-health-insurance", "write"),
+  createEmployeeHealthInsurance,
+);
+
+/**
+ * @swagger
+ * /employee-health-insurances:
+ *   get:
+ *     summary: List all active employee health insurance providers (dropdown source)
+ *     tags: [Employee Records]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: List of health insurance providers }
+ */
+router.get("/employee-health-insurances", authMiddleware(ANY_ROLE), listEmployeeHealthInsurances);
+
+/**
+ * @swagger
+ * /employee-health-insurances/{employeeHealthInsuranceId}:
+ *   get:
+ *     summary: Get employee health insurance provider by ID
+ *     tags: [Employee Records]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: employeeHealthInsuranceId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Health insurance provider details }
+ *       404: { description: Health insurance provider not found }
+ */
+router.get(
+  "/employee-health-insurances/:employeeHealthInsuranceId",
+  authMiddleware(ANY_ROLE),
+  checkPermission("/employee-health-insurance", "read"),
+  getEmployeeHealthInsuranceById,
+);
+
+/**
+ * @swagger
+ * /employee-health-insurances/{employeeHealthInsuranceId}:
+ *   put:
+ *     summary: Update employee health insurance provider
+ *     tags: [Employee Records]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: employeeHealthInsuranceId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/CreateEmployeeHealthInsurance' }
+ *     responses:
+ *       200: { description: Health insurance provider updated successfully }
+ *       404: { description: Health insurance provider not found }
+ */
+router.put(
+  "/employee-health-insurances/:employeeHealthInsuranceId",
+  authMiddleware(ANY_ROLE),
+  checkPermission("/employee-health-insurance", "edit"),
+  updateEmployeeHealthInsurance,
+);
+
+/**
+ * @swagger
+ * /employee-health-insurances/{employeeHealthInsuranceId}:
+ *   delete:
+ *     summary: Delete employee health insurance provider (soft, reference-guarded)
+ *     tags: [Employee Records]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: employeeHealthInsuranceId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Health insurance provider deleted successfully }
+ *       404: { description: Health insurance provider not found }
+ *       409: { description: Health insurance provider is referenced by other records }
+ */
+router.delete(
+  "/employee-health-insurances/:employeeHealthInsuranceId",
+  authMiddleware(ANY_ROLE),
+  checkPermission("/employee-health-insurance", "delete"),
+  deleteEmployeeHealthInsurance,
+);
+
+/**
+ * @swagger
+ * /employee-health-insurances/search:
+ *   post:
+ *     summary: Search employee health insurance providers with pagination
+ *     tags: [Employee Records]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/SearchParams' }
+ *     responses:
+ *       200: { description: Paginated list of health insurance providers }
+ */
+router.post(
+  "/employee-health-insurances/search",
+  authMiddleware(ANY_ROLE),
+  checkPermission("/employee-health-insurance", "read"),
+  listEmployeeHealthInsuranceByParams,
+);
 
 export default router;

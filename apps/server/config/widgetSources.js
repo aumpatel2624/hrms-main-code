@@ -397,4 +397,29 @@ export const WIDGET_SOURCES = Object.freeze({
       createdAt: "date",
     },
   },
+
+  // ADR-023 (Travel). No entry for purpose-of-travels /
+  // identification-document-types — two one-field admin masters, nothing to
+  // group or sum.
+  "travel-requests": {
+    label: "Travel Requests",
+    model: "TravelRequest",
+    aggregatable: {},
+    groupable: {
+      status: { label: "Status" },
+      travelType: { label: "Travel Type" },
+      companyId: {
+        label: "Company",
+        lookup: { from: "companies", labelField: "companyName" },
+      },
+    },
+    dateFields: { createdAt: "Created" },
+    filterable: {
+      employeeId: "objectId",
+      travelType: "string",
+      status: "string",
+      companyId: "objectId",
+      createdAt: "date",
+    },
+  },
 });

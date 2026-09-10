@@ -2048,3 +2048,96 @@ Copy this block. Number sequentially.
   4. Skipped a widget entry for `employee-skill-maps` as planned — one row
      per employee, an embedded array, nothing meaningful to group or sum.
 
+---
+
+### ADR-023 — Travel: a genuinely small module; Travel Request's access opened up from source's System-Manager-only table
+
+- **Date**: 2026-09-10
+- **Status**: accepted
+- **Context**: `system-design` for HRMS module 7, same standing overnight authorization, modules 1-6
+  reviewed clean before starting this one — plus, this session, a git remote was set up, all six
+  merged into `development`, five pre-existing starter bugs found during those modules' testing were
+  fixed (GitHub issues #3-7), and MongoDB moved from a portable binary to Docker (`mongo:7.0` — the
+  official `8.0` image hard-fails on this host's kernel, a documented MongoDB-side compatibility
+  gate). Read `Travel Request.md`, `Travel Itinerary.md`, `Travel Request Costing.md`, `Purpose of
+  Travel.md` in full; `Identification Document Type.md` was already read during module 2's research
+  (ADR-018, which deferred it here) — not re-read, referenced from memory.
+- **This is a genuinely small module** — one real transactional doctype (`Travel Request`) with two
+  embedded child arrays and two one-field master lists. No scope correction needed this time; the
+  Day-1 sketch was right.
+- **The one real judgment call: `Travel Request`'s access is opened up from source's literal
+  permission table.** Source declares exactly one role — System Manager — with no explicit submit/
+  cancel/amend rights even for that role (the spec calls this out as genuinely ambiguous, not merely
+  under-documented: "no role in source can submit this doctype without additional customizations not
+  captured here"). Taken literally, a port would make Travel Request unusable by anyone but an
+  admin-equivalent account, for a feature whose entire premise is an employee requesting to travel.
+  This reads as an incomplete area of the traced source (plausibly filled in by client-specific
+  Frappe customizations the port spec had no visibility into) rather than a deliberate design to
+  preserve — same category as Employee Separation's missing duplicate-guard in module 5, which was
+  named as a gap and then deliberately closed, not silently copied. Opened up the same way every
+  other self-service-shaped doctype in this build has been: `Employee` role gets full-minus-delete on
+  their own requests (no per-screen self-only scoping yet, per the still-open Q-4 — same caveat every
+  Employee-role grant in this project carries), `HR User`/`HR Manager` get full access, matching this
+  project's now-established pattern rather than source's outlier table.
+- **No docstatus, per ADR-016** — `status` becomes a plain Draft/Submitted/Cancelled field with no
+  transition guards (matching source's own near-total absence of validation: the only real rule
+  anywhere in this module is the Inactive-employee guard on Travel Request itself).
+- **`Travel Request Costing`'s `expense_type` (Link to Expense Claim Type) can't be a real reference
+  yet** — Expenses (module 16) hasn't been built. Same forward-dependency shape as Interview Type's
+  `expectedSkillSet` in module 3: kept as a plain free-text field for now, with a note (`OPEN-
+  QUESTIONS.md`) to retrofit it as a real ref once Expenses exists, rather than blocking on a module
+  eight builds away or inventing a placeholder collection.
+- **Two things explicitly NOT invented, because source explicitly doesn't have them**: no rollup
+  `total_amount` on Travel Request (source's own field named "Total Amount" is manually entered, not
+  computed — the port spec flags this as the single most important gap to preserve, not fix) and no
+  date-order validation on `Travel Itinerary` (departure/arrival, check-in/check-out) — source has
+  none, and AGENTS.md's own ground rules (matching this spec's) say not to invent validation that
+  isn't there. Both are named here so nobody "fixes" them later mistaking the gap for an oversight.
+- **Decision**:
+  1. `PurposeOfTravel` — simple master (name, isActive). No RoleMaster grants — matches source's
+     literal System-Manager-only table (unlike Travel Request itself, source here is at least
+     internally consistent: a low-stakes admin classification list nobody flagged as broken).
+  2. `IdentificationDocumentType` — same shape and same ADMIN-only treatment, per ADR-018's original
+     deferral note.
+  3. `TravelRequest` — employeeId (required ref; Inactive-employee guard kept, real source rule),
+     travelType enum (Domestic/International, required), travelFunding (optional enum),
+     purposeOfTravelId (required ref), detailsOfSponsor, description, personalIdTypeId (optional ref
+     IdentificationDocumentType), personalIdNumber, itinerary[] (travelFrom/travelTo, modeOfTravel
+     enum, mealPreference enum, travelAdvanceRequired bool, advanceAmount — as a real Number, not
+     source's untyped Data field; a correct-typing improvement, not a new calculation — departureDate/
+     arrivalDate, lodgingRequired bool, preferredAreaForLodging, checkInDate/checkOutDate,
+     otherDetails), costings[] (expenseType as free text for now per the forward-dependency note
+     above, sponsoredAmount/fundedAmount/totalAmount as plain Numbers — **not computed**, comments),
+     status enum (Draft/Submitted/Cancelled, default Draft, no transition guards), companyId (fetched
+     from employee).
+  4. Roles: per the access-opening decision above. Menu: new "Travel" group (3 screens — Travel
+     Request, Purpose of Travel, Identification Document Type). Reporting: one `widgetSources.js`
+     entry for `travel-requests` (groupable by status/travelType/companyId); skip one for the two
+     masters — nothing to group.
+- **Consequences**: `OPEN-QUESTIONS.md` gets a new row for the `expenseType` retrofit, parallel to the
+  existing Recruitment-retrofit rows (Q-8/Q-9) — a follow-up touch to `TravelRequestCosting` once
+  Expenses exists, not forgotten.
+- **Deviates from convention**: none new — the access-opening call is the same "deliberate
+  improvement over a flagged source gap" category ADR-021 already established a precedent for, not a
+  new kind of deviation.
+- **As built**: `PurposeOfTravel`, `IdentificationDocumentType`, `TravelRequest` (embedded
+  `itinerary[]`/`costings[]`) built exactly as designed above — no scope changes during
+  implementation. New "Travel" menu group (3 screens); roles per the access-opening decision
+  (`Employee` full-minus-delete, `HR User`/`HR Manager` full, on `/travel-request` only — the two
+  masters get no RoleMaster grants for any of the six HRMS roles). One `widgetSources.js` entry for
+  `travel-requests` (groupable by status/travelType/companyId). Starter master data seeded (5
+  Purposes of Travel, 4 Identification Document Types) since neither list had any real-world source
+  data to draw from, unlike other modules' masters. `OPEN-QUESTIONS.md` Q-13 already covers the
+  `TravelRequestCosting.expenseType` → real `ExpenseClaimType` ref retrofit — no new row needed.
+  Verified live: `npm test` all green, `npm run seed` twice (idempotent — second run added 0 new
+  masters), `npm run build` green, and a full HTTP walk — Travel Request created with populated
+  itinerary/costing sub-documents and an auto-filled `companyId`; the Inactive-employee guard
+  confirmed (400, exact message format); the missing-required-fields guard confirmed (400); the
+  reference-guarded delete on `PurposeOfTravel` confirmed (409, blocked while referenced); role
+  checks confirmed end to end with three throwaway `User` accounts (Employee/HR User/HR Manager) —
+  Employee could create/read/edit but not delete a Travel Request and was refused write access to
+  Purpose of Travel (403); HR User was refused write access to Purpose of Travel too (403, ADMIN-only
+  holds for every non-admin role, not just Employee); HR Manager could delete. All test data (3
+  users, all Travel Requests created during verify) cleaned up afterward — employee count back to
+  195, master lists back to their 5/4 seeded rows, no stray test rows anywhere.
+

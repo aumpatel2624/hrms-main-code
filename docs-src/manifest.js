@@ -731,6 +731,35 @@ export const CONFIG_SCREENS = [
         ],
         roles: "HR Manager can fully manage skill maps; HR User can create and edit but not delete.",
     },
+    {
+        key: "purpose-of-travel",
+        config: "purposeOfTravelConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A named reason for travel (e.g. Client Meeting, Conference), used as a dropdown on Travel Request.",
+        when: "Set these up once, before employees start submitting travel requests.",
+        roles: "Admin only — no HR or Employee role has access to this screen.",
+    },
+    {
+        key: "identification-document-type",
+        config: "identificationDocumentTypeConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A named type of personal ID (e.g. Passport, Aadhaar Card), used as a dropdown on Travel Request.",
+        when: "Set these up once, before employees start submitting travel requests.",
+        roles: "Admin only — no HR or Employee role has access to this screen.",
+    },
+    {
+        key: "travel-request",
+        config: "travelRequestConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "An employee's request to travel, with an itinerary (one row per leg) and costings (sponsored/funded amounts).",
+        when: "Create one whenever an employee needs to travel for work.",
+        gotchas: [
+            "Can't be created or edited for an Inactive employee.",
+            "Total Amount on a costing row is entered manually, not calculated from Sponsored/Funded amounts.",
+            "Itinerary dates (departure/arrival, check-in/check-out) aren't validated against each other.",
+        ],
+        roles: "HR User and HR Manager have full access; Employees can create, read and edit (not delete) their own requests.",
+    },
 ];
 
 /**

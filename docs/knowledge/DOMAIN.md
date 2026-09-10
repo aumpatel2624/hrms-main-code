@@ -483,6 +483,35 @@ both overwrote unrelated fields with `undefined` on a partial update (the exact 
 `skills[]`-only PUT triggers), and `InterviewType`'s create plus `InterviewFeedback`'s create both
 still destructured their pre-retrofit field lists, so the new array fields silently never saved.
 
+### Travel (module 7, built 2026-09-10 — ADR-023)
+
+`PurposeOfTravel` and `IdentificationDocumentType` — two simple one-field masters (name, isActive),
+ADMIN-only (no RoleMaster grants for any of the six HRMS roles), matching source's own literal
+System-Manager-only permission table for both.
+
+`TravelRequest` — employeeId (required ref, Inactive-employee guard, real source rule), travelType
+enum (Domestic/International, required), travelFunding (optional enum), purposeOfTravelId (required
+ref), detailsOfSponsor, description, personalIdTypeId (optional ref `IdentificationDocumentType`),
+personalIdNumber, `itinerary[]` (travelFrom/travelTo, modeOfTravel enum, mealPreference enum,
+travelAdvanceRequired bool, advanceAmount as a real Number — source's own field is untyped Data, a
+correct-typing improvement, not a new calculation — departureDate/arrivalDate, lodgingRequired bool,
+preferredAreaForLodging, checkInDate/checkOutDate, otherDetails), `costings[]` (expenseType as free
+text for now — `ExpenseClaimType` doesn't exist yet, see `OPEN-QUESTIONS.md` Q-13 —
+sponsoredAmount/fundedAmount/totalAmount as plain Numbers, **not computed**, comments), status enum
+(Draft/Submitted/Cancelled, default Draft, no transition guards — no docstatus, per ADR-016),
+companyId (fetched from the employee).
+
+**Access opened up from source's literal permission table**, the one real judgment call this module
+made: source declares only System Manager for all three doctypes, with no explicit submit/cancel
+rights even for that role — the port spec itself calls this out as an incomplete area, not a
+deliberate design to preserve. `Employee` gets full-minus-delete on Travel Request, `HR User`/
+`HR Manager` get full access — the same self-service-shaped pattern this project already uses
+everywhere else (no per-row self-only scoping yet, per the still-open Q-4).
+
+**Two things explicitly not invented, because source doesn't have them either**: no rollup
+`totalAmount` on a costing row (manually entered, despite the field name implying a sum) and no
+date-order validation on itinerary rows (departure/arrival, check-in/check-out).
+
 ## Not modelled
 
 <!-- Things the client talks about that deliberately have no collection, and why. -->

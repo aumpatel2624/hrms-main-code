@@ -40,6 +40,8 @@ import Skill from "../models/Skill.js";
 import Country from "../models/Country.js";
 import State from "../models/State.js";
 import City from "../models/City.js";
+import PurposeOfTravel from "../models/PurposeOfTravel.js";
+import IdentificationDocumentType from "../models/IdentificationDocumentType.js";
 import { PERMISSION_KEYS } from "@demo-panel/shared/permissions";
 import { SCOPES } from "@demo-panel/shared/scopes";
 
@@ -224,6 +226,18 @@ const MENU_GROUPS = [
       { menuName: "Training Feedback", menuUrl: "/training-feedback", icon: "ri-feedback-line" },
       { menuName: "Skill", menuUrl: "/skill", icon: "ri-star-smile-line" },
       { menuName: "Employee Skill Map", menuUrl: "/employee-skill-map", icon: "ri-user-star-line" },
+    ],
+  },
+  // HRMS module 7 (ADR-023). Travel Itinerary/Costing are embedded arrays on
+  // Travel Request, not their own screens — same shape as Training Result.
+  {
+    menuGroupName: "Travel",
+    sequence: 2.96,
+    icon: "ri-flight-takeoff-line",
+    menus: [
+      { menuName: "Travel Request", menuUrl: "/travel-request", icon: "ri-suitcase-3-line" },
+      { menuName: "Purpose of Travel", menuUrl: "/purpose-of-travel", icon: "ri-flag-line" },
+      { menuName: "Identification Document Type", menuUrl: "/identification-document-type", icon: "ri-id-card-line" },
     ],
   },
   {
@@ -1378,6 +1392,97 @@ const seedGeographyData = async () => {
   );
 };
 
+/**
+ * Travel masters (ADR-023) — small starter lists so Travel Request's two
+ * dropdowns aren't empty on a fresh seed. Upserted by natural key.
+ */
+const seedTravelMasters = async () => {
+  const PURPOSES = [
+    "Client Meeting",
+    "Conference",
+    "Training",
+    "Onsite Deployment",
+    "Interview",
+  ];
+  let purposesCreated = 0;
+  for (const purposeOfTravelName of PURPOSES) {
+    const result = await PurposeOfTravel.findOneAndUpdate(
+      { purposeOfTravelName },
+      { purposeOfTravelName, isActive: true },
+      { upsert: true, setDefaultsOnInsert: true, new: false },
+    );
+    if (!result) purposesCreated += 1;
+  }
+
+  const ID_DOC_TYPES = ["Passport", "Aadhaar Card", "PAN Card", "Driving License"];
+  let idDocTypesCreated = 0;
+  for (const identificationDocumentTypeName of ID_DOC_TYPES) {
+    const result = await IdentificationDocumentType.findOneAndUpdate(
+      { identificationDocumentTypeName },
+      { identificationDocumentTypeName, isActive: true },
+      { upsert: true, setDefaultsOnInsert: true, new: false },
+    );
+    if (!result) idDocTypesCreated += 1;
+  }
+
+  console.log(
+    `✅ Travel masters: ${purposesCreated} new Purpose(s) of Travel, ${idDocTypesCreated} new Identification Document Type(s)`,
+  );
+};
+
+/**
+ * Travel roles (ADR-023). `Employee` gets full-minus-delete on their own
+ * Travel Request; `HR User`/`HR Manager` get full CRUD — the access-opening
+ * decision recorded in the ADR (source's literal table is System-Manager-only
+ * for all three doctypes, which would make Travel Request unusable by the
+ * employees it exists for). `PurposeOfTravel`/`IdentificationDocumentType`
+ * get NO grants for any of the six HRMS roles — ADMIN-only, matching source.
+ */
+const seedTravelRoles = async () => {
+  const perm = (write, edit, del) =>
+    Object.fromEntries(PERMISSION_KEYS.map((key) => [key, key === "read" || (key === "write" && write) || (key === "edit" && edit) || (key === "delete" && del)]));
+  const full = perm(true, true, true);
+  const fullNoDelete = perm(true, true, false);
+
+  // { menuUrl: { roleName: permObject } }
+  const GRANTS = {
+    "/travel-request": { Employee: fullNoDelete, "HR User": full, "HR Manager": full },
+  };
+
+  const allMenuUrls = Object.keys(GRANTS);
+  const menus = await MenuMaster.find({ menuUrl: { $in: allMenuUrls } }).lean();
+  if (menus.length !== allMenuUrls.length) {
+    console.log("⚠️  Travel roles: not every menu row exists yet — run seedMenus first");
+    return;
+  }
+  const menuByUrl = Object.fromEntries(menus.map((m) => [m.menuUrl, m]));
+
+  const addRow = (userRoles, menu, permObj) => {
+    if (userRoles.roles.some((r) => String(r.menuId) === String(menu._id))) return false;
+    userRoles.roles.push({ menuId: menu._id, menuGroupId: menu.menuGroup, ...permObj });
+    return true;
+  };
+
+  let matrixRowsAdded = 0;
+  const roleNames = ["Employee", "HR User", "HR Manager"];
+  for (const roleName of roleNames) {
+    const role = await RoleMaster.findOne({ roleName });
+    if (!role) continue;
+    const userRoles = await UserRoles.findOne({ roleId: role._id });
+    if (!userRoles) continue;
+
+    let changed = false;
+    for (const [menuUrl, grantByRole] of Object.entries(GRANTS)) {
+      const permObj = grantByRole[roleName];
+      if (!permObj) continue;
+      if (addRow(userRoles, menuByUrl[menuUrl], permObj)) { matrixRowsAdded += 1; changed = true; }
+    }
+    if (changed) await userRoles.save();
+  }
+
+  console.log(`✅ Travel roles: ${matrixRowsAdded} menu grant(s) added`);
+};
+
 const run = async () => {
   if (!process.env.DATABASE) {
     console.error("❌ DATABASE is not set in .env");
@@ -1413,6 +1518,8 @@ const run = async () => {
   await seedEmployeeCareerEventsRoles();
   await seedTrainingSkillsMasters();
   await seedTrainingSkillsRoles();
+  await seedTravelMasters();
+  await seedTravelRoles();
   await seedGeographyData();
 
   await mongoose.disconnect();

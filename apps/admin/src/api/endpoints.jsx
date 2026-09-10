@@ -225,6 +225,23 @@ export const ENDPOINTS = {
         POPULATE_FROM_DESIGNATION: (id) => `${V1}/employee-skill-maps/${id}/populate-from-designation`,
     },
 
+    // HRMS module 7 (ADR-023)
+    PURPOSE_OF_TRAVELS: {
+        BASE: `${V1}/purpose-of-travels`,
+        BY_ID: (id) => `${V1}/purpose-of-travels/${id}`,
+        SEARCH: `${V1}/purpose-of-travels/search`,
+    },
+    IDENTIFICATION_DOCUMENT_TYPES: {
+        BASE: `${V1}/identification-document-types`,
+        BY_ID: (id) => `${V1}/identification-document-types/${id}`,
+        SEARCH: `${V1}/identification-document-types/search`,
+    },
+    TRAVEL_REQUESTS: {
+        BASE: `${V1}/travel-requests`,
+        BY_ID: (id) => `${V1}/travel-requests/${id}`,
+        SEARCH: `${V1}/travel-requests/search`,
+    },
+
     // User endpoints
     USERS: {
         BASE: `${V1}/users`,

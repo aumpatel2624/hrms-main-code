@@ -67,6 +67,15 @@ import {
     searchEmployeeReferrals, createJobApplicantFromReferral,
     createStaffingPlan, deleteStaffingPlan, getStaffingPlanById, updateStaffingPlan, searchStaffingPlans,
 } from "../api/employeeCareerEvents.api";
+import {
+    createTrainingProgram, deleteTrainingProgram, getTrainingProgramById, updateTrainingProgram, searchTrainingPrograms, getAllTrainingPrograms,
+    createTrainingEvent, deleteTrainingEvent, getTrainingEventById, updateTrainingEvent, searchTrainingEvents, getAllTrainingEvents,
+    markTrainingEventCompleted, markTrainingEventScheduled,
+    createTrainingFeedback, deleteTrainingFeedback, getTrainingFeedbackById, searchTrainingFeedbacks,
+    createSkill, deleteSkill, getSkillById, updateSkill, searchSkills, getAllSkills,
+    createEmployeeSkillMap, deleteEmployeeSkillMap, getEmployeeSkillMapById, updateEmployeeSkillMap,
+    searchEmployeeSkillMaps, populateEmployeeSkillMapFromDesignation,
+} from "../api/trainingSkills.api";
 import PasswordResetSection from "@/components/crud/password-reset-section";
 import EmailTemplateMergeFields from "@/components/crud/email-template-merge-fields";
 import SimpleArrayField from "@/components/crud/simple-array-field";
@@ -1677,6 +1686,242 @@ export const staffingPlanConfig = {
     toForm: (data) => ({ ...data, companyId: refId(data.companyId), departmentId: refId(data.departmentId) }),
 };
 
+// ---------------------------------------------------------------------------
+// Training & Skills (ADR-022). Training Result folds into TrainingEvent's
+// own `employees[]` rows — markCompleted/markScheduled reproduce source's
+// real on_update_after_submit cascade explicitly (no docstatus to trigger
+// it). Designation/InterviewType/InterviewFeedback's Skill-ref retrofits
+// (own commit) aren't given form fields here — no multi-select precedent in
+// this admin beyond SimpleArrayField's row editor, which doesn't fit a bare
+// ref array; left API-only, a follow-up if a screen actually needs it.
+// ---------------------------------------------------------------------------
+
+const TRAINING_EVENT_ATTENDEE_COLUMNS = [
+    { name: "employeeId", label: "Employee id", type: "text" },
+    { name: "isMandatory", label: "Mandatory", type: "checkbox" },
+    { name: "attendance", label: "Attendance", type: "select", options: ["Present", "Absent"] },
+    { name: "status", label: "Status", type: "select", options: ["Open", "Completed", "Feedback Submitted"] },
+    { name: "hours", label: "Hours", type: "number" },
+    { name: "grade", label: "Grade", type: "text" },
+    { name: "comments", label: "Comments", type: "text" },
+];
+
+export const trainingProgramConfig = {
+    filterFields: [
+        { name: "trainingProgramName", label: "Name", type: "string" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "status", label: "Status", type: "enum" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "training-program",
+    path: "/training-program",
+    section: "Training & Skills",
+    singular: "Training Program",
+    plural: "Training Programs",
+    api: {
+        search: searchTrainingPrograms, getById: getTrainingProgramById,
+        create: createTrainingProgram, update: updateTrainingProgram, remove: deleteTrainingProgram,
+    },
+    lookups: { companyId: asOptions(getAllCompanies, "companyName") },
+    fields: [
+        { name: "trainingProgramName", icon: Tag01, label: "Training Program Name", type: "string", required: true, section: "details", error: "Training Program Name is required!" },
+        { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "details", error: "Company is required!", optionsFrom: "companyId" },
+        { name: "status", label: "Status", type: "select", section: "details", options: ["Scheduled", "Completed", "Cancelled"] },
+        { name: "trainerName", label: "Trainer Name", type: "string", section: "details" },
+        { name: "trainerEmail", label: "Trainer Email", type: "string", section: "details" },
+        { name: "supplierName", label: "Supplier", type: "string", section: "details" },
+        { name: "contactNumber", label: "Contact Number", type: "string", section: "details" },
+        { name: "description", label: "Description", type: "textarea", required: true, section: "details", error: "Description is required!" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Name", selector: (row) => row.trainingProgramName, minWidth: "220px" },
+        { name: "Status", selector: (row) => row.status, minWidth: "120px" },
+    ],
+    recordTitle: (r) => r.trainingProgramName,
+    toForm: (data) => ({ ...data, companyId: refId(data.companyId) }),
+};
+
+export const trainingEventConfig = {
+    filterFields: [
+        { name: "eventName", label: "Event Name", type: "string" },
+        { name: "eventStatus", label: "Status", type: "enum" },
+        { name: "type", label: "Type", type: "enum" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "trainingProgramId", label: "Training Program", type: "objectId" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "training-event",
+    path: "/training-event",
+    section: "Training & Skills",
+    singular: "Training Event",
+    plural: "Training Events",
+    description: "Attendee scoring (attendance/hours/grade/comments) lives on each row below, folding in what source calls Training Result.",
+    api: {
+        search: searchTrainingEvents, getById: getTrainingEventById,
+        create: createTrainingEvent, update: updateTrainingEvent, remove: deleteTrainingEvent,
+    },
+    lookups: {
+        companyId: asOptions(getAllCompanies, "companyName"),
+        trainingProgramId: asOptions(getAllTrainingPrograms, "trainingProgramName"),
+    },
+    fields: [
+        { name: "eventName", icon: Tag01, label: "Event Name", type: "string", required: true, section: "details", error: "Event Name is required!" },
+        { name: "trainingProgramId", label: "Training Program", type: "select", section: "details", optionsFrom: "trainingProgramId" },
+        { name: "eventStatus", label: "Status", type: "select", section: "details", options: ["Scheduled", "Completed", "Cancelled"] },
+        { name: "type", label: "Type", type: "select", required: true, section: "details", error: "Type is required!", options: ["Seminar", "Theory", "Workshop", "Conference", "Exam", "Internet", "Self-Study"] },
+        { name: "level", label: "Level", type: "select", section: "details", options: ["Beginner", "Intermediate", "Advance"] },
+        { name: "companyId", icon: Building07, label: "Company", type: "select", section: "details", optionsFrom: "companyId" },
+        { name: "trainerName", label: "Trainer Name", type: "string", section: "details" },
+        { name: "trainerEmail", label: "Trainer Email", type: "string", section: "details" },
+        { name: "supplierName", label: "Supplier", type: "string", section: "details" },
+        { name: "contactNumber", label: "Contact Number", type: "string", section: "details" },
+        { name: "course", label: "Course", type: "string", section: "details" },
+        { name: "location", label: "Location", type: "string", required: true, section: "details", error: "Location is required!" },
+        { name: "startTime", label: "Start Time", type: "datetime-local", required: true, section: "details", error: "Start Time is required!" },
+        { name: "endTime", label: "End Time", type: "datetime-local", required: true, section: "details", error: "End Time is required!" },
+        { name: "introduction", label: "Introduction", type: "textarea", required: true, section: "details", error: "Introduction is required!" },
+        ACTIVE,
+    ],
+    sections: [{ id: "details", title: "Details" }, { id: "attendees", title: "Attendees" }, { id: "actions", title: "Actions" }],
+    renderExtra: ({ mode, id, values, setValues }) => (
+        <>
+            <SimpleArrayField
+                title="Attendees" description="Paste an Employee's id into each row."
+                fieldName="employees" columns={TRAINING_EVENT_ATTENDEE_COLUMNS} values={values} setValues={setValues}
+            />
+            {mode === "edit" && id && (
+                <>
+                    <SimpleActionButton
+                        label="Mark as Completed" description="Present, not-yet-feedback-submitted attendees move to Completed; the event moves to Completed."
+                        onRun={() => markTrainingEventCompleted(id)}
+                        onResult={() => window.location.reload()}
+                    />
+                    <SimpleActionButton
+                        label="Reopen as Scheduled" description="Resets every attendee row to Open; the event moves back to Scheduled."
+                        onRun={() => markTrainingEventScheduled(id)}
+                        onResult={() => window.location.reload()}
+                    />
+                </>
+            )}
+        </>
+    ),
+    columns: [
+        { name: "Event", selector: (row) => row.eventName, minWidth: "200px" },
+        { name: "Status", selector: (row) => row.eventStatus, minWidth: "120px" },
+        { name: "Type", selector: (row) => row.type, minWidth: "120px" },
+    ],
+    recordTitle: (r) => r.eventName,
+    toForm: (data) => ({ ...data, companyId: refId(data.companyId), trainingProgramId: refId(data.trainingProgramId) }),
+};
+
+export const trainingFeedbackConfig = {
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "trainingEventId", label: "Training Event", type: "objectId" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "training-feedback",
+    path: "/training-feedback",
+    section: "Training & Skills",
+    singular: "Training Feedback",
+    plural: "Training Feedback",
+    description: "Only allowed once the Training Event is Completed, the employee was an attendee, and they weren't marked Absent.",
+    api: {
+        search: searchTrainingFeedbacks, getById: getTrainingFeedbackById,
+        create: createTrainingFeedback, remove: deleteTrainingFeedback,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        trainingEventId: asOptions(getAllTrainingEvents, "eventName"),
+    },
+    fields: [
+        { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
+        { name: "trainingEventId", label: "Training Event", type: "select", required: true, section: "details", error: "Training Event is required!", optionsFrom: "trainingEventId" },
+        { name: "feedback", label: "Feedback", type: "textarea", required: true, section: "details", error: "Feedback is required!" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeId, minWidth: "180px" },
+        { name: "Training Event", selector: (row) => row.trainingEventId, minWidth: "180px" },
+    ],
+    recordTitle: (r) => `Training Feedback — ${r._id}`,
+    toForm: (data) => ({ ...data, employeeId: refId(data.employeeId), trainingEventId: refId(data.trainingEventId) }),
+};
+
+export const skillConfig = {
+    filterFields: [
+        { name: "skillName", label: "Skill Name", type: "string" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "skill",
+    path: "/skill",
+    section: "Training & Skills",
+    singular: "Skill",
+    plural: "Skills",
+    api: {
+        search: searchSkills, getById: getSkillById,
+        create: createSkill, update: updateSkill, remove: deleteSkill,
+    },
+    fields: [
+        { name: "skillName", icon: Tag01, label: "Skill Name", type: "string", required: true, section: "details", error: "Skill Name is required!" },
+        { name: "description", label: "Description", type: "textarea", section: "details" },
+        ACTIVE,
+    ],
+    columns: [{ name: "Skill", selector: (row) => row.skillName, minWidth: "220px" }],
+    recordTitle: (r) => r.skillName,
+};
+
+export const employeeSkillMapConfig = {
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "employee-skill-map",
+    path: "/employee-skill-map",
+    section: "Training & Skills",
+    singular: "Employee Skill Map",
+    plural: "Employee Skill Maps",
+    api: {
+        search: searchEmployeeSkillMaps, getById: getEmployeeSkillMapById,
+        create: createEmployeeSkillMap, update: updateEmployeeSkillMap, remove: deleteEmployeeSkillMap,
+    },
+    lookups: { employeeId: asOptions(getAllEmployees, "employeeName") },
+    fields: [
+        { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
+        ACTIVE,
+    ],
+    sections: [{ id: "details", title: "Details" }, { id: "skills", title: "Skills" }, { id: "actions", title: "Actions" }],
+    renderExtra: ({ mode, id, values, setValues }) => (
+        <>
+            <SimpleArrayField
+                title="Employee Skills" description="Paste a Skill's id into each row; proficiency is 1-5."
+                fieldName="employeeSkills"
+                columns={[
+                    { name: "skillId", label: "Skill id", type: "text" },
+                    { name: "proficiency", label: "Proficiency (1-5)", type: "number" },
+                ]}
+                values={values} setValues={setValues}
+            />
+            {mode === "edit" && id && (
+                <SimpleActionButton
+                    label="Populate from Designation" description="Clears and repopulates skills from the Employee's Designation's skill list."
+                    onRun={() => populateEmployeeSkillMapFromDesignation(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+        </>
+    ),
+    columns: [{ name: "Employee", selector: (row) => row.employeeId, minWidth: "220px" }],
+    recordTitle: (r) => `Employee Skill Map — ${r._id}`,
+    toForm: (data) => ({ ...data, employeeId: refId(data.employeeId) }),
+};
+
 export const ADVANCED_ENTITIES = [
     adminUserConfig, userConfig, menuMasterConfig, emailTemplateConfig,
     departmentConfig, branchConfig, designationConfig, employeeConfig,
@@ -1688,4 +1933,6 @@ export const ADVANCED_ENTITIES = [
     exitInterviewConfig, fullAndFinalStatementConfig,
     grievanceTypeConfig, employeeGrievanceConfig, employeeTransferConfig,
     employeePromotionConfig, employeeReferralConfig, staffingPlanConfig,
+    trainingProgramConfig, trainingEventConfig, trainingFeedbackConfig,
+    skillConfig, employeeSkillMapConfig,
 ];

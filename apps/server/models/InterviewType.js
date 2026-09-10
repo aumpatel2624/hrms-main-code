@@ -3,8 +3,8 @@ import mongoose from "mongoose";
 // Reusable interview-round definition (ADR-019). Frappe's separate
 // "Interviewer" child-table doctype (default interviewer pool) is folded
 // into a plain array of User refs — bounded, never queried independently.
-// Expected-skills-to-assess is dropped for now: it references Skill, which
-// doesn't exist until module 6 (Training & Skills) — OPEN-QUESTIONS.md Q-9.
+// expectedSkillSet retrofitted by ADR-022 (module 6) now that Skill exists —
+// closes the OPEN-QUESTIONS.md Q-9 gap this file originally deferred.
 const InterviewTypeSchema = new mongoose.Schema(
   {
     interviewTypeName: {
@@ -25,6 +25,10 @@ const InterviewTypeSchema = new mongoose.Schema(
     },
     defaultInterviewers: {
       type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      default: [],
+    },
+    expectedSkillSet: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Skill" }],
       default: [],
     },
     isActive: {

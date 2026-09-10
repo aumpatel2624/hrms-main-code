@@ -14,7 +14,7 @@ import {
 
 export const createInterviewFeedback = async (req, res) => {
   try {
-    const { interviewId, interviewerId, result, feedback } = req.body;
+    const { interviewId, interviewerId, result, feedback, skillAssessment } = req.body;
     if (!interviewId || !interviewerId || !result) {
       return res.status(400).json({ isOk: false, status: 400, message: "interviewId, interviewerId and result are required" });
     }
@@ -48,7 +48,7 @@ export const createInterviewFeedback = async (req, res) => {
     // here — source has no code path that does this either (flagged in the
     // Port-Spec's own Port Notes as "do not invent without confirming
     // product intent"); moving to Under Review is a manual HR action.
-    await InterviewFeedback.create({ interviewId, interviewerId, result, feedback });
+    await InterviewFeedback.create({ interviewId, interviewerId, result, feedback, skillAssessment });
 
     return res.status(201).json({ isOk: true, status: 201, message: "Interview Feedback created successfully" });
   } catch (error) {

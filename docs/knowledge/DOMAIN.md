@@ -452,6 +452,37 @@ rejected a Job Offer for the same exhausted designation.
 (`Additional Salary`, Payroll-dependent); source's parent/subsidiary-company Staffing Plan validation
 (no company hierarchy exists to validate against).
 
+### Training & Skills (module 6, built 2026-09-10 — ADR-022)
+
+`TrainingProgram` (simple master with a plain user-set status), `TrainingEvent` (eventName/type/
+location/startTime/endTime — endTime strictly after startTime, real guard — plus an embedded
+`employees[]` array carrying attendance/status/hours/grade/comments; source's separate "Training
+Result"/"Training Result Employee" fold directly in here, since there's no docstatus left to gate a
+submittable wrapper around per-attendee scoring). Actions `markCompleted` (Present + not-yet-
+Feedback-Submitted rows → Completed) / `markScheduled` (every row → Open, unconditional reset)
+reproduce source's real `on_update_after_submit` cascade explicitly. `TrainingFeedback` (employeeId/
+trainingEventId/feedback, guarded: event must be Completed, employee must be an attendee, attendance
+must not be Absent; on create flips that attendee row to `Feedback Submitted`). `Skill` (simple
+master, HR-Manager-full/HR-User-**read-only** — matches source exactly). `EmployeeSkillMap`
+(employeeId unique, `employeeSkills[]` of skillId+proficiency 1-5, default `3` not source's `1` — a
+mid default reads as "not yet assessed," source's hardcoded lowest-possible default reads oddly for
+an auto-populate action). Action `populateFromDesignation` — the server-side version of source's
+client-only "copy Designation.skills in" convenience.
+
+`EmployeeTraining` (a per-Employee "trainings attended" child table) is dropped entirely — source's
+own spec couldn't confirm which doctype embeds it, and querying `TrainingEvent.employees.employeeId`
+already answers the same question without a second, redundant collection to keep in sync.
+
+**Three retrofits into already-shipped modules, closing the Skill Assessment half of
+`OPEN-QUESTIONS.md` Q-9** (each its own commit): `Designation.skills[]` (module 1) — source's
+"Designation Skill" child table, folded into a plain ref array now that `Skill` exists, consumed by
+`populateFromDesignation`. `InterviewType.expectedSkillSet[]` and `InterviewFeedback.skillAssessment[]`
+(module 3) — both explicitly deferred by their own modules pending `Skill`'s existence. **Two real
+bugs found wiring these in, both fixed**: `Designation`'s and `InterviewType`'s update controllers
+both overwrote unrelated fields with `undefined` on a partial update (the exact failure mode a
+`skills[]`-only PUT triggers), and `InterviewType`'s create plus `InterviewFeedback`'s create both
+still destructured their pre-retrofit field lists, so the new array fields silently never saved.
+
 ## Not modelled
 
 <!-- Things the client talks about that deliberately have no collection, and why. -->

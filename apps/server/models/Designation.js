@@ -12,6 +12,13 @@ const DesignationSchema = new mongoose.Schema(
       ref: "Company",
       required: true,
     },
+    // Retrofitted by ADR-022 (Training & Skills, module 6) — source's
+    // "Designation Skill" child table, folded into a plain ref array now
+    // that Skill exists. Consumed by EmployeeSkillMap.populateFromDesignation.
+    skills: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Skill" }],
+      default: [],
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -23,9 +30,9 @@ const DesignationSchema = new mongoose.Schema(
 
 // ---- indexes ----------------------------------------------------------
 // Job title master, scoped per company like Department. Frappe's Designation
-// also carries an appraisal_template ref and a Designation Skill child table —
-// both are Performance/Skills-module concerns, added as fields here when
-// those modules are built (ADR-017), not modelled speculatively now.
+// also carries an appraisal_template ref — a Performance-module concern,
+// added as a field here when that module is built, not modelled speculatively
+// now.
 DesignationSchema.index({ designationName: 1, companyId: 1 }, { unique: true });
 DesignationSchema.index({ companyId: 1 });
 DesignationSchema.index({ isActive: 1, createdAt: -1 });

@@ -1,0 +1,479 @@
+/**
+ * Documentation section styling (ADR-014, superseding ADR-012).
+ *
+ * Built on this panel's own design tokens, like every other screen. The section
+ * reads as part of the admin rather than as a separate space, and it follows a
+ * rebrand of the panel automatically because it holds no colours of its own.
+ *
+ * The earlier version reproduced Material for MkDocs — its indigo palette, Roboto
+ * stack and 0.8rem metrics. That made the section visually foreign, pinned it to
+ * colours nothing else in the app used, and put a second full-width masthead
+ * directly under the panel's own header. All three are gone.
+ *
+ * Only two things here are not a plain token lookup:
+ *
+ * - the admonition colours, which map onto the panel's existing brand / success /
+ *   warning surfaces so a callout matches a badge elsewhere in the app;
+ * - the reading measure on `.doc-article`, which is a typographic constraint
+ *   rather than a brand one.
+ *
+ * Everything stays namespaced under `.doc-shell` so none of it leaks.
+ */
+
+.doc-shell {
+    display: flex;
+    flex-direction: column;
+    margin: -1.5rem -1rem;
+    min-height: calc(100vh - 4rem);
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-secondary);
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+}
+
+@media (min-width: 768px) {
+    .doc-shell {
+        margin: -1.5rem;
+    }
+}
+
+/* ---- header controls --------------------------------------------------- */
+
+/*
+ * The page-list toggle and the search field are portalled into the panel's own
+ * header (see `Documentation.jsx`). There is no masthead here: a second
+ * full-width bar under the 4rem header read as two stacked headers and cost most
+ * of a screen of vertical space before any documentation appeared.
+ */
+/*
+ * Only useful while the page list is a drawer. Above the breakpoint the list is
+ * a permanent column and the button would open nothing, so it is hidden there —
+ * in CSS rather than with a Tailwind `xl:hidden`, because Tailwind's xl is
+ * 1280px while the sidebar turns permanent at 1220px, and the two disagreeing
+ * left a dead button in the 60px between them.
+ */
+.doc-nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.375rem;
+    border-radius: 0.5rem;
+    color: var(--color-fg-secondary);
+    transition: background-color 0.15s ease;
+}
+
+.doc-nav-toggle:hover {
+    background-color: var(--color-bg-secondary);
+}
+
+@media (min-width: 1220px) {
+    .doc-nav-toggle {
+        display: none;
+    }
+}
+
+/* ---- three-column body ------------------------------------------------- */
+
+/*
+ * The three columns sit on one row at desktop widths and must not wrap — an
+ * unconditional `flex-wrap: wrap` left a phantom gap between the page list and
+ * the article. Wrapping is switched on only below the breakpoint, where the open
+ * drawer is a sibling of the article inside this row and needs a line of its own
+ * above it.
+ *
+ * The row uses the width the panel gives it; `.doc-article` below still caps the
+ * line length, so the extra width goes to the two rails rather than to over-long
+ * lines.
+ */
+.doc-body {
+    display: flex;
+    align-items: flex-start;
+    width: 100%;
+    max-width: 90rem;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+}
+
+/* Below the breakpoint the page list is a full-width drawer opened from the
+   header; at and above it, a sticky column.
+
+   The drawer rules are scoped inside the media query on purpose. Left unscoped,
+   `.doc-sidebar-open` applies at every width, so on a desktop the drawer takes
+   the whole flex row and the article and table of contents overlap in what is
+   left. */
+.doc-sidebar {
+    display: none;
+    flex-direction: column;
+}
+
+@media (max-width: 1219px) {
+    /* Only while the drawer is open, so a closed one costs no layout. */
+    .doc-body:has(.doc-sidebar-open) {
+        flex-wrap: wrap;
+    }
+
+    .doc-sidebar-open {
+        display: flex;
+        width: 100%;
+        padding: 1rem 0;
+        border-bottom: 1px solid var(--color-border-secondary);
+    }
+}
+
+@media (min-width: 1220px) {
+    .doc-sidebar {
+        position: sticky;
+        top: 4.5rem;
+        display: flex;
+        width: 15rem;
+        flex-shrink: 0;
+        max-height: calc(100vh - 4.5rem);
+        overflow-y: auto;
+        padding: 1.5rem 1rem 1.5rem 0;
+    }
+}
+
+.doc-nav-group {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 1.25rem;
+}
+
+.doc-nav-label {
+    padding: 0 0.75rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-quaternary);
+}
+
+.doc-nav-link {
+    display: block;
+    width: 100%;
+    padding: 0.4375rem 0.75rem;
+    border-radius: 0.375rem;
+    text-align: left;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--color-text-secondary);
+    transition:
+        color 0.15s ease,
+        background-color 0.15s ease;
+}
+
+.doc-nav-link:hover {
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+}
+
+.doc-nav-link-active {
+    background-color: var(--color-bg-brand-primary);
+    color: var(--color-text-brand-secondary);
+    font-weight: 600;
+}
+
+/* `flex-basis: 0` rather than `auto`: with `auto` the column is sized from its
+   content, and a long unbreakable word can push it wider than the row, which is
+   what squeezes the article into a one-word-per-line ribbon beside the table of
+   contents. Basis zero makes it take exactly the space the other two leave. */
+.doc-main {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0 2rem 4rem;
+    border-left: 1px solid var(--color-border-secondary);
+}
+
+/* The measure is a typographic limit, not a brand one: past roughly 75
+   characters a line is measurably harder to track back from. */
+.doc-article {
+    max-width: 52rem;
+    padding-top: 1.5rem;
+}
+
+/* ---- table of contents ------------------------------------------------- */
+
+.doc-toc {
+    position: sticky;
+    top: 4.5rem;
+    display: none;
+    width: 15rem;
+    flex-shrink: 0;
+    max-height: calc(100vh - 4.5rem);
+    overflow-y: auto;
+    padding: 1.5rem 0;
+}
+
+@media (min-width: 1220px) {
+    .doc-toc {
+        display: block;
+    }
+}
+
+.doc-toc-title {
+    margin-bottom: 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-quaternary);
+}
+
+.doc-toc ul {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    border-left: 1px solid var(--color-border-secondary);
+}
+
+.doc-toc-link {
+    display: block;
+    padding: 0.25rem 0.75rem;
+    margin-left: -1px;
+    border-left: 2px solid transparent;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: var(--color-text-tertiary);
+    transition:
+        color 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.doc-toc-link:hover {
+    color: var(--color-text-primary);
+}
+
+.doc-toc-link-active {
+    border-left-color: var(--color-border-brand);
+    color: var(--color-text-brand-secondary);
+    font-weight: 500;
+}
+
+/* ---- article ----------------------------------------------------------- */
+
+.doc-article h1 {
+    margin-bottom: 0.75rem;
+    font-size: 1.875rem;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    color: var(--color-text-primary);
+}
+
+/* A rule above each section, so the four operation sections read as separate
+   procedures rather than as one long column of prose. */
+.doc-article h2 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 2.5rem 0 1rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--color-border-secondary);
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    color: var(--color-text-primary);
+}
+
+.doc-article h3 {
+    margin: 1.75rem 0 0.625rem;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--color-text-primary);
+}
+
+.doc-article p,
+.doc-article ul,
+.doc-article ol {
+    margin: 0 0 1rem;
+}
+
+.doc-article ul,
+.doc-article ol {
+    padding-left: 1.25rem;
+}
+
+/*
+ * `list-style-type`, not the `list-style` shorthand. The minifier in this build
+ * rewrites `list-style: disc` to `list-style: outside` — which sets only the
+ * position and leaves the type unset, so the bullets silently vanish in the
+ * production bundle while looking correct in dev. The longhand cannot be
+ * rewritten that way.
+ */
+.doc-article ul {
+    list-style-type: disc;
+}
+
+.doc-article ol {
+    list-style-type: decimal;
+}
+
+.doc-article li {
+    margin-bottom: 0.375rem;
+    padding-left: 0.25rem;
+}
+
+.doc-article li::marker {
+    color: var(--color-fg-quaternary);
+}
+
+.doc-article strong {
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.doc-article em {
+    color: var(--color-text-tertiary);
+}
+
+.doc-article a {
+    color: var(--color-text-brand-secondary);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+}
+
+.doc-article a:hover {
+    color: var(--color-text-brand-primary);
+}
+
+.doc-article code {
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    background-color: var(--color-bg-secondary);
+    font-size: 0.875em;
+    color: var(--color-text-primary);
+}
+
+/* The heading anchor, revealed on hover so it does not clutter the page. */
+.doc-anchor {
+    opacity: 0;
+    font-weight: 400;
+    text-decoration: none;
+    color: var(--color-text-quaternary);
+    transition: opacity 0.15s ease;
+}
+
+.doc-heading:hover .doc-anchor {
+    opacity: 1;
+}
+
+.doc-anchor:hover {
+    color: var(--color-text-brand-secondary);
+}
+
+/* Screenshots: framed so they read as a picture of the app rather than as part
+   of the page itself. */
+.doc-article img {
+    display: block;
+    width: 100%;
+    margin: 1.25rem 0;
+    border: 1px solid var(--color-border-secondary);
+    border-radius: 0.625rem;
+}
+
+/*
+ * Only the screenshot matching the active theme is shown. Both are in the
+ * markup — it is generated at build time and cannot know the theme — so the
+ * choice is made here, which also means the theme toggle swaps every picture
+ * on the page with no re-render.
+ */
+.doc-article img[data-theme="dark"] {
+    display: none;
+}
+
+.dark-mode .doc-article img[data-theme="dark"] {
+    display: block;
+}
+
+.dark-mode .doc-article img[data-theme="light"] {
+    display: none;
+}
+
+/* ---- callouts ---------------------------------------------------------- */
+
+/*
+ * Mapped onto the panel's own semantic surfaces, so a warning here matches a
+ * warning badge anywhere else in the app.
+ */
+.doc-callout {
+    margin: 1.25rem 0;
+    border: 1px solid var(--doc-callout-border);
+    border-left-width: 3px;
+    border-radius: 0.5rem;
+    background-color: var(--doc-callout-bg);
+    overflow: hidden;
+}
+
+.doc-callout-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 0.875rem 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+/* The icon, drawn as a mask so one rule colours it per admonition type. */
+.doc-callout-title::before {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    content: "";
+    background-color: var(--doc-callout-icon-color);
+    mask-repeat: no-repeat;
+    mask-position: center;
+    mask-size: contain;
+    mask-image: var(--doc-callout-icon);
+}
+
+/* pencil / note */
+.doc-callout-note {
+    --doc-callout-bg: var(--color-bg-brand-primary);
+    --doc-callout-border: var(--color-border-brand);
+    --doc-callout-icon-color: var(--color-fg-brand-primary);
+    --doc-callout-icon: url('data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>');
+}
+
+/* lightbulb / tip */
+.doc-callout-tip {
+    --doc-callout-bg: var(--color-bg-success-primary);
+    --doc-callout-border: var(--color-border-secondary);
+    --doc-callout-icon-color: var(--color-fg-success-primary);
+    --doc-callout-icon: url('data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7M9 21a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1H9v1Z"/></svg>');
+}
+
+/* warning triangle */
+.doc-callout-warning {
+    --doc-callout-bg: var(--color-bg-warning-primary);
+    --doc-callout-border: var(--color-border-secondary);
+    --doc-callout-icon-color: var(--color-fg-warning-primary);
+    --doc-callout-icon: url('data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 14h-2V9h2m0 9h-2v-2h2M1 21h22L12 2 1 21Z"/></svg>');
+}
+
+.doc-callout-body {
+    padding: 0.375rem 0.875rem 0.75rem;
+}
+
+.doc-callout-body p {
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.6;
+}
+
+/*
+ * The paragraph's own bottom margin has to go, not just the wrapper's — a
+ * single-paragraph admonition is nearly all of them, and without this it renders
+ * with a stranded gap under its text.
+ */
+.doc-callout-body > :first-child {
+    margin-top: 0;
+}
+
+.doc-callout-body > :last-child,
+.doc-callout-body p:last-child {
+    margin-bottom: 0;
+}

@@ -1,0 +1,196 @@
+code,name,title,department,manager_name,shift,date_of_joining,location,work_mode,gender
+A005,Hemant Patel,MD & Founder,Mgmt,,Night,2-Aug-12,Vadodara,WFO,Male
+U001,Amita Patel,CEO,Mgmt,,Night,2-Aug-12,USA,WFH,Female
+A004,Pradeep Talreja,Sr. Director,Talent Acquisition,Hemant Patel,Night,2-Aug-12,Vadodara,WFO,Male
+A007,Hemanshu Patel,Sr. Director,Shared Services,Hemant Patel,Night,26-Jul-13,Vadodara,WFO,Male
+A009,Raju Sharma,AVP,Onboarding & Compliance,Hemant Patel,Night,25-Nov-13,Vadodara,WFO,Female
+U002,Mamta Patel,Sr. Manager,Payroll & Compliance,Amita Patel,Night,24-Mar-14,USA,WFH,Female
+A013,Mahesh Gohil,Associate Manager,Data Analyst,Hemanshu Patel,Night,7-Apr-14,Vadodara,WFO,Male
+A017,Sujith Kurup,Vice President,Client Services,Hemant Patel,Night,8-Jan-15,Vadodara,WFO,Male
+A022,Sheldon Bobby,AVP,Talent Acquisition,Pradeep Talreja,Night,5-May-15,Vadodara,WFO,Male
+A025,Hardik Patel P,Lead Executive,Payroll & Compliance,Mamta Patel,Night,14-Aug-15,Vadodara,WFO,Male
+A030,Jasmine Ouseph,Sr. Executive,Finance & Accounts,Ginu Joy,UK,10-Sep-15,Vadodara,WFO,Female
+A052,Upendra Sharma,Sr. Executive,Finance & Accounts,Ginu Joy,UK,18-Feb-16,Vadodara,WFO,Male
+B002,Rahul N Mistry,Lead Executive,Data Analyst,Mahesh Gohil,Night,19-Sep-16,Vadodara,WFO,Male
+A099,Farzad Bokdawala,AVP,Learning & Development,Pradeep Talreja,Night,10-Oct-16,Vadodara,WFO,Male
+A119,Manish C Marwadi,Sr. Executive,Facility Management,Amit Patil,Night,1-Feb-17,Vadodara,WFO,Male
+A124,Megha Betala,Associate Manager,Key Accounts Management,Sujith Kurup,Night,23-Feb-17,Vadodara,WFO,Female
+A136,Sonu Singh,Sr. Delivery Manager,Talent Acquisition,Pradeep Talreja,Night,20-Mar-17,Vadodara,WFO,Male
+A157,Sapan Patel,Sr. Executive,Payroll & Compliance,Mamta Patel,Night,8-May-17,Vadodara,WFO,Male
+A225,Maulin Patel,Sr. Executive,MIS,Ginu Joy,UK,12-Jun-18,Vadodara,WFO,Male
+A236,Hardik Patel D,Sr. Delivery Manager,Talent Acquisition,Sheldon Bobby,Night,2-Jul-18,Vadodara,WFO,Male
+G001,Nandine Gobin,Sr. Manager,Key Accounts Management,Sujith Kurup,Night,23-Jul-18,Guyana,WFH,Female
+G003,Narissa Mohamed,Sr. Executive,Key Accounts Management,Nandine Gobin,Night,24-Jul-18,Guyana,WFH,Female
+A280,Bhavesh Verma,Sr. Delivery Manager,Talent Acquisition,Sujith Kurup,Night,10-Dec-18,Vadodara,WFO,Male
+A287,Sohel Contractor,Team Lead,Information Technology,Pratik Dalal,Night,17-Dec-18,Vadodara,WFO,Male
+G004,Kimberly Patraj,Sr. Executive,Key Accounts Management,Nandine Gobin,Night,25-Feb-19,Guyana,WFH,Female
+A347,Milan Solanki,Sr. Executive,Data Analyst,Mahesh Gohil,Night,8-Jul-19,Vadodara,WFO,Male
+D057,Roshani Kandalkar,Senior Team Lead,Talent Acquisition,Neha Dhoot,Day,26-Aug-19,Vadodara,WFO,Female
+A366,Himesh Gond,Sr. Delivery Manager,Talent Acquisition,Pradeep Talreja,Night,28-Oct-19,Vadodara,WFO,Male
+A370,Riya Rajput,Team Lead,Talent Acquisition,Pradeep Talreja,Night,7-Nov-19,Vadodara,WFO,Female
+H001,Jayesh Vaishnav,Housekeeping,Facility Management,Amit Patil,Night,17-Dec-19,Vadodara,WFO,Male
+A403,Ankit Bhatt,Sr. Executive,Data Analyst,Mahesh Gohil,Night,6-Jul-20,Vadodara,WFO,Male
+A508,Hana Amber Ansari,ADM,Talent Acquisition,Sheldon Bobby,Night,17-Aug-20,Vadodara,WFO,Female
+A430,Manali Srivastava,Lead Recruiter,Talent Acquisition,Bhavesh Verma,Night,5-Oct-20,Vadodara,WFO,Female
+A441,Mitesh Patel,ADM,Talent Acquisition,Pradeep Talreja,Night,29-Oct-20,Vadodara,WFO,Male
+A442,Soumya Adlakha,Manager,Human Resources,Hemanshu Patel,UK,9-Nov-20,Vadodara,WFO,Female
+TMP29,Mukesh T Rajput,Security,Facility Management,Amit Patil,Night,11-Dec-20,Vadodara,WFO,Male
+TMP28,Maganbhai Vaghela,Security,Facility Management,Amit Patil,UK,12-Dec-20,Vadodara,WFO,Male
+A471,Tanya Vaid,Manager,Employee Relations,Pradeep Talreja,Night,28-Dec-20,Vadodara,WFO,Female
+A472,Amit Patil,Manager,Corporate Recruitment & Facility Management,Hemanshu Patel,UK,4-Jan-21,Vadodara,WFO,Male
+A497,Aadil Shaikh,Lead Recruiter,Talent Acquisition,Malhar Savant,Night,3-Feb-21,Vadodara,WFO,Male
+A500,Mohammad Abdur Rahim,Sr. Executive,Onboarding & Compliance,Raju Sharma,Night,8-Feb-21,Vadodara,WFO,Male
+D090,Neha Dhoot,Recruitment Manager,Talent Acquisition,Dhaval Patil,Day,22-Feb-21,Vadodara,WFO,Female
+D093,Mansi Joshi,Senior Team Lead,Talent Acquisition,Dhaval Patil,Day,22-Mar-21,Vadodara,WFO,Female
+A526,Pooja Dhoundiyal,Lead Recruiter,Talent Acquisition,Himesh Gond,Night,12-Apr-21,Vadodara,WFO,Female
+A597,Rishabh Thapliyal,AVP,International Sales,Ron Lippitt,Night,12-Jul-21,Noida,WFH,Male
+A610,Tapan Patel,Team Lead,Talent Acquisition,Bhavesh Verma,Night,2-Aug-21,Vadodara,WFO,Male
+A649,Kartiksaravna Iyer,Team Lead,Talent Acquisition,Sonu Singh,Night,13-Sep-21,Vadodara,WFO,Male
+A648,Jignesh Sharma,Lead Recruiter,Talent Acquisition,Mitesh Patel,Night,13-Sep-21,Vadodara,WFO,Male
+A691,Charles Mascarenhas,Executive,Payroll & Compliance,Mamta Patel,Night,1-Dec-21,Vadodara,WFO,Male
+A695,Dhairya Shah,Sr. Recruiter,Talent Acquisition,Himesh Gond,Night,8-Dec-21,Vadodara,WFO,Male
+A704,Himanshu Patel,Executive,Facility Management,Amit Patil,UK,27-Dec-21,Vadodara,WFO,Male
+A712,Arif Shaikh,Executive,Onboarding & Compliance,Raju Sharma,Night,3-Jan-22,Vadodara,WFO,Male
+A742,Aakash Khatri,Sr. Recruiter,Talent Acquisition,Hana Amber Ansari,Night,31-Jan-22,Vadodara,WFO,Male
+U005,Ron Lippitt,CSBDO,International Sales,Amita Patel,Night,14-Jun-22,USA,WFH,Male
+A804,Maitri Maradiya,Sr. Executive,PR and Social media,Suraj Patel,UK,23-Jun-22,Vadodara,WFO,Female
+D176,Dhaval Patil,AVP,Talent Acquisition,Hemanshu Patel,Day,28-Jun-22,Vadodara,WFO,Male
+A815,Goonja Pandey,Sr. Recruiter,Talent Acquisition,Hardik Patel D,Night,5-Jul-22,Vadodara,WFO,Female
+A810,Aishwarya Nair,Sr. Executive,Learning & Development,Farzad Bokdawala,Night,5-Jul-22,Vadodara,WFO,Female
+A824,Malhar Savant,Associate Delivery Manager,Talent Acquisition,Sagar Sakpal,Night,6-Sep-22,Vadodara,WFO,Male
+A827,Rohit More,Sr. Recruiter,Talent Acquisition,Hana Amber Ansari,Night,6-Sep-22,Vadodara,WFO,Male
+A890,Aanshi Patel,Head,Marketing & Branding,Ron Lippitt,Night,1-Oct-22,Vadodara,WFO,Female
+A835,Pratik Dalal,Manager,Information Technology,Hemanshu Patel,Night,3-Oct-22,Vadodara,WFO,Male
+A844,Sagar Sakpal,Sr. Delivery Manager,Talent Acquisition,Pradeep Talreja,Night,17-Oct-22,Vadodara,WFO,Male
+A877,Paras Mukati,Associate Manager,Onboarding & Compliance,Raju Sharma,Night,6-Feb-23,Vadodara,WFO,Male
+A882,Misham Dubey,Sr. Recruiter,Talent Acquisition,Hana Amber Ansari,Night,6-Mar-23,Vadodara,WFO,Male
+A911,Vansh Jiani,Executive,International Sales,Rishabh Thapliyal,Night,22-May-23,Vadodara,WFO,Male
+A902,Khushi Singh,Sr. Recruiter,Talent Acquisition,Himesh Gond,Night,22-May-23,Vadodara,WFO,Female
+A919,Suraj Patel,Associate Manager,PR and Social media,Aanshi Patel,UK,26-Jun-23,Vadodara,WFO,Male
+A928,Yuvrajsinh Vaghela,Sr. Recruiter,Talent Acquisition,Hardik Patel D,Night,31-Jul-23,Vadodara,WFO,Male
+H003,Gangaben Vankar,Housekeeping,Facility Management,Amit Patil,Day,20-Sep-23,Vadodara,WFO,Female
+A959,Priyanshi Agrawal,Sr. Recruiter,Corporate Recruitment,Amit Patil,UK,16-Oct-23,Vadodara,WFO,Female
+A962,Kshitij Karajgaonkar,Sr. Recruiter,Talent Acquisition,Malhar Savant,Night,16-Oct-23,Vadodara,WFO,Male
+D209,Radhika Pandya,Sr. Recruiter,Talent Acquisition,Neha Dhoot,Day,30-Oct-23,Vadodara,WFO,Female
+A969,Dharmendra Singh Chauhan,Sr. Executive,Digital / Tech & Venture Growth,Utkarsh Mishra,UK,26-Dec-23,Vadodara,WFO,Male
+A970,Naitik Tamboli,Sr. Executive,Finance & Accounts,Ginu Joy,UK,26-Dec-23,Vadodara,WFO,Male
+A987,Aman Pathak,Sr. Recruiter,Talent Acquisition,Hardik Patel D,Night,2-Jan-24,Vadodara,WFO,Male
+A989,Daksh Sharma,Executive,Information Technology,Pratik Dalal,UK,8-Jan-24,Vadodara,WFO,Male
+A990,Rohan Parmar,Executive,Information Technology,Pratik Dalal,Night,22-Jan-24,Vadodara,WFO,Male
+A1001,Aksh Golakiya,Recruiter,Talent Acquisition,Sonu Singh,Night,12-Feb-24,Vadodara,WFO,Male
+D214,Dharmveer Bhurawat,Recruiter,Talent Acquisition,Neha Dhoot,Day,19-Feb-24,Vadodara,WFO,Male
+A1010,Shivam Singh,Recruiter,Talent Acquisition,Mitesh Patel,Night,20-Feb-24,Vadodara,WFO,Male
+A1014,Jay Patel,Executive,Information Technology,Pratik Dalal,UK,18-Mar-24,Vadodara,WFO,Male
+A1031,Jigar Kharva,Sr. Executive,MIS,Ginu Joy,UK,8-May-24,Vadodara,WFO,Male
+D219,Nikita Singh,Recruiter,Talent Acquisition,Neha Dhoot,Day,13-May-24,Vadodara,WFO,Female
+A1056,Akshay Vasava,Executive,Data Analyst,Mahesh Gohil,Night,16-Sep-24,Vadodara,WFO,Male
+A1060,Aditya Prasad,Executive,Data Analyst,Mahesh Gohil,Night,4-Nov-24,Vadodara,WFO,Male
+A1064,Bimal Singh Chauhan,Recruiter,Talent Acquisition,Sonu Singh,Night,21-Nov-24,Vadodara,WFO,Male
+A1068,Faisal Khan,Recruiter,Talent Acquisition,Bhavesh Verma,Night,2-Dec-24,Vadodara,WFO,Male
+H005,Jashodaben Jashubhai Parmar,Housekeeping,Facility Management,Amit Patil,Night,9-Dec-24,Vadodara,WFO,Female
+A1077,Mubassira Saiyed,Executive,Employee Relations,Tanya Vaid,Night,6-Jan-25,Vadodara,WFO,Female
+H006,Dineshbhai Solanki,Housekeeping,Facility Management,Amit Patil,Night,8-Jan-25,Vadodara,WFO,Male
+A1080,Neel Shelat,Sr. Recruiter,Talent Acquisition,Sonu Singh,Night,16-Jan-25,Vadodara,WFO,Male
+A1079,Dhruvi Raval,Executive,Human Resources,Soumya Adlakha,UK,16-Jan-25,Vadodara,WFO,Female
+D240,Nitish Kumar Pandey,Recruiter,Talent Acquisition,Mansi Joshi,Day,3-Feb-25,Vadodara,WFO,Male
+A1088,Nancy Umralia,Executive,Finance & Accounts,Ginu Joy,UK,17-Feb-25,Vadodara,WFO,Female
+A1093,Abhishek Puranik,Executive,International Sales,Pradeep Talreja,Night,24-Feb-25,Vadodara,WFO,Male
+H008,Kantibhai Vankar,Housekeeping,Facility Management,Amit Patil,UK,25-Feb-25,Vadodara,WFO,Male
+D242,Rishabh Yadav,Sr. Recruiter,Talent Acquisition,Neha Dhoot,Day,3-Mar-25,Vadodara,WFO,Male
+A1097,Jash Jani,Recruiter,Talent Acquisition,Hardik Patel D,Night,24-Mar-25,Vadodara,WFO,Male
+A1100,Mihir Pandya,Executive,International Sales,Pradeep Talreja,Night,7-Apr-25,Vadodara,WFO,Male
+A1103,Kulsher Singh Lehal,Recruiter,Talent Acquisition,Hana Amber Ansari,Night,22-Apr-25,Vadodara,WFO,Male
+A1104,Jahanvi Dave,Executive,Employee Relations,Tanya Vaid,Night,24-Apr-25,Vadodara,WFO,Female
+A1105,Nividkumar Makwana,Executive,PR and social media,Suraj Patel,UK,28-Apr-25,Vadodara,WFO,Male
+A1109,Mahima Thakur,Lead Recruiter,Talent Acquisition,Himesh Gond,Night,7-May-25,Indore,WFH,Female
+A1112,Indrani Ghosh,Recruiter,Talent Acquisition,Mitesh Patel,Night,12-May-25,Vadodara,WFO,Female
+A1113,Nandhana CN,Recruiter,Talent Acquisition,Mitesh Patel,Night,12-May-25,Vadodara,WFO,Female
+A1115,Rahul Kumar,Recruiter,Talent Acquisition,Sonu Singh,Night,12-May-25,Vadodara,WFO,Male
+A1127,Vrushita Pandav,Recruiter,Talent Acquisition,Malhar Savant,Night,12-May-25,Vadodara,WFO,Female
+A1128,Pratham Singh,Recruiter,Talent Acquisition,Sonu Singh,Night,12-May-25,Vadodara,WFO,Male
+D243,Afjal Saiyed,Recruiter,Talent Acquisition,Mansi Joshi,Day,27-May-25,Vadodara,WFO,Male
+D244,Kajal Pathak,Recruiter,Talent Acquisition,Mansi Joshi,Day,16-Jun-25,Vadodara,WFO,Female
+A1132,Shrey Shah,Recruiter,Talent Acquisition,Riya Rajput,Night,19-Jun-25,Vadodara,WFO,Male
+A1134,Zaid Hassan,Sr. Recruiter,Talent Acquisition,Sujith Kurup,Night,23-Jun-25,Meerut,WFH,Male
+A1138,Kunjan Kamani,Sr. Recruiter,Talent Acquisition,Hana Amber Ansari,Night,1-Jul-25,Vadodara,WFO,Female
+A1141,Kajal Zakhariya,Sr. Executive,Digital / Tech & Venture Growth,Utkarsh Mishra,UK,14-Jul-25,Vadodara,WFO,Female
+A1144,Deepak Agrawal,Lead Recruiter,Talent Acquisition,Bhavesh Verma,Night,23-Jul-25,Vadodara,WFO,Male
+D248,Piyusha Rajput,Sr. Recruiter,Talent Acquisition,Neha Dhoot,Day,28-Jul-25,Vadodara,WFO,Female
+D257,Aayushi Madhwani,Sr. Recruiter,Talent Acquisition,Mansi Joshi,Day,8-Sep-25,"Guna, MP",WFH,Female
+A1152,Aniket Khemnani,Management Trainee,Talent Acquisition,Malhar Savant,Night,8-Sep-25,Vadodara,WFO,Male
+A1156,Krupal Vagadiya,Executive,PR and social media,Suraj Patel,UK,18-Sep-25,Vadodara,WFO,Male
+A1158,Utkarsh Mishra,Lead,Digital / Tech & Venture Growth,Aanshi Patel,UK,29-Sep-25,Vadodara,WFO,Male
+A1159,Khushnuma Chashmawala,Recruiter,Talent Acquisition,Sonu Singh,Night,30-Sep-25,Vadodara,WFO,Female
+A1161,Mehzabeen Varsi,Recruiter,Talent Acquisition,Sujith Kurup,Night,30-Sep-25,Vadodara,WFO,Female
+A1162,Neeti Sharma,Executive,Key Accounts Management,Sujith Kurup,Night,1-Oct-25,Vadodara,WFO,Female
+A1168,Vishal Patel,Sr. Recruiter,Corporate Recruitment,Amit Patil,UK,13-Oct-25,Vadodara,WFO,Male
+A1171,Shubham Mishra,Sr. Recruiter,Talent Acquisition,Hardik Patel D,Night,23-Oct-25,Vadodara,WFO,Male
+D260,Aryaanshi Chaturvedi,Recruiter,Talent Acquisition,Neha Dhoot,Day,27-Oct-25,Vadodara,WFO,Female
+D261,Nikita Maru,Recruiter,Talent Acquisition,Neha Dhoot,Day,27-Oct-25,Vadodara,WFO,Female
+A1172,Sachin Rakhe,Sr. Recruiter,Talent Acquisition,Hardik Patel D,Night,27-Oct-25,Vadodara,WFO,Male
+A1173,Isha Salian,Executive,Human Resources,Soumya Adlakha,UK,28-Oct-25,Vadodara,WFO,Female
+A1178,Lata Mishra,Management Trainee,Employee Relations,Tanya Vaid,Night,1-Dec-25,Vadodara,WFO,Female
+A1179,Sachin Prasad,Management Trainee,Talent Acquisition,Malhar Savant,Night,1-Dec-25,Vadodara,WFO,Male
+A1180,Anjali Sharma,Management Trainee,Talent Acquisition,Bhavesh Verma,Night,1-Dec-25,Vadodara,WFO,Female
+A1183,Mohammed Shadab,Team Lead,Talent Acquisition,Pradeep Talreja,Night,17-Dec-25,Vadodara,WFO,Male
+A1185,Shivan Thakkar,Executive,PR and social media,Suraj Patel,UK,21-Dec-25,Vadodara,WFO,Male
+A1186,Sumit Patel,Executive,Software Development,Utkarsh Mishra,UK,29-Dec-25,Vadodara,WFO,Male
+A1188,Jesika Sahu,Recruiter,Talent Acquisition,Himesh Gond,Night,12-Jan-26,Kota,WFH,Female
+A1189,Anita Fernandes,Sr. Manager,International Sales,Pradeep Talreja,Night,13-Jan-26,Mumbai,WFH,Female
+In033,Saurav Singh,Intern,Frontend Developer,Utkarsh Mishra,UK,19-Jan-26,Vadodara,WFO,Male
+U013,Allison Allen,Director,Client Services,Ron Lippitt,Night,17-Oct-25,USA,WFH,Female
+A1192,Akanksha Singh,Executive,Human Resources,Soumya Adlakha,UK,27-Jan-26,Vadodara,WFO,Female
+A1193,Aum Patel,Executive,Software Development,Utkarsh Mishra,UK,29-Jan-26,Vadodara,WFO,Male
+D263,Meet Khatri,Management Trainee,Talent Acquisition,Neha Dhoot,Day,5-Feb-26,Vadodara,WFO,Male
+A1195,Mann Panchal,Management Trainee,Talent Acquisition,Sujith Kurup,Night,9-Feb-26,Vadodara,WFO,Male
+A1197,Sachin Thakor,Management Trainee,Talent Acquisition,Malhar Savant,Night,9-Feb-26,Vadodara,WFO,Male
+A1198,Swayanshree Swain,Management Trainee,Talent Acquisition,Mitesh Patel,Night,9-Feb-26,Vadodara,WFO,Female
+D264,Dhwanit Vaidya,Recruiter,Talent Acquisition,Mansi Joshi,Day,10-Feb-26,Vadodara,WFO,Male
+A1203,Khushi Yadav,Sr. Executive,Key Accounts Management,Sujith Kurup,Night,16-Feb-26,Vadodara,WFO,Female
+A1206,Prerna More,Recruiter,Corporate Recruitment,Amit Patil,UK,2-Mar-26,Vadodara,WFO,Female
+A1208,Arushi Khanna,Recruiter,Talent Acquisition,Himesh Gond,Night,9-Mar-26,Vadodara,WFO,Female
+D267,Bhargav Raval,Management Trainee,Talent Acquisition,Mansi Joshi,Day,16-Mar-26,Vadodara,WFO,Male
+A1210,Unnati Pandya,Sr. Recruiter,Talent Acquisition,Riya Rajput,Night,16-Mar-26,Vadodara,WFO,Female
+A1212,Hardik Trivedi,Executive,Information Technology,Pratik Dalal,Night,23-Mar-26,Vadodara,WFO,Male
+A1213,Falaknaaz Shaikh,Senior Executive,Proposal Writer,Pradeep Talreja,Night,23-Mar-26,Mumbai,WFH,Female
+A1174,Shriya Bharadwaj,Executive,Onboarding & Compliance,Raju Sharma,Night,23-Mar-26,Vadodara,WFO,Female
+D268,Hamna MV,Management Trainee,Talent Acquisition,Mansi Joshi,Day,30-Mar-26,Vadodara,WFO,Female
+D269,Maheshwari Chauhan,Management Trainee,Talent Acquisition,Mansi Joshi,Day,30-Mar-26,Vadodara,WFO,Female
+D272,Nupur Patwa,Management Trainee,Talent Acquisition,Mansi Joshi,Day,6-Apr-26,Vadodara,WFO,Female
+D273,Ayushi Chauhan,Recruiter,Talent Acquisition,Neha Dhoot,Day,6-Apr-26,Vadodara,WFO,Female
+D274,Shradha Sakpal,Management Trainee,Talent Acquisition,Neha Dhoot,Day,8-Apr-26,Vadodara,WFO,Female
+A1215,Janki Darji,Management Trainee,Corporate Recruitment,Amit Patil,UK,13-Apr-26,Vadodara,WFO,Female
+A1216,Ankit Kumar,Recruiter,Talent Acquisition,Hardik Patel D,Night,13-Apr-26,Vadodara,WFO,Male
+A1218,Dhanwin Khopkar,Management Trainee,Corporate Recruitment,Amit Patil,UK,15-Apr-26,Vadodara,WFO,Male
+A1219,Serena Chokshi,Recruiter,Corporate Recruitment,Amit Patil,UK,20-Apr-26,Vadodara,WFO,Female
+A1220,Akash Salwatkar,Sr. Recruiter,Talent Acquisition,Mitesh Patel,Night,20-Apr-26,Vadodara,WFO,Male
+D276,Rutvi Suthar,Management Trainee,Talent Acquisition,Mansi Joshi,Day,22-Apr-26,Vadodara,WFO,Female
+D277,Kashish Jhamnani,Management Trainee,Talent Acquisition,Mansi Joshi,Day,22-Apr-26,Vadodara,WFO,Female
+A1221,Ginu Joy,Manager,Finance & Accounts,Hemanshu Patel,UK,27-Apr-26,Vadodara,WFO,Male
+D278,Dhruvi Sawant,Management Trainee,Talent Acquisition,Neha Dhoot,Day,28-Apr-26,Vadodara,WFO,Female
+D282,Erani Rajesh Raj Purohit,Management Trainee,Talent Acquisition,Mansi Joshi,Day,4-May-26,Vadodara,WFO,Male
+A1224,Saim Jambusariya,Management Trainee,Talent Acquisition,Riya Rajput,Night,4-May-26,Vadodara,WFO,Male
+A1226,Payal Rajput,Management Trainee,Talent Acquisition,Hana Amber Ansari,Night,4-May-26,Vadodara,WFO,Male
+U014,Rachel Slowey,Director,Client Services,Ron Lippitt,Night,7-May-26,USA,WFH,Female
+A1230,Neeraj Kushwaha,Recruiter,Talent Acquisition,Bhavesh Verma,Night,11-May-26,Vadodara,WFO,Male
+A1232,Zaid Qureshi,Recruiter,Talent Acquisition,Bhavesh Verma,Night,1-Jun-26,"Shivpuri,Madhya Pradesh",WFH,Male
+A1233,Aniket Prajapati,Recruiter,Talent Acquisition,Bhavesh Verma,Night,2-Jun-26,Indore,WFH,Male
+A1234,Shruti Baraskar,Management Trainee,Talent Acquisition,Mohammed Shadab,Night,15-Jun-26,Vadodara,WFO,Female
+A1235,Deepshikha Shandilya,Management Trainee,Talent Acquisition,Malhar Savant,Night,15-Jun-26,Vadodara,WFO,Female
+A1236,Preet Raj,Management Trainee,Talent Acquisition,Hana Amber Ansari,Night,15-Jun-26,Vadodara,WFO,Male
+A1237,Aastha Singh,Management Trainee,Talent Acquisition,Sonu Singh,Night,15-Jun-26,Vadodara,WFO,Female
+A1238,Alpana Pandey,Management Trainee,Talent Acquisition,Hardik Patel D,Night,15-Jun-26,Vadodara,WFO,Female
+A1240,Devyani Sahu,Management Trainee,Talent Acquisition,Malhar Savant,Night,15-Jun-26,Vadodara,WFO,Female
+A1241,Hiya Parmar,Management Trainee,Talent Acquisition,Hana Amber Ansari,Night,15-Jun-26,Vadodara,WFO,Female
+A1242,Archna Ekka,Management Trainee,Talent Acquisition,Hana Amber Ansari,Night,15-Jun-26,Vadodara,WFO,Female
+A1243,Keya Vyas,Management Trainee,Talent Acquisition,Mohammed Shadab,Night,15-Jun-26,Vadodara,WFO,Female
+A1244,Mayuresh Thorat,Management Trainee,Talent Acquisition,Sonu Singh,Night,15-Jun-26,Vadodara,WFO,Male
+A1245,Karthikeya Kama,Management Trainee,Talent Acquisition,Hardik Patel D,Night,15-Jun-26,Vadodara,WFO,Male
+A1247,Kalpit Limbachiya,Recruiter,Talent Acquisition,Farzad Bokdawala,Night,15-Jun-26,Vadodara,WFO,Male
+A1248,Shivani Bhavsar,Recruiter,Talent Acquisition,Bhavesh Verma,Night,17-Jun-26,Pune,WFH,Female
+D284,Nilofar Saiyed,Management Trainee,Talent Acquisition,Neha Dhoot,Day,29-Jun-26,Vadodara,WFO,Female
+D285,Kanchan Pardeshi,Management Trainee,Talent Acquisition,Mansi Joshi,Day,29-Jun-26,Vadodara,WFO,Female
+D286,Heer Brahmbhatt,Management Trainee,Talent Acquisition,Mansi Joshi,Day,29-Jun-26,Vadodara,WFO,Female
+D287,Azhar Khan,Management Trainee,Talent Acquisition,Neha Dhoot,Day,29-Jun-26,Vadodara,WFO,Male
+A1250,Soha Pathan,Recruiter,Talent Acquisition,Himesh Gond,Night,29-Jun-26,Porbandar,WFH,Female
+D288,Milan Brahmbhatt,Manager,Domestic Sales,Hemanshu Patel,Day,6-Jul-26,Vadodara,WFO,Male

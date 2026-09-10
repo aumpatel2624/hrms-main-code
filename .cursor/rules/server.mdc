@@ -1,0 +1,43 @@
+---
+description: Conventions for the Express + Mongoose API in apps/server
+globs: apps/server/**
+alwaysApply: false
+---
+
+Follow the pipeline in [AGENTS.md](../../AGENTS.md) — design before code, and stop and ask if a
+request contradicts a documented convention.
+
+Before editing anything here, read:
+
+- [docs/conventions/30-api.md](../../docs/conventions/30-api.md) for routes, controllers, the
+  `{ isOk, status, message, data }` envelope, `runListQuery`, auth and validation
+- [docs/conventions/20-schema.md](../../docs/conventions/20-schema.md) for models, indexes,
+  backfills, soft delete and the audit trail
+- [docs/conventions/60-limits.md](../../docs/conventions/60-limits.md) before promising anything —
+  it is the list of what this starter deliberately does not do
+
+The four that are most often got wrong:
+
+- **Guard every route, twice.** `authMiddleware(roles)` for the session, then
+  `checkPermission(menuUrl, action)` for the permission matrix on anything belonging to an admin
+  screen. The matrix is enforced server-side but only on routes that ask for it — a route without
+  it is open to any logged-in user. `menuUrl` must match a seeded `MenuMaster.menuUrl` exactly; a
+  typo fails closed for every non-admin and looks fine to you, because ADMIN bypasses. The only
+  unauthenticated routes in the repo are the public SEO ones, and adding another has a
+  four-question gate in 30-api.md.
+- **Every list endpoint goes through `runListQuery`.** Its `filterable` map is an allowlist and a
+  security boundary — never build a match from `req.body` directly, and never widen it to "whatever
+  the model has".
+- **`filterable` on the server and `filterFields` in `apps/admin/src/entities/` describe the same
+  set.** Change both together, and index every field in it.
+- **Declare indexes on every `ref`, every filterable field, and every business-unique key.** Most
+  existing models don't; that's the gap, not the pattern.
+
+Two global Mongoose plugins govern every model, including one you add today:
+
+- `models/softDelete.js` — nothing is ever removed; deletes set `isDeleted` and every read hides it.
+- `models/auditPlugin.js` — every write made inside a logged-in request is recorded to `AuditLog`.
+  Writes with no session user (the seeder, public endpoints, counters) are deliberately not.
+
+You write no code for either. Both must be imported before any model — entry points do it on their
+first two imports, and both throw on boot rather than silently skipping a model.

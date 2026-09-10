@@ -1,0 +1,208 @@
+{
+  "main": {
+    "id": "a0bf95a03b6764bd",
+    "type": "split",
+    "children": [
+      {
+        "id": "9a646b60fdc93124",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "b6cd886196adc945",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "02-Roles/Role Login Views.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Role Login Views"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "baf4381547718ad8",
+    "type": "split",
+    "children": [
+      {
+        "id": "6c0b4f2420b3aa50",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "cb6ec9fcf5a8467f",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "461dc3af42d4c7ea",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "0b27dfb28a6b3cc6",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "6092cc2f63a0f75b",
+    "type": "split",
+    "children": [
+      {
+        "id": "79ea87a1133d73a6",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "3fb427370f3b6dbc",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "02-Roles/Role Login Views.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks"
+            }
+          },
+          {
+            "id": "7a1be66270fd26a1",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "02-Roles/Role Login Views.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links"
+            }
+          },
+          {
+            "id": "9d245150a6410af4",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "60124bcef753f8df",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "161addf7b3e9527f",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "02-Roles/Role Login Views.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "b6cd886196adc945",
+  "lastOpenFiles": [
+    "Apidel Organization Chart(1).html",
+    "02-Roles/HR Manager.md",
+    "02-Roles/HR User.md",
+    "02-Roles/Employee.md",
+    "00-Home/Home.md",
+    "02-Roles/Role Login Views.md",
+    "01-Modules/HR-Core/Designation Skill.md",
+    "01-Modules/HR-Core/Department Approver.md",
+    "01-Modules/HR-Core/_Overview.md",
+    "01-Modules/Expenses/Expense Claim Detail.md",
+    "01-Modules/Expenses/Expense Claim Advance.md",
+    "01-Modules/Expenses/Expense Claim Account.md",
+    "01-Modules/Expenses/Expense Claim.md",
+    "01-Modules/Expenses/_Overview.md"
+  ]
+}

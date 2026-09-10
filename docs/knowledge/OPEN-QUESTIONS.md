@@ -1,0 +1,40 @@
+# Open questions
+
+> **TEMPLATE — not filled in yet.** Run the `grill-me` skill. Rows arrive here as the project is
+> interrogated; an empty file means nobody has asked yet, not that nothing is unknown.
+
+Known unknowns for **this project**. **Adding a row here is always better than guessing.** A guess
+that reaches the code becomes an assumption nobody remembers making.
+
+Anyone adds to this file. `grill-me` fills it during interrogation; `system-design` adds whatever
+the design surfaced; `update-docs` closes rows once answered — moving the answer into `PRD.md`,
+`DOMAIN.md` or `RULES.md` and citing it here.
+
+**This file is project-specific and starts empty on a fresh clone.** Questions about the *starter* —
+what it does not do and what closing a gap costs — are permanent and live in
+[docs/conventions/60-limits.md](../conventions/60-limits.md). Start there: its *Decide before you
+build* section is the five answers that are expensive to get late, and anything the client cannot
+answer yet becomes a row below.
+
+| ID | Question | Blocks | Asked | Answer |
+|---|---|---|---|---|
+| Q-3 | Without a general ledger (ADR-016), how should Expense Claim/Payroll track "paid" once money actually moves — a manual "mark as paid" action with an amount/date/reference, or something that still integrates with whatever accounting system Apidel already uses outside this app? | Payroll and Expenses module design | 2026-09-10 | |
+| Q-4 | Per-screen data scoping (ADR-016 DEV-2) needs a concrete mechanism: does `UserRoles` grow a matrix (role × screen → scope value) instead of one `dataScope` field, or does scope move onto the menu-permission rows (`60-limits.md`'s own suggestion)? Also needs an answer for how "approver-scoped" resolves `employee` from `frappe.session.user`'s equivalent (session `userId` → Employee lookup) efficiently on every list call. | Leaves module (first to need approver-scoping) | 2026-09-10 | |
+| Q-5 | The three background jobs this project does keep (auto-attendance, leave accrual/expiry, leave encashment — ADR-016) need a real scheduler; this starter has none (`60-limits.md`). Node-cron in-process, OS cron hitting an endpoint, or something else — and does "single process assumed" (`60-limits.md`) make double-firing a real risk worth guarding against now? | Leaves and Shift & Attendance modules | 2026-09-10 | |
+| Q-6 | Real org data (`apidel-org-chart.csv`) has two pairs of near-duplicate department strings ("PR and Social media" / "PR and social media"; "Corporate Recruitment" / "Corporate Recruitment & Facility Management") — normalize to one canonical spelling each when Organization Setup is built, or are these actually two distinct departments? | Organization Setup module's Department seed | 2026-09-10 | Normalize. → `DOMAIN.md` HRMS spine entities (Department/Designation) |
+| Q-2 | `client-docs` on the email trigger module (2026-09-09) found that the `EmailFor` edit form cannot correctly re-save a row whose `triggerKey` is an `unassigned.*` placeholder (from `backfillEmailForTriggerKeys` in `seed/index.js`). The Trigger dropdown (`triggerOptions` in `apps/admin/src/entities/index.js`) is built only from `EMAIL_TRIGGERS` (the code registry) filtered to unclaimed-or-own — an `unassigned.*` value was never in that registry, so it can never appear as a selectable option. The field renders empty on edit; saving either fails validation (nothing picked) or silently reassigns the row to a real, different trigger. Two real rows in the dev database are affected today: "Contact Enquiry" and "test". Should `triggerOptions` inject the record's current value as a synthetic, clearly-labelled ("not a real event — reassign or remove") option when it isn't in the registry, so these rows stay editable without accidentally being reassigned? | Editing (renaming, deactivating, or reassigning) any legacy/backfilled `EmailFor` row without an unintended trigger change | 2026-09-09 | |
+| Q-1 | `verify` on the email trigger module (2026-09-08) found duplicate active `MenuMaster` rows for five URLs — `/email-for`, `/email-template`, `/email-setup`, `/client`, `/project`. **Correction from the original finding** (`client-docs`, 2026-09-09): for the email screens at least, the two copies sit under two *different* `MenuGroupMaster` documents — an older "CMS" group (2026-08-05) and a newer "Mail" group (2026-08-16) — not one group with a duplicated child row as first thought. Apparently from a non-idempotent reseed or migration. Server-side permission enforcement (`checkPermission`) is unaffected, but the admin client's own menu-id-to-permission resolution (`MenuContext.findMenuIdByUrl`, first-match-wins over the flat tree) can silently resolve the wrong row, so a role granted access via today's role editor may not show write buttons even though the server would allow the action. The real "test" role's saved matrix still only references the old 2026-08-05 ids. Should these rows (and their duplicate groups) be deduplicated, should the seeder be made to upsert by URL instead of by name+group, and should existing roles' matrices be re-pointed at the surviving ids? | Reliable non-admin permission checks/UI for the five affected screens; any future menu row on `/client` or `/project` inherits the same risk | 2026-09-08 | |
+
+- **Blocks** — what cannot be built until this is answered. If nothing, say "nothing" and it is
+  safe to proceed under a stated assumption.
+- **Answer** — leave empty while open. When answered, record where the answer now lives, e.g.
+  `→ RULES.md INV-4`.
+
+## Assumptions in force
+
+Where work proceeded without an answer, record the assumption and what breaks if it is wrong. These
+are the first things to re-check when the client changes their mind.
+
+| ID | Assumption | If wrong |
+|---|---|---|
+| | | |

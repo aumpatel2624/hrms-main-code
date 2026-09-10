@@ -1,0 +1,530 @@
+/**
+ * The documentation manifest (ADR-011).
+ *
+ * One entry per screen the client's end users can reach. This is the source of
+ * truth for three things at once: what gets a documentation page, what gets
+ * photographed, and what the prose says.
+ *
+ * ## Why the prose lives here and not in the generated output
+ *
+ * `docs-src/` is written by people; `apps/admin/src/docs/` is generated and
+ * overwritten on every run. Editing a generated page loses the edit at the
+ * next `npm run docs`. So anything a human wants to say goes in the `intro`,
+ * `when`, `gotchas` and `roles` fields below, and the generator merges it with
+ * what it can read out of the entity config.
+ *
+ * ## What the generator reads for you
+ *
+ * Do not restate in prose what the entity config already carries. The
+ * generator emits the entity's `description`, its `sections` and their
+ * descriptions, every field with its label/hint/required flag, and the filter
+ * list. Write the things a config cannot know: why the screen exists, what a
+ * user is usually trying to do, and what will surprise them.
+ *
+ * ## Adding, viewing, editing and deleting
+ *
+ * Every config-driven screen renders the same shared CRUD components, so the
+ * steps for the four operations are identical everywhere and the generator
+ * writes them for you — do not repeat them per screen.
+ *
+ * Two flags change what it writes:
+ *
+ * - `listOnly: true` — the screen lists records and hands off to its own
+ *   editor rather than the shared form, so only the viewing section is
+ *   emitted, and only the list is photographed.
+ * - `shots: [...]` — which views to capture, from `list`, `add`, `view` and
+ *   `edit`. The default is all four (just `list` for a `listOnly` screen), so
+ *   each operation section is illustrated by the screen its steps describe.
+ *   Deleting has no shot of its own: its dialog is a small modal over the list,
+ *   which the list image at the top of the page already shows.
+ * - `operations: { create, read, update, delete }` — replaces the generated
+ *   body of one section for screens that genuinely differ. Use it sparingly;
+ *   a screen that needs all four rewritten is probably a custom page.
+ *
+ * ## Adding a screen
+ *
+ * A new module adds its screen here in the same commit. A screen missing from
+ * this file gets no page and no screenshot, and nothing warns you — see the
+ * `client-docs` skill.
+ */
+
+/**
+ * Shared UI every CRUD screen renders through. A change to any of these moves
+ * every config-driven screenshot, so they are fingerprint inputs for all of
+ * them. Deliberately broad: over-capturing costs a minute, while a stale
+ * screenshot is documentation that lies.
+ */
+export const SHARED_CRUD_SOURCES = [
+    "apps/admin/src/components/crud/crud-list.jsx",
+    "apps/admin/src/components/crud/crud-form.jsx",
+    "apps/admin/src/components/crud/crud-view.jsx",
+    "apps/admin/src/components/crud/index.jsx",
+];
+
+/** Theme tokens. A change here repaints literally everything. */
+export const THEME_SOURCES = [
+    "apps/admin/src/styles/globals.css",
+    "apps/admin/src/styles/theme.css",
+    "apps/admin/src/styles/typography.css",
+];
+
+/** The fixture data every screenshot is a picture of. */
+export const FIXTURE_SOURCES = ["apps/server/seed/fixtures.js"];
+
+/**
+ * Screens driven by an entity config.
+ *
+ * `config` names the export in `apps/admin/src/entities/`; the generator reads
+ * it for structure. `path` is where the capture script navigates.
+ */
+export const CONFIG_SCREENS = [
+    {
+        key: "department",
+        config: "departmentConfig",
+        source: "apps/admin/src/entities/index.js",
+        intro:
+            "Departments are the teams people belong to — Sales, Finance, Warehouse. Every user is " +
+            "assigned to exactly one, and that assignment does more than label them: it decides who " +
+            "can see their records.",
+        when:
+            "Add a department when a new team is formed. Mark one inactive when a team is wound down — " +
+            "that keeps its history intact while removing it from the dropdowns on other screens.",
+        gotchas: [
+            "You cannot delete a department while users are still assigned to it. The panel will tell " +
+                "you how many, so move those people first.",
+            "Department codes are short labels used in reports and exports. Keep them stable — " +
+                "changing one changes how older reports read.",
+        ],
+        roles:
+            "If your role is limited to your own department, this screen shows only your department " +
+            "rather than the full list.",
+    },
+    {
+        key: "user",
+        config: "userConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro:
+            "Everyone who signs in to the panel has a user record here. It holds who they are, how to " +
+            "reach them, which department they work in, and which role decides what they can do.",
+        when:
+            "Create a user when someone joins. When they leave, mark them inactive rather than " +
+                "deleting them — an inactive user cannot sign in, but everything they did stays " +
+                "attributable to a name.",
+        gotchas: [
+            "Email addresses must be unique, and they are what people sign in with.",
+            "The password field only appears when adding someone. To change an existing user's " +
+                "password, use the reset option on their record instead.",
+            "Changing someone's role changes what they can see and do the next time they sign in.",
+        ],
+        roles:
+            "Whether you can add, edit or delete users depends on your role's permissions. If a button " +
+            "is missing, your role has not been granted that action.",
+    },
+    {
+        key: "role",
+        config: "roleConfig",
+        source: "apps/admin/src/entities/index.js",
+        intro:
+            "A role is a named job — Manager, Support Agent, Warehouse Staff. Creating one here gives " +
+            "you the name; what it can actually do is set on the User Roles screen.",
+        when:
+            "Add a role when a group of people need a different level of access from everyone else.",
+        gotchas: [
+            "A new role starts with no permissions at all. Until you grant some on User Roles, anyone " +
+                "with that role signs in and sees almost nothing.",
+            "You cannot delete a role while users are assigned to it.",
+        ],
+    },
+    {
+        key: "country",
+        config: "countryConfig",
+        source: "apps/admin/src/entities/index.js",
+        intro:
+            "The list of countries used wherever an address is entered. States belong to countries, " +
+            "and cities belong to states, so this is the top of that chain.",
+        when: "Add a country before you can add its states and cities.",
+        gotchas: [
+            "A country cannot be deleted while it still has states, or while anyone's address uses it.",
+        ],
+    },
+    {
+        key: "state",
+        config: "stateConfig",
+        source: "apps/admin/src/entities/index.js",
+        intro:
+            "States and provinces, each belonging to a country. Choosing a country first narrows the " +
+            "state list everywhere an address is entered.",
+        when: "Add a state after its country exists and before adding its cities.",
+        gotchas: ["A state cannot be deleted while it still has cities, or while an address uses it."],
+    },
+    {
+        key: "city",
+        config: "cityConfig",
+        source: "apps/admin/src/entities/index.js",
+        intro: "Cities, each belonging to a state and through it a country.",
+        when: "Add a city when someone needs an address the existing list does not cover.",
+        gotchas: [
+            "Pick the country first — the state list only fills in once a country is chosen.",
+            "A city cannot be deleted while an address uses it.",
+        ],
+    },
+    {
+        key: "currency",
+        config: "currencyConfig",
+        source: "apps/admin/src/entities/index.js",
+        intro:
+            "Currencies available for prices and reporting, each with the symbol shown to users.",
+        when: "Add a currency when you start trading in one you do not already have.",
+    },
+    {
+        key: "admin-user",
+        config: "adminUserConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro:
+            "Administrator accounts. These are separate from ordinary users and are not limited by the " +
+            "permission matrix — an administrator sees everything.",
+        when: "Add one only for people who genuinely need unrestricted access.",
+        gotchas: [
+            "Administrators bypass role permissions and data scoping entirely. Keep this list short.",
+            "As with users, the password is set when adding and changed through a reset afterwards.",
+        ],
+    },
+    {
+        key: "menu-group",
+        config: "menuGroupConfig",
+        source: "apps/admin/src/entities/index.js",
+        intro:
+            "The top-level headings in the sidebar. A group either holds a set of screens or, if it is " +
+            "marked a direct link, navigates straight somewhere on its own.",
+        when: "Add a group when a new area of the panel needs its own heading.",
+        gotchas: [
+            "Sequence controls the order groups appear in the sidebar, lowest first.",
+            "A direct-link group needs a URL and has no screens under it.",
+        ],
+    },
+    {
+        key: "menu-master",
+        config: "menuMasterConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro:
+            "The individual screens inside each sidebar group. Every screen in the panel has a row " +
+            "here, and that row is what permissions are granted against.",
+        when: "You will rarely add rows by hand — new screens arrive with their own.",
+        gotchas: [
+            "A screen with no row here is invisible to everyone except administrators.",
+            "Removing a row removes the screen from the sidebar for every role at once.",
+        ],
+    },
+    {
+        key: "email-setup",
+        config: "emailSetupConfig",
+        source: "apps/admin/src/entities/index.js",
+        intro:
+            "The mailboxes outgoing email is sent from — the address, and the mail server details it " +
+            "connects through.",
+        when: "Set one up before any email template can send.",
+        gotchas: [
+            "The app password is not the mailbox's normal password. Most providers require you to " +
+                "generate a separate one for applications.",
+            "The password is stored securely and never shown back to you after saving.",
+        ],
+    },
+    {
+        key: "email-for",
+        config: "emailForConfig",
+        source: "apps/admin/src/entities/index.js",
+        intro:
+            "The list of occasions an email can be sent for — a welcome message, a password reset, an " +
+            "order confirmation. Each template attaches to one of these.",
+        when: "Add one when there is a new moment in the system that should trigger an email.",
+        gotchas: [
+            "The Trigger dropdown only offers events that don't already have one of these set up, " +
+                "so it can go empty. If the event you want isn't listed, either someone has already " +
+                "set it up (check the list below, or reuse that row instead of creating a new one), " +
+                "or it genuinely doesn't exist yet — new events have to be added by a developer " +
+                "before they show up here.",
+            "If a row's Trigger column shows something starting with \"unassigned.\", it was created " +
+                "before it had a proper event attached. Editing one of these is not safe right now — " +
+                "the Trigger field will appear empty, and saving will either be blocked or, worse, " +
+                "attach it to a different real event than the one it was already quietly doing. Leave " +
+                "these rows alone and ask your development team to sort them out.",
+        ],
+    },
+    {
+        key: "email-template",
+        config: "emailTemplateConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro:
+            "The actual wording of each automated email — the subject, the signature, and who it comes " +
+            "from.",
+        when: "Edit a template when the wording of an automated email needs to change.",
+        gotchas: [
+            "A template needs both a mailbox to send from and an occasion to send for; create those " +
+                "first.",
+            "Once you pick the occasion, the form shows which {{PLACEHOLDER}} tokens that occasion " +
+                "allows — for example {{USERNAME}} or {{OTP_CODE}} — and what each one fills in with. " +
+                "Only those tokens work in the subject and signature; typing anything else in curly " +
+                "braces will be rejected when you save.",
+            "Only one template can be active for a given occasion at a time. Saving a second active " +
+                "one for the same occasion is blocked — either deactivate the existing one first, or " +
+                "save the new one as inactive until you're ready to switch over.",
+        ],
+    },
+    {
+        key: "seo-redirect",
+        config: "seoRedirectConfig",
+        source: "apps/admin/src/entities/index.js",
+        intro:
+            "When a page on your website moves or disappears, a redirect sends anyone asking for the " +
+            "old address to the new one. Without it they see an error, and search engines eventually " +
+            "drop the page.",
+        when:
+            "Add a redirect whenever you change or remove a page's URL — before the change goes live, " +
+            "ideally.",
+        gotchas: [
+            "Use 301 unless the page is genuinely coming back. It tells search engines the move is " +
+                "permanent and passes the old page's standing to the new one.",
+            "410 means gone for good and needs no destination.",
+            "The Times Used column tells you whether a redirect is still earning its place.",
+        ],
+    },
+    {
+        key: "seo-page",
+        config: "seoPageConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        listOnly: true,
+        intro:
+            "How each fixed page of your website appears in a search result and when someone shares " +
+            "the link. This screen lists them; opening one takes you to the editor, which previews " +
+            "both as you type.",
+        when: "Review a page's entry whenever its content changes enough that the summary is now wrong.",
+        gotchas: [
+            "Only pages with fixed addresses live here — the home page, About, Contact. Content with " +
+                "its own record carries its own settings.",
+            "A page left blank falls back to the site-wide defaults on the SEO Settings screen.",
+        ],
+    },
+];
+
+/**
+ * Screens with no entity config. There is nothing to generate structure from,
+ * so `body` is the whole page.
+ *
+ * These are the screens users most need explained, which is exactly why a
+ * generator can say nothing useful about them.
+ */
+export const CUSTOM_SCREENS = [
+    {
+        key: "dashboard",
+        title: "Dashboard",
+        path: "/dashboard",
+        source: "apps/admin/src/pages/Dashboard/Dashboard.jsx",
+        intro:
+            "The first screen after signing in. It shows the charts and figures chosen for your role.",
+        body: [
+            {
+                heading: "What you are looking at",
+                text:
+                    "Each card is one measure — a total, a breakdown by category, or a trend over time. " +
+                    "Which cards appear depends on your role, so two people signing in may see different " +
+                    "dashboards.",
+            },
+            {
+                heading: "The numbers only cover what you can see",
+                text:
+                    "If your role is limited to your own department, every figure here counts only your " +
+                    "department's records. Two people looking at the same card can legitimately see " +
+                    "different totals.",
+            },
+            {
+                heading: "Finding out what a figure means",
+                text:
+                    "A card with an information icon has an explanation behind it, written by whoever " +
+                    "built it, plus a breakdown of how the total splits up. If a number surprises you, " +
+                    "check there first.",
+            },
+        ],
+    },
+    {
+        key: "user-roles",
+        title: "User Roles",
+        path: "/user-roles",
+        source: "apps/admin/src/pages/Setup/UserRoles.jsx",
+        intro:
+            "Where you decide what each role can do. Pick a role, then tick what it may see and change.",
+        body: [
+            {
+                heading: "How the grid works",
+                text:
+                    "Every screen in the panel is a row. The columns are the things you can permit: " +
+                    "viewing the screen at all, adding records, editing them, deleting them, and so on. " +
+                    "A role sees a screen in its sidebar only if the view permission is ticked.",
+            },
+            {
+                heading: "Data scope — the setting people miss",
+                text:
+                    "Above the grid is a data scope setting, and it is the most powerful control here. " +
+                    "'All records' lets the role see everything. 'Their department' limits them to " +
+                    "records belonging to their own department. 'Only their own' narrows it further, to " +
+                    "records they created. This applies everywhere at once — lists, searches, reports " +
+                    "and dashboard figures.",
+            },
+            {
+                heading: "Changes take effect on next sign-in",
+                text:
+                    "Someone already signed in keeps their current permissions for up to a minute. Ask " +
+                    "them to sign out and back in if you need a change to apply immediately.",
+            },
+            {
+                heading: "Administrators are not affected",
+                text:
+                    "Administrator accounts bypass this screen entirely. Nothing you set here limits " +
+                    "them.",
+            },
+        ],
+    },
+    {
+        key: "dashboard-builder",
+        title: "Dashboard Builder",
+        path: "/dashboard-builder",
+        source: "apps/admin/src/pages/Setup/DashboardBuilder.jsx",
+        intro:
+            "Build the cards that appear on dashboards, then choose which roles see which ones.",
+        body: [
+            {
+                heading: "Building a card",
+                text:
+                    "Pick what you are measuring, then how to show it. A single figure is a stat tile; " +
+                    "a split by category is a bar or pie chart; a change over time is a line chart. " +
+                    "A preview updates as you go, so you can see what you are making before saving it.",
+            },
+            {
+                heading: "Grouping and filtering",
+                text:
+                    "Grouping splits one figure into several — users by department, for instance. " +
+                    "Filters narrow which records count at all, using the same conditions as the filter " +
+                    "panel on any list screen.",
+            },
+            {
+                heading: "Write the explanation",
+                text:
+                    "A stat tile has a description field. It is worth filling in: 'average failed " +
+                    "attempts' could mean per user, per day or per session, and only you know which. " +
+                    "What you write appears behind the information icon on the finished card.",
+            },
+            {
+                heading: "Putting cards on a dashboard",
+                text:
+                    "A saved card does nothing until it is pinned to a role's dashboard. Cards can be " +
+                    "dragged into position and resized, and each role gets its own arrangement.",
+            },
+        ],
+    },
+    {
+        key: "audit-log",
+        title: "Audit Log",
+        path: "/audit-log",
+        source: "apps/admin/src/pages/Master/AuditLog.jsx",
+        intro:
+            "A record of every change made in the panel — who changed what, when, and what the value " +
+            "was before.",
+        body: [
+            {
+                heading: "What is recorded",
+                text:
+                    "Creating, editing and deleting a record are all logged, along with the person who " +
+                    "did it. Opening a screen or running a search is not — this is a record of changes, " +
+                    "not of activity.",
+            },
+            {
+                heading: "Seeing what actually changed",
+                text:
+                    "Opening an entry shows a field-by-field comparison: what each value was before and " +
+                    "what it became. Only fields that actually changed are listed.",
+            },
+            {
+                heading: "Passwords are never shown",
+                text:
+                    "Sensitive fields appear as 'hidden'. The log records that a password changed, never " +
+                    "what it changed to.",
+            },
+            {
+                heading: "Nothing here can be edited or removed",
+                text:
+                    "The log is read-only by design, for everyone including administrators. There is no " +
+                    "delete button because a deletable audit trail is not an audit trail.",
+            },
+        ],
+    },
+    {
+        key: "login-attempt-logs",
+        title: "Login Attempt Logs",
+        path: "/login-attempt-logs",
+        source: "apps/admin/src/pages/Master/LoginAttemptLogs.jsx",
+        intro:
+            "Failed and successful sign-in attempts, and which accounts are currently locked.",
+        body: [
+            {
+                heading: "Why an account locks",
+                text:
+                    "Repeated failed sign-ins lock an account temporarily. This is what stops someone " +
+                    "guessing passwords, and it clears on its own after a short wait.",
+            },
+            {
+                heading: "Helping someone locked out",
+                text:
+                    "Find their email in this list to confirm the lock, and check the attempt count. A " +
+                    "handful of failures is usually a forgotten password; a large number from an " +
+                    "unfamiliar address is worth investigating.",
+            },
+        ],
+    },
+    {
+        key: "seo-settings",
+        title: "SEO Settings",
+        path: "/seo-settings",
+        source: "apps/admin/src/pages/Setup/SeoSettings.jsx",
+        intro:
+            "Site-wide defaults for how your website appears in search results — used by any page that " +
+            "does not set its own.",
+        body: [
+            {
+                heading: "Defaults, not overrides",
+                text:
+                    "Anything set on an individual page wins. What you put here fills the gaps, so a " +
+                    "page nobody has written a description for still has a sensible one.",
+            },
+            {
+                heading: "Templates",
+                text:
+                    "The title template controls how page titles are assembled — typically the page name " +
+                    "followed by your site name. Set it once here rather than repeating the site name on " +
+                    "every page.",
+            },
+        ],
+    },
+    {
+        key: "seo-404",
+        title: "404 Log",
+        path: "/seo-404",
+        source: "apps/admin/src/pages/Setup/SeoNotFoundLog.jsx",
+        intro:
+            "Addresses visitors asked for on your website that do not exist, and how often.",
+        body: [
+            {
+                heading: "What to do with it",
+                text:
+                    "A frequently requested missing address usually means a page moved and something " +
+                    "still links to the old location. Turn it into a redirect straight from this screen.",
+            },
+            {
+                heading: "Not everything needs fixing",
+                text:
+                    "Some entries are automated scanning or mistyped addresses nobody will ever visit " +
+                    "again. Sort by how often each was requested and work down from the top.",
+            },
+        ],
+    },
+];
+
+export const ALL_SCREENS = [...CONFIG_SCREENS, ...CUSTOM_SCREENS];

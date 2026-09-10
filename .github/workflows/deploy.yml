@@ -1,0 +1,108 @@
+name: CI/CD
+
+# Test & build on every push and PR. Deploy only runs after a push lands on
+# main (i.e. after a human merges a PR) — see docs/conventions/70-deployment.md.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: # lets a human re-run a deploy with no new commit
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test
+
+      - run: npm run build
+
+  deploy:
+    name: Deploy to VPS
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      APP_DIR: ${{ secrets.APP_DIR }}
+      PM2_APP_NAME: ${{ secrets.PM2_APP_NAME }}
+    steps:
+      - name: Load deploy key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Trust the server's host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      # Mirrors the manual runbook in docs/conventions/70-deployment.md exactly,
+      # so a human can still do this by hand if the pipeline is ever down.
+      # git pull is --ff-only on purpose: if the server checkout has drifted
+      # (someone edited a file over SSH), this fails loudly instead of
+      # discarding whatever is sitting there uncommitted.
+      #
+      # APP_DIR/PM2_APP_NAME are passed as env vars to the *remote* shell
+      # rather than interpolated into the script text, and the heredoc
+      # delimiter is quoted ('REMOTE') so nothing here is expanded by the
+      # runner's shell before it reaches ssh — only secrets we control land in
+      # the command line, and even those go through env rather than ${{ }}
+      # substitution inside the script body.
+      - name: Pull, build and restart
+        run: |
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "APP_DIR='$APP_DIR' PM2_APP_NAME='$PM2_APP_NAME' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$APP_DIR"
+          git pull --ff-only origin main
+          npm ci
+          npm run build
+          pm2 restart "$PM2_APP_NAME" --update-env
+          pm2 save
+
+          # pm2 jlist is meant to be pure JSON on stdout, but a daemon/CLI
+          # version mismatch makes pm2 print an ">>>> In-memory PM2 is
+          # out-of-date" banner to stdout first (harmless, but breaks a naive
+          # JSON.parse) — so pull out the outermost [...] before parsing
+          # rather than assume the whole stream is clean.
+          status=$(pm2 jlist | node -e '
+            const raw = require("fs").readFileSync(0, "utf8");
+            const start = raw.indexOf("[");
+            const end = raw.lastIndexOf("]");
+            const apps = JSON.parse(raw.slice(start, end + 1));
+            const app = apps.find(a => a.name === process.env.PM2_APP_NAME);
+            console.log(app ? app.pm2_env.status : "missing");
+          ')
+
+          if [ "$status" != "online" ]; then
+            echo "pm2 process $PM2_APP_NAME is '$status' after restart, not 'online'" >&2
+            pm2 logs "$PM2_APP_NAME" --lines 50 --nostream
+            exit 1
+          fi
+
+          echo "$PM2_APP_NAME is online."
+          REMOTE
+
+      - name: Reminder
+        run: echo "Deployed. Verify from outside (https://<your-domain>), not just this pm2 status — the proxy and certificate are not exercised by this check."

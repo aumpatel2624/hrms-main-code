@@ -1,0 +1,230 @@
+{
+  "main": {
+    "id": "c46f35e1a03cb78e",
+    "type": "split",
+    "children": [
+      {
+        "id": "0c222e21a70e1ee7",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "1c14c7a69cbe84cb",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "01-Modules/Leaves/Compensatory Leave Request.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Compensatory Leave Request"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "e8c1413862cac1bc",
+    "type": "split",
+    "children": [
+      {
+        "id": "0af4201675a1a1b7",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "a07d7b8d2d745020",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "4e7f102a52cf13c3",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "091410e2c1e17974",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "b09c12270dc3c75b",
+    "type": "split",
+    "children": [
+      {
+        "id": "77d4c5ab42fc8fbb",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "3cc77d85e91d01ca",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "01-Modules/Leaves/Compensatory Leave Request.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks"
+            }
+          },
+          {
+            "id": "a82c3ceb35b69973",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "01-Modules/Leaves/Compensatory Leave Request.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links"
+            }
+          },
+          {
+            "id": "c432a5bbfb8c7ced",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "ccc9f1d48701fb86",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "e2d84019695ba0a5",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "01-Modules/Leaves/Compensatory Leave Request.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "1c14c7a69cbe84cb",
+  "lastOpenFiles": [
+    "01-Modules/Leaves/_Module-Spec.md",
+    "01-Modules/HR-Setup/HR Settings.md",
+    "01-Modules/HR-Setup/Employment Type.md",
+    "01-Modules/Expenses/Expense Claim Type.md",
+    "01-Modules/Expenses/Expense Claim Detail.md",
+    "01-Modules/Expenses/Expense Claim Account.md",
+    "01-Modules/Expenses/Expense Claim.md",
+    "01-Modules/Expenses/_Module-Spec.md",
+    "00-Overview/README.md",
+    "01-Modules/Shift-Attendance/sedTUc7AA",
+    "01-Modules/Shift-Attendance/sedrMikoo",
+    "01-Modules/Shift-Attendance/sedLmednQ",
+    "01-Modules/Shift-Attendance/sedJam8bj",
+    "01-Modules/Shift-Attendance/sedy8PbW3",
+    "01-Modules/Shift-Attendance/sednzCSTD",
+    "01-Modules/Shift-Attendance/sedOZlujF",
+    "01-Modules/Shift-Attendance/sedLEAYHi",
+    "01-Modules/Shift-Attendance/sedMmPpW3",
+    "01-Modules/Shift-Attendance/sedR1fZ1U",
+    "01-Modules/Shift-Attendance/Shift Type.md",
+    "01-Modules/Shift-Attendance/Shift Schedule.md",
+    "01-Modules/Shift-Attendance/Shift Schedule Assignment.md",
+    "01-Modules/Shift-Attendance/Shift Request.md",
+    "01-Modules/Shift-Attendance/Shift Location.md",
+    "01-Modules/Shift-Attendance/Shift Assignment.md",
+    "01-Modules/Shift-Attendance/Shift Assignment Tool.md",
+    "01-Modules/Shift-Attendance/Employee Checkin.md",
+    "01-Modules/Shift-Attendance/Employee Attendance Tool.md",
+    "01-Modules/Shift-Attendance/Attendance Request.md",
+    "01-Modules/Performance/Employee Performance Feedback.md",
+    "01-Modules/Performance/Employee Feedback Rating.md",
+    "01-Modules/Performance/Employee Feedback Criteria.md",
+    "01-Modules/Performance/Appraisal Template.md",
+    "01-Modules/Performance/Appraisal Template Goal.md",
+    "01-Modules/Performance/Appraisal KRA.md",
+    "01-Modules/Performance/Appraisal Goal.md"
+  ]
+}

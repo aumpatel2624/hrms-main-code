@@ -1,0 +1,34 @@
+{
+  "name": "demo-panel",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently -k -c blue,magenta \"npm:dev:*\"",
+    "dev:server": "npm run dev -w @demo-panel/server",
+    "dev:admin": "npm run dev -w @demo-panel/admin",
+    "build": "npm run build -w @demo-panel/admin",
+    "start": "npm start -w @demo-panel/server",
+    "seed": "npm run seed -w @demo-panel/server",
+    "docs": "node scripts/docs-capture.js",
+    "serve": "npm run build && npm start",
+    "test": "node scripts/docs-fingerprint.test.js && node packages/shared/test.js && node packages/shared/seoResolve.test.js && node apps/server/utils/auditDiff.test.js && node apps/server/utils/listQuery.test.js && node apps/server/utils/scope.test.js && node apps/server/utils/widgetQuery.test.js && node apps/server/utils/sendTriggeredEmail.test.js && node apps/server/models/softDelete.test.js && node apps/admin/src/components/ui/dashboard-canvas.test.js",
+    "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/server/out",
+    "reinstall": "npm run clean && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0"
+  },
+  "allowScripts": {
+    "bcrypt@5.1.1": true,
+    "esbuild@0.28.1": true,
+    "sharp@0.34.5": true,
+    "@scarf/scarf": false
+  }
+}

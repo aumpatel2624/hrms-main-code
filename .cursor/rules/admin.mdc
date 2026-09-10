@@ -1,0 +1,33 @@
+---
+description: Conventions for the Vite + React admin SPA in apps/admin
+globs: apps/admin/**
+alwaysApply: false
+---
+
+Follow the pipeline in [AGENTS.md](../../AGENTS.md) — design before code, and stop and ask if a
+request contradicts a documented convention.
+
+Before editing anything here, read
+[docs/conventions/40-frontend.md](../../docs/conventions/40-frontend.md). If someone is asking
+whether a feature is possible rather than how to build it,
+[docs/conventions/60-limits.md](../../docs/conventions/60-limits.md) is the honest answer.
+
+The three that are most often got wrong:
+
+- **A CRUD screen is a config object in `src/entities/`, not a page file.** Writing a page component
+  that lists records with add/edit/view/delete means you took the wrong path. When only the *form*
+  is genuinely not CRUD — an editor whose value is a live preview — keep the config for the list and
+  replace just the form routes; `crudRoutes(config)` returns a plain array. Never fork the CRUD
+  components.
+- A new screen needs a menu row in `apps/server/seed/index.js`, or it is invisible to every
+  non-admin user and resolves to all-false permissions.
+- Use semantic Tailwind tokens (`text-primary`, `bg-secondary`, `text-fg-quaternary`) and merge with
+  `cx` from `@/utils/cx`. Raw colours break dark mode. There is no `tailwind.config.js` — the theme
+  is CSS-first in `src/styles/theme.css`, and a utility it does not define silently generates
+  nothing.
+
+A custom page does for itself what the CRUD components do for you: gate on `currentPagePermissions`
+from `MenuContext`, handle both delete-failure paths, and set `document.title`.
+
+Never edit `src/components/base/` or `src/components/application/` — vendored Untitled UI. Wrap them
+in `src/components/ui/` instead.

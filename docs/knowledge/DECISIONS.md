@@ -2307,4 +2307,48 @@ Copy this block. Number sequentially.
 - **Deviates from convention**: none beyond what's named above (soft-delete reversal instead of
   source's hard-delete; a bespoke scheduler instead of a library, forced by the no-new-dependency
   rule colliding with an offline user who can't be asked).
+- **As built (foundation half only — `feat/leaves`)**: built exactly as designed above for the
+  foundation fork's scope — Q-4 scoping (`SCOPES.APPROVER`, `UserRoles.roles[].dataScope` per-menu-row
+  override, `checkPermission`/`buildScopeFilter`/`utils/requestEmployee.js`), Q-5 scheduler
+  (`SchedulerRunLog`, `jobs/leaveScheduler.js`, wired into `server.js`), Department Approver
+  (`parentDepartmentId` + three approver arrays, `utils/approvers.js`), minimal `Attendance`, and
+  `LeaveType`/`LeavePeriod`/`HolidayList`(+`holidays[]`)/`HolidayListAssignment`/`LeavePolicy`
+  (+`leavePolicyDetails[]`)/`LeavePolicyAssignment`(+`grant-allocations`)/`LeaveAllocation`
+  (+`earnedLeaveSchedule[]`,+`adjust`)/`LeaveLedgerEntry` (read-only) — 9 new models, full CRUD API/UI
+  for the 8 that need it. `LeaveAdjustment`/`CompensatoryLeaveRequest`/`LeaveApplication`/
+  `LeaveEncashment`/`LeaveBlockList`/Leave Control Panel are the still-pending second fork, exactly as
+  planned — this module does not reach `done` until that lands.
+  - **Two deviations from the design's implied precision, both deliberate, both flagged in code
+    comments (`utils/leaveProration.js`)**: the earned-leave schedule's sub-period boundaries are
+    calendar-months-from-`fromDate`, not source's quarter/half-year-calendar-anchored boundaries —
+    this ADR's own two named rounding rules (tenure whole-number, earned-leave decimal) are
+    reproduced exactly, but the elaborate `get_half_year_periods`/`get_semester_start` machinery is
+    not. Carry-forward computation uses `getLeaveBalance` as of the previous allocation's `toDate`
+    rather than source's period-scoped `get_unused_leaves` query — correct for this fork's own
+    single-allocation-per-period cases, worth revisiting once the second fork's Leave Application
+    introduces real consumption entries to net against.
+  - **A bug in this fork's own new code, found and fixed before it ever shipped**: the first draft of
+    `buildEarnedLeaveSchedule` only pro-rated the schedule's first row for a mid-period join date —
+    every calendar month between the schedule's `fromDate` and an employee's actual (later) join date
+    wrongly earned a full month's share instead of zero. Caught by hand-verifying the pro-ration math
+    against a real mid-year joiner during the HTTP walk, not by reading the diff; fixed to place the
+    join date per-row instead of only on the first, locked in with a new test case.
+  - **A pre-existing bug found while live-testing Q-4, unrelated to Leaves itself, filed as GitHub
+    #10 and fixed**: `apps/server/controllers/v1/user.controller.js`'s `getUserById`/`updateUser`/
+    `deleteUser` built their scope-guarded query as `{ _id: userId, ...buildScopeFilter(...) }` — when
+    the "own" dimension (declared against the field name `"_id"` on this one collection) is active,
+    the spread's own `_id` key silently overwrote the URL param's `_id`, so the route ignored
+    `:userId` entirely under an `own`-scoped role and always resolved to the caller's own account.
+    Fixed with `$and` instead of object-spread in all three functions.
+  - **Verified live** (full detail in `STATE.md`'s Log entry for this session): `npm test` green,
+    `npm run seed` twice (idempotent), `npm run build` green, a full `grant-allocations` cycle against
+    a real mid-year-joiner employee with hand-verified pro-ration math, the `/adjust` action and the
+    generic-PATCH rejection both confirmed, `runDueJobs()` manually exercised against constructed
+    fixtures for both `processExpiredAllocations` and `allocateEarnedLeaves` (including same-day
+    no-op idempotency), the Q-4 per-menu-row override confirmed live over real HTTP (before/after the
+    `#10` fix), an unrelated existing HR User account confirmed listing all seeded Departments
+    (module 1) to rule out a scoping regression, and `resolveApprovers`/`getEmployeesApprovedBy`
+    exercised against the real seeded Apidel department hierarchy as well as synthetic fixtures. Full
+    browser UI click-through was not performed (Playwright's browser binary could not be downloaded in
+    this sandbox) — relied on a clean Vite build plus manual config review instead.
 

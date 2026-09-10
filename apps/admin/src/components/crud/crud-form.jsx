@@ -218,6 +218,12 @@ const CrudForm = ({ config, mode = "add" }) => {
     if (!isEdit && !currentPagePermissions.write) {
         return <PageHeader title={`Add ${config.singular}`} pageTitle={config.plural} description="You do not have permission to create records here." />;
     }
+    // Issue #11: nothing previously stopped a direct URL visit to the edit
+    // route regardless of the edit permission (only the "Edit" button on
+    // CrudView was permission-gated) — matching the add-mode guard above.
+    if (isEdit && !currentPagePermissions.edit) {
+        return <PageHeader title={`Edit ${config.singular}`} pageTitle={config.plural} description="You do not have permission to edit records here." />;
+    }
 
     return (
         <>

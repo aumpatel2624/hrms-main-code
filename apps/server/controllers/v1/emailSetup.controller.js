@@ -209,6 +209,6 @@ export const listEmailSetupByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, data: list, status: 200 });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, message: error.message, status: 500 });
+    return res.status(500).json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };

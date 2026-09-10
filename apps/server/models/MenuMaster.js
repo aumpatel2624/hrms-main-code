@@ -53,6 +53,12 @@ const MenuMasterSchema = new mongoose.Schema(
 MenuMasterSchema.index({ menuGroup: 1, sequence: 1 });
 MenuMasterSchema.index({ parentMenu: 1 });
 MenuMasterSchema.index({ menuName: 1 });
+// A screen's URL is its real identity — the seeder upserts by menuUrl (not
+// name+group, which let the same URL end up duplicated under two different
+// groups; found live, OPEN-QUESTIONS.md Q-1 / GitHub #6). A real unique
+// index is what actually holds under concurrency; the soft-delete plugin
+// rewrites this as a partial index automatically.
+MenuMasterSchema.index({ menuUrl: 1 }, { unique: true });
 MenuMasterSchema.index({ isActive: 1, createdAt: -1 });
 MenuMasterSchema.index({ createdAt: -1 });
 

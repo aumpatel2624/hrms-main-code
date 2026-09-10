@@ -158,7 +158,7 @@ export const login = async (req, res) => {
     console.error("Error in login:", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -201,7 +201,7 @@ export const getCurrentUser = async (req, res) => {
     console.error("Error in getCurrentUser:", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -251,7 +251,7 @@ export const getLoginStatus = async (req, res) => {
   } catch (error) {
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -273,7 +273,7 @@ export const getLoginStatusByEmail = async (req, res) => {
   } catch (error) {
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -303,7 +303,7 @@ export const resetLoginAttempts = async (req, res) => {
   } catch (error) {
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -331,7 +331,7 @@ export const unlockAccount = async (req, res) => {
   } catch (error) {
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -377,7 +377,7 @@ export const blockUser = async (req, res) => {
     console.error("Error blocking account:", error);
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -409,7 +409,7 @@ export const unblockUser = async (req, res) => {
     console.error("Error unblocking account:", error);
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -501,6 +501,6 @@ export const listLoginAttempts = async (req, res) => {
     console.error("Error fetching login attempts:", error);
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };

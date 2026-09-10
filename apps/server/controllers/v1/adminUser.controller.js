@@ -31,7 +31,7 @@ export const createAdminUser = async (req, res) => {
     console.error("Error in createAdminUser:", error);
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -69,7 +69,7 @@ export const updateAdminUser = async (req, res) => {
     console.error("Error in updateAdminUser:", error);
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -106,7 +106,7 @@ export const deleteAdminUser = async (req, res) => {
     console.error("Error in deleteAdminUser:", error);
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -127,7 +127,7 @@ export const getAdminUserById = async (req, res) => {
     console.error("Error in getAdminUserById:", error);
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -141,7 +141,7 @@ export const listAllAdminUsers = async (req, res) => {
     console.error("Error in listAllAdminUsers:", error);
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -164,7 +164,7 @@ export const listAdminUsersByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, data: list, status: 200 });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, message: error.message, status: 500 });
+    return res.status(500).json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -195,6 +195,6 @@ export const resetAdminUserPassword = async (req, res) => {
     console.error("Error in resetAdminUserPassword:", error);
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };

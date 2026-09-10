@@ -345,12 +345,38 @@ export const emailForConfig = {
         // claimed by another live Email For — except the one this record
         // itself already claims, so editing it doesn't blank the field. `id`
         // is undefined on the add form, so nothing is ever "this record" yet.
+        //
+        // A row backfilled before the registry existed (or whose registry
+        // entry was since removed) can carry a triggerKey that was never a
+        // real option — e.g. `unassigned.*` from `backfillEmailForTriggerKeys`
+        // (found live, OPEN-QUESTIONS.md Q-2 / GitHub #5). Such a value can
+        // never appear in the registry list, so the select renders empty and
+        // saving either fails validation or silently reassigns the row to a
+        // different real trigger. This loader runs before the record's own
+        // fetch resolves (the two effects aren't linked — see crud-form.jsx),
+        // so it re-fetches the record itself in edit mode purely to learn its
+        // *current* triggerKey and, if that value isn't a real registry
+        // option, injects it as a synthetic, clearly-labelled one — keeping
+        // the row editable (and re-savable without a silent reassignment)
+        // without pretending it points at a real event.
         triggerOptions: (_values, { id }) =>
-            getEmailTriggers().then((res) =>
-                (res.data?.data?.triggers ?? [])
+            Promise.all([
+                getEmailTriggers(),
+                id ? getEmailForById(id).catch(() => null) : Promise.resolve(null),
+            ]).then(([triggersRes, recordRes]) => {
+                const options = (triggersRes.data?.data?.triggers ?? [])
                     .filter((t) => !t.claimedByEmailForId || t.claimedByEmailForId === id)
-                    .map((t) => ({ value: t.key, label: t.label })),
-            ),
+                    .map((t) => ({ value: t.key, label: t.label }));
+
+                const currentKey = recordRes?.data?.data?.triggerKey;
+                if (currentKey && !options.some((o) => o.value === currentKey)) {
+                    options.push({
+                        value: currentKey,
+                        label: `${currentKey} (not a real event — reassign or remove)`,
+                    });
+                }
+                return options;
+            }),
     },
     sections: [
         { id: "details", title: "Details" },

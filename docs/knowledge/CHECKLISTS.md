@@ -315,3 +315,39 @@ Department Approver (originally sketched for module 2) do not belong here either
       1-4 left; manifest entries exist (6 new screens) for a future run to pick up
 - [ ] Found, not fixed (pre-existing, unrelated): `POST /cities` leaks a raw Mongoose validation
       message on a 500 instead of the generic error — the starter's own City controller, not HRMS
+
+## Training & Skills (module 6, ADR-022)
+
+- [x] `npm test` green (10/10) throughout
+- [x] `npm run seed` idempotent ×2 (6 Skills both times; 11 role-matrix grants added once, 0 on rerun)
+- [x] `npm run build` green
+- [x] Full live-HTTP walk against the real dev database: added `skills[]` to a real seeded Designation
+      (surfaced and fixed a real bug — see below) → Training Program created → `endTime<=startTime`
+      guard confirmed (400) → Training Event created with 2 real seeded employees as attendees →
+      Training Feedback rejected before the event was Completed (400) → `markTrainingEventCompleted`
+      cascaded correctly (Present+not-yet-submitted → Completed, Absent row untouched) → Training
+      Feedback then confirmed rejected for the Absent attendee (400), rejected for a non-attendee
+      (400), and succeeded for the Present one, flipping that row to `Feedback Submitted` →
+      `markTrainingEventScheduled` confirmed resetting every row to Open unconditionally →
+      `EmployeeSkillMap` created, `populateFromDesignation` pulled both skills from the Designation
+      with the chosen mid (3) proficiency default → duplicate-EmployeeSkillMap-per-employee guard
+      confirmed (409) → **both Recruitment retrofits confirmed end to end** (after fixing the bugs
+      below): a fresh `InterviewType` created with `expectedSkillSet` round-tripped correctly; a real
+      `Interview`/`InterviewFeedback` chain (with a throwaway Interviewer `User`) confirmed
+      `skillAssessment[]` round-trips via `getById` → role-permission checks confirmed live with
+      throwaway HR User/Employee accounts (Skill: HR User 403 create / 200 read; Training Event: HR
+      User 403 create / 200 edit; Training Feedback: Employee 200 search) → all throwaway data
+      (Training Program/Event/Feedback, Employee Skill Map, Interview Type ×2, Interview, Interview
+      Feedback, Job Applicant, country/state/city, 3 throwaway accounts) cleaned up, `Designation.
+      skills[]` reverted to empty, `npm run seed` re-run to restore the test employee's original
+      designation, employee count confirmed back to 195
+- [x] Three things found live, all recorded in `DECISIONS.md` ADR-022's As-built note: `EmployeeSkillMap`
+      proficiency defaults to `3` not source's `1` (deliberate, a mid default reads as "unassessed");
+      two real bugs in the retrofit target controllers (`updateDesignation` overwrote fields with
+      `undefined` on partial updates, `InterviewType`/`InterviewFeedback`'s create/update controllers
+      didn't know about the new array fields at all) — both fixed, both their own commits; a
+      pre-existing, unrelated `LoginAttempt` bug (orphaned rows from an earlier module's verify
+      session collided with reused throwaway emails) worked around, not fixed — `OPEN-QUESTIONS.md`
+      Q-12
+- [ ] Client-facing documentation screenshots actually captured (`npm run docs`) — same gap modules
+      1-5 left; manifest entries exist (5 new screens) for a future run to pick up

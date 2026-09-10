@@ -2019,5 +2019,32 @@ Copy this block. Number sequentially.
   `Interview.get_skill_wise_average_rating`'s rollup can be built directly against
   `InterviewFeedback.skillAssessment[]` without a schema change.
 - **Deviates from convention**: none new beyond ADR-016/017's already-approved patterns.
-- **As built**: pending — implementation follows in the same session.
+- **As built**: as decided, plus what verify actually found:
+  1. `EmployeeSkillMap.employeeSkills[].proficiency` defaults to `3` (mid,
+     1-5 scale), not source's hardcoded `1` — confirmed live via
+     `populateFromDesignation`: a mid default reads as "not yet assessed,"
+     a `1` default would read as "rated lowest" for skills nobody has
+     actually evaluated yet.
+  2. **Two real bugs found live wiring the three retrofits, both fixed,
+     both their own commits**: `Designation`'s `updateDesignation` (module
+     1) unconditionally overwrote `designationName`/`companyId`/`isActive`
+     with `undefined` on any partial update that omitted them — including
+     every `skills[]`-only update this retrofit needed — failing their
+     `required` validators as an opaque 500. `InterviewType`'s create/
+     update and `InterviewFeedback`'s create (module 3) still destructured
+     their pre-retrofit field lists, so `expectedSkillSet`/`skillAssessment`
+     silently never saved even though the schema had room for them since
+     the day this ADR's commits landed. All caught by actually exercising
+     the retrofits over real HTTP, not by reading the diff.
+  3. A third, unrelated pre-existing bug surfaced and worked around, not
+     fixed: two throwaway accounts (`verify.hruser@example.com`,
+     `verify.employee@example.com`) collided with orphaned `LoginAttempt`
+     rows left behind by an earlier module's verify session whose `User`
+     had since been deleted — auth's login-attempt upsert isn't idempotent
+     against a stale row for a reused email, so login 500'd with a duplicate-
+     key error. Cleaned up the specific stale rows (confirmed orphaned first)
+     and moved on; recorded as `OPEN-QUESTIONS.md` Q-12 so it isn't
+     rediscovered blind by the next module that reuses a throwaway email.
+  4. Skipped a widget entry for `employee-skill-maps` as planned — one row
+     per employee, an embedded array, nothing meaningful to group or sum.
 

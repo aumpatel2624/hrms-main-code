@@ -56,13 +56,13 @@ grill-me round-1 summary in Log below. Not designed end-to-end: each module gets
 | Module | Design | Schema | API | UI | Verified | Docs | Shipped | From |
 |---|---|---|---|---|---|---|---|---|
 | Organization Setup (Company, Branch, Department, Designation, Employment Type, Employee Grade — HR Settings deferred, ADR-017) | done | done | done | done | done | done | local-only | grill-me 2026-09-10 |
-| Employee Records (Employee core, Property History, Health Insurance, ID Document Type, Department Approver) | - | - | - | - | - | - | - | grill-me 2026-09-10 |
+| Employee Records (Employee core, Employee Health Insurance — ADR-018) | - | - | - | - | - | - | - | grill-me 2026-09-10 |
 | Recruitment (Job Requisition → Opening → Applicant → Interview → Offer, public job board) | - | - | - | - | - | - | - | grill-me 2026-09-10 |
 | Onboarding & Separation (Onboarding+Template, Boarding Activity, Separation+Template, Exit Interview, Full & Final Statement/Asset/Outstanding) | - | - | - | - | - | - | - | grill-me 2026-09-10 |
-| Employee Career Events (Transfer, Promotion, Referral, Grievance+Type, Staffing Plan+Detail) | - | - | - | - | - | - | - | grill-me 2026-09-10 |
+| Employee Career Events (Transfer, Promotion, Employee Property History, Referral, Grievance+Type, Staffing Plan+Detail) | - | - | - | - | - | - | - | grill-me 2026-09-10; Property History moved here from module 2 by ADR-018 (its only writers are Transfer/Promotion, both here) |
 | Training & Skills (Program, Event, Result, Feedback, Skill, Designation Skill, Expected Skill Set, Employee Skill Map, Skill Assessment) | - | - | - | - | - | - | - | grill-me 2026-09-10 |
-| Travel (Travel Request, Itinerary, Costing, Purpose of Travel) | - | - | - | - | - | - | - | grill-me 2026-09-10 |
-| Leaves (Type, Period, Policy+Detail, Policy Assignment, Control Panel, Allocation, Earned Leave Schedule, Adjustment, Compensatory Leave Request, Application, Encashment, Ledger Entry, Block List+Date+Allow, Holiday List Assignment) | - | - | - | - | - | - | - | grill-me 2026-09-10 |
+| Travel (Travel Request, Itinerary, Costing, Purpose of Travel, Identification Document Type) | - | - | - | - | - | - | - | grill-me 2026-09-10; ID Document Type moved here from module 2 by ADR-018 (its only named consumer is Travel Request.personal_id_type) |
+| Leaves (Type, Period, Policy+Detail, Policy Assignment, Control Panel, Allocation, Earned Leave Schedule, Adjustment, Compensatory Leave Request, Application, Encashment, Ledger Entry, Block List+Date+Allow, Holiday List Assignment, Department Approver + the per-screen/company scoping mechanism) | - | - | - | - | - | - | - | grill-me 2026-09-10; Department Approver moved here from module 2 by ADR-018 — first and largest consumer of the `get_approvers` pattern, and where OPEN-QUESTIONS.md Q-4 gets answered |
 | Shift & Attendance (Shift Type, Assignment, Request, Schedule, Schedule Assignment, Assignment Tool, Location, Attendance, Attendance Request, Checkin, Attendance Tool) | - | - | - | - | - | - | - | grill-me 2026-09-10 |
 | Payroll — Structure & Assignment (Salary Component+Account, Salary Detail, Salary Structure, Salary Structure Assignment, Bulk Assignment) | - | - | - | - | - | - | - | grill-me 2026-09-10 |
 | Payroll — Run (Salary Slip+Leave+Loan+Timesheet, Payroll Entry+Employee Detail, Payroll Period+Date, Payroll Settings, Payroll Correction+Child, Salary Withholding+Cycle) | - | - | - | - | - | - | - | grill-me 2026-09-10 |

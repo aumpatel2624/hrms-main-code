@@ -7,7 +7,10 @@ import {
 
 export const createDepartment = async (req, res) => {
   try {
-    const { departmentName, departmentCode, companyId, isActive } = req.body;
+    const {
+      departmentName, departmentCode, companyId, isActive,
+      parentDepartmentId, leaveApprovers, expenseApprovers, shiftRequestApprovers,
+    } = req.body;
 
     if (!departmentName || !companyId) {
       return res.status(400).json({
@@ -37,6 +40,10 @@ export const createDepartment = async (req, res) => {
       departmentCode,
       companyId,
       isActive,
+      parentDepartmentId: parentDepartmentId || null,
+      leaveApprovers,
+      expenseApprovers,
+      shiftRequestApprovers,
     });
 
     await department.save();
@@ -58,7 +65,10 @@ export const createDepartment = async (req, res) => {
 
 export const updateDepartment = async (req, res) => {
   try {
-    const { departmentName, departmentCode, companyId, isActive } = req.body;
+    const {
+      departmentName, departmentCode, companyId, isActive,
+      parentDepartmentId, leaveApprovers, expenseApprovers, shiftRequestApprovers,
+    } = req.body;
     const { departmentId } = req.params;
 
     const department = await DepartmentModels.findById(departmentId);
@@ -71,10 +81,24 @@ export const updateDepartment = async (req, res) => {
       });
     }
 
+    // ADR-024: a department can never be its own direct parent. A deeper
+    // cycle isn't practically preventable here — see the schema comment.
+    if (parentDepartmentId && String(parentDepartmentId) === String(department._id)) {
+      return res.status(400).json({
+        message: "A department cannot be its own parent department",
+        isOk: false,
+        status: 400,
+      });
+    }
+
     department.departmentName = departmentName;
     department.departmentCode = departmentCode;
     department.companyId = companyId;
     department.isActive = isActive;
+    if (parentDepartmentId !== undefined) department.parentDepartmentId = parentDepartmentId || null;
+    if (leaveApprovers !== undefined) department.leaveApprovers = leaveApprovers;
+    if (expenseApprovers !== undefined) department.expenseApprovers = expenseApprovers;
+    if (shiftRequestApprovers !== undefined) department.shiftRequestApprovers = shiftRequestApprovers;
 
     await department.save();
 

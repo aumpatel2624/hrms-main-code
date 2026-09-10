@@ -79,7 +79,15 @@ const recordFailedAttempt = async (userId, userEmail, ipAddress, clientLocation 
             location = getLocationFromIP(ipAddress);
         }
 
-        let attempt = await LoginAttempt.findOne({ userId });
+        // Keyed by userEmail, not userId: userEmail carries the real unique
+        // index (LoginAttempt.js), and a User document can be deleted and
+        // recreated with the same email (e.g. a throwaway verify account) —
+        // looking up by the now-stale userId would miss that still-live row
+        // and then collide with it on insert. Re-pointing userId here is
+        // what lets a fresh account "take over" tracking for its email
+        // rather than colliding with an orphaned row nothing ever cleaned up
+        // (found live, OPEN-QUESTIONS.md Q-12 / GitHub #9).
+        let attempt = await LoginAttempt.findOne({ userEmail });
 
         if (!attempt) {
             // Create new record
@@ -95,6 +103,7 @@ const recordFailedAttempt = async (userId, userEmail, ipAddress, clientLocation 
             });
         } else {
             // Update existing record
+            attempt.userId = userId;
             attempt.attemptCount += 1;
             attempt.lastLoginAttempt = new Date();
             attempt.ipAddress = ipAddress || "unknown";
@@ -223,6 +232,8 @@ const recordSuccessfulLogin = async (userId, userEmail, ipAddress = null, client
         }
 
         const updateData = {
+            userId,
+            userEmail,
             attemptCount: 0,
             isLocked: false,
             lockUntil: null,
@@ -238,20 +249,16 @@ const recordSuccessfulLogin = async (userId, userEmail, ipAddress = null, client
             updateData.locationCoordinates = location;
         }
 
+        // Keyed by userEmail, not userId — same reasoning as
+        // recordFailedAttempt above (OPEN-QUESTIONS.md Q-12 / GitHub #9).
+        // userEmail/userId are both in updateData now, on both the insert
+        // and update path, so there's no longer a window where an upserted
+        // row is missing its required userEmail.
         const result = await LoginAttempt.findOneAndUpdate(
-            { userId },
+            { userEmail },
             updateData,
             { new: true, upsert: true, setDefaultsOnInsert: true }
         );
-
-        // If it's a new record (upserted), set the required fields
-        if (!result.userEmail) {
-            result.userEmail = userEmail;
-            if (!result.ipAddress) {
-                result.ipAddress = ipAddress || "unknown";
-            }
-            await result.save();
-        }
 
         console.log(`Successful login recorded for ${userEmail} from IP: ${ipAddress}`);
         return result;

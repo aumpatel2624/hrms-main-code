@@ -4,14 +4,33 @@
  * to Accepted/Rejected syncs the linked Job Applicant (application-code
  * equivalent of source's `on_change` hook). `makeEmployee` builds a
  * prefilled payload only — the client still POSTs it to /employees itself.
+ *
+ * Vacancy-cap check against Staffing Plan added by ADR-021 (module 5),
+ * closing OPEN-QUESTIONS.md Q-8 — applied at create, the closest analog to
+ * source's submit-time `validate_vacancies` since this doctype has no
+ * docstatus (ADR-016).
  */
 import { runListQuery } from "../../utils/listQuery.js";
 import JobOffer from "../../models/JobOffer.js";
 import JobApplicant from "../../models/JobApplicant.js";
+import { findActivePlanDetail, getDesignationCounts } from "./staffingPlan.controller.js";
 import {
   getReferencingCounts,
   formatReferenceMessage,
 } from "../../utils/referenceHelper.js";
+
+const validateVacancyCap = async (designationId, companyId, onDate) => {
+  if (!designationId) return null;
+  const found = await findActivePlanDetail(designationId, companyId, onDate || new Date());
+  if (!found) return null;
+  const { plan, detail } = found;
+  if (!detail.numberOfPositions) return null;
+  const { employeeCount, jobOpenings } = await getDesignationCounts(designationId, companyId);
+  if (employeeCount + jobOpenings >= detail.numberOfPositions) {
+    return `There are no vacancies under Staffing Plan ${plan._id} for this designation`;
+  }
+  return null;
+};
 
 const REQUIRED_FIELDS = ["jobApplicantId", "offerDate", "companyId"];
 const OPTIONAL_FIELDS = [
@@ -48,6 +67,11 @@ export const createJobOffer = async (req, res) => {
     if (!fields.designationId) {
       const applicant = await JobApplicant.findById(jobApplicantId);
       if (applicant?.designationId) fields.designationId = applicant.designationId;
+    }
+
+    const vacancyError = await validateVacancyCap(fields.designationId, fields.companyId, fields.offerDate);
+    if (vacancyError) {
+      return res.status(409).json({ isOk: false, status: 409, message: vacancyError });
     }
 
     const doc = await JobOffer.create(fields);

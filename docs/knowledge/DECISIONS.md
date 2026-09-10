@@ -1909,3 +1909,115 @@ Copy this block. Number sequentially.
   rule. Pre-existing in the starter's own City controller, unrelated to
   HRMS; not touched here.
 
+---
+
+### ADR-022 — Training & Skills: Training Result folded into Training Event; three retrofits into Recruitment close Q-9
+
+- **Date**: 2026-09-10
+- **Status**: accepted
+- **Context**: `system-design` for HRMS module 6, same standing overnight authorization, modules 1-5
+  reviewed clean before starting this one. Read all source files in full: `Training Program.md`,
+  `Training Event.md`, `Training Result.md`, `Training Feedback.md`, `Employee Training.md`,
+  `Skill.md`, `Designation Skill.md`, `Expected Skill Set.md`, `Employee Skill Map.md`, `Skill
+  Assessment.md`. `Employee Skill` (the `Employee Skill Map` child row) was not separately read — its
+  shape is fully inferable from its three siblings (`Designation Skill`, `Expected Skill Set`, `Skill
+  Assessment` all wrap one `Skill` ref + one rating-shaped field; source's own `employee_skill_map.js`
+  names the field `proficiency`, hardcoded to `1` when auto-populated) and reading it would have added
+  nothing this pass didn't already establish.
+- **This module's source is unusually full of dead/broken code, more than any module so far** —
+  worth naming as a pattern, not just listing each bug: `Training Event.status` doesn't exist (the
+  real field is `event_status`) so `Training Result.on_submit`'s attempt to set it is a silent no-op;
+  the "Training Feedback" notification template references context variables nothing populates; the
+  "mandatory" line in the Training Scheduled email references a field (`is_mandatory`) that lives on
+  the child row, not the parent, so it's always false; `Training Result.on_cancel` has no rollback
+  (a flagged, undocumented asymmetry); `Training Feedback` has no uniqueness guard against duplicate
+  submissions despite being the kind of record that needs one. None of this is being reproduced —
+  ADR-016 already committed this project to idiomatic, working behavior, and a training-and-skills
+  module is exactly the kind of internal tooling where reproducing broken notification templates has
+  zero value and real cost (confusing HR admins with silent no-ops).
+- **The big call: `Training Result`/`Training Result Employee` don't become separate collections —
+  their whole function folds into `Training Event`'s own attendee rows.** Source's `Training Result`
+  exists mainly to be a *submittable* wrapper around per-attendee scoring (hours/grade/comments),
+  gated on "the Training Event must already be submitted" — a docstatus-driven ceremony this project
+  doesn't have (ADR-016). Once docstatus is gone, `Training Result` has no remaining reason to be a
+  document separate from the event it's scoring: HR can enter attendance/hours/grade/comments
+  directly on each `TrainingEvent.employees[]` row, and a `markCompleted` action does the same
+  cascade source's real, working `on_update_after_submit` logic does (Present + not yet
+  Feedback-Submitted → Completed; reopening to Scheduled resets every row to Open). This is a
+  simplification in shape, not in function — every real per-attendee fact source captured is still
+  captured, just on one document instead of two.
+- **`EmployeeTraining` (a per-Employee "trainings I've attended" child table) is dropped entirely** —
+  source's own spec file couldn't confirm which doctype embeds it (a documented, unresolved gap in
+  the source repo itself), and whatever it would show is already fully answered by querying
+  `TrainingEvent` where `employees.employeeId` matches — a redundant mirror of data this project
+  already has one home for, not a second source of truth to keep in sync.
+- **Three retrofits into modules already shipped, each closing a real gap those modules' own forks
+  named and deferred** — this module is where `Skill` (the shared master four different doctypes
+  hang off) finally exists, so the doctypes that were waiting on it get touched now, each its own
+  commit:
+  1. `Designation` (module 1) gains `skills[]` (array of `Skill` refs) — source's `Designation Skill`
+     child table, whose real parent (`Designation`) lives outside the traced Frappe source but whose
+     consumer (`Employee Skill Map`'s designation-change auto-populate) is fully documented. No
+     separate `DesignationSkill` collection — a plain ref array on `Designation` is the whole thing.
+  2. `InterviewType` (module 3, Recruitment) gains `expectedSkillSet[]` (array of `Skill` refs) —
+     module 3's own fork explicitly skipped this ("since Skill doesn't exist yet, skip that part"),
+     naming exactly this retrofit as the follow-up.
+  3. `InterviewFeedback` (module 3, Recruitment) gains `skillAssessment[]` (array of `{skillId,
+     rating}`) — closes the `Skill Assessment` half of `OPEN-QUESTIONS.md` Q-9 named since ADR-019.
+     The per-skill average-rating rollup onto the parent `Interview` (source's
+     `get_skill_wise_average_rating`) is **not** retrofitted in the same pass — it's a read-side
+     reporting query, not a data-shape gap, and can be added whenever a screen actually needs it
+     without touching the schema again; noted, not built speculatively now.
+  - Q-9's *other* half (the reverse `EmployeeReferral`↔`JobApplicant` status sync) is untouched by
+    this module — nothing here unblocks it, it stays open.
+- **Decision** (schema, one line each):
+  1. `TrainingProgram` — trainingProgramName (required, unique), companyId (required),
+     trainerName/trainerEmail, supplierName/contactNumber, description (required), status enum
+     (Scheduled/Completed/Cancelled, default Scheduled, plain user-set field — source has no
+     controller logic driving it either).
+  2. `TrainingEvent` — eventName (required, unique), trainingProgramId (optional), eventStatus enum
+     (Scheduled/Completed/Cancelled, default Scheduled — no docstatus, this is the whole lifecycle),
+     type enum (Seminar/Theory/Workshop/Conference/Exam/Internet/Self-Study, required), level enum
+     (optional, Beginner/Intermediate/Advance), companyId, trainerName/Email, supplierName/
+     contactNumber, course, location (required), startTime/endTime (both required, endTime strictly
+     after startTime — real guard, kept), introduction (required), employees[] (employeeId required,
+     isMandatory bool, attendance enum Present/Absent, status enum Open/Completed/`Feedback
+     Submitted` default Open, hours, grade, comments — merges former Training Result Employee fields
+     directly in). Action `markCompleted`/`markScheduled`: cascades `employees[].status` per source's
+     real `on_update_after_submit` logic (stated above).
+  3. `TrainingFeedback` — employeeId (required ref), trainingEventId (required ref), feedback
+     (required text). Guards, real and kept: reject unless the linked TrainingEvent's `eventStatus`
+     is Completed (replaces source's docstatus=1 check with the equivalent status check); reject
+     unless this employee is a row in that event's `employees[]`; reject if that row's `attendance`
+     is Absent. On create: set the matching attendee row's `status` to `Feedback Submitted`.
+  4. `Skill` — skillName (required, unique), description.
+  5. `EmployeeSkillMap` — employeeId (required, unique ref — one map per employee), employeeSkills[]
+     (skillId required ref, proficiency number). Action `populateFromDesignation` (server-side
+     version of source's client-only convenience): clears and repopulates `employeeSkills` from the
+     Employee's Designation's `skills[]` (retrofit point 1), proficiency defaulted to a middling
+     value — implementer's call on the exact default, source hardcoded `1` on what's presumably a
+     1-5 scale, meaning "lowest," which reads oddly as an auto-populate default; flag the choice
+     either way in the As-built note, don't silently copy a default that may read as an insult.
+  6. Retrofits (own commits): `Designation.skills[]`, `InterviewType.expectedSkillSet[]`,
+     `InterviewFeedback.skillAssessment[]` — all per point above.
+  7. Roles: Skill is HR-Manager-full/HR-User-**read-only** (matches source exactly — the third
+     asymmetric-permission master in this project after Employee Health Insurance and Interview
+     Feedback). Training Program/Event/Feedback are HR-Manager-full, HR-User varies per doctype
+     (check each file's real table — Training Event's HR User has no create/delete/submit-equivalent
+     right at all, closer to read+edit-existing than the usual full-access pattern). Employee Skill
+     Map is HR-User-full-minus-delete, HR-Manager-full. Training Feedback additionally grants
+     Employee-role create/read/write — source has no `if_owner` restriction here either (flagged
+     explicitly in the source file as a real gap, not invented), so match it: an unscoped grant, not
+     an "only mine" one, same treatment as every other Employee-role grant deferred to Q-4.
+  8. Menu: new "Training & Skills" menu group (Training Program, Training Event, Training Feedback,
+     Skill, Employee Skill Map — 5 screens). Reporting: `widgetSources.js` entries for
+     `training-events` (groupable by eventStatus/type/companyId) and `employee-skill-maps`
+     (groupable by nothing meaningful yet — mostly a lookup screen, note if there's truly nothing
+     worth a widget rather than forcing one).
+- **Consequences**: `OPEN-QUESTIONS.md` Q-9's Skill-Assessment half closes; its referral-reverse-sync
+  half stays open, explicitly untouched by this module. Any future screen wanting
+  `Interview.get_skill_wise_average_rating`'s rollup can be built directly against
+  `InterviewFeedback.skillAssessment[]` without a schema change.
+- **Deviates from convention**: none new beyond ADR-016/017's already-approved patterns.
+- **As built**: pending — implementation follows in the same session.
+

@@ -178,6 +178,19 @@ mongoose
   .then(() => {
     console.log("✅ DB connected");
     databasestatus = "Connected";
+
+    // ADR-024 (Q-5): dependency-free background scheduler — no node-cron
+    // (AGENTS.md forbids new dependencies without asking). Single process
+    // only, see jobs/leaveScheduler.js. Fire once shortly after boot so a
+    // long-stopped dev server catches up same-day without waiting for the
+    // first 5-minute tick, then on the regular interval. Both fire-and-forget
+    // with their own error handling — never block/crash server startup.
+    setTimeout(() => {
+      runDueJobs().catch((error) => console.error("leaveScheduler: initial run failed:", error));
+    }, 10_000);
+    setInterval(() => {
+      runDueJobs().catch((error) => console.error("leaveScheduler: scheduled run failed:", error));
+    }, 5 * 60 * 1000);
   })
   .catch((err) => {
     console.error("❌ DB Connection Error =>", err);
@@ -231,8 +244,11 @@ import separationRoutes from "./routes/v1/separation.routes.js";
 import employeeCareerEventsRoutes from "./routes/v1/employeeCareerEvents.routes.js";
 import trainingSkillsRoutes from "./routes/v1/trainingSkills.routes.js";
 import travelRoutes from "./routes/v1/travel.routes.js";
+import leavesRoutes from "./routes/v1/leaves.routes.js";
+import attendanceRoutes from "./routes/v1/attendance.routes.js";
 import seoPublicRoutes from "./routes/v1/seoPublic.routes.js";
 import jobsPublicRoutes from "./routes/v1/jobsPublic.routes.js";
+import { runDueJobs } from "./jobs/leaveScheduler.js";
 
 app.use("/api/v1", authRoutes);
 app.use("/api/v1", adminUsersRoutes);
@@ -257,6 +273,8 @@ app.use("/api/v1", separationRoutes);
 app.use("/api/v1", employeeCareerEventsRoutes);
 app.use("/api/v1", trainingSkillsRoutes);
 app.use("/api/v1", travelRoutes);
+app.use("/api/v1", leavesRoutes);
+app.use("/api/v1", attendanceRoutes);
 app.use("/api/v1/otp", otpRoutes);
 
 // Unauthenticated on purpose — the public website has no session. See

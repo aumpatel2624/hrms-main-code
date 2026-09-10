@@ -422,4 +422,181 @@ export const WIDGET_SOURCES = Object.freeze({
       createdAt: "date",
     },
   },
+
+  // ADR-024 (Leaves, HRMS module 8 foundation). No entry for holidays[]/
+  // leavePolicyDetails[]/earnedLeaveSchedule[] — embedded children, covered
+  // by their parent's entry the same way every other module's has been.
+  "leave-types": {
+    label: "Leave Types",
+    model: "LeaveType",
+    aggregatable: { maxLeavesAllowed: "Max leaves allowed" },
+    groupable: {
+      isLwp: { label: "Leave without pay" },
+      isEarnedLeave: { label: "Earned leave" },
+      isCarryForward: { label: "Carry forward" },
+      isActive: { label: "Active status" },
+    },
+    dateFields: { createdAt: "Created" },
+    filterable: {
+      leaveTypeName: "string",
+      isLwp: "boolean",
+      isEarnedLeave: "boolean",
+      isCompensatory: "boolean",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
+
+  "leave-periods": {
+    label: "Leave Periods",
+    model: "LeavePeriod",
+    aggregatable: {},
+    groupable: {
+      companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
+      isActive: { label: "Active status" },
+    },
+    dateFields: { fromDate: "From date", toDate: "To date", createdAt: "Created" },
+    filterable: {
+      companyId: "objectId",
+      fromDate: "date",
+      toDate: "date",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
+
+  "holiday-lists": {
+    label: "Holiday Lists",
+    model: "HolidayList",
+    aggregatable: { totalHolidays: "Total holidays" },
+    groupable: {
+      companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
+      isActive: { label: "Active status" },
+    },
+    dateFields: { fromDate: "From date", toDate: "To date", createdAt: "Created" },
+    filterable: {
+      holidayListName: "string",
+      companyId: "objectId",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
+
+  "holiday-list-assignments": {
+    label: "Holiday List Assignments",
+    model: "HolidayListAssignment",
+    aggregatable: {},
+    groupable: {
+      applicableFor: { label: "Applicable for" },
+      holidayListId: { label: "Holiday List", lookup: { from: "holidaylists", labelField: "holidayListName" } },
+      isActive: { label: "Active status" },
+    },
+    dateFields: { fromDate: "From date", createdAt: "Created" },
+    filterable: {
+      holidayListId: "objectId",
+      applicableFor: "string",
+      employeeId: "objectId",
+      companyId: "objectId",
+      fromDate: "date",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
+
+  "leave-policies": {
+    label: "Leave Policies",
+    model: "LeavePolicy",
+    aggregatable: {},
+    groupable: { isActive: { label: "Active status" } },
+    dateFields: { createdAt: "Created" },
+    filterable: { title: "string", isActive: "boolean", createdAt: "date" },
+  },
+
+  "leave-policy-assignments": {
+    label: "Leave Policy Assignments",
+    model: "LeavePolicyAssignment",
+    aggregatable: {},
+    groupable: {
+      status: { label: "Status" },
+      leavePolicyId: { label: "Leave Policy", lookup: { from: "leavepolicies", labelField: "title" } },
+      companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
+    },
+    dateFields: { effectiveFrom: "Effective from", effectiveTo: "Effective to", createdAt: "Created" },
+    filterable: {
+      employeeId: "objectId",
+      leavePolicyId: "objectId",
+      leavePeriodId: "objectId",
+      companyId: "objectId",
+      status: "string",
+      createdAt: "date",
+    },
+    scopeable: { owner: "employeeId" },
+  },
+
+  "leave-allocations": {
+    label: "Leave Allocations",
+    model: "LeaveAllocation",
+    aggregatable: {
+      newLeavesAllocated: "New leaves allocated",
+      totalLeavesAllocated: "Total leaves allocated (cached)",
+    },
+    groupable: {
+      leaveTypeId: { label: "Leave Type", lookup: { from: "leavetypes", labelField: "leaveTypeName" } },
+      status: { label: "Status" },
+      companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
+    },
+    dateFields: { fromDate: "From date", toDate: "To date", createdAt: "Created" },
+    filterable: {
+      employeeId: "objectId",
+      leaveTypeId: "objectId",
+      companyId: "objectId",
+      leavePolicyAssignmentId: "objectId",
+      status: "string",
+      createdAt: "date",
+    },
+    scopeable: { owner: "employeeId" },
+  },
+
+  "leave-ledger-entries": {
+    label: "Leave Ledger Entries",
+    model: "LeaveLedgerEntry",
+    aggregatable: { leaves: "Leaves (signed)" },
+    groupable: {
+      transactionType: { label: "Transaction type" },
+      leaveTypeId: { label: "Leave Type", lookup: { from: "leavetypes", labelField: "leaveTypeName" } },
+      isExpired: { label: "Expired" },
+      isCarryForward: { label: "Carry forward" },
+    },
+    dateFields: { fromDate: "From date", toDate: "To date", createdAt: "Created" },
+    filterable: {
+      employeeId: "objectId",
+      leaveTypeId: "objectId",
+      transactionType: "string",
+      companyId: "objectId",
+      isCarryForward: "boolean",
+      isExpired: "boolean",
+      createdAt: "date",
+    },
+    scopeable: { owner: "employeeId" },
+  },
+
+  attendances: {
+    label: "Attendance",
+    model: "Attendance",
+    aggregatable: {},
+    groupable: {
+      status: { label: "Status" },
+      companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
+    },
+    dateFields: { attendanceDate: "Attendance date", createdAt: "Created" },
+    filterable: {
+      employeeId: "objectId",
+      companyId: "objectId",
+      status: "string",
+      attendanceDate: "date",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+    scopeable: { owner: "employeeId" },
+  },
 });

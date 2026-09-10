@@ -1,10 +1,20 @@
 import mongoose from "mongoose";
 
-// Per-interviewer scorecard (ADR-019). No docstatus, no Skill Assessment
-// child table (Skill doesn't exist until module 6 — OPEN-QUESTIONS.md Q-9,
-// so no average-rating computation either). Guards (interviewer must be
-// assigned, not before scheduledOn, one per interviewer per interview) are
-// enforced in the controller.
+// Per-interviewer scorecard (ADR-019). No docstatus. skillAssessment
+// retrofitted by ADR-022 (module 6) now that Skill exists — closes the
+// Skill Assessment half of OPEN-QUESTIONS.md Q-9 this file originally
+// deferred. No average-rating rollup onto the parent Interview yet — a
+// read-side reporting query, not a data-shape gap, added when a screen
+// needs it. Guards (interviewer must be assigned, not before scheduledOn,
+// one per interviewer per interview) are enforced in the controller.
+const SkillAssessmentSchema = new mongoose.Schema(
+  {
+    skillId: { type: mongoose.Schema.Types.ObjectId, ref: "Skill", required: true },
+    rating: { type: Number, min: 1, max: 5, required: true },
+  },
+  { _id: false },
+);
+
 const InterviewFeedbackSchema = new mongoose.Schema(
   {
     interviewId: {
@@ -25,6 +35,10 @@ const InterviewFeedbackSchema = new mongoose.Schema(
     feedback: {
       type: String,
       trim: true,
+    },
+    skillAssessment: {
+      type: [SkillAssessmentSchema],
+      default: [],
     },
     isActive: {
       type: Boolean,

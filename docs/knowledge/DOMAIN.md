@@ -114,19 +114,143 @@ and the spine every module hangs off.
 | Self-only, approver-scoped, global (role shapes) | The three shapes every HRMS role takes — see `HRMS-Obsidian-Vault/02-Roles/Roles Overview.md` and `HRMS-Port-Spec/02-Cross-Cutting/Permission Model (RBAC).md`. Employee = self-only; Leave/Expense/Shift Approver = approver-scoped (named on the record, or via Department Approver fallback); HR User/HR Manager/System Manager = global (within their company, per ADR-016). |
 | Idiomatic status field | This project's replacement for Frappe's `docstatus` (Draft/Submitted/Cancelled/Amended). Each module's own `RULES.md` entry names its status values and illegal transitions — there is no shared generic lifecycle engine (ADR-016). |
 
-### Spine entities (built early, referenced by nearly every later module)
+### Organization Setup (module 1, built 2026-09-10 — ADR-017)
 
-- **Company** — Is a: a legal entity. Owned by/scoped to: itself (top of the scoping hierarchy).
-  Deletable: blocked while any Branch/Department/Employee/etc. references it (guarded, per INV-2
-  pattern). Real values: one placeholder ("Apidel") until real multi-company names are supplied.
-- **Branch** — Is a: a site under a Company. Scoped to: one Company.
-- **Department**, **Designation** — Is a: classification masters, scoped to one Company. Seed data:
-  `apidel-org-chart.csv`. Two pairs of raw department strings are data-entry variants, not distinct
-  departments — normalize both when seeding (decided 2026-09-10, `OPEN-QUESTIONS.md` Q-6): "PR and
-  Social media" / "PR and social media" → **"PR and Social media"**; "Corporate Recruitment" /
-  "Corporate Recruitment & Facility Management" → **"Corporate Recruitment & Facility Management"**.
-- **Employee** — Is a: the hub. Owned by/scoped to: one Company; self-scoped to its own `userId` for
-  self-service. Full field shape: `HRMS-Port-Spec/02-Cross-Cutting/Employee Core Model.md`.
+Company/Branch/Designation/Employment Type/Employee Grade are new models; Department already existed
+as one of the starter's 13 demo screens and was extended, not replaced (see ADR-017 for the reuse
+reasoning). None of these are submittable — plain `isActive` masters, no status field.
+
+#### Company
+
+- **Is a**: A legal entity within Apidel — the top of the scoping hierarchy every later HRMS model
+  hangs off.
+- **Owned by / scoped to**: itself — nothing scopes a Company.
+- **Identified by**: `companyName` (globally unique); `companyCode` optional, globally unique when set.
+- **Lifecycle**: created by HR User/HR Manager; `isActive` toggled to retire one without breaking
+  references. No status field.
+- **Deletable**: only when nothing references it (Branch, Department, Designation, and — from module 2
+  on — Employee).
+
+| Field | Type | Notes |
+|---|---|---|
+| companyName | String, required | trimmed, unique |
+| companyCode | String | trimmed, unique when present (partial index — see the model file for why not `sparse`) |
+| isActive | Boolean | default true |
+
+Seed data: one placeholder row, **"Apidel"** — real multi-company names deferred (grill-me,
+2026-09-10: user chose "one entity for now, placeholder name").
+
+#### Branch
+
+- **Is a**: A site/location under a Company (e.g. Vadodara, USA) — a plain name label, not a
+  structured address (no Country/State/City linkage; ADR-017 decided that's not needed yet).
+- **Owned by / scoped to**: one Company.
+- **Identified by**: `branchName`, unique per `companyId`.
+- **Lifecycle**: created by HR User/HR Manager; `isActive` toggled to retire one.
+- **Deletable**: only when nothing references it.
+
+| Field | Type | Notes |
+|---|---|---|
+| branchName | String, required | trimmed, unique per companyId |
+| companyId | ObjectId ref Company, required | indexed |
+| isActive | Boolean | default true |
+
+Seed data: the 12 distinct `location` values in `apidel-org-chart.csv` (Guna MP, Guyana, Indore, Kota,
+Meerut, Mumbai, Noida, Porbandar, Pune, Shivpuri MP, USA, Vadodara), all under Apidel.
+
+#### Department (extended)
+
+- **Is a**: A team/department. Pre-existing starter demo entity; core-ERPNext-shaped in the source
+  spec, not HRMS-authored.
+- **Owned by / scoped to**: one Company (added by ADR-017 — previously unscoped).
+- **Identified by**: `departmentName`, unique per `companyId`; `departmentCode` optional (unlike
+  before ADR-017, when it was required — the real Apidel data has no code concept), unique per
+  `companyId` when present.
+- **Lifecycle**: created by HR User/HR Manager; `isActive` toggled to retire one. `User.departmentId`
+  (the pre-existing starter demo relation) still points here unchanged.
+- **Deletable**: only when nothing references it (existing `getReferencingCounts` guard, unchanged).
+
+| Field | Type | Notes |
+|---|---|---|
+| departmentName | String, required | trimmed, unique per companyId |
+| departmentCode | String | trimmed, optional, unique per companyId when present |
+| companyId | ObjectId ref Company, required | indexed; backfilled on pre-existing rows by `ensureApidelCompany`/`backfillDepartmentCompany` in `seed/index.js` |
+| isActive | Boolean | default true |
+
+Seed data: 24 real Apidel department names from `apidel-org-chart.csv`, normalized per the two
+decisions below, plus the starter's original 6 fictional demo rows (Sales/Operations/Finance/Customer
+Support/Warehouse/Human Resources — unchanged, left alone, now scoped to a separate throwaway
+"Fixture Co" company created inside `seed/fixtures.js` itself, never touching the real Company).
+
+Two pairs of raw department strings in the CSV are data-entry variants, not distinct departments —
+normalized when seeding (decided 2026-09-10, `OPEN-QUESTIONS.md` Q-6): "PR and Social media" / "PR
+and social media" → **"PR and Social media"**; "Corporate Recruitment" / "Corporate Recruitment &
+Facility Management" → **"Corporate Recruitment & Facility Management"**.
+
+#### Designation
+
+- **Is a**: A job title (e.g. "Sr. Executive"). Frappe's `appraisal_template`/`skills` fields on this
+  doctype are Performance/Skills-module concerns, added as fields here when those modules are built,
+  not modelled now.
+- **Owned by / scoped to**: one Company.
+- **Identified by**: `designationName`, unique per `companyId`.
+- **Lifecycle**: created by HR User/HR Manager; `isActive` toggled to retire one.
+- **Deletable**: only when nothing references it.
+
+| Field | Type | Notes |
+|---|---|---|
+| designationName | String, required | trimmed, unique per companyId |
+| companyId | ObjectId ref Company, required | indexed |
+| isActive | Boolean | default true |
+
+Seed data: 29 distinct designation titles from `apidel-org-chart.csv`, under Apidel.
+
+#### Employment Type
+
+- **Is a**: An employment category (Full-time, Contract, ...). **Not** company-scoped — Frappe's own
+  source doesn't scope it per company either (ADR-017).
+- **Owned by / scoped to**: global.
+- **Identified by**: `employmentTypeName`, globally unique.
+- **Deletable**: only when nothing references it.
+
+| Field | Type | Notes |
+|---|---|---|
+| employmentTypeName | String, required | trimmed, unique |
+| isActive | Boolean | default true |
+
+Seed data: Full-time, Part-time, Contract, Intern — **not** derived from the org-chart CSV (it has no
+employment-type column); a small reasonable starter set for the client to edit.
+
+#### Employee Grade
+
+- **Is a**: A pay-grade label (L1, L2, ...). No `defaultSalaryStructure` field yet — `SalaryStructure`
+  doesn't exist until the Payroll module; added there as a schema change to this model, not modelled
+  speculatively now. **Not** company-scoped, same reasoning as Employment Type.
+- **Owned by / scoped to**: global.
+- **Identified by**: `gradeName`, globally unique.
+- **Deletable**: only when nothing references it.
+
+| Field | Type | Notes |
+|---|---|---|
+| gradeName | String, required | trimmed, unique |
+| isActive | Boolean | default true |
+
+Seed data: none — nothing in the org-chart data names actual grades, and none were invented.
+
+#### Roles seeded this module
+
+`RoleMaster` rows for the 6 non-admin HRMS roles (Employee, HR User, HR Manager, Leave Approver,
+Expense Approver, Interviewer) — `System Manager` maps to the existing `ADMIN` account type, no
+`RoleMaster` row. Each has a `UserRoles` matrix document (`dataScope: "all"`); only HR User and HR
+Manager are granted read/write/edit/delete on this module's 6 screens (Company, Branch, Department,
+Designation, Employment Type, Employee Grade) — the other four roles have no matrix row for them
+(fail-closed default: no row = no access), confirmed live in `verify` (see `STATE.md` log).
+
+#### Employee (not built yet — module 2)
+
+Not a Frappe-authored doctype (core ERPNext) — its expected field shape is reconstructed in
+`HRMS-Port-Spec/02-Cross-Cutting/Employee Core Model.md`; treat that file as the starting field list
+when Employee Records (module 2) is designed.
 
 ## Not modelled
 

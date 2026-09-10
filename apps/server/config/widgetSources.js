@@ -370,4 +370,31 @@ export const WIDGET_SOURCES = Object.freeze({
       createdAt: "date",
     },
   },
+
+  // ADR-022 (Training & Skills). No entry for employee-skill-maps — it's a
+  // lookup screen (one row per employee, an embedded skills array), nothing
+  // meaningful to group or sum yet.
+  "training-events": {
+    label: "Training Events",
+    model: "TrainingEvent",
+    aggregatable: {},
+    groupable: {
+      eventStatus: { label: "Status" },
+      type: { label: "Type" },
+      companyId: {
+        label: "Company",
+        lookup: { from: "companies", labelField: "companyName" },
+      },
+    },
+    dateFields: { startTime: "Start Time", createdAt: "Created" },
+    filterable: {
+      eventName: "string",
+      eventStatus: "enum",
+      type: "enum",
+      companyId: "objectId",
+      trainingProgramId: "objectId",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
 });

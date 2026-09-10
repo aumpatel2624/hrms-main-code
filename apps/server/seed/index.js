@@ -36,6 +36,7 @@ import RoleMaster from "../models/RoleMaster.js";
 import UserRoles from "../models/UserRoles.js";
 import JobApplicantSource from "../models/JobApplicantSource.js";
 import GrievanceType from "../models/GrievanceType.js";
+import Skill from "../models/Skill.js";
 import { PERMISSION_KEYS } from "@demo-panel/shared/permissions";
 import { SCOPES } from "@demo-panel/shared/scopes";
 
@@ -206,6 +207,20 @@ const MENU_GROUPS = [
       { menuName: "Employee Promotion", menuUrl: "/employee-promotion", icon: "ri-arrow-up-circle-line" },
       { menuName: "Employee Referral", menuUrl: "/employee-referral", icon: "ri-user-shared-line" },
       { menuName: "Staffing Plan", menuUrl: "/staffing-plan", icon: "ri-organization-chart" },
+    ],
+  },
+  // HRMS module 6 (ADR-022). Training Result folds into Training Event's
+  // own employees[] rows — no separate screen for it.
+  {
+    menuGroupName: "Training & Skills",
+    sequence: 2.95,
+    icon: "ri-graduation-cap-line",
+    menus: [
+      { menuName: "Training Program", menuUrl: "/training-program", icon: "ri-book-open-line" },
+      { menuName: "Training Event", menuUrl: "/training-event", icon: "ri-calendar-event-line" },
+      { menuName: "Training Feedback", menuUrl: "/training-feedback", icon: "ri-feedback-line" },
+      { menuName: "Skill", menuUrl: "/skill", icon: "ri-star-smile-line" },
+      { menuName: "Employee Skill Map", menuUrl: "/employee-skill-map", icon: "ri-user-star-line" },
     ],
   },
   {
@@ -1108,6 +1123,91 @@ const seedEmployeeCareerEventsRoles = async () => {
   console.log(`✅ Employee Career Events roles: ${matrixRowsAdded} menu grant(s) added`);
 };
 
+/**
+ * Skill starter set (ADR-022) — not derived from any real data, the
+ * org-chart CSV has no skills data. Upserted by name.
+ */
+const seedTrainingSkillsMasters = async () => {
+  const SKILLS = [
+    { skillName: "Communication", description: "Written and verbal communication" },
+    { skillName: "Leadership", description: "Team leadership and people management" },
+    { skillName: "Client Servicing", description: "Client relationship management" },
+    { skillName: "Recruitment Sourcing", description: "Candidate sourcing and pipeline building" },
+    { skillName: "MS Excel", description: "Spreadsheet analysis and reporting" },
+    { skillName: "Negotiation", description: "Offer and vendor negotiation" },
+  ];
+  let created = 0;
+  for (const skill of SKILLS) {
+    const result = await Skill.findOneAndUpdate(
+      { skillName: skill.skillName },
+      { ...skill, isActive: true },
+      { upsert: true, setDefaultsOnInsert: true, new: false },
+    );
+    if (!result) created += 1;
+  }
+  console.log(`✅ Training & Skills masters: ${created} new Skill(s), ${SKILLS.length} ensured`);
+};
+
+/**
+ * Training & Skills roles (ADR-022). Reproduces each doctype's real,
+ * not-symmetric source permission table — several HR User rows here are
+ * "read + edit existing, no create/delete" (source's own Write/Create
+ * distinction: Write=1, Create=0), not this project's usual full-CRUD-minus-
+ * delete pattern. Skill is HR-Manager-full / HR-User-**read-only** (same
+ * shape as Employee Health Insurance, module 2) — matches source exactly,
+ * don't default to the usual pattern here.
+ */
+const seedTrainingSkillsRoles = async () => {
+  const perm = (write, edit, del) =>
+    Object.fromEntries(PERMISSION_KEYS.map((key) => [key, key === "read" || (key === "write" && write) || (key === "edit" && edit) || (key === "delete" && del)]));
+  const full = perm(true, true, true);
+  const fullNoDelete = perm(true, true, false);
+  const editOnly = perm(false, true, false); // read + edit existing, no create/delete — source's Write-without-Create rows
+  const readOnly = perm(false, false, false);
+
+  // { menuUrl: { roleName: permObject } }
+  const GRANTS = {
+    "/training-program": { "HR User": editOnly, "HR Manager": full },
+    "/training-event": { "HR User": editOnly, "HR Manager": full },
+    "/training-feedback": { "HR User": editOnly, "HR Manager": full, Employee: fullNoDelete },
+    "/skill": { "HR User": readOnly, "HR Manager": full },
+    "/employee-skill-map": { "HR User": fullNoDelete, "HR Manager": full },
+  };
+
+  const allMenuUrls = Object.keys(GRANTS);
+  const menus = await MenuMaster.find({ menuUrl: { $in: allMenuUrls } }).lean();
+  if (menus.length !== allMenuUrls.length) {
+    console.log("⚠️  Training & Skills roles: not every menu row exists yet — run seedMenus first");
+    return;
+  }
+  const menuByUrl = Object.fromEntries(menus.map((m) => [m.menuUrl, m]));
+
+  const addRow = (userRoles, menu, permObj) => {
+    if (userRoles.roles.some((r) => String(r.menuId) === String(menu._id))) return false;
+    userRoles.roles.push({ menuId: menu._id, menuGroupId: menu.menuGroup, ...permObj });
+    return true;
+  };
+
+  let matrixRowsAdded = 0;
+  const roleNames = ["Employee", "HR User", "HR Manager"];
+  for (const roleName of roleNames) {
+    const role = await RoleMaster.findOne({ roleName });
+    if (!role) continue;
+    const userRoles = await UserRoles.findOne({ roleId: role._id });
+    if (!userRoles) continue;
+
+    let changed = false;
+    for (const [menuUrl, grantByRole] of Object.entries(GRANTS)) {
+      const permObj = grantByRole[roleName];
+      if (!permObj) continue;
+      if (addRow(userRoles, menuByUrl[menuUrl], permObj)) { matrixRowsAdded += 1; changed = true; }
+    }
+    if (changed) await userRoles.save();
+  }
+
+  console.log(`✅ Training & Skills roles: ${matrixRowsAdded} menu grant(s) added`);
+};
+
 const run = async () => {
   if (!process.env.DATABASE) {
     console.error("❌ DATABASE is not set in .env");
@@ -1140,6 +1240,8 @@ const run = async () => {
   await seedOnboardingSeparationRoles();
   await seedEmployeeCareerEventsMasters();
   await seedEmployeeCareerEventsRoles();
+  await seedTrainingSkillsMasters();
+  await seedTrainingSkillsRoles();
 
   await mongoose.disconnect();
   console.log("✅ Seeding complete");

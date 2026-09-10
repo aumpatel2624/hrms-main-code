@@ -20,11 +20,11 @@ frozen `docs/knowledge/` schema.
 - Tracking starts at **module 8 (Leaves)** — modules 1-7's per-fork token counts weren't captured
   at the time and aren't reconstructed here.
 
-## Summary (as of 2026-09-10, module 8 in progress)
+## Summary (as of 2026-09-10, module 8 foundation merged, second half pending)
 
 | Tool | Status | Tasks | Total tokens | Avg tokens/task |
 |---|---|---|---|---|
-| Claude sub-agents | Active — tier 1 | 2 done, 1 in flight | 403,274 | 201.6k |
+| Claude sub-agents | Active — tier 1 | 3 done | 959,712 | 319.9k |
 | codex | Not yet used | 0 | — | — |
 | agy | Not yet used | 0 | — | — |
 
@@ -34,7 +34,7 @@ frozen `docs/knowledge/` schema.
 |---|---|---|---|---|---|---|
 | Leaves module research (17 specs + scoping code) — pass 1 | Claude fork | Module 8, design research | 114,972 | 4 | 23s | **Wasted** — echoed my own orchestration context back instead of reading the files; had to be re-sent |
 | Leaves module research (17 specs + scoping code) — pass 2 | Claude fork | Module 8, design research | 288,302 | 31 | 2m 31s | Delivered — grounded ADR-024's Q-4/Q-5 decisions |
-| Leaves foundation — scoping, scheduler, approvers, 9 models/screens | Claude fork | Module 8, schema+API+UI+verify | — | — | — | In progress |
+| Leaves foundation — scoping, scheduler, approvers, 9 models/screens | Claude fork | Module 8, schema+API+UI+verify | 556,438 | 304 | 37m 8s | Delivered — verified independently (tests/seed/build rerun, logic spot-checked against ADR-024); one real bug found in its own new code and fixed pre-ship, one pre-existing bug found and fixed as issue #10 |
 
 ## Reading it so far
 
@@ -57,9 +57,17 @@ seconds with 4 tool calls, which was the tell before the token count even matter
 
 ## Efficiency verdicts (fill in as tiers activate)
 
-- **Claude sub-agents**: best-verified tool so far (only one used to date) — strong at long,
-  detailed, self-contained prompts with heavy cross-file reasoning (module design, spec research).
-  No codex/agy comparison yet on the same task shape.
+- **Claude sub-agents**: only tool used to date, and it held up under independent re-verification —
+  the foundation-build task (556k tokens, 304 tool calls, ~37 minutes) shipped 9 models, a
+  cross-cutting scoping mechanism, a scheduler, and an approver-resolution algorithm with correct
+  logic (spot-checked line-by-line against ADR-024's specific rounding/precedence rules, not just
+  "tests pass"), one self-caught bug fixed before shipping, and one unrelated pre-existing bug
+  found and fixed live. Roughly **1,850 tokens per file touched** (556k / ~300 files+tests) for a
+  task with real cross-cutting infra risk (a scoping-mechanism change that could've silently broken
+  7 already-shipped modules) — the independent re-verification pass (rerunning tests/seed/build,
+  reading the two riskiest files in full) cost a small fraction of that and is the right ratio to
+  keep, not something to skip to save tokens. No codex/agy comparison yet on the same task shape —
+  the next module or module-8-part-2 is the one to route there deliberately for a real comparison.
 - **codex**: no data yet.
 - **agy**: no data yet.
 

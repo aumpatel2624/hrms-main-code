@@ -36,6 +36,9 @@ import RoleMaster from "../models/RoleMaster.js";
 import UserRoles from "../models/UserRoles.js";
 import JobApplicantSource from "../models/JobApplicantSource.js";
 import GrievanceType from "../models/GrievanceType.js";
+import Country from "../models/Country.js";
+import State from "../models/State.js";
+import City from "../models/City.js";
 import { PERMISSION_KEYS } from "@demo-panel/shared/permissions";
 import { SCOPES } from "@demo-panel/shared/scopes";
 
@@ -1108,6 +1111,94 @@ const seedEmployeeCareerEventsRoles = async () => {
   console.log(`✅ Employee Career Events roles: ${matrixRowsAdded} menu grant(s) added`);
 };
 
+/**
+ * Fixes docs/knowledge/OPEN-QUESTIONS.md Q-10 (partial): this starter's
+ * generic User model requires countryId/stateId/cityId, but nothing had ever
+ * seeded any — every module's `verify` pass had to create throwaway
+ * geography just to test a non-admin login. Seeds a small, REAL set (the
+ * countries/states/cities the Apidel org-chart data actually names —
+ * docs/knowledge/apidel-org-chart.csv — not generic placeholders), upserted
+ * by natural key so this is safe to re-run.
+ */
+const seedGeographyData = async () => {
+  const countries = [
+    { countryName: "India", countryCode: "IN" },
+    { countryName: "United States", countryCode: "US" },
+    { countryName: "Guyana", countryCode: "GY" },
+  ];
+  const countryByName = {};
+  for (const c of countries) {
+    const doc = await Country.findOneAndUpdate(
+      { countryName: c.countryName },
+      { $setOnInsert: { ...c, isActive: true } },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
+    countryByName[c.countryName] = doc._id;
+  }
+
+  // Only the states the org-chart's `location` column actually names, per
+  // country — not a full geography reference set.
+  const states = [
+    { stateName: "Madhya Pradesh", stateCode: "MP", country: "India" },
+    { stateName: "Rajasthan", stateCode: "RJ", country: "India" },
+    { stateName: "Uttar Pradesh", stateCode: "UP", country: "India" },
+    { stateName: "Maharashtra", stateCode: "MH", country: "India" },
+    { stateName: "Gujarat", stateCode: "GJ", country: "India" },
+  ];
+  const stateByName = {};
+  for (const s of states) {
+    const doc = await State.findOneAndUpdate(
+      { stateName: s.stateName },
+      {
+        $setOnInsert: {
+          stateName: s.stateName,
+          stateCode: s.stateCode,
+          countryId: countryByName[s.country],
+          isActive: true,
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
+    stateByName[s.stateName] = doc._id;
+  }
+
+  // Every India location in apidel-org-chart.csv (Guna/Shivpuri distinguish
+  // by state despite similar names elsewhere; both are Madhya Pradesh here).
+  const cities = [
+    { cityName: "Guna", state: "Madhya Pradesh" },
+    { cityName: "Indore", state: "Madhya Pradesh" },
+    { cityName: "Shivpuri", state: "Madhya Pradesh" },
+    { cityName: "Kota", state: "Rajasthan" },
+    { cityName: "Meerut", state: "Uttar Pradesh" },
+    { cityName: "Noida", state: "Uttar Pradesh" },
+    { cityName: "Mumbai", state: "Maharashtra" },
+    { cityName: "Pune", state: "Maharashtra" },
+    { cityName: "Porbandar", state: "Gujarat" },
+    { cityName: "Vadodara", state: "Gujarat" },
+  ];
+  let citiesCreated = 0;
+  for (const c of cities) {
+    const existed = await City.exists({ cityName: c.cityName });
+    await City.findOneAndUpdate(
+      { cityName: c.cityName },
+      {
+        $setOnInsert: {
+          cityName: c.cityName,
+          stateId: stateByName[c.state],
+          countryId: countryByName["India"],
+          isActive: true,
+        },
+      },
+      { upsert: true, setDefaultsOnInsert: true },
+    );
+    if (!existed) citiesCreated += 1;
+  }
+
+  console.log(
+    `✅ Geography: ${countries.length} countries, ${states.length} states, ${citiesCreated} new / ${cities.length} total cities`,
+  );
+};
+
 const run = async () => {
   if (!process.env.DATABASE) {
     console.error("❌ DATABASE is not set in .env");
@@ -1140,6 +1231,7 @@ const run = async () => {
   await seedOnboardingSeparationRoles();
   await seedEmployeeCareerEventsMasters();
   await seedEmployeeCareerEventsRoles();
+  await seedGeographyData();
 
   await mongoose.disconnect();
   console.log("✅ Seeding complete");

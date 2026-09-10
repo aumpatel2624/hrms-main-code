@@ -11,7 +11,11 @@ import {
 } from "../api/locations.api";
 import { createCurrency, deleteCurrency, getCurrencyById, updateCurrency, searchCurrencies } from "../api/currencies.api";
 import { createRole, getRoleById, deleteRole, updateRole, searchRoles } from "../api/roles.api";
-import { createDepartment, deleteDepartment, getDepartmentById, updateDepartment, searchDepartments } from "../api/departments.api";
+import {
+    createCompany, deleteCompany, getCompanyById, updateCompany, searchCompanies,
+    createEmploymentType, deleteEmploymentType, getEmploymentTypeById, updateEmploymentType, searchEmploymentTypes,
+    createEmployeeGrade, deleteEmployeeGrade, getEmployeeGradeById, updateEmployeeGrade, searchEmployeeGrades,
+} from "../api/organizationSetup.api";
 import {
     createEmailFor, deleteEmailFor, getEmailForById, updateEmailFor, searchEmailFor, getEmailTriggers,
     createEmailSetup, deleteEmailSetup, getEmailSetupById, updateEmailSetup, searchEmailSetups,
@@ -193,35 +197,100 @@ export const roleConfig = {
     recordTitle: (r) => r.roleName,
 };
 
-export const departmentConfig = {
+// departmentConfig moved to entities/advanced.jsx (ADR-017) — it now needs a
+// companyId select (lookups), which is an advanced-tier concern.
+
+export const companyConfig = {
     filterFields: [
-        { name: "departmentName", label: "Department Name", type: "string" },
-        { name: "departmentCode", label: "Department Code", type: "string" },
+        { name: "companyName", label: "Company Name", type: "string" },
+        { name: "companyCode", label: "Company Code", type: "string" },
         { name: "isActive", label: "Active", type: "boolean" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
-    key: "department",
-    path: "/department",
-    section: "Setup",
-    singular: "Department",
-    plural: "Departments",
-    description: "Departments users can be assigned to.",
-    api: { search: searchDepartments, getById: getDepartmentById, create: createDepartment, update: updateDepartment, remove: deleteDepartment },
+    key: "company",
+    path: "/company",
+    section: "HR Setup",
+    singular: "Company",
+    plural: "Companies",
+    description: "Legal entities within Apidel. Every branch, department and designation belongs to one.",
+    api: { search: searchCompanies, getById: getCompanyById, create: createCompany, update: updateCompany, remove: deleteCompany },
     sections: [
-        { id: "details", title: "Department details" },
+        { id: "details", title: "Company details" },
         { id: "status", title: "Status" },
     ],
     fields: [
-        { name: "departmentName", icon: Building07, label: "Department Name", required: true, section: "details", error: "Department Name is required!" , placeholder: "Enter department name" },
-        { name: "departmentCode", icon: Hash02, label: "Department Code", required: true, section: "details", error: "Department Code is required!" , placeholder: "Enter department code" },
+        { name: "companyName", icon: Building07, label: "Company Name", required: true, section: "details", error: "Company Name is required!", placeholder: "Enter company name" },
+        { name: "companyCode", icon: Hash02, label: "Company Code", section: "details", placeholder: "Enter company code (optional)" },
         ACTIVE,
     ],
     columns: [
-        { name: "Department Name", selector: (row) => row.departmentName, minWidth: "180px" },
-        { name: "Code", selector: (row) => row.departmentCode, minWidth: "130px" },
+        { name: "Company Name", selector: (row) => row.companyName, minWidth: "200px" },
+        { name: "Code", selector: (row) => row.companyCode, minWidth: "130px" },
         { name: "Status", selector: (row) => (row.isActive ? "Active" : "Inactive"), minWidth: "130px" },
     ],
-    recordTitle: (r) => r.departmentName,
+    recordTitle: (r) => r.companyName,
+};
+
+export const employmentTypeConfig = {
+    filterFields: [
+        { name: "employmentTypeName", label: "Employment Type", type: "string" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "employment-type",
+    path: "/employment-type",
+    section: "HR Setup",
+    singular: "Employment Type",
+    plural: "Employment Types",
+    description: "Employment categories (Full-time, Contract, ...) assignable to an employee.",
+    api: {
+        search: searchEmploymentTypes, getById: getEmploymentTypeById, create: createEmploymentType,
+        update: updateEmploymentType, remove: deleteEmploymentType,
+    },
+    sections: [
+        { id: "details", title: "Employment type details" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "employmentTypeName", icon: Tag01, label: "Employment Type", required: true, section: "details", error: "Employment Type is required!", placeholder: "Enter employment type" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Employment Type", selector: (row) => row.employmentTypeName, minWidth: "200px" },
+        { name: "Status", selector: (row) => (row.isActive ? "Active" : "Inactive"), minWidth: "130px" },
+    ],
+    recordTitle: (r) => r.employmentTypeName,
+};
+
+export const employeeGradeConfig = {
+    filterFields: [
+        { name: "gradeName", label: "Grade Name", type: "string" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "employee-grade",
+    path: "/employee-grade",
+    section: "HR Setup",
+    singular: "Employee Grade",
+    plural: "Employee Grades",
+    description: "Pay-grade master assignable to an employee.",
+    api: {
+        search: searchEmployeeGrades, getById: getEmployeeGradeById, create: createEmployeeGrade,
+        update: updateEmployeeGrade, remove: deleteEmployeeGrade,
+    },
+    sections: [
+        { id: "details", title: "Employee grade details" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "gradeName", icon: Tag01, label: "Grade Name", required: true, section: "details", error: "Grade Name is required!", placeholder: "Enter grade name" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Grade Name", selector: (row) => row.gradeName, minWidth: "200px" },
+        { name: "Status", selector: (row) => (row.isActive ? "Active" : "Inactive"), minWidth: "130px" },
+    ],
+    recordTitle: (r) => r.gradeName,
 };
 
 export const emailForConfig = {
@@ -433,6 +502,7 @@ export const seoRedirectConfig = {
 
 export const UNIFORM_ENTITIES = [
     countryConfig, stateConfig, cityConfig, currencyConfig,
-    roleConfig, departmentConfig, emailForConfig, emailSetupConfig, menuGroupConfig,
+    roleConfig, emailForConfig, emailSetupConfig, menuGroupConfig,
     seoRedirectConfig,
+    companyConfig, employmentTypeConfig, employeeGradeConfig,
 ];

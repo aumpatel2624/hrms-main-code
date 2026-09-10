@@ -35,6 +35,33 @@ export const ENDPOINTS = {
         SEARCH: `${V1}/departments/search`,
     },
 
+    // Organization Setup endpoints (ADR-017)
+    COMPANIES: {
+        BASE: `${V1}/companies`,
+        BY_ID: (id) => `${V1}/companies/${id}`,
+        SEARCH: `${V1}/companies/search`,
+    },
+    BRANCHES: {
+        BASE: `${V1}/branches`,
+        BY_ID: (id) => `${V1}/branches/${id}`,
+        SEARCH: `${V1}/branches/search`,
+    },
+    DESIGNATIONS: {
+        BASE: `${V1}/designations`,
+        BY_ID: (id) => `${V1}/designations/${id}`,
+        SEARCH: `${V1}/designations/search`,
+    },
+    EMPLOYMENT_TYPES: {
+        BASE: `${V1}/employment-types`,
+        BY_ID: (id) => `${V1}/employment-types/${id}`,
+        SEARCH: `${V1}/employment-types/search`,
+    },
+    EMPLOYEE_GRADES: {
+        BASE: `${V1}/employee-grades`,
+        BY_ID: (id) => `${V1}/employee-grades/${id}`,
+        SEARCH: `${V1}/employee-grades/search`,
+    },
+
     // User endpoints
     USERS: {
         BASE: `${V1}/users`,

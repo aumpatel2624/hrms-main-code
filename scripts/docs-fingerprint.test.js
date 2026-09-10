@@ -195,20 +195,24 @@ CONFIG_SCREENS.pop();
     const uniform = fs.readFileSync(path.join(REPO_ROOT, "apps/admin/src/entities/index.js"), "utf8");
     const advanced = fs.readFileSync(path.join(REPO_ROOT, "apps/admin/src/entities/advanced.jsx"), "utf8");
 
-    const department = extractConfig(uniform, "departmentConfig");
-    assert.equal(department.plural, "Departments");
-    assert.ok(department.description, "the entity description is read");
+    // departmentConfig moved to entities/advanced.jsx (ADR-017 — it needs a
+    // companyId lookup now); companyConfig is the fixture for this block's
+    // assertions instead, same uniform-tier shape (required first field,
+    // bare ACTIVE last).
+    const company = extractConfig(uniform, "companyConfig");
+    assert.equal(company.plural, "Companies");
+    assert.ok(company.description, "the entity description is read");
     assert.deepEqual(
-        department.fields.map((f) => f.name),
-        ["departmentName", "departmentCode", "isActive"],
+        company.fields.map((f) => f.name),
+        ["companyName", "companyCode", "isActive"],
         "the bare ACTIVE entry is not dropped",
     );
     assert.equal(
-        department.fields.at(-1).section,
+        company.fields.at(-1).section,
         "status",
         "the Active flag lands in the Status section",
     );
-    assert.ok(department.fields[0].required, "required is detected");
+    assert.ok(company.fields[0].required, "required is detected");
 
     // `{ ...ACTIVE, default: true }` — the spread form.
     const role = extractConfig(uniform, "roleConfig");
@@ -233,9 +237,9 @@ CONFIG_SCREENS.pop();
 // ---- rendering ----------------------------------------------------------
 
 {
-    const uniform = fs.readFileSync(path.join(REPO_ROOT, "apps/admin/src/entities/index.js"), "utf8");
+    const advanced = fs.readFileSync(path.join(REPO_ROOT, "apps/admin/src/entities/advanced.jsx"), "utf8");
     const entry = CONFIG_SCREENS.find((s) => s.key === "department");
-    const page = renderConfigPage(entry, extractConfig(uniform, "departmentConfig"));
+    const page = renderConfigPage(entry, extractConfig(advanced, "departmentConfig"));
 
     assert.match(page, /^# Departments/, "starts with the plural title");
     assert.ok(page.includes(entry.intro), "the manifest intro is used over the config description");
@@ -307,7 +311,7 @@ CONFIG_SCREENS.pop();
 
     const department = renderConfigPage(
         CONFIG_SCREENS.find((s) => s.key === "department"),
-        extractConfig(uniform, "departmentConfig"),
+        extractConfig(advanced, "departmentConfig"),
     );
     for (const heading of [
         "## Adding a Department",

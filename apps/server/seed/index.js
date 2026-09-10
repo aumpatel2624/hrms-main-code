@@ -25,8 +25,74 @@ import dotenv from "dotenv";
 import MenuGroupMaster from "../models/MenuGroupMaster.js";
 import MenuMaster from "../models/MenuMaster.js";
 import AdminUser from "../models/AdminUser.js";
+import Company from "../models/Company.js";
+import Branch from "../models/Branch.js";
+import Department from "../models/Department.js";
+import Designation from "../models/Designation.js";
+import EmploymentType from "../models/EmploymentType.js";
+import RoleMaster from "../models/RoleMaster.js";
+import UserRoles from "../models/UserRoles.js";
+import { PERMISSION_KEYS } from "@demo-panel/shared/permissions";
+import { SCOPES } from "@demo-panel/shared/scopes";
 
 dotenv.config();
+
+/**
+ * ADR-017 (Organization Setup) — placeholder name until Apidel supplies real
+ * multi-company data (grill-me, 2026-09-10: user chose "one entity for now,
+ * placeholder name").
+ */
+const APIDEL_COMPANY_NAME = "Apidel";
+
+/** Minimal RFC-4180-ish CSV line parser — good enough for this one file's
+ * shape (quoted fields with embedded commas, no embedded newlines/escaped
+ * quotes). Not a dependency: `docs/knowledge/apidel-org-chart.csv` is the
+ * only CSV this repo reads. */
+const parseCsvLine = (line) => {
+  const fields = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (inQuotes) {
+      if (char === '"') inQuotes = false;
+      else current += char;
+    } else if (char === '"') {
+      inQuotes = true;
+    } else if (char === ",") {
+      fields.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  fields.push(current);
+  return fields;
+};
+
+/**
+ * Reads the real Apidel org-chart data recovered during grill-me (2026-09-10
+ * — the source file is a Claude Design Canvas export, not plain HTML; the CSV
+ * is the already-extracted, clean form). Returns parsed rows keyed by header.
+ */
+const readOrgChartRows = () => {
+  const csvPath = path.join(import.meta.dirname, "../../../docs/knowledge/apidel-org-chart.csv");
+  const lines = fs.readFileSync(csvPath, "utf8").trim().split("\n");
+  const headers = parseCsvLine(lines[0]);
+  return lines.slice(1).map((line) => {
+    const values = parseCsvLine(line);
+    return Object.fromEntries(headers.map((h, i) => [h, values[i] ?? ""]));
+  });
+};
+
+/** ADR-017: the two department-name pairs decided in DOMAIN.md/OPEN-QUESTIONS.md Q-6. */
+const normalizeDepartmentName = (name) => {
+  if (/^pr and social media$/i.test(name)) return "PR and Social media";
+  if (/^corporate recruitment(\s*&\s*facility management)?$/i.test(name)) {
+    return "Corporate Recruitment & Facility Management";
+  }
+  return name;
+};
 
 /**
  * Menu tree. `isLink: true` groups render as a single sidebar link with no
@@ -48,13 +114,29 @@ const MENU_GROUPS = [
     menus: [
       { menuName: "Admin Users", menuUrl: "/admin-user", icon: "ri-shield-user-line" },
       { menuName: "Users", menuUrl: "/user", icon: "ri-user-3-line" },
-      { menuName: "Department", menuUrl: "/department", icon: "ri-building-line" },
       { menuName: "User Roles", menuUrl: "/user-roles", icon: "ri-lock-password-line" },
       { menuName: "Dashboard Builder", menuUrl: "/dashboard-builder", icon: "ri-bar-chart-2-line" },
       { menuName: "SEO Pages", menuUrl: "/seo-pages", icon: "ri-search-eye-line" },
       { menuName: "SEO Settings", menuUrl: "/seo-settings", icon: "ri-global-line" },
       { menuName: "Redirects", menuUrl: "/seo-redirects", icon: "ri-arrow-left-right-line" },
       { menuName: "404 Log", menuUrl: "/seo-404", icon: "ri-error-warning-line" },
+    ],
+  },
+  // HRMS module 1 (ADR-017). Department already existed under "Master" —
+  // moveDepartmentMenuToHrSetup() moves its existing row here in place
+  // (same _id, so existing role permissions on it survive) rather than
+  // seedMenus() creating a duplicate under this group's new menuGroup id.
+  {
+    menuGroupName: "HR Setup",
+    sequence: 2.5,
+    icon: "ri-building-4-line",
+    menus: [
+      { menuName: "Company", menuUrl: "/company", icon: "ri-community-line" },
+      { menuName: "Branch", menuUrl: "/branch", icon: "ri-map-pin-2-line" },
+      { menuName: "Department", menuUrl: "/department", icon: "ri-building-line" },
+      { menuName: "Designation", menuUrl: "/designation", icon: "ri-user-star-line" },
+      { menuName: "Employment Type", menuUrl: "/employment-type", icon: "ri-briefcase-line" },
+      { menuName: "Employee Grade", menuUrl: "/employee-grade", icon: "ri-medal-line" },
     ],
   },
   {
@@ -335,6 +417,209 @@ const backfillSoftDelete = async () => {
   console.log(`✅ Soft delete: flagged ${flagged} existing documents, indexes in sync`);
 };
 
+/**
+ * ADR-017 (Organization Setup). Company.companyId is a required ref on
+ * Department (and everything HRMS builds from here on) — this must exist,
+ * and its _id be known, before backfillDepartmentCompany or any of the real
+ * org-data seeding below. Upserted by name, like every other seed row here.
+ */
+const ensureApidelCompany = async () => {
+  const company = await Company.findOneAndUpdate(
+    { companyName: APIDEL_COMPANY_NAME },
+    { companyName: APIDEL_COMPANY_NAME, isActive: true },
+    { new: true, upsert: true, setDefaultsOnInsert: true },
+  );
+  return company._id;
+};
+
+/**
+ * Backfill for Department.companyId (ADR-017), a new required field.
+ * Pre-existing rows (the starter's 6 fixture departments, or any project's
+ * own) have no value for it — the new unique index is compound with
+ * companyId, so this must run before backfillSoftDelete's syncIndexes, same
+ * reasoning as backfillEmailForTriggerKeys above.
+ *
+ * Idempotent: only touches documents with no companyId yet.
+ */
+const backfillDepartmentCompany = async (companyId) => {
+  const result = await Department.updateMany(
+    { companyId: { $exists: false } },
+    { $set: { companyId } },
+  );
+
+  if (result.modifiedCount) {
+    console.log(
+      `✅ Department: backfilled companyId on ${result.modifiedCount} existing row(s) → ${APIDEL_COMPANY_NAME}`,
+    );
+  }
+};
+
+/**
+ * Move the existing Department menu row into the new "HR Setup" group, in
+ * place — same reasoning and pattern as renameReportBuilderMenu above.
+ * seedMenus() upserts by { menuName, menuGroup }, so if this row still
+ * pointed at the old "Master" group's id, seedMenus creating "HR Setup"'s
+ * Department entry would insert a *second* MenuMaster document (new _id),
+ * silently dropping every role's existing permissions on the first one.
+ *
+ * Must run before seedMenus(). Idempotent: no-op once the row already
+ * belongs to a group named "HR Setup".
+ */
+const moveDepartmentMenuToHrSetup = async () => {
+  const existing = await MenuMaster.findOne({ menuUrl: "/department" }).populate("menuGroup");
+  if (!existing || existing.menuGroup?.menuGroupName === "HR Setup") return;
+
+  const hrSetupGroup = await MenuGroupMaster.findOneAndUpdate(
+    { menuGroupName: "HR Setup" },
+    { menuGroupName: "HR Setup", sequence: 2.5, icon: "ri-building-4-line", isActive: true, isLink: false },
+    { new: true, upsert: true, setDefaultsOnInsert: true },
+  );
+
+  await MenuMaster.updateOne({ _id: existing._id }, { $set: { menuGroup: hrSetupGroup._id } });
+  console.log("✅ Moved the Department menu row from Master to HR Setup (permissions kept)");
+};
+
+/**
+ * Real Apidel org-structure data (ADR-017), recovered from the org-chart
+ * file during grill-me — see readOrgChartRows(). Every row upserted by its
+ * natural key, scoped to the one seeded Company, so this is safe to re-run.
+ * Does NOT touch seed/fixtures.js's 6 fictional demo departments — those are
+ * a separate, deliberately-fictional dataset (see that file's own header).
+ */
+const seedOrganizationSetupData = async (companyId) => {
+  const rows = readOrgChartRows();
+
+  const locations = [...new Set(rows.map((r) => r.location).filter(Boolean))];
+  let branchCount = 0;
+  for (const branchName of locations) {
+    await Branch.findOneAndUpdate(
+      { branchName, companyId },
+      { branchName, companyId, isActive: true },
+      { upsert: true, setDefaultsOnInsert: true },
+    );
+    branchCount += 1;
+  }
+
+  const departmentNames = [
+    ...new Set(rows.map((r) => normalizeDepartmentName(r.department)).filter(Boolean)),
+  ];
+  let departmentCount = 0;
+  for (const departmentName of departmentNames) {
+    await Department.findOneAndUpdate(
+      { departmentName, companyId },
+      { departmentName, companyId, isActive: true },
+      { upsert: true, setDefaultsOnInsert: true },
+    );
+    departmentCount += 1;
+  }
+
+  const designationNames = [...new Set(rows.map((r) => r.title).filter(Boolean))];
+  let designationCount = 0;
+  for (const designationName of designationNames) {
+    await Designation.findOneAndUpdate(
+      { designationName, companyId },
+      { designationName, companyId, isActive: true },
+      { upsert: true, setDefaultsOnInsert: true },
+    );
+    designationCount += 1;
+  }
+
+  // Not derived from the CSV — it has no employment-type column. A small
+  // reasonable starter set the client can edit (ADR-017).
+  const EMPLOYMENT_TYPES = ["Full-time", "Part-time", "Contract", "Intern"];
+  let employmentTypeCount = 0;
+  for (const employmentTypeName of EMPLOYMENT_TYPES) {
+    await EmploymentType.findOneAndUpdate(
+      { employmentTypeName },
+      { employmentTypeName, isActive: true },
+      { upsert: true, setDefaultsOnInsert: true },
+    );
+    employmentTypeCount += 1;
+  }
+
+  console.log(
+    `✅ Organization setup data: ${branchCount} branches, ${departmentCount} departments, ` +
+      `${designationCount} designations, ${employmentTypeCount} employment types (${APIDEL_COMPANY_NAME})`,
+  );
+};
+
+/**
+ * The 6 HRMS roles below System Manager (ADR-017 — System Manager maps to
+ * this starter's existing ADMIN account type, already unrestricted, so it
+ * gets no RoleMaster row). Grants full read/write/edit/delete on this
+ * module's 6 menus to HR User and HR Manager only; the other four roles have
+ * no business reason to touch org-structure masters and get no matrix row
+ * for them (no row = no access, the existing fail-closed default).
+ *
+ * Idempotent, and deliberately additive rather than overwriting: a role's
+ * UserRoles document is only ever created here, never reset, and a matrix
+ * row is only added for a menu that doesn't already have one — so an
+ * admin's later edits in the Role Permissions screen survive a re-seed.
+ */
+const seedOrganizationSetupRoles = async () => {
+  const HRMS_ROLE_NAMES = [
+    "Employee",
+    "HR User",
+    "HR Manager",
+    "Leave Approver",
+    "Expense Approver",
+    "Interviewer",
+  ];
+  const FULL_ACCESS_ROLES = ["HR User", "HR Manager"];
+  const HR_SETUP_MENU_URLS = ["/company", "/branch", "/department", "/designation", "/employment-type", "/employee-grade"];
+
+  const roleIds = {};
+  for (const roleName of HRMS_ROLE_NAMES) {
+    const role = await RoleMaster.findOneAndUpdate(
+      { roleName },
+      { roleName, isActive: true },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    );
+    roleIds[roleName] = role._id;
+  }
+
+  const menus = await MenuMaster.find({ menuUrl: { $in: HR_SETUP_MENU_URLS } }).lean();
+  if (menus.length !== HR_SETUP_MENU_URLS.length) {
+    console.log("⚠️  Organization setup roles: not every HR Setup menu row exists yet — run seedMenus first");
+    return;
+  }
+
+  let created = 0;
+  let matrixRowsAdded = 0;
+  for (const roleName of HRMS_ROLE_NAMES) {
+    let userRoles = await UserRoles.findOne({ roleId: roleIds[roleName] });
+    if (!userRoles) {
+      userRoles = await UserRoles.create({
+        roleId: roleIds[roleName],
+        roles: [],
+        dataScope: SCOPES.ALL,
+        isActive: true,
+      });
+      created += 1;
+    }
+
+    if (!FULL_ACCESS_ROLES.includes(roleName)) continue;
+
+    let changed = false;
+    for (const menu of menus) {
+      const hasRow = userRoles.roles.some((r) => String(r.menuId) === String(menu._id));
+      if (hasRow) continue;
+      userRoles.roles.push({
+        menuId: menu._id,
+        menuGroupId: menu.menuGroup,
+        ...Object.fromEntries(PERMISSION_KEYS.map((key) => [key, key === "read" || key === "write" || key === "edit" || key === "delete"])),
+      });
+      matrixRowsAdded += 1;
+      changed = true;
+    }
+    if (changed) await userRoles.save();
+  }
+
+  console.log(
+    `✅ Organization setup roles: ${HRMS_ROLE_NAMES.length} roles ensured, ${created} new matrix document(s), ${matrixRowsAdded} menu grant(s) added`,
+  );
+};
+
 const run = async () => {
   if (!process.env.DATABASE) {
     console.error("❌ DATABASE is not set in .env");
@@ -350,10 +635,15 @@ const run = async () => {
   await dedupeUserRoles();
   await backfillEmailForTriggerKeys();
   await dedupeActiveEmailTemplates();
+  const companyId = await ensureApidelCompany();
+  await backfillDepartmentCompany(companyId);
   await backfillSoftDelete();
+  await moveDepartmentMenuToHrSetup();
   await renameReportBuilderMenu();
   await seedMenus();
   await seedAdminUser();
+  await seedOrganizationSetupData(companyId);
+  await seedOrganizationSetupRoles();
 
   await mongoose.disconnect();
   console.log("✅ Seeding complete");

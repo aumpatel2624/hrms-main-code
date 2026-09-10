@@ -60,6 +60,57 @@ Every module that adds a collection, endpoints and a screen. The `verify` skill 
      the acceptance criteria, the edge cases that must be handled, the rules from RULES.md it must
      satisfy. The standard checklist above still applies to each. -->
 
+### Organization Setup (HRMS module 1 — Company, Branch, Department, Designation, Employment Type, Employee Grade)
+
+Scope: the org-structure foundation every later HRMS module foreign-keys to. See ADR-017 for the
+design (idiomatic-rebuild pattern from ADR-016, applied to the first module) and `DOMAIN.md`'s
+Organization Setup section for the shipped field shapes. `HRSettings` deliberately not built this
+module (ADR-017 — nothing to configure yet).
+
+- [x] `Company`, `Branch`, `Designation`, `EmploymentType`, `EmployeeGrade` models — new, following
+      `Department.js`/`State.js`'s conventions (real compound unique indexes, not just a controller
+      `findOne`)
+- [x] `Department` extended, not duplicated: `companyId` added (required), uniqueness re-scoped from
+      global to per-company (INV-8), `departmentCode` changed from required to optional (real Apidel
+      data has no code concept)
+- [x] Backfill: `ensureApidelCompany` + `backfillDepartmentCompany` in `seed/index.js`, run before
+      `backfillSoftDelete`'s `syncIndexes` (same ordering as the existing EmailFor/EmailTemplate
+      backfills)
+- [x] `seed/fixtures.js`'s 6 fictional demo departments fixed to carry a throwaway fixture-local
+      Company (`Fixture Co`) — kept fictional, not mixed with real Apidel data
+- [x] Pre-existing bug fixed while `department.controller.js` was touched anyway: `createDepartment`'s
+      duplicate-name 400 respose incorrectly sent `isOk: true` (named in `30-api.md` as a known bug)
+      — own commit, per git-flow's "unrelated-but-found bugs get their own commit"
+- [x] `organizationSetup.controller.js` / `.routes.js`: 6 endpoints each for Company, Branch,
+      Designation, Employment Type, Employee Grade, `checkPermission`-gated, swagger documented
+- [x] Real Apidel org data seeded in `seed/index.js` (idempotent, upserted by natural key) from
+      `apidel-org-chart.csv`: 1 company, 12 branches, 24 departments (normalized per
+      `OPEN-QUESTIONS.md` Q-6), 29 designations, 4 employment types (not derived from the CSV — no
+      such column; a reasonable starter set)
+- [x] `RoleMaster` + `UserRoles` seeded for the 6 non-admin HRMS roles; only HR User/HR Manager
+      granted access to this module's 6 screens (INV-8c) — confirmed live, not just by inspection
+- [x] "HR Setup" menu group added; the existing `/department` menu row moved into it **in place**
+      (`moveDepartmentMenuToHrSetup`, same _id — existing role permissions survive), not duplicated
+- [x] Admin entity configs: `companyConfig`/`employmentTypeConfig`/`employeeGradeConfig` (uniform
+      tier, `entities/index.js`); `departmentConfig` (moved)/`branchConfig`/`designationConfig`
+      (advanced tier, `entities/advanced.jsx` — each needs a `companyId` lookup select)
+- [x] `widgetSources.js`: 6 new entries (`companies`, `branches`, `departments`, `designations`,
+      `employment-types`, `employee-grades`), `groupable` only — no numeric fields to aggregate yet
+- [x] `docs-src/manifest.js`: entries for all 6 screens (5 new + department's `source` path updated)
+      — required for `npm test`'s docs-fingerprint suite to pass, not optional polish
+- [x] Acceptance check (live HTTP against the real dev database, cookie session, not just unit
+      tests — see STATE.md log): admin login → create Company → create Branch under it → 409 deleting
+      a Company with a live Branch reference → Department create rejected (400) without `companyId`,
+      accepted with one → HR User role can read/write all 6 screens (200/201) → Employee role blocked
+      (403) on the same routes → Employee's dropdown `GET /companies` still works (matrix-free by
+      design) → all throwaway test data deleted afterward, collection counts back to the pre-test
+      seeded baseline
+- [ ] Client-facing documentation screenshots actually captured (`npm run docs`) — manifest entries
+      exist and the fingerprint test passes, but the Playwright capture run itself was not executed
+      this session (flagged for follow-up, not silently skipped)
+- [ ] Per-screen/company-confinement scoping mechanism (INV-8b, `OPEN-QUESTIONS.md` Q-4) — explicitly
+      out of scope for this module, first needed by Employee Records (module 2)
+
 ### Email trigger system (dynamic form → template routing)
 
 Scope for this module: the generic mechanism plus the one real trigger site, `otp.controller.js`.

@@ -29,6 +29,7 @@ import dotenv from "dotenv";
 
 import AdminUser from "../models/AdminUser.js";
 import City from "../models/City.js";
+import Company from "../models/Company.js";
 import Country from "../models/Country.js";
 import CurrencyMaster from "../models/CurrencyMaster.js";
 import DashboardWidget from "../models/DashboardWidget.js";
@@ -129,7 +130,7 @@ const emailFor = (name) => `${name.toLowerCase().replace(/[^a-z]+/g, ".")}@examp
  */
 const wipe = async () => {
   const models = [
-    City, Country, CurrencyMaster, DashboardWidget, Department, EmailFor,
+    City, Company, Country, CurrencyMaster, DashboardWidget, Department, EmailFor,
     EmailSetup, EmailTemplate, LoginAttempt, RoleDashboard, RoleMaster,
     SeoPage, SeoRedirect, State, User,
   ];
@@ -169,8 +170,13 @@ const seedLocations = async () => {
 };
 
 const seedPeople = async (place) => {
+  // ADR-017: Department.companyId is now required. This fixture company is
+  // as fictional as everything else in this file — a real Apidel Company is
+  // seeded separately by seed/index.js, never by this throwaway script.
+  const fixtureCompany = await Company.create({ companyName: "Fixture Co", isActive: true });
+
   const departments = await Department.create(
-    DEPARTMENTS.map((d) => ({ ...d, isActive: true })),
+    DEPARTMENTS.map((d) => ({ ...d, companyId: fixtureCompany._id, isActive: true })),
   );
   const roles = await RoleMaster.create(ROLES.map((roleName) => ({ roleName, isActive: true })));
 

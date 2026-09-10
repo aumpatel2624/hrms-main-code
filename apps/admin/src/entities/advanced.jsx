@@ -2,7 +2,14 @@ import { Building07, Hash02, Link01, Mail01, MarkerPin01, Phone, Shield01, Tag01
 import { isStrongPassword, isValidEmail, PASSWORD } from "@demo-panel/shared/validation";
 import api from "../api/index";
 import { ENDPOINTS } from "../api/endpoints";
-import { getAllDepartments } from "../api/departments.api";
+import {
+    createDepartment, deleteDepartment, getDepartmentById, updateDepartment, searchDepartments, getAllDepartments,
+} from "../api/departments.api";
+import {
+    createBranch, deleteBranch, getBranchById, updateBranch, searchBranches,
+    createDesignation, deleteDesignation, getDesignationById, updateDesignation, searchDesignations,
+    getAllCompanies,
+} from "../api/organizationSetup.api";
 import { getAllRoles } from "../api/roles.api";
 import { getAllCountries, getStatesByCountry, getCitiesByState } from "../api/locations.api";
 import {
@@ -394,4 +401,110 @@ export const seoPageConfig = {
     recordTitle: (r) => r.pageName,
 };
 
-export const ADVANCED_ENTITIES = [adminUserConfig, userConfig, menuMasterConfig, emailTemplateConfig];
+// ADR-017 (Organization Setup): Department, Branch and Designation each need
+// a companyId select (a `lookups` entry), which is why they live here rather
+// than in entities/index.js's UNIFORM_ENTITIES.
+
+export const departmentConfig = {
+    filterFields: [
+        { name: "departmentName", label: "Department Name", type: "string" },
+        { name: "departmentCode", label: "Department Code", type: "string" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "department",
+    path: "/department",
+    section: "HR Setup",
+    singular: "Department",
+    plural: "Departments",
+    description: "Departments users can be assigned to.",
+    api: { search: searchDepartments, getById: getDepartmentById, create: createDepartment, update: updateDepartment, remove: deleteDepartment },
+    lookups: { companyId: asOptions(getAllCompanies, "companyName") },
+    sections: [
+        { id: "details", title: "Department details" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "details", error: "Company is required!", optionsFrom: "companyId" },
+        { name: "departmentName", icon: Building07, label: "Department Name", required: true, section: "details", error: "Department Name is required!", placeholder: "Enter department name" },
+        { name: "departmentCode", icon: Hash02, label: "Department Code", section: "details", placeholder: "Enter department code (optional)" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Department Name", selector: (row) => row.departmentName, minWidth: "180px" },
+        { name: "Code", selector: (row) => row.departmentCode, minWidth: "130px" },
+        { name: "Status", selector: (row) => (row.isActive ? "Active" : "Inactive"), minWidth: "130px" },
+    ],
+    recordTitle: (r) => r.departmentName,
+    toForm: (data) => ({ ...data, companyId: refId(data.companyId) }),
+};
+
+export const branchConfig = {
+    filterFields: [
+        { name: "branchName", label: "Branch Name", type: "string" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "branch",
+    path: "/branch",
+    section: "HR Setup",
+    singular: "Branch",
+    plural: "Branches",
+    description: "Sites/locations under a company (e.g. Vadodara, USA).",
+    api: { search: searchBranches, getById: getBranchById, create: createBranch, update: updateBranch, remove: deleteBranch },
+    lookups: { companyId: asOptions(getAllCompanies, "companyName") },
+    sections: [
+        { id: "details", title: "Branch details" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "details", error: "Company is required!", optionsFrom: "companyId" },
+        { name: "branchName", icon: MarkerPin01, label: "Branch Name", required: true, section: "details", error: "Branch Name is required!", placeholder: "Enter branch name" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Branch Name", selector: (row) => row.branchName, minWidth: "180px" },
+        { name: "Status", selector: (row) => (row.isActive ? "Active" : "Inactive"), minWidth: "130px" },
+    ],
+    recordTitle: (r) => r.branchName,
+    toForm: (data) => ({ ...data, companyId: refId(data.companyId) }),
+};
+
+export const designationConfig = {
+    filterFields: [
+        { name: "designationName", label: "Designation Name", type: "string" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "designation",
+    path: "/designation",
+    section: "HR Setup",
+    singular: "Designation",
+    plural: "Designations",
+    description: "Job titles assignable to an employee.",
+    api: { search: searchDesignations, getById: getDesignationById, create: createDesignation, update: updateDesignation, remove: deleteDesignation },
+    lookups: { companyId: asOptions(getAllCompanies, "companyName") },
+    sections: [
+        { id: "details", title: "Designation details" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "details", error: "Company is required!", optionsFrom: "companyId" },
+        { name: "designationName", icon: User01, label: "Designation Name", required: true, section: "details", error: "Designation Name is required!", placeholder: "Enter designation name" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Designation Name", selector: (row) => row.designationName, minWidth: "180px" },
+        { name: "Status", selector: (row) => (row.isActive ? "Active" : "Inactive"), minWidth: "130px" },
+    ],
+    recordTitle: (r) => r.designationName,
+    toForm: (data) => ({ ...data, companyId: refId(data.companyId) }),
+};
+
+export const ADVANCED_ENTITIES = [
+    adminUserConfig, userConfig, menuMasterConfig, emailTemplateConfig,
+    departmentConfig, branchConfig, designationConfig,
+];

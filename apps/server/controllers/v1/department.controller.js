@@ -7,25 +7,27 @@ import {
 
 export const createDepartment = async (req, res) => {
   try {
-    const { departmentName, departmentCode, isActive } = req.body;
-    console.log("Request Body:", req.body); // Debugging line
+    const { departmentName, departmentCode, companyId, isActive } = req.body;
 
-    if (!departmentName && !departmentCode) {
+    if (!departmentName || !companyId) {
       return res.status(400).json({
-        message: "Department name and code are required",
+        message: "Department name and company are required",
         isOk: false,
         status: 400,
       });
     }
 
+    // ADR-017: uniqueness is scoped per company — two companies may each
+    // legitimately have a "Finance" department.
     const existingDepartment = await DepartmentModels.findOne({
-      departmentCode,
+      departmentName,
+      companyId,
     });
 
     if (existingDepartment) {
       return res.status(400).json({
-        message: "Department already exists",
-        isOk: true,
+        message: "Department already exists for this company",
+        isOk: false,
         status: 400,
       });
     }
@@ -33,6 +35,7 @@ export const createDepartment = async (req, res) => {
     const department = new DepartmentModels({
       departmentName,
       departmentCode,
+      companyId,
       isActive,
     });
 
@@ -44,7 +47,7 @@ export const createDepartment = async (req, res) => {
       status: 201,
     });
   } catch (error) {
-    console.log("Error in createDepartmentName", error);
+    console.log("Error in createDepartment", error);
     return res.status(500).json({
       message: "Internal server error",
       isOk: false,
@@ -55,21 +58,22 @@ export const createDepartment = async (req, res) => {
 
 export const updateDepartment = async (req, res) => {
   try {
-    const { departmentName, departmentCode, isActive } = req.body;
+    const { departmentName, departmentCode, companyId, isActive } = req.body;
     const { departmentId } = req.params;
 
     const department = await DepartmentModels.findById(departmentId);
 
     if (!department) {
-      return res.status(400).json({
+      return res.status(404).json({
         message: "Department not found",
-        isOk: true,
-        status: 400,
+        isOk: false,
+        status: 404,
       });
     }
 
     department.departmentName = departmentName;
     department.departmentCode = departmentCode;
+    department.companyId = companyId;
     department.isActive = isActive;
 
     await department.save();
@@ -96,10 +100,10 @@ export const deleteDepartment = async (req, res) => {
     const department = await DepartmentModels.findById(departmentId);
 
     if (!department) {
-      return res.status(400).json({
+      return res.status(404).json({
         message: "Department not found",
         isOk: false,
-        status: 400,
+        status: 404,
       });
     }
 
@@ -134,7 +138,6 @@ export const deleteDepartment = async (req, res) => {
       message: "Internal server error",
       isOk: false,
       status: 500,
-      error: error.message,
     });
   }
 };
@@ -146,10 +149,10 @@ export const getDeparmentById = async (req, res) => {
     const department = await DepartmentModels.findById(departmentId);
 
     if (!department) {
-      return res.status(400).json({
+      return res.status(404).json({
         message: "Department not found",
-        isOk: true,
-        status: 400,
+        isOk: false,
+        status: 404,
       });
     }
 
@@ -176,21 +179,36 @@ export const listDepartmentByParams = async (req, res) => {
       filterable: {
         departmentName: "string",
         departmentCode: "string",
+        companyId: "objectId",
         isActive: "boolean",
         createdAt: "date",
       },
+      stages: [
+        {
+          $lookup: {
+            from: "companies",
+            localField: "companyId",
+            foreignField: "_id",
+            as: "company",
+          },
+        },
+        { $addFields: { companyName: { $arrayElemAt: ["$company.companyName", 0] } } },
+      ],
     });
 
     return res.status(200).json({ isOk: true, data: list, status: 200 });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, message: error.message, status: 500 });
+    return res.status(500).json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
 export const listDepartments = async (req, res) => {
   try {
-    const departments = await DepartmentModels.find({ isActive: true });
+    const filter = { isActive: true };
+    if (req.query.companyId) filter.companyId = req.query.companyId;
+
+    const departments = await DepartmentModels.find(filter);
 
     return res.status(200).json({
       isOk: true,
@@ -198,10 +216,10 @@ export const listDepartments = async (req, res) => {
       status: 200,
     });
   } catch (error) {
-    console.error("Error in listBranch:", error);
+    console.error("Error in listDepartments:", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }

@@ -1051,3 +1051,147 @@ Copy this block. Number sequentially.
   anticipates for question 1 of *Decide before you build*.
 - **As built**: not yet — this ADR covers the grilling/scoping decision only; no code written.
 
+---
+
+### ADR-017 — Organization Setup: Company/Branch (new), Department (extended), Designation/Employment Type/Employee Grade (new); HR Settings deferred
+
+- **Date**: 2026-09-10
+- **Status**: accepted
+- **Context**: `system-design` for HRMS module 1 (Organization Setup). User is offline overnight
+  ("continuously run the pipeline... using sub-agents"); this ADR is being written and self-approved
+  under that standing authorization rather than reviewed live — see the STATE.md log entry for the
+  git/environment bootstrap done alongside it. Read `docs/conventions/20-schema.md`/`30-api.md` and
+  the existing `Department` model/controller/routes/entity-config as the template, per AGENTS.md rule
+  2 ("reuse before you write") — and found more to reuse than expected:
+  - **`Department` already exists** as one of the starter's 13 seeded demo CRUD screens
+    (`apps/server/models/Department.js`, flat `departmentName`/`departmentCode`/`isActive`, no
+    company concept, six fictional rows in `seed/fixtures.js`). HR-Setup's own `_Overview.md` in the
+    input spec confirms Department is core-ERPNext-shaped, not HRMS-authored — extending the
+    starter's own generic Department is the intended kind of reuse, not a coincidence to route around.
+  - **`RoleMaster` + `UserRoles`** already implement exactly the named-role-with-a-permission-matrix
+    shape the 7 HRMS roles need (Employee, HR User, HR Manager, Leave Approver, Expense Approver,
+    Interviewer — `System Manager` maps to this starter's existing `ADMIN` coarse role, which already
+    bypasses the matrix, so it gets no `RoleMaster` row). No new Role model.
+  - **`SeoSettings`** is the existing singleton-via-unique-`key` pattern any future `HRSettings`
+    singleton should copy.
+  - `Department`'s existing controller has the exact `isOk: true` + 400 bug `30-api.md` calls out by
+    name as something to fix, not copy — fixed while the file is touched anyway.
+  - `seed/fixtures.js` is explicitly throwaway/fictional (screenshot-capture only, guarded to a
+    separate `*-docs-fixtures` database) — real Apidel org data does not belong there. It belongs in
+    the idempotent `seed/index.js`, upserted by natural key, same as the menu tree and admin user.
+- **Options considered**:
+  - _New `HrDepartment` collection instead of extending `Department`_ — lost. Would be a second
+    version of exactly the thing `Department` already is (list, filter, delete-guard, form, menu row)
+    — the AGENTS.md rule 2 violation named explicitly.
+  - _Company-scope every new master (Employment Type, Employee Grade) for symmetry_ — lost.
+    Frappe's own source doesn't scope these per company (they're shared vocabulary across a company
+    group), and with one company today the distinction is unobservable either way — kept as plain
+    global masters, like this starter's existing `Country`/`CurrencyMaster`. Reconsider if Apidel
+    later says different entities need different Employment Types per company.
+  - _Build `HRSettings` now, seeded empty_ — lost. Its fields (self-approval rules, backdating
+    limits, shift/attendance toggles, hiring notifications) all belong to modules that don't exist
+    yet (Leaves, Expenses, Shift & Attendance, Recruitment) — an empty settings screen with nothing
+    to configure is speculative infrastructure. Deferred: each later module adds the `HRSettings`
+    fields it actually needs, creating the singleton on first use via the `SeoSettings` pattern.
+  - _Design the full per-screen/per-company scoping mechanism now (ADR-016 DEV-2, `OPEN-QUESTIONS.md`
+    Q-4)_ — lost, for this module specifically. Every Organization Setup entity is a top-of-hierarchy
+    master (Company/Branch/Department/Designation/Employment Type/Employee Grade) with no per-employee
+    ownership, reachable only by HR User/HR Manager/System Manager — the existing per-*role*
+    `dataScope` (`all`, ADR-002) is sufficient here, and with exactly one seeded Company the
+    distinction is unobservable regardless. Real design work on the mechanism itself is deferred to
+    Employee Records (module 2), the first module with genuinely per-employee, self-service data.
+  - _Give Branch a full Country/State/City address_ — lost. Org-chart data is a location label
+    ("Vadodara", "USA", "Guyana"), not a structured address; a plain `branchName` matches what exists
+    and avoids modelling geography nobody asked for.
+- **Decision**:
+  1. **`Company`** (new): `companyName` (required, trim, globally unique), `companyCode` (optional,
+     trim, globally unique when present), `isActive`. One placeholder row seeded: "Apidel" (real
+     multi-company names deferred — user chose placeholder-for-now during grilling).
+  2. **`Branch`** (new): `branchName` (required, trim), `companyId` (ref `Company`, required,
+     indexed), `isActive`; `branchName` unique per `companyId`. Seeded from the 12 distinct locations
+     in `apidel-org-chart.csv`.
+  3. **`Department`** (extended, not replaced): add `companyId` (ref `Company`, required, indexed).
+     Re-scope `departmentCode`/`departmentName` uniqueness from global to per-`companyId` (fixing the
+     pre-existing gap where neither was a real unique index — `20-schema.md`'s named example of what
+     the starter gets wrong). Backfill script assigns the 6 existing fixture-seeded rows (and any
+     other pre-existing rows) to the placeholder Company. Seed the real 23 normalized department names
+     from `apidel-org-chart.csv` (`DOMAIN.md` HRMS spine entities has the two normalization decisions)
+     as additional rows under the same Company — the 6 fictional starter-demo rows are left alone,
+     not deleted, since `User.departmentId` still references them and they cost nothing to keep.
+     Fix the `isOk: true`-on-400 bug in the same commit (touching the file anyway; unrelated-but-found
+     bugs get their own commit per `git-flow`).
+  4. **`Designation`** (new): `designationName` (required, trim), `companyId` (ref `Company`,
+     required, indexed), `isActive`; unique per `companyId`. Seeded from the 29 designations in the
+     CSV. (Frappe's `appraisal_template`/`skills` fields on Designation are Performance/Skills-module
+     concerns — added when those modules are built, not now.)
+  5. **`EmploymentType`** (new): `employmentTypeName` (required, trim, globally unique), `isActive`.
+     Not seeded from real data — the org-chart CSV has no employment-type column; seed a small
+     reasonable starter set (Full-time, Part-time, Contract, Intern) the client can edit.
+  6. **`EmployeeGrade`** (new): `gradeName` (required, trim, globally unique), `isActive`. No
+     `defaultSalaryStructure` field yet — `SalaryStructure` doesn't exist until the Payroll module;
+     added there as a schema change to this model, not modelled speculatively now.
+  7. **`HRSettings`**: deferred (see Options above) — no model this module.
+  8. **Roles**: seed `RoleMaster` rows for the 6 non-admin HRMS roles (Employee, HR User, HR Manager,
+     Leave Approver, Expense Approver, Interviewer) with matching `UserRoles` matrix documents. This
+     module's screens (Company/Branch/Department/Designation/Employment Type/Employee Grade) grant
+     full `read/write/edit/delete` to HR User and HR Manager only — the other four roles have no
+     business reason to touch org-structure masters and get no matrix row for these menus (fails
+     closed to "no access", the existing default). `System Manager` = `ADMIN`, already unrestricted.
+  9. **Menu**: new "HR Setup" menu group (Company, Branch, Department, Designation, Employment Type,
+     Employee Grade) in `seed/index.js`'s `MENU_GROUPS`, reusing `Department`'s existing menu row.
+  10. **Reporting**: `widgetSources.js` gets an entry each for `companies`, `branches`, `departments`
+      (updated — now has `companyId` groupable-with-lookup), `designations`, `employment-types`,
+      `employee-grades` — `groupable` only (headcount-by-department style breakdowns once Employee
+      exists in module 2); no `aggregatable` numeric fields on pure masters.
+- **Consequences**:
+  - Every later HRMS module's `Employee`-linked model foreign-keys to `Company` (directly or via
+    `Department`/`Branch`) — this module is the one everything else in the 17-module list depends on,
+    matching the dependency graph in `HRMS-Port-Spec/02-Cross-Cutting/Build Order.md`.
+  - `Department`'s uniqueness re-scope is a live schema change on an existing collection — needs the
+    backfill script per `20-schema.md`, and `seed/fixtures.js`'s `Department.create()` call needs its
+    own throwaway `companyId` (a fixture-local Company row) or it breaks `npm run docs`.
+  - The per-screen/company scoping mechanism itself (ADR-016 DEV-2) is still an open question — this
+    module does not answer it, only avoids needing the answer yet. `OPEN-QUESTIONS.md` Q-4 stays open.
+- **Deviates from convention**: extends an existing starter demo screen's schema and re-scopes its
+  uniqueness — a live migration on shipped starter code, not just an addition. Covered by ADR-016's
+  standing multi-company approval; no separate user confirmation obtained (overnight/autonomous).
+- **As built**: shipped as decided, with four deviations worth recording:
+  1. **`departmentCode` changed from required to optional**, not left required as the original
+     Department model had it. The real Apidel org-chart data has no code concept at all for any of
+     its 24 real departments — requiring one would mean inventing fake codes. Uniqueness (per
+     company) still applies whenever one is actually given.
+  2. **No `sparse` index anywhere.** `Company.companyCode` and `Department.departmentCode` (both
+     optional-but-unique-when-present) cannot use `{ unique: true, sparse: true }` — the soft-delete
+     plugin (`models/softDelete.js`) merges its own `partialFilterExpression: { isDeleted: false }`
+     into every `unique: true` index, and MongoDB rejects mixing `sparse` with
+     `partialFilterExpression` on the same index (`CannotCreateIndex`, confirmed by actually running
+     `npm run seed` and reading the error, not by inspection). Fixed with a custom
+     `partialFilterExpression: { <field>: { $type: "string" } }` instead, which the plugin's spread
+     merges `isDeleted: false` into cleanly. Worth a line in `20-schema.md`'s indexes section if this
+     starter grows a second optional-unique field — not added there in this module, flagged here.
+  3. **Backfill lives as functions inside `seed/index.js`'s `run()`**, not as a separate script under
+     `seed/`, contradicting this ADR's own plan and the `20-schema.md` prose about a standalone
+     backfill file. Found the *actual* established convention only after reading
+     `backfillEmailForTriggerKeys`/`dedupeActiveEmailTemplates` in full — this repo already backfills
+     exactly this way (ADR-015), and matching that beats introducing a second pattern.
+  4. **`scripts/docs-fingerprint.test.js` needed real edits**, not just `docs-src/manifest.js`: it
+     hardcoded `extractConfig(uniform, "departmentConfig")` as a fixture for the extractor's own
+     regression tests, three separate places. Moving `departmentConfig` to `advanced.jsx` (needed for
+     its new `companyId` lookup) broke all three at `npm test` time. Fixed by swapping the first
+     block's fixture to `companyConfig` (same uniform-tier shape) and pointing the other two at
+     `advanced` instead of `uniform` — caught by actually running `npm test`, not by reasoning about
+     the change in advance.
+  Not done this session, flagged rather than silently skipped: `npm run docs` (the actual Playwright
+  screenshot capture) was not run — `docs-src/manifest.js` entries exist and the fingerprint test
+  passes, but no screenshots were generated. `CHECKLISTS.md` records this as open.
+  Verification actually run, not just written: `npm test` (10/10), `npm run seed` run twice against
+  the real dev database confirming idempotency (identical document counts both times: 1 company, 12
+  branches, 24 departments, 29 designations, 4 employment types, 0 employee grades, 6 roles, 6
+  matrix documents, 26 menus), `npm run dev` booted and exercised live over HTTP with a real cookie
+  session — admin login, Company/Branch create, the 409 delete-guard (Company referenced by a live
+  Branch), Department's `companyId` requirement (400 without, 201 with), and the permission matrix
+  itself: a throwaway HR User account got 200/201 on every new route, a throwaway Employee account
+  got 403 on the same routes but 200 on the matrix-free dropdown GET — then all throwaway data
+  (2 users, 2 extra companies, 1 branch, 1 department) deleted, collection counts confirmed back to
+  the seeded baseline. `npm run build` green throughout.
+

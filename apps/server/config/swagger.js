@@ -245,16 +245,105 @@ const options = {
           properties: {
             _id: { type: "string" },
             departmentName: { type: "string" },
-            description: { type: "string" },
+            departmentCode: { type: "string" },
+            companyId: { type: "string" },
             isActive: { type: "boolean" },
           },
         },
         CreateDepartment: {
           type: "object",
-          required: ["departmentName"],
+          required: ["departmentName", "companyId"],
           properties: {
             departmentName: { type: "string", example: "Sales" },
-            description: { type: "string" },
+            departmentCode: { type: "string" },
+            companyId: { type: "string" },
+            isActive: { type: "boolean", default: true },
+          },
+        },
+        // Organization Setup schemas (ADR-017)
+        Company: {
+          type: "object",
+          properties: {
+            _id: { type: "string" },
+            companyName: { type: "string" },
+            companyCode: { type: "string" },
+            isActive: { type: "boolean" },
+          },
+        },
+        CreateCompany: {
+          type: "object",
+          required: ["companyName"],
+          properties: {
+            companyName: { type: "string", example: "Apidel" },
+            companyCode: { type: "string" },
+            isActive: { type: "boolean", default: true },
+          },
+        },
+        Branch: {
+          type: "object",
+          properties: {
+            _id: { type: "string" },
+            branchName: { type: "string" },
+            companyId: { type: "string" },
+            isActive: { type: "boolean" },
+          },
+        },
+        CreateBranch: {
+          type: "object",
+          required: ["branchName", "companyId"],
+          properties: {
+            branchName: { type: "string", example: "Vadodara" },
+            companyId: { type: "string" },
+            isActive: { type: "boolean", default: true },
+          },
+        },
+        Designation: {
+          type: "object",
+          properties: {
+            _id: { type: "string" },
+            designationName: { type: "string" },
+            companyId: { type: "string" },
+            isActive: { type: "boolean" },
+          },
+        },
+        CreateDesignation: {
+          type: "object",
+          required: ["designationName", "companyId"],
+          properties: {
+            designationName: { type: "string", example: "Sr. Executive" },
+            companyId: { type: "string" },
+            isActive: { type: "boolean", default: true },
+          },
+        },
+        EmploymentType: {
+          type: "object",
+          properties: {
+            _id: { type: "string" },
+            employmentTypeName: { type: "string" },
+            isActive: { type: "boolean" },
+          },
+        },
+        CreateEmploymentType: {
+          type: "object",
+          required: ["employmentTypeName"],
+          properties: {
+            employmentTypeName: { type: "string", example: "Full-time" },
+            isActive: { type: "boolean", default: true },
+          },
+        },
+        EmployeeGrade: {
+          type: "object",
+          properties: {
+            _id: { type: "string" },
+            gradeName: { type: "string" },
+            isActive: { type: "boolean" },
+          },
+        },
+        CreateEmployeeGrade: {
+          type: "object",
+          required: ["gradeName"],
+          properties: {
+            gradeName: { type: "string", example: "L1" },
             isActive: { type: "boolean", default: true },
           },
         },

@@ -280,4 +280,47 @@ export const WIDGET_SOURCES = Object.freeze({
       createdAt: "date",
     },
   },
+
+  // HRMS module 4 (ADR-020).
+  "employee-onboardings": {
+    label: "Employee Onboardings",
+    model: "EmployeeOnboarding",
+    aggregatable: {},
+    groupable: {
+      boardingStatus: { label: "Status" },
+      companyId: {
+        label: "Company",
+        lookup: { from: "companies", labelField: "companyName" },
+      },
+      departmentId: {
+        label: "Department",
+        lookup: { from: "departments", labelField: "departmentName" },
+      },
+    },
+    dateFields: { dateOfJoining: "Date of Joining", createdAt: "Created" },
+    filterable: {
+      jobApplicantId: "objectId",
+      companyId: "objectId",
+      departmentId: "objectId",
+      boardingStatus: "enum",
+      dateOfJoining: "date",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
+  "employee-separations": {
+    label: "Employee Separations",
+    model: "EmployeeSeparation",
+    aggregatable: {},
+    groupable: {
+      boardingStatus: { label: "Status" },
+    },
+    dateFields: { createdAt: "Created" },
+    filterable: {
+      employeeId: "objectId",
+      boardingStatus: "enum",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
 });

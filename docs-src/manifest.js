@@ -522,6 +522,89 @@ export const CONFIG_SCREENS = [
             "A page left blank falls back to the site-wide defaults on the SEO Settings screen.",
         ],
     },
+    {
+        key: "employee-onboarding-template",
+        config: "employeeOnboardingTemplateConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A reusable checklist of onboarding activities — laptop setup, ID card, orientation — for a role, department or grade.",
+        when: "Build one before you have your first new hire in that role, then reuse it every time.",
+        gotchas: [
+            "Selecting a template on an Employee Onboarding copies its activities in at that moment — " +
+                "editing the template afterward does not change onboardings already created from it.",
+        ],
+        roles: "HR User and HR Manager can add and edit templates; only HR Manager can delete one.",
+    },
+    {
+        key: "employee-onboarding",
+        config: "employeeOnboardingConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "The checklist that brings one new hire from accepted offer to Active employee.",
+        when: "Create one as soon as a Job Offer is accepted.",
+        gotchas: [
+            "Status (Pending / In Process / Completed) is derived automatically from the activities " +
+                "below it — tick activities off rather than trying to set the status directly.",
+            "\"Create Employee\" only works once every activity marked \"Required for hire\" is Completed.",
+            "\"Create Employee\" builds a draft — review and save it on the Employee screen, it isn't " +
+                "created automatically.",
+            "Only one onboarding is allowed per Job Applicant.",
+        ],
+        roles: "HR User and HR Manager can add and edit onboardings, but neither can delete one — only a System Manager can.",
+    },
+    {
+        key: "employee-separation-template",
+        config: "employeeSeparationTemplateConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A reusable checklist of offboarding activities — asset return, access revocation, exit paperwork.",
+        when: "Build one before your first departure, then reuse it every time.",
+        gotchas: [
+            "Selecting a template copies its activities in at that moment, same as the onboarding template.",
+        ],
+        roles: "Only HR Manager can add, edit or delete separation templates — HR User has read-only access here.",
+    },
+    {
+        key: "employee-separation",
+        config: "employeeSeparationConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "The checklist that relieves one employee — access revocation, asset return, exit paperwork.",
+        when: "Create one as soon as an employee's departure is confirmed.",
+        gotchas: [
+            "Status is derived from the activities below it, same as Employee Onboarding.",
+            "Only one separation is allowed per employee at a time.",
+            "The Exit Interview Summary field here is free-text notes only — it is not linked to that " +
+                "employee's actual Exit Interview record.",
+        ],
+        roles: "HR User and HR Manager can add and edit separations, but neither can delete one.",
+    },
+    {
+        key: "exit-interview",
+        config: "exitInterviewConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A standalone record of an employee's exit interview and final decision.",
+        when: "Schedule one once the employee's Relieving Date is confirmed.",
+        gotchas: [
+            "The linked employee must already have a Relieving Date set, or this cannot be created.",
+            "Date and interviewers are required once Status is set to Scheduled; Final Decision is " +
+                "required once Status is set to Completed.",
+            "Only one exit interview is allowed per employee at a time.",
+        ],
+        roles: "HR Manager can add and edit exit interviews; HR User has read-only access here.",
+    },
+    {
+        key: "full-and-final-statement",
+        config: "fullAndFinalStatementConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A final-settlement worksheet for a departing employee — what the company owes them, what they owe the company, and any company assets to recover.",
+        when: "Create one once the employee's Relieving Date is confirmed, and fill in payables, receivables and any allocated assets by hand.",
+        gotchas: [
+            "The linked employee must already have a Relieving Date set, or this cannot be created.",
+            "Totals are calculated automatically from the rows below — don't try to type them in directly.",
+            "\"Mark as Paid\" is blocked until every payable and receivable row is Settled and every " +
+                "returned asset is marked Returned.",
+            "This is a worksheet, not an accounting entry — it does not post to any ledger.",
+        ],
+        roles: "HR User and HR Manager can both fully manage statements, including delete — the one " +
+            "screen in this group where HR User isn't more restricted than HR Manager.",
+    },
 ];
 
 /**

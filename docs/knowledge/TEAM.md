@@ -10,7 +10,7 @@ Set up by the `team-setup` skill.
 
 | Name | GitHub handle | git email | Focus | Notes |
 |---|---|---|---|---|
-| _not set up yet_ | | | | |
+| Aum Patel | aumpatel2624 | aumpatelc36@gmail.com | Solo — whole HRMS build | Filled in from context, not a full `team-setup` interview (solo project, one active agent). Re-run `team-setup` if a second person joins. |
 
 - **git email** — exactly what `git config user.email` returns in that person's clone. This is the
   lookup key; if it is wrong, their agent cannot identify them.

@@ -784,156 +784,188 @@ export const listLeavePolicyAssignmentByParams = async (req, res) => {
 };
 
 /**
- * POST /leave-policy-assignments/:id/grant-allocations — ADR-024's fold of
- * source's `grant_leave_alloc_for_employee` (on_submit). Idempotent via
- * `leavesAllocated`. Skips LWP leave types entirely (never allocated via
- * this flow, matching source). Pro-ration: see utils/leaveProration.js.
+ * Business logic behind POST /leave-policy-assignments/:id/grant-allocations
+ * — ADR-024's fold of source's `grant_leave_alloc_for_employee` (on_submit).
+ * Idempotent via `leavesAllocated`. Skips LWP leave types entirely (never
+ * allocated via this flow, matching source). Pro-ration: see
+ * utils/leaveProration.js.
+ *
+ * Extracted from the route handler (module complete, second fork) so Leave
+ * Control Panel's bulk-allocations endpoint can call the same logic
+ * per-employee without going through HTTP — "reuse before you write"
+ * (AGENTS.md). Throws an `Error` with a `.status` property on a known
+ * failure (404/400); the HTTP handler below translates that, and a bulk
+ * caller can catch it per-item.
+ *
+ * @returns {Promise<{created: object[], skipped: object[]}>}
  */
-export const grantLeavePolicyAssignmentAllocations = async (req, res) => {
-  try {
-    const { leavePolicyAssignmentId } = req.params;
-    const assignment = await LeavePolicyAssignment.findById(leavePolicyAssignmentId);
-    if (!assignment) return res.status(404).json({ isOk: false, status: 404, message: "Leave Policy Assignment not found" });
-    if (assignment.leavesAllocated) {
-      return res.status(400).json({ isOk: false, status: 400, message: "Leave already has been assigned for this Leave Policy Assignment" });
-    }
+export const grantAllocationsForAssignment = async (leavePolicyAssignmentId) => {
+  const assignment = await LeavePolicyAssignment.findById(leavePolicyAssignmentId);
+  if (!assignment) {
+    const error = new Error("Leave Policy Assignment not found");
+    error.status = 404;
+    throw error;
+  }
+  if (assignment.leavesAllocated) {
+    const error = new Error("Leave already has been assigned for this Leave Policy Assignment");
+    error.status = 400;
+    throw error;
+  }
 
-    const policy = await LeavePolicy.findById(assignment.leavePolicyId).lean();
-    if (!policy) return res.status(404).json({ isOk: false, status: 404, message: "Leave Policy not found" });
-    const employee = await Employee.findById(assignment.employeeId).lean();
-    if (!employee) return res.status(404).json({ isOk: false, status: 404, message: "Employee not found" });
+  const policy = await LeavePolicy.findById(assignment.leavePolicyId).lean();
+  if (!policy) {
+    const error = new Error("Leave Policy not found");
+    error.status = 404;
+    throw error;
+  }
+  const employee = await Employee.findById(assignment.employeeId).lean();
+  if (!employee) {
+    const error = new Error("Employee not found");
+    error.status = 404;
+    throw error;
+  }
 
-    const today = new Date();
-    const fromDate = new Date(assignment.effectiveFrom);
-    const toDate = new Date(assignment.effectiveTo);
-    const dateOfJoining = employee.dateOfJoining ? new Date(employee.dateOfJoining) : null;
+  const today = new Date();
+  const fromDate = new Date(assignment.effectiveFrom);
+  const toDate = new Date(assignment.effectiveTo);
+  const dateOfJoining = employee.dateOfJoining ? new Date(employee.dateOfJoining) : null;
 
-    const created = [];
-    const skipped = [];
+  const created = [];
+  const skipped = [];
 
-    for (const detail of policy.leavePolicyDetails) {
-      // eslint-disable-next-line no-await-in-loop
-      const leaveType = await LeaveType.findById(detail.leaveTypeId).lean();
-      if (!leaveType || leaveType.isLwp) continue; // LWP types are never allocated via this flow
+  for (const detail of policy.leavePolicyDetails) {
+    // eslint-disable-next-line no-await-in-loop
+    const leaveType = await LeaveType.findById(detail.leaveTypeId).lean();
+    if (!leaveType || leaveType.isLwp) continue; // LWP types are never allocated via this flow
 
-      let newLeavesAllocated = 0;
-      let earnedLeaveSchedule = [];
+    let newLeavesAllocated = 0;
+    let earnedLeaveSchedule = [];
 
-      if (leaveType.isCompensatory) {
-        newLeavesAllocated = 0; // compensatory leave is never allocated up front
-      } else if (leaveType.isEarnedLeave) {
-        earnedLeaveSchedule = buildEarnedLeaveSchedule({
-          annualAllocation: detail.annualAllocation,
-          frequency: leaveType.earnedLeaveFrequency,
-          rounding: leaveType.rounding,
-          fromDate,
-          toDate,
-          dateOfJoining,
-          today,
-        });
-        newLeavesAllocated = earnedLeaveSchedule
-          .filter((row) => row.isAllocated)
-          .reduce((sum, row) => sum + row.numberOfLeaves, 0);
-      } else {
-        newLeavesAllocated = prorateTenureLeaves(detail.annualAllocation, dateOfJoining, fromDate, toDate);
-      }
-
-      // Annual allocation is a hard ceiling, except Yearly-frequency earned leave.
-      if (
-        newLeavesAllocated > detail.annualAllocation
-        && !(leaveType.isEarnedLeave && leaveType.earnedLeaveFrequency === "Yearly")
-      ) {
-        newLeavesAllocated = detail.annualAllocation;
-      }
-
-      if (newLeavesAllocated === 0 && !leaveType.isEarnedLeave && !leaveType.allowNegative) {
-        skipped.push({ leaveTypeId: String(detail.leaveTypeId), reason: "computed allocation is 0" });
-        continue; // eslint-disable-line no-continue
-      }
-
-      // Carry-forward: sum of the previous allocation's balance as of its
-      // own end date, clamped to LeaveType.maximumCarryForwardedLeaves.
-      let unusedLeaves = 0;
-      if (assignment.carryForward && leaveType.isCarryForward) {
-        // eslint-disable-next-line no-await-in-loop
-        const previousAllocation = await LeaveAllocation.findOne({
-          employeeId: employee._id,
-          leaveTypeId: leaveType._id,
-          toDate: { $lt: fromDate },
-        }).sort({ toDate: -1 });
-        if (previousAllocation) {
-          // eslint-disable-next-line no-await-in-loop
-          const balance = await getLeaveBalance(employee._id, leaveType._id, previousAllocation.toDate);
-          unusedLeaves = Math.max(balance, 0);
-          if (leaveType.maximumCarryForwardedLeaves && unusedLeaves > leaveType.maximumCarryForwardedLeaves) {
-            unusedLeaves = leaveType.maximumCarryForwardedLeaves;
-          }
-        }
-      }
-
-      const totalLeavesAllocated = unusedLeaves + newLeavesAllocated;
-
-      // eslint-disable-next-line no-await-in-loop
-      const allocation = await LeaveAllocation.create({
-        employeeId: employee._id,
-        leaveTypeId: leaveType._id,
-        companyId: employee.companyId,
+    if (leaveType.isCompensatory) {
+      newLeavesAllocated = 0; // compensatory leave is never allocated up front
+    } else if (leaveType.isEarnedLeave) {
+      earnedLeaveSchedule = buildEarnedLeaveSchedule({
+        annualAllocation: detail.annualAllocation,
+        frequency: leaveType.earnedLeaveFrequency,
+        rounding: leaveType.rounding,
         fromDate,
         toDate,
-        newLeavesAllocated,
-        carryForward: Boolean(assignment.carryForward && leaveType.isCarryForward),
-        unusedLeaves,
-        totalLeavesAllocated,
-        leavePeriodId: assignment.leavePeriodId || null,
-        leavePolicyId: assignment.leavePolicyId,
-        leavePolicyAssignmentId: assignment._id,
-        status: "active",
-        earnedLeaveSchedule,
+        dateOfJoining,
+        today,
       });
-
-      if (unusedLeaves > 0) {
-        // eslint-disable-next-line no-await-in-loop
-        await LeaveLedgerEntry.create({
-          employeeId: employee._id,
-          leaveTypeId: leaveType._id,
-          transactionType: "LeaveAllocation",
-          transactionId: allocation._id,
-          leaves: unusedLeaves,
-          fromDate,
-          toDate,
-          isCarryForward: true,
-          companyId: employee.companyId,
-        });
-      }
-      if (newLeavesAllocated !== 0) {
-        // eslint-disable-next-line no-await-in-loop
-        await LeaveLedgerEntry.create({
-          employeeId: employee._id,
-          leaveTypeId: leaveType._id,
-          transactionType: "LeaveAllocation",
-          transactionId: allocation._id,
-          leaves: newLeavesAllocated,
-          fromDate,
-          toDate,
-          isCarryForward: false,
-          companyId: employee.companyId,
-        });
-      }
-
-      created.push({ leaveTypeId: String(leaveType._id), allocationId: String(allocation._id), newLeavesAllocated, unusedLeaves });
+      newLeavesAllocated = earnedLeaveSchedule
+        .filter((row) => row.isAllocated)
+        .reduce((sum, row) => sum + row.numberOfLeaves, 0);
+    } else {
+      newLeavesAllocated = prorateTenureLeaves(detail.annualAllocation, dateOfJoining, fromDate, toDate);
     }
 
-    assignment.leavesAllocated = true;
-    assignment.status = "allocated";
-    await assignment.save();
+    // Annual allocation is a hard ceiling, except Yearly-frequency earned leave.
+    if (
+      newLeavesAllocated > detail.annualAllocation
+      && !(leaveType.isEarnedLeave && leaveType.earnedLeaveFrequency === "Yearly")
+    ) {
+      newLeavesAllocated = detail.annualAllocation;
+    }
 
+    if (newLeavesAllocated === 0 && !leaveType.isEarnedLeave && !leaveType.allowNegative) {
+      skipped.push({ leaveTypeId: String(detail.leaveTypeId), reason: "computed allocation is 0" });
+      continue; // eslint-disable-line no-continue
+    }
+
+    // Carry-forward: sum of the previous allocation's balance as of its
+    // own end date, clamped to LeaveType.maximumCarryForwardedLeaves.
+    let unusedLeaves = 0;
+    if (assignment.carryForward && leaveType.isCarryForward) {
+      // eslint-disable-next-line no-await-in-loop
+      const previousAllocation = await LeaveAllocation.findOne({
+        employeeId: employee._id,
+        leaveTypeId: leaveType._id,
+        toDate: { $lt: fromDate },
+      }).sort({ toDate: -1 });
+      if (previousAllocation) {
+        // eslint-disable-next-line no-await-in-loop
+        const balance = await getLeaveBalance(employee._id, leaveType._id, previousAllocation.toDate);
+        unusedLeaves = Math.max(balance, 0);
+        if (leaveType.maximumCarryForwardedLeaves && unusedLeaves > leaveType.maximumCarryForwardedLeaves) {
+          unusedLeaves = leaveType.maximumCarryForwardedLeaves;
+        }
+      }
+    }
+
+    const totalLeavesAllocated = unusedLeaves + newLeavesAllocated;
+
+    // eslint-disable-next-line no-await-in-loop
+    const allocation = await LeaveAllocation.create({
+      employeeId: employee._id,
+      leaveTypeId: leaveType._id,
+      companyId: employee.companyId,
+      fromDate,
+      toDate,
+      newLeavesAllocated,
+      carryForward: Boolean(assignment.carryForward && leaveType.isCarryForward),
+      unusedLeaves,
+      totalLeavesAllocated,
+      leavePeriodId: assignment.leavePeriodId || null,
+      leavePolicyId: assignment.leavePolicyId,
+      leavePolicyAssignmentId: assignment._id,
+      status: "active",
+      earnedLeaveSchedule,
+    });
+
+    if (unusedLeaves > 0) {
+      // eslint-disable-next-line no-await-in-loop
+      await LeaveLedgerEntry.create({
+        employeeId: employee._id,
+        leaveTypeId: leaveType._id,
+        transactionType: "LeaveAllocation",
+        transactionId: allocation._id,
+        leaves: unusedLeaves,
+        fromDate,
+        toDate,
+        isCarryForward: true,
+        companyId: employee.companyId,
+      });
+    }
+    if (newLeavesAllocated !== 0) {
+      // eslint-disable-next-line no-await-in-loop
+      await LeaveLedgerEntry.create({
+        employeeId: employee._id,
+        leaveTypeId: leaveType._id,
+        transactionType: "LeaveAllocation",
+        transactionId: allocation._id,
+        leaves: newLeavesAllocated,
+        fromDate,
+        toDate,
+        isCarryForward: false,
+        companyId: employee.companyId,
+      });
+    }
+
+    created.push({ leaveTypeId: String(leaveType._id), allocationId: String(allocation._id), newLeavesAllocated, unusedLeaves });
+  }
+
+  assignment.leavesAllocated = true;
+  assignment.status = "allocated";
+  await assignment.save();
+
+  return { created, skipped };
+};
+
+/** Thin HTTP wrapper around grantAllocationsForAssignment — see its own doc comment. */
+export const grantLeavePolicyAssignmentAllocations = async (req, res) => {
+  try {
+    const result = await grantAllocationsForAssignment(req.params.leavePolicyAssignmentId);
     return res.status(200).json({
       isOk: true,
       status: 200,
       message: "Leave allocations granted successfully",
-      data: { created, skipped },
+      data: result,
     });
   } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
+    }
     console.log("Error in grantLeavePolicyAssignmentAllocations", error);
     return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
   }
@@ -1043,12 +1075,18 @@ export const deleteLeaveAllocation = async (req, res) => {
 
 export const getLeaveAllocationById = async (req, res) => {
   try {
-    const doc = await LeaveAllocation.findById(req.params.leaveAllocationId)
-      .populate("employeeId", "employeeName employeeCode")
-      .populate("leaveTypeId", "leaveTypeName")
-      .populate("companyId", "companyName");
+    const doc = await LeaveAllocation.findById(req.params.leaveAllocationId);
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Leave Allocation not found" });
+    // Balance computed from the raw (unpopulated) ids — issue #13: passing
+    // a populated sub-document into getLeaveBalance's ObjectId constructor
+    // threw, since a populated Mongoose document's String() is not its hex
+    // id. Populate only happens after, purely for display.
     const balance = await getLeaveBalance(doc.employeeId, doc.leaveTypeId, new Date());
+    await doc.populate([
+      { path: "employeeId", select: "employeeName employeeCode" },
+      { path: "leaveTypeId", select: "leaveTypeName" },
+      { path: "companyId", select: "companyName" },
+    ]);
     return res.status(200).json({ isOk: true, status: 200, data: { ...doc.toObject(), currentBalance: balance } });
   } catch (error) {
     console.log("Error in getLeaveAllocationById", error);

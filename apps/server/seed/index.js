@@ -241,9 +241,7 @@ const MENU_GROUPS = [
       { menuName: "Identification Document Type", menuUrl: "/identification-document-type", icon: "ri-id-card-line" },
     ],
   },
-  // HRMS module 8 foundation (ADR-024). LeaveAdjustment/CompensatoryLeaveRequest/
-  // LeaveApplication/LeaveEncashment/LeaveBlockList/Leave Control Panel are the
-  // second fork's work, stacked on this branch — no menu rows for them yet.
+  // HRMS module 8 (ADR-024) — foundation + transactional fork, module complete.
   {
     menuGroupName: "Leaves",
     sequence: 2.97,
@@ -257,6 +255,12 @@ const MENU_GROUPS = [
       { menuName: "Leave Policy Assignment", menuUrl: "/leave-policy-assignment", icon: "ri-file-user-line" },
       { menuName: "Leave Allocation", menuUrl: "/leave-allocation", icon: "ri-calendar-check-line" },
       { menuName: "Leave Ledger Entry", menuUrl: "/leave-ledger-entry", icon: "ri-file-list-line" },
+      { menuName: "Leave Adjustment", menuUrl: "/leave-adjustment", icon: "ri-settings-4-line" },
+      { menuName: "Compensatory Leave Request", menuUrl: "/compensatory-leave-request", icon: "ri-calendar-todo-fill" },
+      { menuName: "Leave Application", menuUrl: "/leave-application", icon: "ri-file-list-3-fill" },
+      { menuName: "Leave Encashment", menuUrl: "/leave-encashment", icon: "ri-money-dollar-circle-line" },
+      { menuName: "Leave Block List", menuUrl: "/leave-block-list", icon: "ri-forbid-2-line" },
+      { menuName: "Leave Control Panel", menuUrl: "/leave-control-panel", icon: "ri-tools-line" },
       { menuName: "Attendance", menuUrl: "/attendance", icon: "ri-user-follow-line" },
     ],
   },
@@ -1545,22 +1549,40 @@ const seedLeaveMasters = async () => {
 };
 
 /**
- * Leaves roles (ADR-024). HR User/HR Manager get full read/write/edit/
- * delete on every foundation-half screen except Leave Ledger Entry, which
- * has no write endpoint at all regardless of the flags set here (matching
- * the read-only-on-system-written-data precedent Employee Health Insurance
- * established in module 2 — HR User read-only, HR Manager the rest too,
- * even though neither flag is consumed by any route for this collection).
- * Employee gets read on LeaveType/LeavePeriod/HolidayList only — what they
- * need to understand their own balances, not the admin-configuration
- * screens. No "own"/"approver" scoping wired on any screen yet (ADR-024) —
- * there is no Leave Application in this fork for that scope to mean
- * anything on.
+ * Leaves roles (ADR-024, module complete). HR User/HR Manager get full read/
+ * write/edit/delete on every screen except the two collections that are
+ * immutable once created (Leave Adjustment, Leave Encashment — write only,
+ * no edit/delete grant, matching their controllers having no real update
+ * path; Leave Encashment's `edit` is granted so the Mark as Paid action
+ * route works) and Leave Ledger Entry (no write endpoint at all regardless
+ * of the flags set here — Employee Health Insurance's module-2 precedent).
+ * Employee gets read on LeaveType/LeavePeriod/HolidayList (to understand
+ * their own balances, not the admin-configuration screens) and full
+ * self-service (minus delete on Leave Application, which has no delete
+ * route) on Leave Application/Compensatory Leave Request — this IS where
+ * Q-4's "own"/"approver" scoping finally means something (ADR-024's own
+ * words), so both those two rows carry `dataScope: SCOPES.APPROVER`.
+ *
+ * **The scoping judgment call (ADR-024 "As built (module complete)",
+ * DECISIONS.md)**: `Employee` and the pre-existing (but until now ungranted)
+ * `Leave Approver` role both get `dataScope: SCOPES.APPROVER` on
+ * `/leave-application`. `getEmployeesApprovedBy` returns `[]` for a plain
+ * Employee with nobody reporting to them, so the `approver` scope
+ * degenerates to exactly "my own applications" — reusing one scope value
+ * for both roles instead of introducing a separate plain-`own` case, since
+ * `buildScopeFilter`'s `own` dimension compares against the login User's own
+ * id (`reqUser.id`), not the Employee id `LeaveApplication.employeeId`
+ * actually stores; `approver` was already built to read `reqUser.
+ * employeeId` instead (ADR-024's own `resolveRequestEmployee`), which is the
+ * one that's actually correct here.
  */
 const seedLeaveRoles = async () => {
   const perm = (write, edit, del) =>
     Object.fromEntries(PERMISSION_KEYS.map((key) => [key, key === "read" || (key === "write" && write) || (key === "edit" && edit) || (key === "delete" && del)]));
   const full = perm(true, true, true);
+  const fullNoDelete = perm(true, true, false);
+  const writeOnly = perm(true, false, false);
+  const writeAndEdit = perm(true, true, false);
   const readOnly = perm(false, false, false);
 
   // { menuUrl: { roleName: permObject } }
@@ -1574,6 +1596,30 @@ const seedLeaveRoles = async () => {
     "/leave-allocation": { "HR User": full, "HR Manager": full },
     "/leave-ledger-entry": { "HR User": readOnly, "HR Manager": full },
     "/attendance": { "HR User": full, "HR Manager": full },
+    // Immutable once created — write (create) only, no edit/delete grant
+    // anywhere (matches the controller having no real update/delete path).
+    "/leave-adjustment": { "HR User": writeOnly, "HR Manager": writeOnly },
+    // `edit` is granted so the Mark as Paid action route (checkPermission
+    // "edit") works — the generic edit FORM is still a clean 400 (issue #11,
+    // updateLeaveEncashment), not a silent no-op.
+    "/leave-encashment": { "HR User": writeAndEdit, "HR Manager": writeAndEdit },
+    "/leave-block-list": { "HR User": full, "HR Manager": full },
+    "/leave-control-panel": { "HR User": writeAndEdit, "HR Manager": writeAndEdit },
+    // Self-service, scoped to "own" via the `approver` dimension (see the
+    // file-level doc comment above) — Employee never gets `delete` (no
+    // delete route exists for Leave Application at all; Compensatory Leave
+    // Request's delete is further guarded server-side to pre-approval only).
+    "/leave-application": {
+      Employee: { ...fullNoDelete, dataScope: SCOPES.APPROVER },
+      "Leave Approver": { ...perm(false, true, false), dataScope: SCOPES.APPROVER },
+      "HR User": fullNoDelete,
+      "HR Manager": fullNoDelete,
+    },
+    "/compensatory-leave-request": {
+      Employee: { ...full, dataScope: SCOPES.APPROVER },
+      "HR User": full,
+      "HR Manager": full,
+    },
   };
 
   const allMenuUrls = Object.keys(GRANTS);
@@ -1591,7 +1637,7 @@ const seedLeaveRoles = async () => {
   };
 
   let matrixRowsAdded = 0;
-  const roleNames = ["Employee", "HR User", "HR Manager"];
+  const roleNames = ["Employee", "HR User", "HR Manager", "Leave Approver"];
   for (const roleName of roleNames) {
     const role = await RoleMaster.findOne({ roleName });
     if (!role) continue;

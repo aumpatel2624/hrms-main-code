@@ -599,4 +599,122 @@ export const WIDGET_SOURCES = Object.freeze({
     },
     scopeable: { owner: "employeeId" },
   },
+
+  // ADR-024 (Leaves, HRMS module 8 — transactional fork, module complete).
+  "leave-adjustments": {
+    label: "Leave Adjustments",
+    model: "LeaveAdjustment",
+    aggregatable: { leavesToAdjust: "Leaves adjusted" },
+    groupable: {
+      adjustmentType: { label: "Adjustment type" },
+      leaveTypeId: { label: "Leave Type", lookup: { from: "leavetypes", labelField: "leaveTypeName" } },
+      companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
+    },
+    dateFields: { postingDate: "Posting date", createdAt: "Created" },
+    filterable: {
+      employeeId: "objectId",
+      leaveTypeId: "objectId",
+      leaveAllocationId: "objectId",
+      adjustmentType: "string",
+      companyId: "objectId",
+      createdAt: "date",
+    },
+    scopeable: { owner: "employeeId" },
+  },
+
+  "compensatory-leave-requests": {
+    label: "Compensatory Leave Requests",
+    model: "CompensatoryLeaveRequest",
+    aggregatable: {},
+    groupable: {
+      status: { label: "Status" },
+      leaveTypeId: { label: "Leave Type", lookup: { from: "leavetypes", labelField: "leaveTypeName" } },
+      companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
+    },
+    dateFields: { workFromDate: "Work from date", workEndDate: "Work end date", createdAt: "Created" },
+    filterable: {
+      employeeId: "objectId",
+      leaveTypeId: "objectId",
+      status: "string",
+      companyId: "objectId",
+      workFromDate: "date",
+      workEndDate: "date",
+      createdAt: "date",
+    },
+    scopeable: { owner: "employeeId" },
+  },
+
+  // The module's centerpiece — groupable by status/leaveTypeId/companyId,
+  // dateField fromDate, so leave-usage charts can actually be built.
+  "leave-applications": {
+    label: "Leave Applications",
+    model: "LeaveApplication",
+    aggregatable: { totalLeaveDays: "Total leave days" },
+    groupable: {
+      status: { label: "Status" },
+      leaveTypeId: { label: "Leave Type", lookup: { from: "leavetypes", labelField: "leaveTypeName" } },
+      companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
+    },
+    dateFields: { fromDate: "From date", toDate: "To date", createdAt: "Created" },
+    filterable: {
+      employeeId: "objectId",
+      leaveTypeId: "objectId",
+      status: "string",
+      companyId: "objectId",
+      leaveApproverId: "objectId",
+      fromDate: "date",
+      toDate: "date",
+      createdAt: "date",
+    },
+    scopeable: { owner: "employeeId" },
+  },
+
+  "leave-encashments": {
+    label: "Leave Encashments",
+    model: "LeaveEncashment",
+    aggregatable: {
+      encashmentDays: "Encashment days",
+      encashmentAmount: "Encashment amount",
+    },
+    groupable: {
+      status: { label: "Status" },
+      leaveTypeId: { label: "Leave Type", lookup: { from: "leavetypes", labelField: "leaveTypeName" } },
+      companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
+    },
+    dateFields: { encashmentDate: "Encashment date", createdAt: "Created" },
+    filterable: {
+      employeeId: "objectId",
+      leaveTypeId: "objectId",
+      leaveAllocationId: "objectId",
+      status: "string",
+      companyId: "objectId",
+      encashmentDate: "date",
+      createdAt: "date",
+    },
+    scopeable: { owner: "employeeId" },
+  },
+
+  // No entry for blockDates[]/allowList[] — embedded children, covered by
+  // their parent's entry the same way every other module's has been.
+  "leave-block-lists": {
+    label: "Leave Block Lists",
+    model: "LeaveBlockList",
+    aggregatable: {},
+    groupable: {
+      appliesToAllDepartments: { label: "Applies to all departments" },
+      departmentId: { label: "Department", lookup: { from: "departments", labelField: "departmentName" } },
+      companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
+      isActive: { label: "Active status" },
+    },
+    dateFields: { createdAt: "Created" },
+    filterable: {
+      leaveBlockListName: "string",
+      companyId: "objectId",
+      departmentId: "objectId",
+      leaveTypeId: "objectId",
+      appliesToAllDepartments: "boolean",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+  },
 });

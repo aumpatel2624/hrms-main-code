@@ -226,6 +226,8 @@ import auditLogsRoutes from "./routes/v1/auditLogs.routes.js";
 import recruitmentPipelineRoutes from "./routes/v1/recruitmentPipeline.routes.js";
 import interviewsRoutes from "./routes/v1/interviews.routes.js";
 import jobOffersRoutes from "./routes/v1/jobOffers.routes.js";
+import onboardingRoutes from "./routes/v1/onboarding.routes.js";
+import separationRoutes from "./routes/v1/separation.routes.js";
 import seoPublicRoutes from "./routes/v1/seoPublic.routes.js";
 import jobsPublicRoutes from "./routes/v1/jobsPublic.routes.js";
 
@@ -247,6 +249,8 @@ app.use("/api/v1", auditLogsRoutes);
 app.use("/api/v1", recruitmentPipelineRoutes);
 app.use("/api/v1", interviewsRoutes);
 app.use("/api/v1", jobOffersRoutes);
+app.use("/api/v1", onboardingRoutes);
+app.use("/api/v1", separationRoutes);
 app.use("/api/v1/otp", otpRoutes);
 
 // Unauthenticated on purpose — the public website has no session. See

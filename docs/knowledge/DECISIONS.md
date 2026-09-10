@@ -1535,3 +1535,137 @@ Copy this block. Number sequentially.
   Referral status sync and Skill Assessment ratings remain exactly as deferred in this ADR
   (`OPEN-QUESTIONS.md` Q-7/Q-8/Q-9) — nothing new deferred beyond what was already planned.
 
+---
+
+### ADR-020 — Onboarding & Separation: activities without Project/Task; Full & Final Statement without a ledger
+
+- **Date**: 2026-09-10
+- **Status**: accepted
+- **Context**: `system-design` for HRMS module 4, same standing overnight authorization, modules 1-3
+  reviewed clean before starting this one. Read all source files for this module in full: `Employee
+  Onboarding.md` (which also documents the shared `EmployeeBoardingController` base class in one
+  place, per the source spec's own "one canonical place" convention), `Employee Onboarding
+  Template.md`, `Employee Boarding Activity.md`, `Employee Separation.md`, `Exit Interview.md`, `Full
+  and Final Statement.md`, `Full and Final Asset.md`, `Full and Final Outstanding Statement.md`.
+  `Employee Separation Template` was not read separately — it is structurally identical to Employee
+  Onboarding Template (same child table, no controller logic), confirmed by both Onboarding-side
+  files describing it as such.
+- **The big call: onboarding/separation checklists are their own thing, not core-ERPNext Project/Task
+  wearing an HR hat.** Source models both as a `Project` with `Task` children (core ERPNext doctypes
+  this repo doesn't have and isn't taking on) — `boarding_status` is *derived* from `Project.percent_
+  complete`, which is itself computed by ERPNext's own task-completion-weight formula that this port
+  spec couldn't even trace (documented as an external dependency in `Employee Onboarding.md`'s own
+  Port Notes). Building a generic Project/Task system to host one HR feature would be exactly the
+  kind of framework-fidelity build ADR-016 already ruled out, and the source's own Port Notes on
+  `Employee Onboarding Template` independently suggest the direct alternative: **each Onboarding/
+  Separation record owns its `activities` array directly, each activity carries its own `status`
+  (Pending/Completed/Cancelled) instead of a linked Task's status, and the parent's `boardingStatus`
+  is derived straight from the activity rows** (none completed → Pending; some → In Process; all →
+  Completed, or set directly via a "mark as completed" action) — same visible behavior, no Project/
+  Task indirection, no need to reproduce ERPNext's percent-complete formula. `notify_users_by_email` +
+  `frappe.desk.form.assign_to.add` (a ToDo-assignment mechanism this starter doesn't have) is replaced
+  by an **optional** activity-assignment notification through the *existing* trigger-email system
+  (ADR-015, `sendTriggeredEmail`) — a real, already-built mechanism, not a new one — left to the
+  implementer's judgement whether it's worth a trigger key for this module or better deferred; either
+  way it's a nice-to-have, not a blocker.
+- **Idiomatic-rebuild items dropped, per ADR-016, same shape as modules 1-3**: no docstatus on any
+  doctype in this module (each keeps only its own status field — `boardingStatus`, `status`); no
+  naming series; no scheduled jobs (none existed for this module in source anyway); no `track_changes`
+  version-history claim beyond what the existing audit-trail plugin already gives every model for
+  free; no Project/Task, per above.
+- **Full and Final Statement is the second-largest scope cut in the project so far, and for the same
+  reason ADR-016 exists**: source's F&F Statement is fundamentally an *accounting* document —
+  `status` is driven entirely by a linked `Journal Entry`'s submit/cancel (no other code path ever
+  sets it to "Paid"), `create_journal_entry()` builds real GL-bound accounting entries, and its
+  auto-population logic reads `Salary Slip`, `Gratuity`, `Leave Encashment`, `Employee Advance`,
+  `Asset Movement`, and — conditionally — a whole separate "Lending" app for loan repayment/accrual.
+  None of that exists here and none of it is being built to serve this one screen: ADR-016 already
+  decided against a general ledger (Q-3 covers Expense Claim/Payroll; this ADR extends that same
+  answer to Full and Final Statement rather than opening a duplicate question), and Salary Slip/
+  Gratuity/Leave Encashment/Asset tracking are all unbuilt modules. Simplified to a **manually
+  entered final-settlement worksheet**: HR types in payable/receivable line items (component label,
+  description, amount, settled/unsettled) and asset-recovery rows (asset name, return-or-recover-cost,
+  cost) by hand instead of the system auto-deriving them from six other doctypes; totals still compute
+  server-side exactly as source does (`totalPayableAmount`, `totalReceivableAmount` = receivables sum
+  + asset-recovery-cost sum); the settlement guard (every line item must be Settled, every
+  return-action asset must be Returned, before the statement can be finalized) is preserved — it's
+  real, self-contained business logic, not accounting-coupled; **no Journal Entry, no GL, "Paid" is a
+  manual HR action** (`markAsPaid`), matching Q-3's already-planned answer applied here too.
+- **One deliberate improvement over a flagged source gap**: `Employee Separation` has no
+  duplicate-active-separation-per-employee guard in source (the spec calls this out explicitly as "a
+  re-implementer should decide deliberately" rather than a gap to blindly copy) — adding one here
+  (mirroring Employee Onboarding's real `validate_duplicate_employee_onboarding`), since leaving it
+  out has no upside and a duplicate open separation for one employee is a real data-integrity problem
+  worth preventing. Recorded as a deviation, not a silent fix.
+- **Decision** (schema, one line each):
+  1. `EmployeeBoardingActivity` — shared shape (not a separate collection; embed as an array field on
+     both Onboarding and Separation, and on their Templates): activityName, assignedToEmployeeId
+     (optional ref Employee — replaces source's User-or-Role assignee with something meaningful in
+     this HR context), description, status (Pending/Completed/Cancelled, default Pending),
+     requiredForEmployeeCreation (bool, only meaningful on Onboarding/Onboarding Template — keep the
+     column on both parents' arrays regardless, matches source), beginOnDays/durationDays (int
+     offsets from the parent's boardingBeginsOn — used for informational target start/end dates only,
+     no holiday-list shifting since Holiday List doesn't exist yet, module 8).
+  2. `EmployeeOnboarding` — jobApplicantId/jobOfferId refs (both required), employeeOnboardingTemplateId
+     (optional — selecting it copies its activities array in, server-side this time, not client-only
+     like source), companyId/departmentId/designationId/employeeGradeId (fetched from template when
+     set), employeeId (optional, auto-resolved if an Employee already exists for the jobApplicantId,
+     same as source's `set_employee`), employeeName (fetched from applicant), dateOfJoining,
+     boardingBeginsOn, activities[], boardingStatus (Pending/In Process/Completed, derived per above).
+     Duplicate guard: one active (boardingStatus != Completed... actually per source, keyed off
+     existence not completion — one non-cancelled Employee Onboarding per jobApplicantId, full stop).
+     Action: `markAsCompleted` (force every activity + the parent to Completed). Action: `makeEmployee`
+     (mapped-payload pattern like Job Offer/Job Requisition in module 3 — guarded: every
+     `requiredForEmployeeCreation` activity must be Completed first, matching source's
+     `validate_employee_creation`).
+  3. `EmployeeOnboardingTemplate` — title, companyId/departmentId/designationId/employeeGradeId
+     (all optional), activities[] (same shape as point 1, used as a copy source).
+  4. `EmployeeSeparation` — employeeId ref (required; department/designation/grade/company/
+     resignationLetterDate/employeeName all fetched from Employee, matching source's authoritative-
+     fetch-from-Employee resolution over the template's own conflicting client-side copy — source
+     itself flags this inconsistency and says Employee wins, so Employee wins here too), employee
+     SeparationTemplateId (optional, copies activities in), boardingBeginsOn, activities[],
+     boardingStatus, exitInterviewSummary (free text field on this doctype — explicitly NOT linked to
+     the separate `ExitInterview` collection, matching source, don't conflate them). Duplicate guard:
+     added per the deliberate-improvement note above.
+  5. `EmployeeSeparationTemplate` — same shape as Onboarding Template, separation-flavored.
+  6. `ExitInterview` — employeeId ref (required), status enum (Pending/Scheduled/Completed/Cancelled),
+     date (required when Scheduled), interviewers (array of Employee refs, required when Scheduled —
+     Employee not User, consistent with point 1's reasoning), interviewSummary, employeeStatus
+     (blank/Employee Retained/Exit Confirmed, required when Completed). Guards: employee must have a
+     relievingDate set (real rule, kept); one active (non-cancelled) Exit Interview per employee (real
+     rule, kept). No email-append-to inbox threading, no exit-questionnaire Web Form flow (both need
+     infrastructure this starter doesn't have) — a simple "send interview invite" email via the
+     existing trigger system is optional/implementer's-judgement, same as point 1's assignment email.
+  7. `FullAndFinalStatement` — employeeId ref (required; department/designation/company/dateOfJoining/
+     relievingDate fetched from Employee — guard: relievingDate must be set, real rule kept),
+     transactionDate (required), payables[]/receivables[] (component, description, amount, status
+     Settled/Unsettled — one shared shape, `lineType` discriminator if implemented as one array,
+     source's own Port Notes flag this exact choice), assetsAllocated[] (assetName, action
+     Return/RecoverCost, cost — required + only meaningful when RecoverCost, status Owned/Returned),
+     totalPayableAmount/totalReceivableAmount/totalAssetRecoveryCost (all server-computed on save,
+     never client-supplied), status (Unpaid/Paid/Cancelled, default Unpaid). Settlement guard before
+     `markAsPaid` or any finalize action: every payable/receivable row Settled, every Return-action
+     asset row Returned (source's real `before_submit` guards, preserved even though docstatus/submit
+     itself isn't). No Journal Entry, no GL, no Asset Movement auto-population, no Loan/Lending — all
+     per the simplification above.
+  8. Roles: HR User/HR Manager get full CRUD on Onboarding, Onboarding Template, Separation Template,
+     Exit Interview, per source's own tables (mostly symmetric here, unlike modules 1-3's several
+     asymmetric splits — check each doctype's real permission table in the source files for the exact
+     few exceptions, e.g. Employee Separation's HR User has no delete right and HR Manager alone gets
+     submit-equivalent/finalize rights per source — reproduce that specific asymmetry even without
+     docstatus, by gating the finalize/markAsPaid-style actions to HR Manager only where source did).
+     Employee/Interviewer/Approver roles get no matrix row anywhere in this module.
+  9. Menu: new "Onboarding & Separation" menu group. Reporting: `widgetSources.js` entries for
+     `employee-onboardings` and `employee-separations` (groupable by boardingStatus/companyId/
+     departmentId).
+- **Consequences**: `Employee Separation`'s `exitInterviewSummary` free-text field and the separate
+  `ExitInterview` collection stay deliberately unlinked, matching source (a UI hint suggesting HR
+  copy/paste a summary across, if wanted, is fine; no data coupling). `OPEN-QUESTIONS.md` Q-3
+  (payment reconciliation without a GL) now explicitly covers Full and Final Statement too, not just
+  Expense Claim/Payroll — updating its text rather than adding a duplicate row.
+- **Deviates from convention**: adds a guard source doesn't have (Employee Separation duplicate
+  check) — the "deliberate improvement" case AGENTS.md rule 8 anticipates (source flagged it as a
+  real gap, not a considered omission), recorded here rather than silently added.
+- **As built**: pending — implementation follows in the same session.
+

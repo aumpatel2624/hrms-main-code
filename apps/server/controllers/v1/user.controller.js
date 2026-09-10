@@ -49,7 +49,7 @@ export const createUser = async (req, res) => {
     console.error("Error in createUser:", error);
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -109,7 +109,7 @@ export const updateUser = async (req, res) => {
     console.error("Error in updateUser:", error);
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -138,7 +138,7 @@ export const deleteUser = async (req, res) => {
     console.error("Error in deleteUser:", error);
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -166,7 +166,7 @@ export const getUserById = async (req, res) => {
     console.error("Error in getUserById:", error);
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -185,7 +185,7 @@ export const listAllUsers = async (req, res) => {
     console.error("Error in listAllUsers:", error);
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -244,7 +244,7 @@ export const listUsersByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, data: list, status: 200 });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, message: error.message, status: 500 });
+    return res.status(500).json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -260,7 +260,7 @@ export const listUsersByDepartment = async (req, res) => {
     console.error("Error in listUsersByDepartment:", error);
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -293,6 +293,6 @@ export const resetUserPassword = async (req, res) => {
     console.error("Error in resetUserPassword:", error);
     return res
       .status(500)
-      .json({ isOk: false, message: error.message, status: 500 });
+      .json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };

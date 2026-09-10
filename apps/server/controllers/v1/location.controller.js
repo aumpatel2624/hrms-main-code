@@ -39,7 +39,7 @@ export const createCountry = async (req, res) => {
     console.log("Error in createCountry", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -58,7 +58,7 @@ export const listAllCountries = async (req, res) => {
     console.log("Error in listAllCountries", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -102,7 +102,7 @@ export const deleteCountry = async (req, res) => {
     console.log("Error in deleteCountry", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -138,7 +138,7 @@ export const updateCountry = async (req, res) => {
     console.log("Error in updateCountry", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -159,7 +159,7 @@ export const listCountryByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, data: list, status: 200 });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, message: error.message, status: 500 });
+    return res.status(500).json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -186,7 +186,7 @@ export const getCountryById = async (req, res) => {
     console.log("Error in getCountryById", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -227,7 +227,7 @@ export const createState = async (req, res) => {
     console.log("Error in createState", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -248,7 +248,7 @@ export const listAllStates = async (req, res) => {
     console.log("Error in listAllStates", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -277,7 +277,7 @@ export const getStateById = async (req, res) => {
     console.log("Error in getStateById", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -308,7 +308,7 @@ export const deleteState = async (req, res) => {
     console.log("Error in deleteState", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -345,7 +345,7 @@ export const updateState = async (req, res) => {
     console.log("Error in updateState", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -366,7 +366,7 @@ export const listStateByCountry = async (req, res) => {
     console.log("Error in listStateByCountry", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -394,7 +394,7 @@ export const listStateByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, data: list, status: 200 });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, message: error.message, status: 500 });
+    return res.status(500).json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -433,7 +433,7 @@ export const createCity = async (req, res) => {
     console.log("Error in createCity", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -454,7 +454,7 @@ export const listAllCities = async (req, res) => {
     console.log("Error in listAllCities", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -483,7 +483,7 @@ export const getCityById = async (req, res) => {
     console.log("Error in getCityById", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -514,7 +514,7 @@ export const deleteCity = async (req, res) => {
     console.log("Error in deleteCity", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -552,7 +552,7 @@ export const updateCity = async (req, res) => {
     console.log("Error in updateCity", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -573,7 +573,7 @@ export const listCityByState = async (req, res) => {
     console.log("Error in listCityByState", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }
@@ -606,7 +606,7 @@ export const listCityByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, data: list, status: 200 });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, message: error.message, status: 500 });
+    return res.status(500).json({ isOk: false, message: "Internal server error", status: 500 });
   }
 };
 
@@ -661,7 +661,7 @@ export const listCountryStateCity = async (req, res) => {
     console.log("Error in listCountryStateCity", error);
     return res.status(500).json({
       isOk: false,
-      message: error.message,
+      message: "Internal server error",
       status: 500,
     });
   }

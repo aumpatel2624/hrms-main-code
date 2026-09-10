@@ -50,11 +50,14 @@ const toPublicShape = (opening, lookups) => {
   return shape;
 };
 
+const idsOf = (openings, field) =>
+  [...new Set(openings.map((o) => o[field]).filter(Boolean).map(String))];
+
 const buildLookups = async (openings) => {
-  const companyIds = [...new Set(openings.map((o) => String(o.companyId)).filter(Boolean))];
-  const departmentIds = [...new Set(openings.map((o) => String(o.departmentId)).filter(Boolean))];
-  const employmentTypeIds = [...new Set(openings.map((o) => String(o.employmentTypeId)).filter(Boolean))];
-  const branchIds = [...new Set(openings.map((o) => String(o.branchId)).filter(Boolean))];
+  const companyIds = idsOf(openings, "companyId");
+  const departmentIds = idsOf(openings, "departmentId");
+  const employmentTypeIds = idsOf(openings, "employmentTypeId");
+  const branchIds = idsOf(openings, "branchId");
 
   const [companies, departments, employmentTypes, branches] = await Promise.all([
     Company.find({ _id: { $in: companyIds } }).select("companyName"),

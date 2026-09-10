@@ -194,3 +194,58 @@ background and `docs/knowledge/DECISIONS.md` for the ADR this module produces.
       the merge-field tokens, the one-active-template guard, and the `unassigned.*` edit trap;
       screenshots recaptured; confirmed readable as a non-admin role in both themes (`client-docs`,
       2026-09-09).
+
+### Recruitment (HRMS module 3 — Job Requisition, Job Opening, Job Applicant(+Source), Interview
+Type/Interview(+Feedback), Job Offer(+Term Template))
+
+Scope: the full hiring funnel plus a public job listing. See ADR-019 for the design (idiomatic-rebuild
+applied to a module with real Frappe submittable doctypes for the first time) and `DOMAIN.md`'s
+Recruitment section for the shipped field shapes/guards. Property History, ID Document Type and
+Department Approver (originally sketched for module 2) do not belong here either — see ADR-018.
+
+- [x] 9 new models, no docstatus/naming series (ADR-016) — each keeps only its own `status`/`result`
+      field as the state machine. Frappe's `Interview Detail`/`Job Offer Term` child-table doctypes
+      folded into plain embedded arrays, not built as separate collections
+- [x] `Employee.jobApplicantId` (optional) added — the integration point the reverse hook reads
+- [x] Real guards enforced server-side (RULES.md INV-10/11/12): closed-opening + duplicate-application
+      on Job Applicant; duplicate-interview-per-type + designation-mismatch on Interview;
+      interviewer-assignment + not-before-scheduled-date + duplicate on Interview Feedback;
+      duplicate-offer-per-applicant on Job Offer
+- [x] Cross-doctype sync (RULES.md FLOW-1/2): closing a linked Job Opening marks its Job Requisition
+      Filled; a Job Offer's status change syncs the linked Job Applicant; creating an Employee with
+      `jobApplicantId` set flips both the Job Applicant and its open Job Offer to Accepted
+- [x] Public job listing (`/api/v1/public/jobs`, `/api/v1/public/jobs/:company/:jobSlug`) — bespoke
+      router, NOT built on `runListQuery`/generic `filterable` (ADR-019's deliberate second exception
+      to `30-api.md`'s public-endpoint gate), hardcoded `status=Open AND publish=true`, field-
+      allowlisted response, no public write endpoint (`OPEN-QUESTIONS.md` Q-7)
+- [x] Expired-but-Open postings excluded from the public listing by a read-time date filter — no
+      scheduled job (ADR-016/019)
+- [x] `RoleMaster`/`UserRoles` extended: HR User/HR Manager full CRUD except Interview Feedback
+      (**both read-only** there, RULES.md PERM-3 — only `Interviewer` writes, matching source exactly)
+- [x] "Recruitment" menu group (9 screens); public listing correctly has no menu row
+- [x] 9 admin entity configs + 3 grouped API wrapper files, following modules 1-2's pattern.
+      Known simplification: `interviewers`/`defaultInterviewers` (User-ref arrays) are schema-ready,
+      not exposed on the quick-entry forms — no multi-select field precedent in this admin yet
+- [x] `widgetSources.js`: `job-openings`/`job-applicants`, groupable only
+- [x] `docs-src/manifest.js`: entries for all 9 screens
+- [x] A real bug found and fixed during verify, own commit: the public listing's `buildLookups()`
+      stringified `null` refs before filtering, producing the literal string `"null"` in a Mongoose
+      `$in` ObjectId query, which throws — found by exercising the endpoint with a real posting
+      missing an optional field, not by reading the code
+- [x] Acceptance check (live HTTP against the real dev database — see STATE.md log): the full funnel
+      end to end — Job Requisition → `makeJobOpening` mapping → published Job Opening confirmed
+      visible on the unauthenticated public listing and its by-route detail endpoint, salary
+      correctly hidden when unpublished → Job Applicant created (name auto-derived from email) →
+      closing the opening blocked a new applicant (409) and cascaded the requisition to Filled →
+      Interview created, duplicate-type guard confirmed (409) → Interview Feedback: non-assigned
+      interviewer rejected (403), assigned interviewer accepted, duplicate rejected (409) → Job Offer
+      created, duplicate guard confirmed (409), Accepted status synced the applicant → `makeEmployee`
+      mapping → real Employee created, reverse hook confirmed flipping both applicant and offer to
+      Accepted → HR User confirmed read-only on Interview Feedback (200 GET, 403 PUT), Employee-role
+      confirmed 403 on Job Applicant → all throwaway data (including a throwaway country/state/city
+      created solely to satisfy the starter-generic `User` model's required geography fields) cleaned
+      up, collection counts back to baseline
+- [ ] Client-facing documentation screenshots actually captured (`npm run docs`) — same gap modules
+      1-2 left; manifest entries exist for a future run to pick up
+- [ ] Public apply flow, Staffing Plan vacancy checks, Employee Referral sync, Skill Assessment
+      ratings — all deliberately deferred, `OPEN-QUESTIONS.md` Q-7/Q-8/Q-9, not this module's job

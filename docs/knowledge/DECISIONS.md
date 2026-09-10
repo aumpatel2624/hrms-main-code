@@ -1348,3 +1348,190 @@ Copy this block. Number sequentially.
   - Not done, flagged for later: `Employee.userId` self-service linking has no UI action yet (create
     a `User` for a specific `Employee`) — schema-ready, deliberately not built this module.
 
+---
+
+### ADR-019 — Recruitment: hiring funnel without docstatus/naming-series/scheduler fidelity; a narrow public listing, not a public apply form
+
+- **Date**: 2026-09-10
+- **Status**: accepted
+- **Context**: `system-design` for HRMS module 3, same standing overnight authorization as ADR-017/018
+  (both implementation forks finished clean, reviewed before starting this one). Read the six
+  substantial `HRMS-Port-Spec/01-Modules/Recruitment/` files (Job Requisition, Job Opening, Job
+  Applicant, Interview, Interview Feedback, Job Offer) in full; the simpler child-table/master
+  doctypes (Interview Type, Interviewer, Interview Detail, Job Offer Term, Job Offer Term Template,
+  Job Applicant Source, Job Opening Template) were not read in the same depth — left to the
+  implementation fork, they're simple enough not to need pre-digestion.
+- **The scope cut, and why it's large**: this is the first module where Frappe's framework-fidelity
+  machinery (docstatus, naming series, the scheduler, Kanban, print/letterhead, telemetry) shows up
+  in force on doctypes that are actually interesting (Interview, Interview Feedback and Job Offer are
+  all `is_submittable`). ADR-016 already decided against reproducing that layer; this ADR is where
+  that decision actually bites for the first time, so it's spelled out doctype by doctype rather than
+  asserted once:
+  - **No docstatus on Interview / Interview Feedback / Job Offer.** Each keeps its own `status` Select
+    (which source already treats as the real, independent state machine) and drops the separate
+    Draft/Submitted/Cancelled/Amended axis entirely — there is no `amended_from` chain, no "submit"
+    action distinct from just setting status. Where source uses `on_submit` to trigger a side effect
+    (e.g. Job Offer's `on_change` syncing Job Applicant status), the equivalent status-field write
+    triggers it instead.
+  - **No naming series** (`HR-HIREQ-`, `HR-OPN-.YYYY.-.####`, etc.) — Mongo `_id` is the identity;
+    no separate human-readable code is manufactured for doctypes with no real data to seed (unlike
+    `Employee.employeeCode`, which had real codes worth preserving).
+  - **No scheduled jobs**: `close_expired_job_openings` (daily), `send_interview_reminder` (~every 4
+    min), `send_daily_feedback_reminder` (daily) are all dropped, per ADR-016 ("background jobs only
+    where a feature genuinely cannot work without one" — none of these three qualify; reminders are a
+    nice-to-have notification, and an expired-but-still-"Open"-flagged posting is solved without a
+    job at all, see point 3 below). Not a gap to silently paper over: real, named, deferred.
+  - **No Kanban board, no print/letterhead/Print Heading fields, no Terms-and-Conditions template
+    link, no telemetry** — Desk-UI sugar or accounting/print concepts this starter doesn't have
+    equivalents for and nothing here needs.
+  - **Staffing Plan-gated vacancy checks are skipped, not simplified** — `Staffing Plan`/`Staffing
+    Plan Detail` don't exist yet (module 5, Employee Career Events per the corrected STATE.md order).
+    `Job Opening.validate_current_vacancies` and `Job Offer.validate_vacancies` are both real business
+    rules worth having eventually, but building them against a Staffing Plan that doesn't exist would
+    mean either stubbing a fake dependency or inventing a different vacancy model now and re-doing it
+    when module 5 lands. Deferred as a named follow-up on both doctypes, not dropped as a feature.
+  - **`Job Applicant.source == "Employee Referral"` sync is skipped** — `Employee Referral` is module
+    5 too. `Job Applicant Source` (the plain master) is still built; the specific referral-status-sync
+    behavior is deferred alongside Staffing Plan.
+  - **Interview Feedback's `Skill Assessment` child table is dropped for now** — `Skill` (the master
+    it references) is module 6 (Training & Skills). `feedback` (free text) + `result` (Cleared/
+    Rejected) + `interviewer` stay; the structured per-skill rating table and its average-rating
+    rescaling arrive when `Skill` exists. `average_rating`-on-the-parent-Interview logic (averaging
+    across interviewers) is dropped with it for the same reason — nothing to average yet.
+- **The one genuinely open call: the public job board is a listing, not an apply form.** User said
+  "yes, needed" to a public job board during grilling (round 1). `30-api.md`'s public-endpoint gate
+  requires (criterion 2) that a public route be "resolve-by-key, never a listing" — a job board is
+  *inherently* a listing by nature, which is a real tension with that gate, not an oversight to route
+  around quietly:
+  - **Building anyway, as its own deliberate exception**: the data really is meant to be public
+    (published, open postings only), field-allowlisted in the response (never a raw Mongo document),
+    filter keys hardcoded to a small allowlist (company/department/employmentType/location) — the
+    same spirit as the SEO public router (ADR-004), applied to a shape SEO never needed (a paginated,
+    filtered catalog instead of resolve-by-path). Built as its own narrow, bespoke read path under
+    `/api/v1/public/jobs`, NOT on top of `runListQuery`/the generic `filterable` mechanism — that
+    mechanism's trust boundary is built for authenticated internal screens; reusing it for an
+    anonymous, unauthenticated caller is a wider attack surface than this needs. `status="Open"` and
+    `publish=true` are hardcoded server-side, never client-supplied.
+  - **NOT building the public apply flow (anonymous Job Applicant creation) this module.** This is
+    where I'm stopping short of what "public job board" could mean, deliberately: an anonymous write
+    endpoint is a real new attack surface (spam applications, résumé-upload abuse), and `60-limits.md`
+    is explicit that this starter has **no HTTP rate limiting at all** — "before exposing anything to
+    the internet — especially a new public route" is exactly the moment that limit says to stop and
+    decide, not improvise past. Recorded in `OPEN-QUESTIONS.md` rather than built silently overnight;
+    Job Applicant records are created/managed by HR through the normal authenticated admin screen in
+    this module (a realistic path too — HR receiving résumés by email and entering candidates
+    manually is completely normal, not a workaround).
+  - **`close_expired_job_openings`'s daily job, dropped per point above, is replaced by a read-time
+    computation**, not silently lost: the public listing query filters `status = "Open" AND (closesOn
+    is null OR closesOn >= today)` directly, so an expired-but-not-yet-flipped posting never shows up
+    publicly regardless of whether anything ever flips its stored `status` to `Closed`. The internal
+    admin list can still show the stored `status` as-is (HR sees "Open" until they close it or the
+    date passes) — this is a deliberate small behavioral difference from source (which does flip the
+    stored field via the daily job) traded for not needing a scheduler.
+- **What's still real and being built, not cut**: Job Requisition → Job Opening → Job Applicant →
+  Interview (+ Interview Type, Interview Detail) → Interview Feedback → Job Offer (+ Job Offer Term,
+  Job Offer Term Template), Job Applicant Source, and the actual cross-doctype logic that makes this a
+  funnel rather than five unrelated CRUD screens: `make_job_opening` (Requisition → Opening),
+  closed-opening / duplicate-application guards on Job Applicant creation, `validate_designation` and
+  duplicate-interview guards on Interview, `validate_interviewer`/interview-date/duplicate-feedback
+  guards plus average-rating calc on Interview Feedback, duplicate-offer-per-applicant guard and
+  applicant-status-sync-on-offer-status-change on Job Offer, and — the actual integration point with
+  Employee Records — a manual, user-triggered "Create Employee from this accepted Job Offer" action
+  (`make_employee`), matching source's own actual behavior (this was never automatic in Frappe either
+  — only the Employee→Applicant/Offer status sync-back is automatic, which this module also builds:
+  creating an Employee with `jobApplicantId` set flips that applicant and its open offer to Accepted).
+- **Decision** (schema, one line each — implementer fills in full field detail per the doctype specs):
+  1. `JobRequisition` — designation/department/company refs, positions, compensation, status enum
+     (Pending/Open & Approved/Rejected/Filled/On Hold/Cancelled, no enforced transition graph, matches
+     source), requestedBy (ref Employee, fields fetched not stored-duplicated at write time — fetch
+     on read via `$lookup` or populate, implementer's call), `make_job_opening` action.
+  2. `JobOpening` — designation/department/company/employmentType/branch(location) refs, status enum
+     (Open/Closed), publish + publishSalaryRange + preventDuplicateApplicant flags, route/slug field
+     (server-generated, `company/job-title` scrubbed, matching source's server-authoritative version
+     over the client's diverging one — Port Notes flagged this discrepancy, server wins), pay range +
+     currency, staffingPlan/vacancy fields present on the schema but unvalidated (deferred per above).
+  3. `JobApplicant` — applicant name/email/phone, jobOpeningId ref, designation (fetched), status enum
+     (Open/Replied/Shortlisted/Rejected/Hold/Accepted), sourceId ref, resume link/attachment, cover
+     letter, salary expectation. Closed-opening guard and duplicate-application guard (when the
+     opening's `preventDuplicateApplicant` is set) both enforced server-side on create — source only
+     had the closed-opening guard server-side and the duplicate check client-adjacent; both become
+     real server validation here since there's no client form step to rely on.
+  4. `JobApplicantSource` — simple master (name, isActive).
+  5. `InterviewType` — name, designation ref, expected average rating, default interviewers (simple
+     array of User refs — Interviewer's own child-table shape isn't worth a separate collection at
+     this scale, implementer's call if it should be one).
+  6. `Interview` — interviewType/jobApplicant refs, jobOpening (fetched), designation (fetched,
+     mismatch-guarded against the applicant's own designation per `validate_designation`),
+     scheduledOn/fromTime/toTime, status enum (Pending/Under Review/Cleared/Rejected/Cancelled),
+     interviewers (child list of User refs, replacing Interview Detail as its own collection unless
+     the implementer finds a reason not to fold it in), duplicate-interview-per-type guard.
+  7. `InterviewFeedback` — interview/interviewer refs, result enum (Cleared/Rejected), free-text
+     feedback (no Skill Assessment table, per above), interviewer-must-be-assigned guard,
+     no-feedback-before-scheduled-date guard, duplicate-feedback-per-interviewer guard.
+  8. `JobOffer` — jobApplicant ref (applicant name/email fetched), status enum (Awaiting
+     Response/Accepted/Rejected/Cancelled), offerDate, designation (fetched), company, offerTerms
+     (child list — term + value, replacing the separate Job Offer Term/Job Offer Term Template
+     doctypes with one simple embedded list plus an optional reusable `JobOfferTermTemplate` master
+     the UI can copy from), duplicate-offer-per-applicant guard, status-change syncs linked
+     JobApplicant.status, `make_employee` action (manual, per above).
+  9. Roles: HR User/HR Manager get full CRUD on everything in this module except where source's own
+     permission table is asymmetric — reproduce those asymmetries exactly: Interview Feedback is
+     HR-Manager-read-only/HR-User-read-only (both, per source — only `Interviewer` gets write there).
+     `Interviewer` (RoleMaster row, already seeded in module 1) gets full CRUD on Interview and
+     Interview Feedback, matching source's own (surprisingly unscoped) permission table — source
+     itself has no `if_owner`-style "only my assigned interviews" restriction at the permission-table
+     level, only the `validate_interviewer` business-rule check on Feedback specifically; don't invent
+     a stricter scoping than source actually has.
+  10. Public: `/api/v1/public/jobs` (list, GET one by route/slug) per the bespoke-router decision
+      above. No public write endpoint this module — `OPEN-QUESTIONS.md` gets a row.
+  11. Menu: new "Recruitment" menu group. Reporting: `widgetSources.js` entries for the funnel stages
+      (jobOpenings groupable by status/company/department; jobApplicants groupable by status/source,
+      dateField postedOn/creation) — enough for a basic hiring-funnel chart, not a reproduction of
+      every KPI method in source (`get_avg_time_to_fill`, `get_applicant_to_hire_percentage`,
+      `get_offer_acceptance_rate` are real and could become dashboard widgets later; not required now).
+- **Consequences**: Staffing Plan (module 5) and Skill (module 6) both need to come back and touch
+  this module's doctypes when they land — `OPEN-QUESTIONS.md` gets rows for both so they're not
+  forgotten. The public listing sets the pattern for any future public route this project adds:
+  bespoke narrow router under `/api/v1/public/`, never the generic list mechanism.
+- **Deviates from convention**: yes — a second public router (`30-api.md` frames one public router as
+  "by exception"; this is the second, justified the same way ADR-004 justified the first) and,
+  narrower, a public route that's a listing rather than resolve-by-key (gate criterion 2 not met,
+  reasoned through above rather than silently waived).
+- **As built**: as decided, with two small runtime adjustments. Interview's `interview_details` and
+  Job Offer's `offer_terms` child tables became plain embedded arrays as planned; Frappe's separate
+  `Interview Detail`/`Job Offer Term` doctypes were never built at all (correctly — nothing needed
+  them independently). `Employee.jobApplicantId` (optional) was added as planned to carry the
+  reverse-hook integration. Deviations found only during implementation: (1) `Company.companyCode`/
+  `Department.departmentCode`'s existing non-`sparse` partial-unique-index pattern (module 1) was
+  reused for `JobOpening.route` and `Employee.userId`-style optional-unique fields, not called out by
+  name in the ADR but the same established fix; (2) a real bug, not a design deviation — the public
+  listing's `buildLookups()` stringified `null` refs before filtering, producing the literal string
+  `"null"` in a Mongoose `$in` ObjectId query, which throws; fixed in its own commit
+  (`fix(server): public job listing 500s when a Job Opening has no employment type/branch`), found by
+  actually exercising the public endpoint with a real opening missing those optional fields, not by
+  reading the code.
+  **Verified**: `npm test` (10/10) green throughout. `npm run seed` run twice, identical counts on the
+  second run (idempotent) — 1 Apidel company/12 branches/24 departments/29 designations/4 employment
+  types (module 1), 195 employees (module 2), 5 Job Applicant Sources (module 3), unchanged. Live HTTP
+  walk of the full funnel end to end: Job Requisition → `makeJobOpening` mapping → published Job
+  Opening → confirmed visible on the **unauthenticated** `/api/v1/public/jobs` listing and its
+  by-route detail endpoint, with salary correctly hidden when `publishSalaryRange` is false → Job
+  Applicant created against it (name auto-derived from email) → closing the opening both blocked a new
+  applicant (409) and cascaded the linked Job Requisition to `Filled` → Interview created, duplicate-
+  type guard confirmed (409) → Interview Feedback: non-assigned interviewer rejected (403), assigned
+  interviewer accepted (201), duplicate rejected (409) → Job Offer created, duplicate-per-applicant
+  guard confirmed (409), status change to Accepted synced the Job Applicant → `makeEmployee` mapping →
+  real Employee created with `jobApplicantId` set, confirmed the reverse hook flipped both the
+  applicant and the (already-Accepted) offer correctly → confirmed with throwaway HR User/Employee-role
+  accounts that HR User can read but not write Interview Feedback (asymmetric permission, 403 on
+  write) and Employee-role is 403'd on Job Applicant. All throwaway test data (job requisitions,
+  openings, applicants, interview types, interviews, feedback, offers, one employee, users, and the
+  throwaway country/state/city created solely to satisfy the starter-generic `User` model's required
+  geography fields — this dev DB had none seeded) cleaned up afterward; collection counts confirmed
+  back to baseline (195 employees, 5 sources, zero in every purely-transactional collection). `npm run
+  build` green before and after. `npm run docs` (screenshot capture) not run — same gap modules 1-2
+  left; manifest entries exist so a future run can pick them up.
+  **Not done, flagged for the user**: the public *apply* flow, Staffing-Plan vacancy checks, Employee
+  Referral status sync and Skill Assessment ratings remain exactly as deferred in this ADR
+  (`OPEN-QUESTIONS.md` Q-7/Q-8/Q-9) — nothing new deferred beyond what was already planned.
+

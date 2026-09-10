@@ -129,6 +129,16 @@ const EmployeeSchema = new mongoose.Schema(
       trim: true,
       required: false,
     },
+    // Set when this Employee originated from a hired candidate (ADR-019,
+    // Recruitment module). Drives the reverse hook in
+    // employee.controller.js's create path: flips the linked JobApplicant
+    // and its open JobOffer to Accepted.
+    jobApplicantId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "JobApplicant",
+      required: false,
+      default: null,
+    },
     // Placeholder fields (ADR-018) preserving real org-chart data
     // (CSV "shift"/"work_mode" columns) ahead of the real Shift & Attendance
     // module (module 9) — not a preview of that module's design.
@@ -169,6 +179,7 @@ EmployeeSchema.index({ departmentId: 1 });
 EmployeeSchema.index({ designationId: 1 });
 EmployeeSchema.index({ branchId: 1 });
 EmployeeSchema.index({ reportsToId: 1 });
+EmployeeSchema.index({ jobApplicantId: 1 });
 EmployeeSchema.index({ status: 1 });
 EmployeeSchema.index({ isActive: 1, createdAt: -1 });
 EmployeeSchema.index({ createdAt: -1 });

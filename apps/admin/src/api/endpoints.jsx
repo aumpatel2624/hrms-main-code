@@ -74,6 +74,56 @@ export const ENDPOINTS = {
         SEARCH: `${V1}/employees/search`,
     },
 
+    // Recruitment endpoints (ADR-019)
+    JOB_REQUISITIONS: {
+        BASE: `${V1}/job-requisitions`,
+        BY_ID: (id) => `${V1}/job-requisitions/${id}`,
+        SEARCH: `${V1}/job-requisitions/search`,
+        MAKE_JOB_OPENING: (id) => `${V1}/job-requisitions/${id}/make-job-opening`,
+    },
+    JOB_OPENINGS: {
+        BASE: `${V1}/job-openings`,
+        BY_ID: (id) => `${V1}/job-openings/${id}`,
+        SEARCH: `${V1}/job-openings/search`,
+    },
+    JOB_APPLICANTS: {
+        BASE: `${V1}/job-applicants`,
+        BY_ID: (id) => `${V1}/job-applicants/${id}`,
+        SEARCH: `${V1}/job-applicants/search`,
+    },
+    JOB_APPLICANT_SOURCES: {
+        BASE: `${V1}/job-applicant-sources`,
+        BY_ID: (id) => `${V1}/job-applicant-sources/${id}`,
+        SEARCH: `${V1}/job-applicant-sources/search`,
+    },
+    INTERVIEW_TYPES: {
+        BASE: `${V1}/interview-types`,
+        BY_ID: (id) => `${V1}/interview-types/${id}`,
+        SEARCH: `${V1}/interview-types/search`,
+    },
+    INTERVIEWS: {
+        BASE: `${V1}/interviews`,
+        BY_ID: (id) => `${V1}/interviews/${id}`,
+        SEARCH: `${V1}/interviews/search`,
+        RESCHEDULE: (id) => `${V1}/interviews/${id}/reschedule`,
+    },
+    INTERVIEW_FEEDBACKS: {
+        BASE: `${V1}/interview-feedbacks`,
+        BY_ID: (id) => `${V1}/interview-feedbacks/${id}`,
+        SEARCH: `${V1}/interview-feedbacks/search`,
+    },
+    JOB_OFFERS: {
+        BASE: `${V1}/job-offers`,
+        BY_ID: (id) => `${V1}/job-offers/${id}`,
+        SEARCH: `${V1}/job-offers/search`,
+        MAKE_EMPLOYEE: (id) => `${V1}/job-offers/${id}/make-employee`,
+    },
+    JOB_OFFER_TERM_TEMPLATES: {
+        BASE: `${V1}/job-offer-term-templates`,
+        BY_ID: (id) => `${V1}/job-offer-term-templates/${id}`,
+        SEARCH: `${V1}/job-offer-term-templates/search`,
+    },
+
     // User endpoints
     USERS: {
         BASE: `${V1}/users`,

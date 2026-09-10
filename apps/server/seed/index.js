@@ -34,6 +34,7 @@ import Employee from "../models/Employee.js";
 import EmployeeHealthInsurance from "../models/EmployeeHealthInsurance.js";
 import RoleMaster from "../models/RoleMaster.js";
 import UserRoles from "../models/UserRoles.js";
+import JobApplicantSource from "../models/JobApplicantSource.js";
 import { PERMISSION_KEYS } from "@demo-panel/shared/permissions";
 import { SCOPES } from "@demo-panel/shared/scopes";
 
@@ -156,6 +157,25 @@ const MENU_GROUPS = [
     menus: [
       { menuName: "Employee", menuUrl: "/employee", icon: "ri-user-3-line" },
       { menuName: "Employee Health Insurance", menuUrl: "/employee-health-insurance", icon: "ri-heart-pulse-line" },
+    ],
+  },
+  // HRMS module 3 (ADR-019). The full hiring funnel; the public job
+  // listing (/api/v1/public/jobs) is not a menu item — it's not an admin
+  // screen.
+  {
+    menuGroupName: "Recruitment",
+    sequence: 2.7,
+    icon: "ri-briefcase-4-line",
+    menus: [
+      { menuName: "Job Requisition", menuUrl: "/job-requisition", icon: "ri-file-list-3-line" },
+      { menuName: "Job Opening", menuUrl: "/job-opening", icon: "ri-door-open-line" },
+      { menuName: "Job Applicant", menuUrl: "/job-applicant", icon: "ri-user-add-line" },
+      { menuName: "Job Applicant Source", menuUrl: "/job-applicant-source", icon: "ri-links-line" },
+      { menuName: "Interview Type", menuUrl: "/interview-type", icon: "ri-questionnaire-line" },
+      { menuName: "Interview", menuUrl: "/interview", icon: "ri-chat-3-line" },
+      { menuName: "Interview Feedback", menuUrl: "/interview-feedback", icon: "ri-star-line" },
+      { menuName: "Job Offer", menuUrl: "/job-offer", icon: "ri-mail-send-line" },
+      { menuName: "Job Offer Term Template", menuUrl: "/job-offer-term-template", icon: "ri-file-copy-line" },
     ],
   },
   {
@@ -820,6 +840,93 @@ const seedOrganizationSetupRoles = async () => {
   );
 };
 
+/**
+ * Job Applicant Source starter set (ADR-019) — not derived from any real
+ * data, the org-chart CSV has no source column. Upserted by name.
+ */
+const seedRecruitmentMasters = async () => {
+  const SOURCES = ["Referral", "Job Board", "LinkedIn", "Career Site", "Walk-in"];
+  let created = 0;
+  for (const sourceName of SOURCES) {
+    const result = await JobApplicantSource.findOneAndUpdate(
+      { sourceName },
+      { sourceName, isActive: true },
+      { upsert: true, setDefaultsOnInsert: true, new: false },
+    );
+    if (!result) created += 1;
+  }
+  console.log(`✅ Recruitment masters: ${created} new Job Applicant Source(s), ${SOURCES.length} ensured`);
+};
+
+/**
+ * Recruitment roles (ADR-019). HR User/HR Manager get full CRUD on the
+ * whole funnel EXCEPT Interview Feedback, where — matching source's own
+ * permission table exactly — both are read-only and only Interviewer
+ * writes. Interviewer gets full CRUD on Interview and Interview Feedback
+ * only, same as source (no if_owner-style "only my assigned interviews"
+ * restriction at the permission-table level — see ADR-019 point 9).
+ */
+const seedRecruitmentRoles = async () => {
+  const FULL_ACCESS_ROLES = ["HR User", "HR Manager"];
+  const FULL_ACCESS_MENU_URLS = [
+    "/job-requisition", "/job-opening", "/job-applicant", "/job-applicant-source",
+    "/interview-type", "/interview", "/job-offer", "/job-offer-term-template",
+  ];
+  const READ_ONLY_FOR_HR_MENU_URLS = ["/interview-feedback"];
+  const INTERVIEWER_MENU_URLS = ["/interview", "/interview-feedback"];
+
+  const allMenus = await MenuMaster.find({
+    menuUrl: { $in: [...FULL_ACCESS_MENU_URLS, ...READ_ONLY_FOR_HR_MENU_URLS] },
+  }).lean();
+  if (allMenus.length !== FULL_ACCESS_MENU_URLS.length + READ_ONLY_FOR_HR_MENU_URLS.length) {
+    console.log("⚠️  Recruitment roles: not every Recruitment menu row exists yet — run seedMenus first");
+    return;
+  }
+  const menuByUrl = Object.fromEntries(allMenus.map((m) => [m.menuUrl, m]));
+
+  const fullPerm = Object.fromEntries(PERMISSION_KEYS.map((key) => [key, key === "read" || key === "write" || key === "edit" || key === "delete"]));
+  const readOnlyPerm = Object.fromEntries(PERMISSION_KEYS.map((key) => [key, key === "read"]));
+
+  const addRow = (userRoles, menu, perm) => {
+    const hasRow = userRoles.roles.some((r) => String(r.menuId) === String(menu._id));
+    if (hasRow) return false;
+    userRoles.roles.push({ menuId: menu._id, menuGroupId: menu.menuGroup, ...perm });
+    return true;
+  };
+
+  let matrixRowsAdded = 0;
+
+  for (const roleName of FULL_ACCESS_ROLES) {
+    const role = await RoleMaster.findOne({ roleName });
+    if (!role) continue;
+    const userRoles = await UserRoles.findOne({ roleId: role._id });
+    if (!userRoles) continue;
+
+    let changed = false;
+    for (const url of FULL_ACCESS_MENU_URLS) {
+      if (addRow(userRoles, menuByUrl[url], fullPerm)) { matrixRowsAdded += 1; changed = true; }
+    }
+    for (const url of READ_ONLY_FOR_HR_MENU_URLS) {
+      if (addRow(userRoles, menuByUrl[url], readOnlyPerm)) { matrixRowsAdded += 1; changed = true; }
+    }
+    if (changed) await userRoles.save();
+  }
+
+  const interviewerRole = await RoleMaster.findOne({ roleName: "Interviewer" });
+  if (interviewerRole) {
+    const userRoles = await UserRoles.findOne({ roleId: interviewerRole._id });
+    if (userRoles) {
+      let changed = false;
+      for (const url of INTERVIEWER_MENU_URLS) {
+        if (addRow(userRoles, menuByUrl[url], fullPerm)) { matrixRowsAdded += 1; changed = true; }
+      }
+      if (changed) await userRoles.save();
+    }
+  }
+
+  console.log(`✅ Recruitment roles: ${matrixRowsAdded} menu grant(s) added`);
+};
+
 const run = async () => {
   if (!process.env.DATABASE) {
     console.error("❌ DATABASE is not set in .env");
@@ -847,6 +954,8 @@ const run = async () => {
   await seedEmployeeHealthInsuranceData();
   await seedEmployees(companyId);
   await seedEmployeeRecordsRoles();
+  await seedRecruitmentMasters();
+  await seedRecruitmentRoles();
 
   await mongoose.disconnect();
   console.log("✅ Seeding complete");

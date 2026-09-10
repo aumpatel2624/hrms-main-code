@@ -6,6 +6,8 @@
  */
 import { runListQuery } from "../../utils/listQuery.js";
 import Employee from "../../models/Employee.js";
+import JobApplicant from "../../models/JobApplicant.js";
+import JobOffer from "../../models/JobOffer.js";
 import {
   getReferencingCounts,
   formatReferenceMessage,
@@ -16,8 +18,28 @@ const REQUIRED_FIELDS = ["employeeCode", "employeeName", "companyId", "departmen
 const OPTIONAL_FIELDS = [
   "userId", "reportsToId", "status", "relievingDate", "dateOfBirth", "gender",
   "employmentTypeId", "gradeId", "expenseApproverId", "leaveApproverId", "shiftRequestApproverId",
-  "healthInsuranceProviderId", "healthInsuranceNo", "shiftPreference", "workMode", "isActive",
+  "healthInsuranceProviderId", "healthInsuranceNo", "shiftPreference", "workMode",
+  "jobApplicantId", "isActive",
 ];
+
+// Reverse hook (ADR-019): an Employee created from an accepted Job Offer
+// flips the linked Job Applicant and its most recent non-Cancelled Job
+// Offer to Accepted. Source's equivalent (`update_job_applicant_and_offer`)
+// fires unconditionally on every Employee insert and no-ops when
+// job_applicant is empty — same shape here, called from createEmployee only.
+const syncJobApplicantAndOffer = async (jobApplicantId) => {
+  if (!jobApplicantId) return;
+  const applicant = await JobApplicant.findById(jobApplicantId);
+  if (applicant && applicant.status !== "Accepted") {
+    applicant.status = "Accepted";
+    await applicant.save();
+  }
+  const offer = await JobOffer.findOne({ jobApplicantId, status: { $ne: "Cancelled" } }).sort({ createdAt: -1 });
+  if (offer && offer.status !== "Accepted") {
+    offer.status = "Accepted";
+    await offer.save();
+  }
+};
 
 const pickFields = (body) =>
   Object.fromEntries(
@@ -42,7 +64,9 @@ export const createEmployee = async (req, res) => {
       return res.status(400).json({ isOk: false, status: 400, message: "Employee code already exists" });
     }
 
-    await Employee.create(pickFields(req.body));
+    const fields = pickFields(req.body);
+    await Employee.create(fields);
+    await syncJobApplicantAndOffer(fields.jobApplicantId);
     return res.status(201).json({ isOk: true, status: 201, message: "Employee created successfully" });
   } catch (error) {
     console.log("Error in createEmployee", error);

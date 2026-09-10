@@ -249,3 +249,33 @@ Department Approver (originally sketched for module 2) do not belong here either
       1-2 left; manifest entries exist for a future run to pick up
 - [ ] Public apply flow, Staffing Plan vacancy checks, Employee Referral sync, Skill Assessment
       ratings — all deliberately deferred, `OPEN-QUESTIONS.md` Q-7/Q-8/Q-9, not this module's job
+
+## Onboarding & Separation (module 4, ADR-020)
+
+- [x] `npm test` green (10/10) throughout
+- [x] `npm run seed` idempotent ×2 — this module has no real seed data (a workflow module, like
+      Recruitment); only the menu group and 12 role-matrix grants are seeded, confirmed 0 new on rerun
+- [x] `npm run build` green
+- [x] Full live-HTTP walk against the real dev database: Onboarding Template with activities created
+      → Employee Onboarding created from it, activities confirmed copied in server-side → duplicate
+      onboarding guard confirmed (409) → `makeEmployee` blocked while a required activity was still
+      Pending (409, named the activity) → `markAsCompleted` → `boardingStatus` confirmed Completed,
+      every activity Completed → `makeEmployee` now returned a correct mapped payload → Employee
+      Separation created, duplicate guard confirmed (409) → Exit Interview blocked without a
+      relieving date (400, named the employee) → relieving date set on the employee → Exit Interview
+      created, duplicate guard confirmed (409) → Full and Final Statement created with an unsettled
+      payable/receivable and a Recover-Cost asset, totals confirmed correct (receivable total folded
+      in the asset recovery cost) → `markAsPaid` blocked with the exact blocking rows named (409) →
+      rows marked Settled → `markAsPaid` succeeded → the cost-required-when-Recover-Cost guard
+      confirmed (400) → role-permission asymmetries confirmed live with throwaway HR User/Employee-
+      role accounts (HR User: 403 deleting Onboarding, 403 writing Exit Interview, 200 reading it,
+      200 deleting a Full and Final Statement; Employee-role: 403 on Employee Onboarding) → all
+      throwaway data (including a throwaway country/state/city, same starter-generic-`User` caveat as
+      module 3) cleaned up, employee count confirmed back to 195
+- [x] A real bug found live and fixed in shipped starter infrastructure, its own commit:
+      `models/auditPlugin.js`'s global `mongoose.plugin()` reached embedded subdocument schemas,
+      crashing when an existing document's array-of-subdocuments field was modified and re-saved
+      (`this.constructor.findById is not a function`) — fixed with a `$isSubdocument` guard, general
+      to every current and future embedded-array model in this project, not just this module's
+- [ ] Client-facing documentation screenshots actually captured (`npm run docs`) — same gap modules
+      1-3 left; manifest entries exist (6 new screens) for a future run to pick up

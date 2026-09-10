@@ -178,6 +178,21 @@ const MENU_GROUPS = [
       { menuName: "Job Offer Term Template", menuUrl: "/job-offer-term-template", icon: "ri-file-copy-line" },
     ],
   },
+  // HRMS module 4 (ADR-020). Activities live embedded on Onboarding/
+  // Separation/their Templates, not as their own screens.
+  {
+    menuGroupName: "Onboarding & Separation",
+    sequence: 2.8,
+    icon: "ri-user-follow-line",
+    menus: [
+      { menuName: "Employee Onboarding", menuUrl: "/employee-onboarding", icon: "ri-user-add-line" },
+      { menuName: "Onboarding Template", menuUrl: "/employee-onboarding-template", icon: "ri-file-copy-line" },
+      { menuName: "Employee Separation", menuUrl: "/employee-separation", icon: "ri-user-unfollow-line" },
+      { menuName: "Separation Template", menuUrl: "/employee-separation-template", icon: "ri-file-copy-2-line" },
+      { menuName: "Exit Interview", menuUrl: "/exit-interview", icon: "ri-chat-off-line" },
+      { menuName: "Full and Final Statement", menuUrl: "/full-and-final-statement", icon: "ri-file-list-3-line" },
+    ],
+  },
   {
     menuGroupName: "Master",
     sequence: 3,
@@ -927,6 +942,67 @@ const seedRecruitmentRoles = async () => {
   console.log(`✅ Recruitment roles: ${matrixRowsAdded} menu grant(s) added`);
 };
 
+/**
+ * Onboarding & Separation roles (ADR-020). Reproduces each doctype's real,
+ * *not-symmetric* source permission table — several of these differ from
+ * this project's usual "HR User + HR Manager both full CRUD" default:
+ * neither role gets delete on Employee Onboarding or Employee Separation
+ * (System Manager/ADMIN only, in source); Employee Separation Template and
+ * Exit Interview give HR User read-only; Full and Final Statement is the
+ * one screen here where HR User also gets delete. The `markAsCompleted`/
+ * `makeEmployee`/`markAsPaid` action endpoints are gated on the existing
+ * "edit" key (this starter's permission matrix has no separate "submit"
+ * dimension the way source's submit/cancel/amend columns do — HR User
+ * therefore keeps action access on screens where source restricted it to
+ * HR Manager only; a deliberate, noted simplification, not an oversight).
+ */
+const seedOnboardingSeparationRoles = async () => {
+  const perm = (write, edit, del) =>
+    Object.fromEntries(PERMISSION_KEYS.map((key) => [key, key === "read" || (key === "write" && write) || (key === "edit" && edit) || (key === "delete" && del)]));
+  const fullNoDelete = perm(true, true, false);
+  const full = perm(true, true, true);
+  const readOnly = perm(false, false, false);
+
+  // { menuUrl: { "HR User": permObject, "HR Manager": permObject } }
+  const GRANTS = {
+    "/employee-onboarding": { "HR User": fullNoDelete, "HR Manager": fullNoDelete },
+    "/employee-onboarding-template": { "HR User": fullNoDelete, "HR Manager": full },
+    "/employee-separation": { "HR User": fullNoDelete, "HR Manager": fullNoDelete },
+    "/employee-separation-template": { "HR User": readOnly, "HR Manager": full },
+    "/exit-interview": { "HR User": readOnly, "HR Manager": fullNoDelete },
+    "/full-and-final-statement": { "HR User": full, "HR Manager": full },
+  };
+
+  const menus = await MenuMaster.find({ menuUrl: { $in: Object.keys(GRANTS) } }).lean();
+  if (menus.length !== Object.keys(GRANTS).length) {
+    console.log("⚠️  Onboarding & Separation roles: not every menu row exists yet — run seedMenus first");
+    return;
+  }
+  const menuByUrl = Object.fromEntries(menus.map((m) => [m.menuUrl, m]));
+
+  const addRow = (userRoles, menu, permObj) => {
+    if (userRoles.roles.some((r) => String(r.menuId) === String(menu._id))) return false;
+    userRoles.roles.push({ menuId: menu._id, menuGroupId: menu.menuGroup, ...permObj });
+    return true;
+  };
+
+  let matrixRowsAdded = 0;
+  for (const roleName of ["HR User", "HR Manager"]) {
+    const role = await RoleMaster.findOne({ roleName });
+    if (!role) continue;
+    const userRoles = await UserRoles.findOne({ roleId: role._id });
+    if (!userRoles) continue;
+
+    let changed = false;
+    for (const [menuUrl, grantByRole] of Object.entries(GRANTS)) {
+      if (addRow(userRoles, menuByUrl[menuUrl], grantByRole[roleName])) { matrixRowsAdded += 1; changed = true; }
+    }
+    if (changed) await userRoles.save();
+  }
+
+  console.log(`✅ Onboarding & Separation roles: ${matrixRowsAdded} menu grant(s) added`);
+};
+
 const run = async () => {
   if (!process.env.DATABASE) {
     console.error("❌ DATABASE is not set in .env");
@@ -956,6 +1032,7 @@ const run = async () => {
   await seedEmployeeRecordsRoles();
   await seedRecruitmentMasters();
   await seedRecruitmentRoles();
+  await seedOnboardingSeparationRoles();
 
   await mongoose.disconnect();
   console.log("✅ Seeding complete");

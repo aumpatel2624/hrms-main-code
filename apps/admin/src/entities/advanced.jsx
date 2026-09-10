@@ -41,12 +41,27 @@ import {
     createInterviewFeedback, deleteInterviewFeedback, getInterviewFeedbackById, updateInterviewFeedback, searchInterviewFeedbacks,
 } from "../api/interviews.api";
 import {
-    createJobOffer, deleteJobOffer, getJobOfferById, updateJobOffer, searchJobOffers, makeEmployeeFromJobOffer,
+    createJobOffer, deleteJobOffer, getJobOfferById, updateJobOffer, searchJobOffers, makeEmployeeFromJobOffer, getAllJobOffers,
     createJobOfferTermTemplate, deleteJobOfferTermTemplate, getJobOfferTermTemplateById, updateJobOfferTermTemplate,
     searchJobOfferTermTemplates, getAllJobOfferTermTemplates,
 } from "../api/jobOffers.api";
+import {
+    createEmployeeOnboarding, deleteEmployeeOnboarding, getEmployeeOnboardingById, updateEmployeeOnboarding,
+    searchEmployeeOnboardings, markOnboardingAsCompleted, makeEmployeeFromOnboarding,
+    createEmployeeOnboardingTemplate, deleteEmployeeOnboardingTemplate, getEmployeeOnboardingTemplateById,
+    updateEmployeeOnboardingTemplate, searchEmployeeOnboardingTemplates, getAllEmployeeOnboardingTemplates,
+    createEmployeeSeparation, deleteEmployeeSeparation, getEmployeeSeparationById, updateEmployeeSeparation,
+    searchEmployeeSeparations,
+    createEmployeeSeparationTemplate, deleteEmployeeSeparationTemplate, getEmployeeSeparationTemplateById,
+    updateEmployeeSeparationTemplate, searchEmployeeSeparationTemplates, getAllEmployeeSeparationTemplates,
+    createExitInterview, deleteExitInterview, getExitInterviewById, updateExitInterview, searchExitInterviews,
+    createFullAndFinalStatement, deleteFullAndFinalStatement, getFullAndFinalStatementById,
+    updateFullAndFinalStatement, searchFullAndFinalStatements, markStatementAsPaid,
+} from "../api/onboardingSeparation.api";
 import PasswordResetSection from "@/components/crud/password-reset-section";
 import EmailTemplateMergeFields from "@/components/crud/email-template-merge-fields";
+import SimpleArrayField from "@/components/crud/simple-array-field";
+import SimpleActionButton from "@/components/crud/simple-action-button";
 
 const ACTIVE = { name: "isActive", label: "Is Active", type: "checkbox", section: "status", default: false };
 const asOptions = (loader, labelKey) => () =>
@@ -1031,10 +1046,359 @@ export const jobOfferConfig = {
     }),
 };
 
+// ---------------------------------------------------------------------------
+// Onboarding & Separation (ADR-020). Activities/payables/receivables/assets
+// are embedded arrays with no generic grid-field precedent in this admin —
+// SimpleArrayField/SimpleActionButton (both new, module 4) fill that gap via
+// the same `renderExtra` hook EmailTemplateMergeFields already uses.
+// ---------------------------------------------------------------------------
+
+const ACTIVITY_COLUMNS = [
+    { name: "activityName", label: "Activity", type: "text" },
+    { name: "description", label: "Description", type: "text" },
+    { name: "status", label: "Status", type: "select", options: ["Pending", "Completed", "Cancelled"] },
+    { name: "requiredForEmployeeCreation", label: "Required for hire", type: "checkbox" },
+    { name: "beginOnDays", label: "Begin on (days)", type: "number" },
+    { name: "durationDays", label: "Duration (days)", type: "number" },
+];
+
+export const employeeOnboardingTemplateConfig = {
+    filterFields: [
+        { name: "title", label: "Title", type: "string" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "employee-onboarding-template",
+    path: "/employee-onboarding-template",
+    section: "Onboarding & Separation",
+    singular: "Onboarding Template",
+    plural: "Onboarding Templates",
+    description: "Reusable activity checklist for onboarding a new hire.",
+    api: {
+        search: searchEmployeeOnboardingTemplates, getById: getEmployeeOnboardingTemplateById,
+        create: createEmployeeOnboardingTemplate, update: updateEmployeeOnboardingTemplate, remove: deleteEmployeeOnboardingTemplate,
+    },
+    lookups: {
+        companyId: asOptions(getAllCompanies, "companyName"),
+        departmentId: asOptions(getAllDepartments, "departmentName"),
+        designationId: asOptions(getAllDesignations, "designationName"),
+        employeeGradeId: asOptions(getAllEmployeeGrades, "gradeName"),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "activities", title: "Activities" }, { id: "status", title: "Status" }],
+    fields: [
+        { name: "title", icon: Type01, label: "Title", type: "text", required: true, section: "details", error: "Title is required!" },
+        { name: "companyId", icon: Building07, label: "Company", type: "select", section: "details", optionsFrom: "companyId" },
+        { name: "departmentId", label: "Department", type: "select", section: "details", optionsFrom: "departmentId" },
+        { name: "designationId", label: "Designation", type: "select", section: "details", optionsFrom: "designationId" },
+        { name: "employeeGradeId", label: "Employee Grade", type: "select", section: "details", optionsFrom: "employeeGradeId" },
+        ACTIVE,
+    ],
+    renderExtra: ({ values, setValues }) => (
+        <SimpleArrayField
+            title="Activities" description="Copied into every Employee Onboarding created from this template."
+            fieldName="activities" columns={ACTIVITY_COLUMNS} values={values} setValues={setValues}
+        />
+    ),
+    columns: [
+        { name: "Title", selector: (row) => row.title, minWidth: "220px" },
+        { name: "Activities", selector: (row) => row.activities?.length ?? 0, minWidth: "100px" },
+    ],
+    recordTitle: (r) => r.title,
+    toForm: (data) => ({
+        ...data, companyId: refId(data.companyId), departmentId: refId(data.departmentId),
+        designationId: refId(data.designationId), employeeGradeId: refId(data.employeeGradeId),
+    }),
+};
+
+export const employeeOnboardingConfig = {
+    filterFields: [
+        { name: "jobApplicantId", label: "Job Applicant", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "departmentId", label: "Department", type: "objectId" },
+        { name: "boardingStatus", label: "Status", type: "enum" },
+        { name: "dateOfJoining", label: "Date of Joining", type: "date" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "employee-onboarding",
+    path: "/employee-onboarding",
+    section: "Onboarding & Separation",
+    singular: "Employee Onboarding",
+    plural: "Employee Onboardings",
+    description: "Checklist-driven process for bringing a new hire to Active status.",
+    api: {
+        search: searchEmployeeOnboardings, getById: getEmployeeOnboardingById,
+        create: createEmployeeOnboarding, update: updateEmployeeOnboarding, remove: deleteEmployeeOnboarding,
+    },
+    lookups: {
+        jobApplicantId: asOptions(getAllJobApplicants, "applicantName"),
+        jobOfferId: asOptions(getAllJobOffers, "status"),
+        employeeOnboardingTemplateId: asOptions(getAllEmployeeOnboardingTemplates, "title"),
+        companyId: asOptions(getAllCompanies, "companyName"),
+        departmentId: asOptions(getAllDepartments, "departmentName"),
+        designationId: asOptions(getAllDesignations, "designationName"),
+        employeeGradeId: asOptions(getAllEmployeeGrades, "gradeName"),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "activities", title: "Activities" }, { id: "actions", title: "Actions" }],
+    fields: [
+        { name: "jobApplicantId", icon: User01, label: "Job Applicant", type: "select", required: true, section: "details", error: "Job Applicant is required!", optionsFrom: "jobApplicantId" },
+        { name: "jobOfferId", label: "Job Offer", type: "select", required: true, section: "details", error: "Job Offer is required!", optionsFrom: "jobOfferId" },
+        { name: "employeeOnboardingTemplateId", label: "Template", type: "select", section: "details", optionsFrom: "employeeOnboardingTemplateId" },
+        { name: "companyId", icon: Building07, label: "Company", type: "select", section: "details", optionsFrom: "companyId" },
+        { name: "departmentId", label: "Department", type: "select", section: "details", optionsFrom: "departmentId" },
+        { name: "designationId", label: "Designation", type: "select", section: "details", optionsFrom: "designationId" },
+        { name: "employeeGradeId", label: "Employee Grade", type: "select", section: "details", optionsFrom: "employeeGradeId" },
+        { name: "dateOfJoining", label: "Date of Joining", type: "date", required: true, section: "details", error: "Date of Joining is required!" },
+        { name: "boardingBeginsOn", label: "Onboarding Begins On", type: "date", required: true, section: "details", error: "Onboarding Begins On is required!" },
+        ACTIVE,
+    ],
+    renderExtra: ({ mode, id, values, setValues }) => (
+        <>
+            <SimpleArrayField
+                title="Activities" description={`Status: ${values.boardingStatus ?? "Pending"} (derived from the activities below).`}
+                fieldName="activities" columns={ACTIVITY_COLUMNS} values={values} setValues={setValues}
+            />
+            {mode === "edit" && id && (
+                <>
+                    <SimpleActionButton
+                        label="Mark as Completed" description="Marks every activity, and this onboarding, Completed."
+                        onRun={() => markOnboardingAsCompleted(id)}
+                        onResult={() => window.location.reload()}
+                    />
+                    <SimpleActionButton
+                        label="Create Employee" description="Builds a prefilled Employee record from this onboarding (once every required activity is Completed) — review and save it on the Employee screen."
+                        onRun={() => makeEmployeeFromOnboarding(id)}
+                    />
+                </>
+            )}
+        </>
+    ),
+    columns: [
+        { name: "Applicant", selector: (row) => row.employeeName ?? "—", minWidth: "170px" },
+        { name: "Status", selector: (row) => row.boardingStatus ?? "—", minWidth: "120px" },
+        { name: "Date of Joining", selector: (row) => row.dateOfJoining?.slice?.(0, 10) ?? "—", minWidth: "130px" },
+    ],
+    recordTitle: (r) => `Onboarding — ${r.employeeName ?? r.jobApplicantId}`,
+    toForm: (data) => ({
+        ...data, jobApplicantId: refId(data.jobApplicantId), jobOfferId: refId(data.jobOfferId),
+        employeeOnboardingTemplateId: refId(data.employeeOnboardingTemplateId), companyId: refId(data.companyId),
+        departmentId: refId(data.departmentId), designationId: refId(data.designationId), employeeGradeId: refId(data.employeeGradeId),
+    }),
+};
+
+export const employeeSeparationTemplateConfig = {
+    filterFields: [
+        { name: "title", label: "Title", type: "string" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "employee-separation-template",
+    path: "/employee-separation-template",
+    section: "Onboarding & Separation",
+    singular: "Separation Template",
+    plural: "Separation Templates",
+    description: "Reusable activity checklist for relieving an employee.",
+    api: {
+        search: searchEmployeeSeparationTemplates, getById: getEmployeeSeparationTemplateById,
+        create: createEmployeeSeparationTemplate, update: updateEmployeeSeparationTemplate, remove: deleteEmployeeSeparationTemplate,
+    },
+    lookups: {
+        companyId: asOptions(getAllCompanies, "companyName"),
+        departmentId: asOptions(getAllDepartments, "departmentName"),
+        designationId: asOptions(getAllDesignations, "designationName"),
+        employeeGradeId: asOptions(getAllEmployeeGrades, "gradeName"),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "activities", title: "Activities" }, { id: "status", title: "Status" }],
+    fields: [
+        { name: "title", icon: Type01, label: "Title", type: "text", required: true, section: "details", error: "Title is required!" },
+        { name: "companyId", icon: Building07, label: "Company", type: "select", section: "details", optionsFrom: "companyId" },
+        { name: "departmentId", label: "Department", type: "select", section: "details", optionsFrom: "departmentId" },
+        { name: "designationId", label: "Designation", type: "select", section: "details", optionsFrom: "designationId" },
+        { name: "employeeGradeId", label: "Employee Grade", type: "select", section: "details", optionsFrom: "employeeGradeId" },
+        ACTIVE,
+    ],
+    renderExtra: ({ values, setValues }) => (
+        <SimpleArrayField
+            title="Activities" description="Copied into every Employee Separation created from this template."
+            fieldName="activities" columns={ACTIVITY_COLUMNS} values={values} setValues={setValues}
+        />
+    ),
+    columns: [
+        { name: "Title", selector: (row) => row.title, minWidth: "220px" },
+        { name: "Activities", selector: (row) => row.activities?.length ?? 0, minWidth: "100px" },
+    ],
+    recordTitle: (r) => r.title,
+    toForm: (data) => ({
+        ...data, companyId: refId(data.companyId), departmentId: refId(data.departmentId),
+        designationId: refId(data.designationId), employeeGradeId: refId(data.employeeGradeId),
+    }),
+};
+
+export const employeeSeparationConfig = {
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "boardingStatus", label: "Status", type: "enum" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "employee-separation",
+    path: "/employee-separation",
+    section: "Onboarding & Separation",
+    singular: "Employee Separation",
+    plural: "Employee Separations",
+    description: "Checklist-driven process for relieving an employee.",
+    api: {
+        search: searchEmployeeSeparations, getById: getEmployeeSeparationById,
+        create: createEmployeeSeparation, update: updateEmployeeSeparation, remove: deleteEmployeeSeparation,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        employeeSeparationTemplateId: asOptions(getAllEmployeeSeparationTemplates, "title"),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "activities", title: "Activities" }],
+    fields: [
+        { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
+        { name: "employeeSeparationTemplateId", label: "Template", type: "select", section: "details", optionsFrom: "employeeSeparationTemplateId" },
+        { name: "boardingBeginsOn", label: "Separation Begins On", type: "date", required: true, section: "details", error: "Separation Begins On is required!" },
+        { name: "exitInterviewSummary", label: "Exit Interview Summary (notes only — not linked to Exit Interview records)", type: "textarea", section: "details" },
+        ACTIVE,
+    ],
+    renderExtra: ({ values, setValues }) => (
+        <SimpleArrayField
+            title="Activities" description={`Status: ${values.boardingStatus ?? "Pending"} (derived from the activities below).`}
+            fieldName="activities" columns={ACTIVITY_COLUMNS} values={values} setValues={setValues}
+        />
+    ),
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeName ?? "—", minWidth: "170px" },
+        { name: "Status", selector: (row) => row.boardingStatus ?? "—", minWidth: "120px" },
+    ],
+    recordTitle: (r) => `Separation — ${r.employeeName ?? r.employeeId}`,
+    toForm: (data) => ({
+        ...data, employeeId: refId(data.employeeId), employeeSeparationTemplateId: refId(data.employeeSeparationTemplateId),
+    }),
+};
+
+export const exitInterviewConfig = {
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "status", label: "Status", type: "enum" },
+        { name: "date", label: "Date", type: "date" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "exit-interview",
+    path: "/exit-interview",
+    section: "Onboarding & Separation",
+    singular: "Exit Interview",
+    plural: "Exit Interviews",
+    description: "Standalone exit feedback capture — the linked Employee must have a Relieving Date set first.",
+    api: {
+        search: searchExitInterviews, getById: getExitInterviewById,
+        create: createExitInterview, update: updateExitInterview, remove: deleteExitInterview,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        interviewers: asOptions(getAllEmployees, "employeeName"),
+    },
+    sections: [{ id: "details", title: "Details" }],
+    fields: [
+        { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
+        {
+            name: "status", label: "Status", type: "select", section: "details",
+            options: ["Pending", "Scheduled", "Completed", "Cancelled"].map((v) => ({ value: v, label: v })),
+        },
+        { name: "date", label: "Date", type: "date", section: "details" },
+        { name: "interviewSummary", label: "Interview Summary", type: "textarea", section: "details" },
+        {
+            name: "employeeStatus", label: "Final Decision", type: "select", section: "details",
+            options: ["Employee Retained", "Exit Confirmed"].map((v) => ({ value: v, label: v })),
+        },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeName ?? "—", minWidth: "170px" },
+        { name: "Status", selector: (row) => row.status ?? "—", minWidth: "120px" },
+        { name: "Date", selector: (row) => row.date?.slice?.(0, 10) ?? "—", minWidth: "120px" },
+    ],
+    recordTitle: (r) => `Exit Interview — ${r.employeeName ?? r.employeeId}`,
+    toForm: (data) => ({ ...data, employeeId: refId(data.employeeId) }),
+};
+
+const OUTSTANDING_LINE_COLUMNS = [
+    { name: "component", label: "Component", type: "text" },
+    { name: "description", label: "Description", type: "text" },
+    { name: "amount", label: "Amount", type: "number" },
+    { name: "status", label: "Status", type: "select", options: ["Settled", "Unsettled"] },
+];
+const ASSET_COLUMNS = [
+    { name: "assetName", label: "Asset", type: "text" },
+    { name: "action", label: "Action", type: "select", options: ["Return", "Recover Cost"] },
+    { name: "cost", label: "Cost (Recover Cost only)", type: "number" },
+    { name: "status", label: "Status", type: "select", options: ["Owned", "Returned"] },
+];
+
+export const fullAndFinalStatementConfig = {
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "status", label: "Status", type: "enum" },
+        { name: "transactionDate", label: "Transaction Date", type: "date" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    key: "full-and-final-statement",
+    path: "/full-and-final-statement",
+    section: "Onboarding & Separation",
+    singular: "Full and Final Statement",
+    plural: "Full and Final Statements",
+    description: "A manually entered final-settlement worksheet — not an accounting document (ADR-020). The Employee must have a Relieving Date set first.",
+    api: {
+        search: searchFullAndFinalStatements, getById: getFullAndFinalStatementById,
+        create: createFullAndFinalStatement, update: updateFullAndFinalStatement, remove: deleteFullAndFinalStatement,
+    },
+    lookups: { employeeId: asOptions(getAllEmployees, "employeeName") },
+    sections: [
+        { id: "details", title: "Details" }, { id: "payables", title: "Payables" },
+        { id: "receivables", title: "Receivables" }, { id: "assets", title: "Assets" }, { id: "actions", title: "Actions" },
+    ],
+    fields: [
+        { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
+        { name: "transactionDate", label: "Transaction Date", type: "date", required: true, section: "details", error: "Transaction Date is required!" },
+    ],
+    renderExtra: ({ mode, id, values, setValues }) => (
+        <>
+            <SimpleArrayField title="Payables" description={`Total payable: ${values.totalPayableAmount ?? 0}`} fieldName="payables" columns={OUTSTANDING_LINE_COLUMNS} values={values} setValues={setValues} />
+            <SimpleArrayField title="Receivables" description={`Total receivable: ${values.totalReceivableAmount ?? 0} (includes asset recovery cost)`} fieldName="receivables" columns={OUTSTANDING_LINE_COLUMNS} values={values} setValues={setValues} />
+            <SimpleArrayField title="Assets Allocated" description={`Total asset recovery cost: ${values.totalAssetRecoveryCost ?? 0}`} fieldName="assetsAllocated" columns={ASSET_COLUMNS} values={values} setValues={setValues} />
+            {mode === "edit" && id && (
+                <SimpleActionButton
+                    label="Mark as Paid" description={`Status: ${values.status ?? "Unpaid"}. Blocked until every payable/receivable is Settled and every returned asset is Returned.`}
+                    onRun={() => markStatementAsPaid(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+        </>
+    ),
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeName ?? "—", minWidth: "170px" },
+        { name: "Status", selector: (row) => row.status ?? "—", minWidth: "110px" },
+        { name: "Payable", selector: (row) => row.totalPayableAmount ?? 0, minWidth: "100px" },
+        { name: "Receivable", selector: (row) => row.totalReceivableAmount ?? 0, minWidth: "100px" },
+    ],
+    recordTitle: (r) => `F&F Statement — ${r.employeeName ?? r.employeeId}`,
+    toForm: (data) => ({ ...data, employeeId: refId(data.employeeId) }),
+};
+
 export const ADVANCED_ENTITIES = [
     adminUserConfig, userConfig, menuMasterConfig, emailTemplateConfig,
     departmentConfig, branchConfig, designationConfig, employeeConfig,
     jobApplicantSourceConfig, interviewTypeConfig, jobOfferTermTemplateConfig,
     jobRequisitionConfig, jobOpeningConfig, jobApplicantConfig,
     interviewConfig, interviewFeedbackConfig, jobOfferConfig,
+    employeeOnboardingTemplateConfig, employeeOnboardingConfig,
+    employeeSeparationTemplateConfig, employeeSeparationConfig,
+    exitInterviewConfig, fullAndFinalStatementConfig,
 ];

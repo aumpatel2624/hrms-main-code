@@ -78,7 +78,19 @@ export const CheckField = ({ name, checked, onChange, label, ...rest }) => (
  * Searchable dropdown. Takes the react-select shape the pages already use
  * (options: [{ value, label }], onChange(option)) and renders Untitled UI's
  * ComboBox, which filters as you type - a plain Select does not.
+ *
+ * Many entity configs pass a plain enum array instead (`options: ["Open",
+ * "Closed"]`, sometimes with a bare `null` for "unset") rather than the
+ * `{ value, label }` shape above — normalise both here, once, rather than
+ * rewriting every one of those config fields to the object shape.
  */
+const normalizeOption = (o) =>
+    o === null || o === undefined
+        ? { value: null, label: "—" }
+        : typeof o === "object"
+          ? o
+          : { value: o, label: String(o) };
+
 export const SelectField = ({
     options = [],
     value,
@@ -89,7 +101,8 @@ export const SelectField = ({
     isDisabled,
     ...rest
 }) => {
-    const items = options.map((o) => ({ id: String(o.value), label: o.label }));
+    const normalizedOptions = options.map(normalizeOption);
+    const items = normalizedOptions.map((o) => ({ id: String(o.value), label: o.label }));
     const selectedKey = value === null || value === undefined || value === "" ? null : String(value);
 
     return (
@@ -97,7 +110,7 @@ export const SelectField = ({
             items={items}
             selectedKey={selectedKey}
             onSelectionChange={(key) => {
-                const picked = options.find((o) => String(o.value) === String(key));
+                const picked = normalizedOptions.find((o) => String(o.value) === String(key));
                 onChange?.(picked ?? null);
             }}
             placeholder={placeholder}

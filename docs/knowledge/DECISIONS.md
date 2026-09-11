@@ -3391,4 +3391,25 @@ Copy this block. Number sequentially.
   and the save-time overwrite-uniqueness check are both the same "deliberate improvement" category
   already established repeatedly this session, not a new kind of deviation).
 
+#### As built (module complete)
+
+- **Entities created**:
+  - `AdditionalSalary` (`apps/server/models/AdditionalSalary.js`): `status` enum (`active`/`cancelled`), polymorphic back-reference (`refDoctype`/`refDocnameId`), save-time overwrite uniqueness validation.
+  - `Arrear` (`apps/server/models/Arrear.js`): `status` enum (`draft`/`submitted`/`cancelled`), child arrays `earningArrears` and `deductionArrears`, preview calculation against historical slips, submit/cancel actions.
+  - `RetentionBonus` (`apps/server/models/RetentionBonus.js`): `status` enum (`draft`/`submitted`/`cancelled`), earning-only component guard, relieving date validation, submit creates active `AdditionalSalary`, cancel cascades to cancel it.
+  - `EmployeeIncentive` (`apps/server/models/EmployeeIncentive.js`): `status` enum (`draft`/`submitted`/`cancelled`), earning-only component guard, submit creates active `AdditionalSalary`, cancel cascades to cancel it (deliberate bug fix over source orphan gap).
+  - `EmployeeOtherIncome` (`apps/server/models/EmployeeOtherIncome.js`): `status` enum (`draft`/`submitted`/`cancelled`), self-service declared income/loss with `SCOPES.OWN` confinement, negative amounts permitted (no `min: 0`), inert with respect to payslips pending tax module.
+- **Engine retrofits**:
+  - `arrearCalc.js`: pure utility comparing historical submitted `SalarySlip` rows with revised `SalaryStructureAssignment` components; only strictly positive deltas (`delta > 0`) are retained; negative clawback deltas are dropped. Unit tests in `arrearCalc.test.js`.
+  - `salarySlipCalc.js`: retrofitted with `isAdditionalSalaryInPeriod` and `mergeAdditionalSalaries`; merges active `AdditionalSalary` rows into slip earnings and deductions; overwrite replaces and additive sums; all injected rows hardcode `dependsOnPaymentDays: false`.
+- **API, UI, & Permissions**:
+  - REST endpoints and controllers in `apps/server/controllers/v1/payrollAdjustments.controller.js` and `apps/server/routes/v1/payrollAdjustments.routes.js`.
+  - Frontend entity configs in `apps/admin/src/entities/advanced.jsx` and API client in `apps/admin/src/api/payrollAdjustments.api.jsx`.
+  - Seeded menu rows and role matrix grants in `apps/server/seed/index.js` (including `Employee` role self-service for `/employee-other-income` without delete permissions).
+  - Reporting sources registered in `apps/server/config/widgetSources.js` for all 5 entities.
+  - Documentation manifest updated in `docs-src/manifest.js`.
+- **Verification**:
+  - All 25 unit test suites passing (`npm test`).
+  - Integration suite `scripts/verify-payroll-adjustments.mjs` executed 44 real HTTP requests against live server validating: component validations (statistical/employer contribution reject 400), date mutual exclusion, overwrite uniqueness overlap reject 400, additive co-existence, `RetentionBonus` submit/cancel cascade, `EmployeeIncentive` submit/cancel cascade, `Arrear` positive-only calculation and submit/cancel cascade, `EmployeeOtherIncome` self-service scoping with negative amounts, and live `SalarySlip` overwrite/additive calculation matching exact hand-calculated figures. Teardown restored employee count exactly to baseline 195.
+
 

@@ -303,6 +303,12 @@ const MENU_GROUPS = [
       { menuName: "Payroll Entry", menuUrl: "/payroll-entry", icon: "ri-play-list-line" },
       { menuName: "Salary Withholding", menuUrl: "/salary-withholding", icon: "ri-pause-circle-line" },
       { menuName: "Salary Slip", menuUrl: "/salary-slip", icon: "ri-file-paper-2-line" },
+      // ADR-028 (module 12, feat/payroll-adjustments).
+      { menuName: "Additional Salary", menuUrl: "/additional-salary", icon: "ri-money-dollar-box-line" },
+      { menuName: "Arrear", menuUrl: "/arrear", icon: "ri-refund-2-line" },
+      { menuName: "Retention Bonus", menuUrl: "/retention-bonus", icon: "ri-medal-line" },
+      { menuName: "Employee Incentive", menuUrl: "/employee-incentive", icon: "ri-award-line" },
+      { menuName: "Employee Other Income", menuUrl: "/employee-other-income", icon: "ri-file-shield-2-line" },
     ],
   },
   {
@@ -1793,6 +1799,7 @@ const seedShiftAttendanceTransactionsRoles = async () => {
  */
 const seedPayrollRoles = async () => {
   const full = { write: true, read: true, edit: true, delete: true, print: true, mail: true };
+  const fullNoDelete = { write: true, read: true, edit: true, delete: false, print: true, mail: true, dataScope: SCOPES.OWN };
 
   const GRANTS = {
     "/salary-component": { "HR User": full, "HR Manager": full },
@@ -1808,6 +1815,16 @@ const seedPayrollRoles = async () => {
     "/salary-slip": { "HR User": full, "HR Manager": full },
     "/payroll-entry": { "HR User": full, "HR Manager": full },
     "/salary-withholding": { "HR User": full, "HR Manager": full },
+    // ADR-028 (module 12, feat/payroll-adjustments).
+    "/additional-salary": { "HR User": full, "HR Manager": full },
+    "/arrear": { "HR User": full, "HR Manager": full },
+    "/retention-bonus": { "HR User": full, "HR Manager": full },
+    "/employee-incentive": { "HR User": full, "HR Manager": full },
+    "/employee-other-income": {
+      "HR User": full,
+      "HR Manager": full,
+      "Employee": fullNoDelete,
+    },
   };
 
   const allMenuUrls = Object.keys(GRANTS);
@@ -1825,7 +1842,7 @@ const seedPayrollRoles = async () => {
   };
 
   let matrixRowsAdded = 0;
-  for (const roleName of ["HR User", "HR Manager"]) {
+  for (const roleName of ["HR User", "HR Manager", "Employee"]) {
     const role = await RoleMaster.findOne({ roleName });
     if (!role) continue;
     const userRoles = await UserRoles.findOne({ roleId: role._id });

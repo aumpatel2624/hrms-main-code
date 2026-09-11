@@ -1088,6 +1088,67 @@ export const CONFIG_SCREENS = [
         ],
         roles: "HR User and HR Manager manage records within their company.",
     },
+    {
+        key: "additional-salary",
+        config: "additionalSalaryConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Ad-hoc or recurring earnings/deductions that sit outside an employee's base Salary Structure Assignment.",
+        when: "Create one when adding bonuses, variable deductions, or one-off adjustments for a specific payroll period.",
+        gotchas: [
+            "Exactly one of payrollDate (one-off) or fromDate/toDate (recurring) must be provided.",
+            "Statistical components cannot be used in Additional Salary.",
+            "Active overwrite adjustments cannot overlap for the same employee and component.",
+        ],
+        roles: "HR User and HR Manager manage records within their company.",
+    },
+    {
+        key: "arrear",
+        config: "arrearConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Calculates retroactive salary differential pay when a Salary Structure Assignment is backdated.",
+        when: "Create one after backdating an assignment to calculate and disburse retroactive pay differences.",
+        gotchas: [
+            "Only positive differences (underpayments) are calculated; reductions in pay are not clawed back.",
+            "Submit generates active Additional Salary records; cancelling an Arrear cancels those generated records too.",
+        ],
+        roles: "HR User and HR Manager manage records within their company.",
+    },
+    {
+        key: "retention-bonus",
+        config: "retentionBonusConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Tracks retention bonus agreements payable to an active employee on a future payment date.",
+        when: "Create one when agreeing on a retention bonus with an employee.",
+        gotchas: [
+            "Bonus payment date cannot be after the employee's relieving date.",
+            "Submit creates an active Additional Salary; cancel cancels that linked record.",
+        ],
+        roles: "HR User and HR Manager manage records within their company.",
+    },
+    {
+        key: "employee-incentive",
+        config: "employeeIncentiveConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "One-time performance bonuses, project rewards, or sales incentives.",
+        when: "Record approved performance bonuses before running payroll.",
+        gotchas: [
+            "Salary Component must be of type Earning.",
+            "Submitting creates an Additional Salary; cancelling cancels that Additional Salary.",
+        ],
+        roles: "HR User and HR Manager manage records within their company.",
+    },
+    {
+        key: "employee-other-income",
+        config: "employeeOtherIncomeConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Captures externally-declared income sources (rental income, bank interest, freelance, or housing loan loss) for tax computation.",
+        when: "Employees declare external income for income tax computation.",
+        gotchas: [
+            "Amount can be negative to represent losses (such as deductible housing loan interest).",
+            "This record is used for tax projections and is not added to Salary Slip component tables.",
+        ],
+        roles: "Employees can create and manage their own declarations; HR User and HR Manager have full access across their company.",
+    },
 ];
 
 /**

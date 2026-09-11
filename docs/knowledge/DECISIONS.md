@@ -2779,3 +2779,127 @@ Copy this block. Number sequentially.
     checkin-group rows created, no duplicate absence row). Every throwaway fixture cleaned up via tracked
     deletion in a `finally` block; employee count confirmed back to baseline 195 both before and after.
 
+---
+
+### ADR-026 — Payroll (Structure & Assignment): a real bounded formula evaluator, GL dropped entirely, Q-14 finally retrofitted
+
+- **Date**: 2026-09-11
+- **Status**: accepted
+- **Context**: `system-design` for HRMS module 10 — the first Payroll module, following Shift &
+  Attendance (module 9, ADR-025). Read a Claude fork's research pass in full: `_Module-Spec.md` and
+  all 6 real per-doctype specs in scope (`Salary Component`, `Salary Component Account`, `Salary
+  Detail`, `Salary Structure`, `Salary Structure Assignment`, `Bulk Salary Structure Assignment`),
+  plus this project's own current code (`Employee.js`, ADR-016's no-GL rule, ADR-024's Leave
+  Encashment/Q-14, `OPEN-QUESTIONS.md` Q-3/13/14/15).
+- **GL is dropped entirely, with nothing load-bearing lost.** The research confirmed `Salary
+  Component Account` (per-company GL account mapping) has **no consumer inside this module's own
+  scope** — its only real use in source is a Salary Slip helper (module 11, "Payroll — Run", not
+  built yet) resolving "which component is THE tax component per company," and that resolution path
+  turns out to be a *different* function than the one `Salary Structure Assignment` itself uses for
+  its own tax-slab-mandatory check (which reads the structure's deduction-row flags directly, no
+  account lookup). Dropped along with it: `payrollPayableAccount`, `modeOfPayment`/`paymentAccount`,
+  `Salary Structure.letterHead` — all GL/accounting-adjacent, all colliding with ADR-016's explicit
+  "no GL" line, none needed for anything this module actually computes.
+- **A real, bounded formula evaluator gets built — this is not a shortcut-able piece.** Source's
+  `condition`/`formula` fields are live Python-expression text, sandboxed via an AST denylist. The
+  research is explicit that this is "a significant, non-trivial subsystem... its own design task, not
+  a one-line port," and offers two paths: a small equivalent interpreter, or an embedded scripting
+  engine. Decision: **a small, hand-written, safe expression evaluator** (`utils/payrollFormula.js`)
+  — no `eval()`/`Function()` (these formulas are stored, user-editable text; treating them as
+  trusted-enough-to-`eval` would be a real security hole, not a shortcut worth taking), no new npm
+  dependency (AGENTS.md hard rule — a from-scratch recursive-descent parser over arithmetic +
+  comparison + boolean operators + a short function allowlist is not "a library's job," it's a
+  bounded, well-specified piece of business logic exactly like `leaveProration.js`/`workingHours.js`
+  before it). Supports: `+ - * /`, parentheses, numeric literals, comparison (`== != < > <= >=`),
+  boolean (`and`/`or`/`not`), and `round`/`min`/`max`/`ceil`/`floor`. Variables available: every
+  already-evaluated component's abbreviation (earnings evaluate first and inject their resolved
+  value before deductions run, deductions before employer contributions — matching source's real
+  ordering exactly, since a formula can reference an earlier row's abbreviation) plus `base`/
+  `variable` off the `SalaryStructureAssignment` itself. **This is scoped to what this module
+  actually needs — a static CTC/gross *preview* at assignment time, not a real payroll run.** Source
+  seeds a synthetic "full pay cycle, zero leave" period for this exact reason (no real Salary Slip
+  exists yet to evaluate against); this project does the same — `paymentDays`/`totalWorkingDays` are
+  both derived from `payrollFrequency` alone (Monthly→30, Fortnightly→15, Weekly→7, Daily→1,
+  Bimonthly→60), zero LWP/absent days assumed. **The moment this stops being accurate is Payroll —
+  Run (module 11)**, whose real `Salary Slip` needs the *actual* attendance-derived payment-days
+  context — flagged here explicitly so nobody mistakes this preview-only evaluator for the real
+  payroll-run engine; it is a deliberately narrower reuse target, not the finished subsystem.
+- **`total_earning`/`total_deduction`/`net_pay` move from source's client-JS-only computation to a
+  real server-side calculation** — a flagged source gap (this project's server-authoritative
+  convention doesn't tolerate a client-computed-only total), closed here as a deliberate improvement,
+  same category as prior modules' "closes a flagged gap" fixes (Employee Separation's duplicate
+  guard, module 5). Same for `payrollFrequency`: source requires it only client-side; this project
+  adds the server-side `required` the source spec itself flags as missing.
+- **The CTC/gross formula, reproduced exactly minus the GL-specific term**: `PERIODS_PER_YEAR =
+  { Monthly: 12, Fortnightly: 26, Bimonthly: 24, Weekly: 52, Daily: 365 }`; `grossPerPeriod =
+  Σ(earnings.amount)` excluding rows flagged `statisticalComponent`/`doNotIncludeInTotal`;
+  `annualGrossEarning = grossPerPeriod × periodsPerYear`; `ctc = (grossPerPeriod +
+  employerContributionsTotal) × periodsPerYear` (source's `non_payable_earnings` term was itself
+  GL-account-derived and is dropped along with the rest of that surface).
+- **`Salary Structure Assignment`'s real uniqueness invariant, reproduced exactly**: source enforces
+  only an exact-duplicate-`from_date`-per-employee guard — it does **not** prevent multiple different
+  `fromDate`s coexisting, and deliberately has **no `toDate` field at all**. "Current as of a date" is
+  resolved by a separate query (latest assignment with `fromDate <= onDate`, no company filter) —
+  built here as `getCurrentSalaryStructureAssignment(employeeId, asOfDate)`, the same "resolver
+  utility, not a stored current-flag" shape as Leaves' `getLeaveBalance`. Do not invent an overlap
+  guard or a `toDate` field source doesn't have.
+- **Everything the research flagged as belonging to a future module is deferred, not stubbed**:
+  `incomeTaxSlabId` (+ its mandatory-if-tax-component validation) → "Tax & Exemptions"; `employee
+  Benefits`/`maxBenefits` capping → "Payroll — Benefits"; `payrollCostCenters` (+100%-split
+  validation) → "Payroll — Adjustments & Incentives"; `taxDeductedTillDate`/`taxableEarningsTillDate`
+  "opening balances" → "Payroll — Run". None of these fields exist in this module's schema at all
+  (not even as inert placeholders) — same forward-dependency-deferral discipline as `Overtime Type`
+  (ADR-025) and `expenseType` (ADR-023), each retrofitted only once its real target module exists.
+  `Salary Component`'s benefit-related fields (`isFlexibleBenefit`/`maxBenefitAmount`/`payoutMethod`)
+  and `finalCycleAccrualPayout` are dropped for the same reason — inert without Benefits. `Salary
+  Structure.isDefault` is a **dead field in source itself** (schema exists, zero code reads or writes
+  it) — omitted entirely rather than ported as inert dead weight.
+- **Q-14 finally closes for real**: `SalaryStructureAssignment.leaveEncashmentAmountPerDay` (fetched
+  from `SalaryStructure.leaveEncashmentAmountPerDay`, matching source's real `fetch_from`+
+  `fetch_if_empty` field exactly) is the actual field Leave Encashment's per-day rate should derive
+  from. `LeaveEncashment`'s create path (ADR-024, module 8) is retrofitted: when
+  `perDayEncashmentAmount` isn't explicitly supplied, resolve the employee's current
+  `SalaryStructureAssignment` via `getCurrentSalaryStructureAssignment` as of the encashment date and
+  default to its `leaveEncashmentAmountPerDay` — falling back to the existing manual-entry behavior
+  only when no assignment resolves. This is the first of the three forward-dependency gaps named
+  across modules 4/8/9 to actually close.
+- **Bulk Salary Structure Assignment stays a stateless bulk-action endpoint pair, no stored model** —
+  source's own doctype is a non-persistent Single "tool," matching `Leave Control Panel`/`Shift
+  Assignment Tool`'s established precedent exactly. Both `assign_salary_structure`'s (`Salary
+  Structure`'s own bulk-assign) and the dedicated `Bulk Salary Structure Assignment`'s creation logic
+  reuse a single shared function (`createSalaryStructureAssignment`) in source — reproduced the same
+  way here (AGENTS.md #2: reuse before you write). Source's own 20-vs-30-employee synchronous/
+  background thresholds are two independently-hardcoded numbers tuned for Frappe's queue
+  infrastructure — this project has none (60-limits.md) and no real queue at this scale (195
+  employees); every bulk action in this project so far (Leave Control Panel, Shift Assignment Tool)
+  has run synchronously with per-item try/catch isolation regardless of batch size, and this module
+  does the same — no synchronous/background split to invent.
+- **Docstatus folding (ADR-016)**: `Salary Structure` already has a real `isActive` (Yes/No) field
+  in source distinct from docstatus — that's the only "is this usable" signal this project needs, no
+  separate status field invented. `Salary Structure Assignment` has no custom status at all beyond
+  the generic docstatus this project already drops — plain records, no status field needed (its real
+  "supersede" semantics are entirely captured by the `fromDate`-ordering resolver above, not a
+  status).
+- **Decision — models**: `SalaryComponent` (master: `salaryComponentName`, `abbreviation`
+  auto-derived-and-deduped, `type` enum Earning/Deduction/EmployerContribution, `isTaxApplicable`,
+  `dependsOnPaymentDays`, `doNotIncludeInTotal`, `statisticalComponent`, `roundToNearestInteger`,
+  `exemptedFromIncomeTax`, `removeIfZeroValued`, `variableBasedOnTaxableSalary`, `arrearComponent`
+  (mutually exclusive with `variableBasedOnTaxableSalary`, validated), `accrualComponent`
+  (Earning-only, validated), `companyId`, `isActive`); `SalaryStructure` (+ embedded
+  `earnings[]`/`deductions[]`/`employerContributions[]` `SalaryDetail` rows — each a **one-time
+  denormalized copy** of its component's flags at row-creation time, matching source's explicit
+  "historical rows don't retroactively change" behavior — `companyId`, `payrollFrequency` (server-
+  required), `isActive`, `leaveEncashmentAmountPerDay`, server-computed `totalEarning`/
+  `totalDeduction`/`netPay`, `currency`); `SalaryStructureAssignment` (`employeeId`, `salaryStructureId`,
+  `fromDate`, `companyId`, `base`, `variable`, server-computed `annualGrossEarning`/`ctc`, `currency`
+  fetched from structure, `leaveEncashmentAmountPerDay` fetched from structure). `Bulk Salary
+  Structure Assignment` → two bulk-action endpoints, no model, matching precedent.
+- **Consequences**: `OPEN-QUESTIONS.md` Q-14 closes, pointing here. Q-13/Q-15 stay open (this
+  module's scope doesn't touch either). New rows for `incomeTaxSlabId`/`employeeBenefits`/
+  `payrollCostCenters`/`taxDeductedTillDate` deferrals, parallel to the existing Q-13/14/15 format.
+- **Deviates from convention**: a hand-written formula-expression evaluator is a genuinely new kind
+  of component for this codebase (every prior "pure calculation utility" — pro-ration, working
+  hours, shift occurrence — computed a fixed, known formula; this one *interprets user-authored
+  formula text*). Not a deviation from any existing decision, just named here as a first, since the
+  next agent touching it should know it's parsing untrusted-ish text and must stay off `eval`.
+

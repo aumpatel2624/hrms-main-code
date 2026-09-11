@@ -93,6 +93,17 @@ export const validateGratuitySlabs = (slabs = []) => {
   }
 };
 
+// Normalizes a client-submitted slab row's `toYear` to a real `null` for
+// "open-ended" — a blank text/number input on the admin's array-field editor
+// arrives as `""`, not `null`/`undefined`, and `validateGratuitySlabs`/
+// `getGratuityAmount` both depend on true `null` for that sentinel.
+const normalizeSlabs = (slabs = []) =>
+  (Array.isArray(slabs) ? slabs : []).map((slab) => ({
+    fromYear: Number(slab.fromYear) || 0,
+    toYear: slab.toYear === "" || slab.toYear === null || slab.toYear === undefined ? null : Number(slab.toYear),
+    fractionOfApplicableEarnings: Number(slab.fractionOfApplicableEarnings) || 0,
+  }));
+
 const validateGratuityRuleTables = ({ applicableEarningsComponent, gratuityRuleSlabs }) => {
   if (!Array.isArray(applicableEarningsComponent) || applicableEarningsComponent.length === 0) {
     throwError(400, "At least one Applicable Earnings Component row is required");
@@ -105,11 +116,12 @@ const validateGratuityRuleTables = ({ applicableEarningsComponent, gratuityRuleS
 
 export const createGratuityRule = async (req, res) => {
   try {
-    const { name, calculateGratuityAmountBasedOn, applicableEarningsComponent, gratuityRuleSlabs } = req.body;
+    const { name, calculateGratuityAmountBasedOn, applicableEarningsComponent } = req.body;
+    const gratuityRuleSlabs = normalizeSlabs(req.body.gratuityRuleSlabs);
     if (!name || !calculateGratuityAmountBasedOn) {
       throwError(400, "Name and Calculate Gratuity Amount Based On are required");
     }
-    validateGratuityRuleTables(req.body);
+    validateGratuityRuleTables({ applicableEarningsComponent, gratuityRuleSlabs });
 
     const doc = await GratuityRule.create({
       name,
@@ -179,9 +191,10 @@ export const updateGratuityRule = async (req, res) => {
     const doc = await GratuityRule.findById(req.params.id);
     if (!doc) throwError(404, "Gratuity Rule not found");
 
+    const nextSlabs = req.body.gratuityRuleSlabs !== undefined ? normalizeSlabs(req.body.gratuityRuleSlabs) : doc.gratuityRuleSlabs;
     validateGratuityRuleTables({
       applicableEarningsComponent: req.body.applicableEarningsComponent ?? doc.applicableEarningsComponent,
-      gratuityRuleSlabs: req.body.gratuityRuleSlabs ?? doc.gratuityRuleSlabs,
+      gratuityRuleSlabs: nextSlabs,
     });
 
     if (req.body.name !== undefined) doc.name = req.body.name;
@@ -195,7 +208,7 @@ export const updateGratuityRule = async (req, res) => {
     }
     if (req.body.minimumYearForGratuity !== undefined) doc.minimumYearForGratuity = req.body.minimumYearForGratuity;
     if (req.body.applicableEarningsComponent !== undefined) doc.applicableEarningsComponent = req.body.applicableEarningsComponent;
-    if (req.body.gratuityRuleSlabs !== undefined) doc.gratuityRuleSlabs = req.body.gratuityRuleSlabs;
+    if (req.body.gratuityRuleSlabs !== undefined) doc.gratuityRuleSlabs = nextSlabs;
 
     await doc.save();
     return res.status(200).json({ isOk: true, status: 200, message: "Gratuity Rule updated successfully", data: doc });

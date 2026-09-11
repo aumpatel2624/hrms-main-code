@@ -34,6 +34,10 @@ import {
     createEmployeeTaxExemptionDeclaration, getEmployeeTaxExemptionDeclarationById, updateEmployeeTaxExemptionDeclaration, deleteEmployeeTaxExemptionDeclaration, searchEmployeeTaxExemptionDeclarations, submitEmployeeTaxExemptionDeclaration, cancelEmployeeTaxExemptionDeclaration,
     createEmployeeTaxExemptionProofSubmission, getEmployeeTaxExemptionProofSubmissionById, updateEmployeeTaxExemptionProofSubmission, deleteEmployeeTaxExemptionProofSubmission, searchEmployeeTaxExemptionProofSubmissions, submitEmployeeTaxExemptionProofSubmission, cancelEmployeeTaxExemptionProofSubmission,
 } from "../api/payrollTax.api";
+import {
+    createGratuityRule, getGratuityRuleById, updateGratuityRule, deleteGratuityRule, searchGratuityRules, getAllGratuityRules,
+    createGratuity, getGratuityById, updateGratuity, deleteGratuity, searchGratuities, submitGratuity, cancelGratuity,
+} from "../api/gratuity.api";
 import { GenerateShiftsPanel } from "../components/hrms/generate-shifts-panel";
 import { Building07, Hash02, Link01, Mail01, MarkerPin01, Phone, Shield01, Tag01, Type01, User01 } from "@untitledui/icons";
 import { isStrongPassword, isValidEmail, PASSWORD } from "@demo-panel/shared/validation";
@@ -4107,6 +4111,202 @@ export const employeeOtherIncomeConfig = {
         }),
 };
 
+// ============================================================================
+// ADR-031 (Payroll — Gratuity)
+// ============================================================================
+
+const GRATUITY_APPLICABLE_COMPONENT_COLUMNS = [
+    { name: "salaryComponentId", label: "Salary Component ID", type: "text", placeholder: "Component ObjectId" },
+];
+
+const GRATUITY_RULE_SLAB_COLUMNS = [
+    { name: "fromYear", label: "From Year", type: "number", placeholder: "0" },
+    { name: "toYear", label: "To Year (blank for open-ended)", type: "number", placeholder: "Optional" },
+    { name: "fractionOfApplicableEarnings", label: "Fraction of Applicable Earnings", type: "number", placeholder: "e.g. 0.5" },
+];
+
+export const gratuityRuleConfig = {
+    key: "gratuity-rule",
+    path: "/gratuity-rule",
+    section: "Payroll",
+    singular: "Gratuity Rule",
+    plural: "Gratuity Rules",
+    description: "Defines years-of-service slabs and the fraction of applicable earnings paid out for each, used to compute an employee's gratuity.",
+    api: {
+        search: searchGratuityRules,
+        getById: getGratuityRuleById,
+        create: createGratuityRule,
+        update: updateGratuityRule,
+        remove: deleteGratuityRule,
+    },
+    sections: [
+        { id: "details", title: "Rule Details" },
+    ],
+    fields: [
+        { name: "name", label: "Name", section: "details", type: "text", required: true, error: "Name is required" },
+        { name: "disable", label: "Disable", section: "details", type: "checkbox" },
+        {
+            name: "calculateGratuityAmountBasedOn", label: "Calculate Gratuity Amount Based On", section: "details", type: "select",
+            options: [
+                { value: "Current Slab", label: "Current Slab" },
+                { value: "Sum of all previous slabs", label: "Sum of all previous slabs" },
+            ],
+            required: true, error: "Calculate Gratuity Amount Based On is required",
+        },
+        { name: "totalWorkingDaysPerYear", label: "Total Working Days Per Year", section: "details", type: "number" },
+        {
+            name: "workExperienceCalculationFunction", label: "Work Experience Calculation Method", section: "details", type: "select",
+            options: [
+                { value: "Round off Work Experience", label: "Round off Work Experience" },
+                { value: "Take Exact Completed Years", label: "Take Exact Completed Years" },
+                { value: "Manual", label: "Manual" },
+            ],
+        },
+        { name: "minimumYearForGratuity", label: "Minimum Year for Gratuity", section: "details", type: "number" },
+    ],
+    renderExtra: ({ values, setValues }) => (
+        <>
+            <SimpleArrayField
+                title="Applicable Earnings Components"
+                description="Salary Components counted toward the gratuity base amount. At least one row is required."
+                fieldName="applicableEarningsComponent"
+                columns={GRATUITY_APPLICABLE_COMPONENT_COLUMNS}
+                values={values}
+                setValues={setValues}
+            />
+            <SimpleArrayField
+                title="Gratuity Rule Slabs"
+                description="Years-of-service brackets, ascending and non-overlapping. Only the last row may leave To Year blank (open-ended). At least one row is required."
+                fieldName="gratuityRuleSlabs"
+                columns={GRATUITY_RULE_SLAB_COLUMNS}
+                values={values}
+                setValues={setValues}
+            />
+        </>
+    ),
+    columns: [
+        { name: "Name", selector: (r) => r.name, sortable: true, sortField: "name" },
+        { name: "Disabled", selector: (r) => (r.disable ? "Yes" : "No") },
+        { name: "Based On", selector: (r) => r.calculateGratuityAmountBasedOn },
+        { name: "Method", selector: (r) => r.workExperienceCalculationFunction },
+        { name: "Min Years", selector: (r) => r.minimumYearForGratuity ?? 0 },
+    ],
+    filterFields: [
+        { name: "name", label: "Name", type: "string" },
+        { name: "disable", label: "Disabled", type: "boolean" },
+        { name: "calculateGratuityAmountBasedOn", label: "Calculate based on", type: "string" },
+        { name: "workExperienceCalculationFunction", label: "Work experience method", type: "string" },
+        { name: "minimumYearForGratuity", label: "Minimum year for gratuity", type: "number" },
+        { name: "totalWorkingDaysPerYear", label: "Total working days per year", type: "number" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => r.name,
+    toForm: (data) => ({
+        ...data,
+        applicableEarningsComponent: (data.applicableEarningsComponent ?? []).map((row) => ({
+            ...row,
+            salaryComponentId: refId(row.salaryComponentId),
+        })),
+    }),
+};
+
+export const gratuityConfig = {
+    key: "gratuity",
+    path: "/gratuity",
+    section: "Payroll",
+    singular: "Gratuity",
+    plural: "Gratuities",
+    description: "Computes and pays out an employee's gratuity based on their tenure, last salary slip, and an assigned Gratuity Rule.",
+    api: {
+        search: searchGratuities,
+        getById: getGratuityById,
+        create: createGratuity,
+        update: updateGratuity,
+        remove: deleteGratuity,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        gratuityRuleId: asOptions(getAllGratuityRules, "name"),
+        salaryComponentId: asOptions(getAllSalaryComponents, "salaryComponentName"),
+    },
+    sections: [
+        { id: "details", title: "Gratuity Details" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "gratuityRuleId", label: "Gratuity Rule", section: "details", type: "select", optionsFrom: "gratuityRuleId", required: true, error: "Gratuity Rule is required" },
+        { name: "postingDate", label: "Posting Date", section: "details", type: "date" },
+        { name: "payrollDate", label: "Payroll Date", section: "details", type: "date", required: true, error: "Payroll Date is required" },
+        { name: "salaryComponentId", label: "Salary Component (Earning)", section: "details", type: "select", optionsFrom: "salaryComponentId", required: true, error: "Salary Component is required" },
+        { name: "currentWorkExperience", label: "Current Work Experience (Manual mode only)", section: "details", type: "number" },
+    ],
+    columns: [
+        { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Gratuity Rule", selector: (r) => r.gratuityRuleId?.name || r.gratuityRuleIdLabel || "—" },
+        { name: "Work Experience", selector: (r) => r.currentWorkExperience ?? "—" },
+        { name: "Amount", selector: (r) => r.amount ?? "—" },
+        { name: "Payroll Date", selector: (r) => String(r.payrollDate ?? "").slice(0, 10), sortable: true, sortField: "payrollDate" },
+        { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" },
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        <>
+            {mode === "edit" && id && values.status === "draft" && (
+                <SimpleActionButton
+                    label="Submit"
+                    description="Computes work experience and gratuity amount, generates an active Additional Salary record, and marks Gratuity submitted."
+                    onRun={() => submitGratuity(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+            {mode === "edit" && id && values.status === "submitted" && (
+                <SimpleActionButton
+                    label="Cancel"
+                    description="Cancels the Gratuity and its linked Additional Salary."
+                    onRun={() => cancelGratuity(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+        </>
+    ),
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "gratuityRuleId", label: "Gratuity Rule", type: "objectId" },
+        { name: "salaryComponentId", label: "Salary Component", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "postingDate", label: "Posting date", type: "date" },
+        { name: "payrollDate", label: "Payroll date", type: "date" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => `Gratuity — ${r.amount ?? ""}`,
+    toForm: (data) => ({
+        ...data,
+        employeeId: refId(data.employeeId),
+        gratuityRuleId: refId(data.gratuityRuleId),
+        salaryComponentId: refId(data.salaryComponentId),
+        postingDate: data.postingDate?.slice(0, 10) || "",
+        payrollDate: data.payrollDate?.slice(0, 10) || "",
+    }),
+    toPayload: (values, mode) => (mode === "edit"
+        ? {
+            payrollDate: values.payrollDate,
+            postingDate: values.postingDate,
+            salaryComponentId: values.salaryComponentId,
+            gratuityRuleId: values.gratuityRuleId,
+            currentWorkExperience: values.currentWorkExperience !== undefined && values.currentWorkExperience !== ""
+                ? Number(values.currentWorkExperience) : undefined,
+        }
+        : {
+            employeeId: values.employeeId,
+            gratuityRuleId: values.gratuityRuleId,
+            postingDate: values.postingDate,
+            payrollDate: values.payrollDate,
+            salaryComponentId: values.salaryComponentId,
+            currentWorkExperience: values.currentWorkExperience !== undefined && values.currentWorkExperience !== ""
+                ? Number(values.currentWorkExperience) : undefined,
+        }),
+};
+
 export const ADVANCED_ENTITIES = [
     shiftTypeConfig, shiftLocationConfig, shiftAssignmentConfig, shiftScheduleConfig, shiftScheduleAssignmentConfig, employeeCheckinConfig,
     shiftRequestConfig, attendanceRequestConfig,
@@ -4136,6 +4336,7 @@ export const ADVANCED_ENTITIES = [
     incomeTaxSlabConfig, employeeTaxExemptionCategoryConfig,
     employeeTaxExemptionSubCategoryConfig, employeeTaxExemptionDeclarationConfig,
     employeeTaxExemptionProofSubmissionConfig,
+    gratuityRuleConfig, gratuityConfig,
 ];
 
 const EMPLOYEE_BENEFIT_DETAIL_COLUMNS = [

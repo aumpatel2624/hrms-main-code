@@ -14,9 +14,10 @@ import mongoose from "mongoose";
  * real source asymmetry (source only ever reverses gratuity's now-dropped
  * GL branch on cancel, never touches the Additional Salary branch).
  *
- * No payViaSalarySlip, no costCenter/modeOfPayment/expenseAccount/
- * payableAccount/paidAmount — the entire GL payout branch is dropped
- * project-wide (ADR-016), leaving AdditionalSalary as the only payout path.
+ * No payViaSalarySlip toggle and none of source's GL-only payment-tab
+ * fields (paidAmount, or any general-ledger posting target) are ported —
+ * the entire GL payout branch is dropped project-wide (ADR-016), leaving
+ * AdditionalSalary as the only payout path.
  */
 const GratuitySchema = new mongoose.Schema(
   {

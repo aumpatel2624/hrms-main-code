@@ -150,6 +150,19 @@ export const ENDPOINTS = {
         MARK: `${V1}/employee-attendance-tool/mark`,
         RESOLVE_HALF_DAY: `${V1}/employee-attendance-tool/resolve-half-day`,
     },
+    // ADR-031 (Payroll — Gratuity).
+    GRATUITY_RULES: {
+        BASE: `${V1}/gratuity-rules`,
+        SEARCH: `${V1}/gratuity-rules/search`,
+        BY_ID: (id) => `${V1}/gratuity-rules/${id}`,
+    },
+    GRATUITIES: {
+        BASE: `${V1}/gratuities`,
+        SEARCH: `${V1}/gratuities/search`,
+        BY_ID: (id) => `${V1}/gratuities/${id}`,
+        SUBMIT: (id) => `${V1}/gratuities/${id}/submit`,
+        CANCEL: (id) => `${V1}/gratuities/${id}/cancel`,
+    },
 
     // Auth endpoints
     AUTH: {

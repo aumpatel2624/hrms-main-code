@@ -11,6 +11,7 @@
 import { runListQuery } from "../../utils/listQuery.js";
 import FullAndFinalStatement from "../../models/FullAndFinalStatement.js";
 import Employee from "../../models/Employee.js";
+import Gratuity from "../../models/Gratuity.js";
 import {
   getReferencingCounts,
   formatReferenceMessage,
@@ -78,7 +79,18 @@ export const createFullAndFinalStatement = async (req, res) => {
     fields.companyId = employee.companyId;
     fields.dateOfJoining = employee.dateOfJoining;
     fields.relievingDate = employee.relievingDate;
-    fields.payables = fields.payables ?? [];
+
+    // ADR-031 retrofit: a one-time denormalized suggestion, not a live link
+    // (same "fetch once at creation" pattern as LeaveEncashment's
+    // perDayEncashmentAmount default and SalaryStructureAssignment's fetched
+    // currency, ADR-026). Additive/suggestive only — HR can still edit or
+    // delete this row afterward like any other manual line.
+    const gratuity = await Gratuity.findOne({ employeeId, status: "submitted" }).lean();
+    const suggestedPayables = gratuity
+      ? [{ component: "Gratuity", description: "Gratuity payout (auto-suggested)", amount: gratuity.amount, status: "Unsettled" }]
+      : [];
+
+    fields.payables = [...suggestedPayables, ...(fields.payables ?? [])];
     fields.receivables = fields.receivables ?? [];
     fields.assetsAllocated = fields.assetsAllocated ?? [];
 

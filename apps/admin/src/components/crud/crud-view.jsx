@@ -146,7 +146,19 @@ const CrudView = ({ config }) => {
     const fields = (config.viewFields ?? config.fields).filter(
         (f) => f.type !== "password" && !f.hideIn?.includes("view"),
     );
-    const sections = config.sections ?? [{ id: "default", title: `${config.singular} details` }];
+    // Same fallback as crud-form.jsx (issue #27): a field's `section` id not
+    // covered by `config.sections` (or no `sections` array declared at all)
+    // must not silently vanish — give it its own auto-titled section.
+    const declaredSections = config.sections ?? [];
+    const declaredSectionIds = new Set(declaredSections.map((s) => s.id));
+    const usedSectionIds = [...new Set(fields.map((f) => f.section ?? "default"))];
+    const autoSections = usedSectionIds
+        .filter((id) => !declaredSectionIds.has(id))
+        .map((id) => ({
+            id,
+            title: id === "default" ? `${config.singular} details` : id.charAt(0).toUpperCase() + id.slice(1),
+        }));
+    const sections = [...declaredSections, ...autoSections];
     const visibleSections = sections
         .map((section) => ({
             ...section,

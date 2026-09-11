@@ -1254,6 +1254,30 @@ export const CONFIG_SCREENS = [
         ],
         roles: "Employees can create and manage their own proof submissions; HR User and HR Manager can view all in their company.",
     },
+    {
+        key: "gratuity-rule",
+        config: "gratuityRuleConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Master rule defining years-of-service slabs and the fraction of applicable earnings paid out for each, used to compute an employee's gratuity.",
+        when: "Setting up or updating the gratuity payout formula before creating Gratuity records for departing employees.",
+        gotchas: [
+            "A disabled rule is hidden from the picker when creating a new Gratuity record, but still shows up here so it can be re-enabled.",
+            "Slab year ranges cannot overlap, and only the last slab may be left open-ended (no upper year).",
+        ],
+        roles: "HR User and HR Manager manage records.",
+    },
+    {
+        key: "gratuity",
+        config: "gratuityConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Computes and pays out an employee's gratuity based on their tenure, last salary slip, and an assigned Gratuity Rule.",
+        when: "An employee is departing (relieving date set) and is due a gratuity payout.",
+        gotchas: [
+            "Submitting requires the employee's relieving date to be set and a submitted Salary Slip to exist; it creates an Additional Salary for the payout.",
+            "Cancelling a submitted Gratuity also cancels its linked Additional Salary.",
+        ],
+        roles: "HR User and HR Manager manage records within their company.",
+    },
 ];
 
 /**

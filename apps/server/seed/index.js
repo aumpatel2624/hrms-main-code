@@ -320,6 +320,9 @@ const MENU_GROUPS = [
       { menuName: "Employee Tax Exemption Sub Category", menuUrl: "/employee-tax-exemption-sub-category", icon: "ri-bookmark-3-line" },
       { menuName: "Employee Tax Exemption Declaration", menuUrl: "/employee-tax-exemption-declaration", icon: "ri-file-text-line" },
       { menuName: "Employee Tax Exemption Proof Submission", menuUrl: "/employee-tax-exemption-proof-submission", icon: "ri-file-check-line" },
+      // ADR-031 (module 15, feat/gratuity).
+      { menuName: "Gratuity Rule", menuUrl: "/gratuity-rule", icon: "ri-file-list-3-line" },
+      { menuName: "Gratuity", menuUrl: "/gratuity", icon: "ri-hand-coin-line" },
     ],
   },
   {
@@ -1872,6 +1875,10 @@ const seedPayrollRoles = async () => {
       "HR Manager": full,
       "Employee": fullNoDelete,
     },
+    // ADR-031 (module 15, feat/gratuity). HR-administered, not employee
+    // self-service (same grant shape as RetentionBonus, not EmployeeOtherIncome).
+    "/gratuity-rule": { "HR User": full, "HR Manager": full },
+    "/gratuity": { "HR User": full, "HR Manager": full },
   };
 
   const allMenuUrls = Object.keys(GRANTS);

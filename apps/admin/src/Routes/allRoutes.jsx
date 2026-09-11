@@ -19,6 +19,7 @@ import LeaveControlPanel from "../pages/Leaves/LeaveControlPanel";
 import ShiftAssignmentTool from "../pages/ShiftAttendance/ShiftAssignmentTool";
 import EmployeeAttendanceTool from "../pages/ShiftAttendance/EmployeeAttendanceTool";
 import BulkSalaryStructureAssignmentTool from "../pages/Payroll/BulkSalaryStructureAssignmentTool";
+import PayrollSettings from "../pages/Payroll/PayrollSettings";
 import Documentation from "../pages/Documentation";
 
 const authProtectedRoutes = [
@@ -48,6 +49,9 @@ const authProtectedRoutes = [
     { path: "/login-attempt-logs", component: <LoginAttemptLogs /> },
     { path: "/audit-log", component: <AuditLog /> },
     { path: "/seo-settings", component: <SeoSettings /> },
+    // ADR-027 (Payroll — Run, foundation half): a true global singleton, same
+    // "genuinely not CRUD" shape as SeoSettings above.
+    { path: "/payroll-settings", component: <PayrollSettings /> },
     { path: "/seo-404", component: <SeoNotFoundLog /> },
     // ADR-024: LeaveLedgerEntry is append-only/system-written, no create/
     // update/delete endpoint at all — same reasoning as AuditLog above.

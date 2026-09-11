@@ -6,7 +6,13 @@ import {
     createSalaryComponent, getSalaryComponentById, updateSalaryComponent, deleteSalaryComponent, searchSalaryComponents, getAllSalaryComponents,
     createSalaryStructure, getSalaryStructureById, updateSalaryStructure, deleteSalaryStructure, searchSalaryStructures, getAllSalaryStructures,
     createSalaryStructureAssignment, getSalaryStructureAssignmentById, updateSalaryStructureAssignment, deleteSalaryStructureAssignment, searchSalaryStructureAssignments,
+    getAllSalaryStructureAssignments,
 } from "../api/payroll.api";
+import {
+    createPayrollPeriod, getPayrollPeriodById, updatePayrollPeriod, deletePayrollPeriod, searchPayrollPeriods, getAllPayrollPeriods,
+    createSalarySlip, getSalarySlipById, updateSalarySlip, deleteSalarySlip, searchSalarySlips,
+    submitSalarySlip, cancelSalarySlip,
+} from "../api/payrollRun.api";
 import { GenerateShiftsPanel } from "../components/hrms/generate-shifts-panel";
 import { Building07, Hash02, Link01, Mail01, MarkerPin01, Phone, Shield01, Tag01, Type01, User01 } from "@untitledui/icons";
 import { isStrongPassword, isValidEmail, PASSWORD } from "@demo-panel/shared/validation";
@@ -3393,6 +3399,193 @@ export const salaryStructureAssignmentConfig = {
     toForm: (data) => ({ ...data, fromDate: data.fromDate?.slice(0, 10) || "", employeeId: refId(data.employeeId), salaryStructureId: refId(data.salaryStructureId) }),
 };
 
+// ---------------------------------------------------------------------------
+// Payroll — Run, foundation half (ADR-027). PayrollPeriod is plain CRUD.
+// SalarySlip is create-only from the admin's point of view — every figure on
+// it (payment days, the three component tables, the leave snapshot, the
+// totals) is server-computed once at creation and never edited afterward
+// (a point-in-time snapshot, matching ADR-026's own "historical rows don't
+// retroactively change" reasoning). Submit/Cancel are the only two actions,
+// the same SimpleActionButton pattern Shift Request/Leave Encashment use.
+// Its `update` endpoint accepts no fields at all (toPayload always sends
+// `{}`) — it exists only so the admin's generic edit route has something to
+// call; there is no real edit-in-place.
+// ---------------------------------------------------------------------------
+
+export const payrollPeriodConfig = {
+    key: "payroll-period",
+    path: "/payroll-period",
+    section: "Payroll",
+    singular: "Payroll Period",
+    plural: "Payroll Periods",
+    description: "A company-scoped date range payroll runs against — also used to resolve which dates are holidays for a Salary Slip.",
+    api: {
+        search: searchPayrollPeriods, getById: getPayrollPeriodById,
+        create: createPayrollPeriod, update: updatePayrollPeriod, remove: deletePayrollPeriod,
+    },
+    lookups: { companyId: asOptions(getAllCompanies, "companyName") },
+    sections: [{ id: "details", title: "Period details" }, { id: "status", title: "Status" }],
+    fields: [
+        { name: "companyId", label: "Company", section: "details", type: "select", optionsFrom: "companyId", required: true, error: "Company is required" },
+        { name: "startDate", label: "Start date", section: "details", type: "date", required: true, error: "Start date is required" },
+        { name: "endDate", label: "End date", section: "details", type: "date", required: true, error: "End date is required" },
+        ACTIVE,
+    ],
+    filterFields: [
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "startDate", label: "Start date", type: "date" },
+        { name: "endDate", label: "End date", type: "date" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    columns: [
+        { name: "Company", selector: (row) => row.companyIdLabel || "—", sortable: true, sortField: "companyId" },
+        { name: "Start date", selector: (row) => String(row.startDate ?? "—").slice(0, 10), sortable: true, sortField: "startDate" },
+        { name: "End date", selector: (row) => String(row.endDate ?? "—").slice(0, 10), sortable: true, sortField: "endDate" },
+        { name: "Status", selector: (row) => (row.isActive ? "Active" : "Inactive") },
+    ],
+    recordTitle: (r) => `Payroll Period — ${String(r.startDate ?? "").slice(0, 10)} to ${String(r.endDate ?? "").slice(0, 10)}`,
+    toForm: (data) => ({ ...data, companyId: refId(data.companyId), startDate: data.startDate?.slice(0, 10) || "", endDate: data.endDate?.slice(0, 10) || "" }),
+};
+
+const ReadOnlyRows = ({ title, rows, columns }) => (
+    <div className="border-b border-secondary p-5 last:border-b-0">
+        <h3 className="text-sm font-semibold text-primary">{title}</h3>
+        {(!rows || rows.length === 0) ? (
+            <p className="mt-2 text-xs text-tertiary">No rows.</p>
+        ) : (
+            <div className="mt-2 overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                    <thead>
+                        <tr className="border-b border-secondary text-tertiary">
+                            {columns.map((col) => <th key={col.label} className="py-1.5 pr-4 font-medium">{col.label}</th>)}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((row, idx) => (
+                            <tr key={row._id || idx} className="border-b border-secondary/50">
+                                {columns.map((col) => <td key={col.label} className="py-1.5 pr-4 text-primary">{col.value(row)}</td>)}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        )}
+    </div>
+);
+
+const componentLabel = (row) => row.abbreviation || row.salaryComponentId?.abbreviation || row.salaryComponentId?.salaryComponentName || row.salaryComponentId || "—";
+const SALARY_DETAIL_VIEW_COLUMNS = [
+    { label: "Component", value: componentLabel },
+    { label: "Amount", value: (row) => row.defaultAmount ?? row.amount ?? 0 },
+    { label: "Skipped (condition false)", value: (row) => (row._skipped ? "Yes" : "No") },
+];
+
+export const salarySlipConfig = {
+    key: "salary-slip",
+    path: "/salary-slip",
+    section: "Payroll",
+    singular: "Salary Slip",
+    plural: "Salary Slips",
+    description: "One payslip for one employee for one period, computed once from their current Salary Structure Assignment plus their actual attendance/leave for that period. Create is the action — every figure below is server-computed and never edited afterward; Submit and Cancel are the only two actions.",
+    api: {
+        search: searchSalarySlips, getById: getSalarySlipById,
+        create: createSalarySlip, update: updateSalarySlip, remove: deleteSalarySlip,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        salaryStructureAssignmentId: asOptions(getAllSalaryStructureAssignments, "currency"),
+    },
+    sections: [
+        { id: "details", title: "Slip details" },
+        { id: "payment-days", title: "Payment days (computed)" },
+        { id: "totals", title: "Totals (computed)" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "startDate", label: "Start date", section: "details", type: "date", required: true, error: "Start date is required" },
+        { name: "endDate", label: "End date", section: "details", type: "date", required: true, error: "End date is required" },
+        { name: "salaryStructureAssignmentId", label: "Salary Structure Assignment (blank = auto-resolve the employee's current one)", section: "details", type: "select", optionsFrom: "salaryStructureAssignmentId" },
+    ],
+    viewFields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId" },
+        { name: "startDate", label: "Start date", section: "details", type: "date" },
+        { name: "endDate", label: "End date", section: "details", type: "date" },
+        { name: "workingDays", label: "Working days", section: "payment-days", type: "number" },
+        { name: "totalWorkingDays", label: "Total working days", section: "payment-days", type: "number" },
+        { name: "paymentDays", label: "Payment days", section: "payment-days", type: "number" },
+        { name: "lwpDays", label: "LWP days", section: "payment-days", type: "number" },
+        { name: "absentDays", label: "Absent days", section: "payment-days", type: "number" },
+        { name: "halfDayDays", label: "Half days", section: "payment-days", type: "number" },
+        { name: "grossPay", label: "Gross pay", section: "totals", type: "number" },
+        { name: "totalDeduction", label: "Total deduction", section: "totals", type: "number" },
+        { name: "netPay", label: "Net pay", section: "totals", type: "number" },
+        { name: "status", label: "Status", section: "status", type: "text" },
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        <>
+            {mode !== "add" && (
+                <>
+                    <ReadOnlyRows title="Earnings" rows={values.earnings} columns={SALARY_DETAIL_VIEW_COLUMNS} />
+                    <ReadOnlyRows title="Deductions" rows={values.deductions} columns={SALARY_DETAIL_VIEW_COLUMNS} />
+                    <ReadOnlyRows title="Employer Contributions" rows={values.employerContributions} columns={SALARY_DETAIL_VIEW_COLUMNS} />
+                    <ReadOnlyRows
+                        title="Leave balances (as of end date)"
+                        rows={values.leaves}
+                        columns={[
+                            { label: "Leave Type", value: (row) => row.leaveTypeId?.leaveTypeName || row.leaveTypeId || "—" },
+                            { label: "Allocated", value: (row) => row.allocated ?? 0 },
+                            { label: "Used", value: (row) => row.used ?? 0 },
+                            { label: "Available", value: (row) => row.available ?? 0 },
+                        ]}
+                    />
+                </>
+            )}
+            {mode === "edit" && id && values.status === "draft" && (
+                <>
+                    <SimpleActionButton
+                        label="Submit" description="Re-validates Net Pay >= 0 (a draft may be negative; submitting is what enforces it) and flips status to Submitted."
+                        onRun={() => submitSalarySlip(id)}
+                        onResult={() => window.location.reload()}
+                    />
+                    <SimpleActionButton
+                        label="Cancel" description="Status flip only — no GL or ledger reversal."
+                        onRun={() => cancelSalarySlip(id)}
+                        onResult={() => window.location.reload()}
+                    />
+                </>
+            )}
+        </>
+    ),
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "startDate", label: "Start date", type: "date" },
+        { name: "endDate", label: "End date", type: "date" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Start date", selector: (row) => String(row.startDate ?? "—").slice(0, 10), sortable: true, sortField: "startDate" },
+        { name: "End date", selector: (row) => String(row.endDate ?? "—").slice(0, 10), sortable: true, sortField: "endDate" },
+        { name: "Net pay", selector: (row) => row.netPay ?? "—" },
+        { name: "Status", selector: (row) => row.status, sortable: true, sortField: "status" },
+    ],
+    recordTitle: (r) => `Salary Slip — ${String(r.startDate ?? "").slice(0, 10)} to ${String(r.endDate ?? "").slice(0, 10)}`,
+    toForm: (data) => ({
+        ...data,
+        employeeId: refId(data.employeeId),
+        salaryStructureAssignmentId: refId(data.salaryStructureAssignmentId),
+        startDate: data.startDate?.slice(0, 10) || "",
+        endDate: data.endDate?.slice(0, 10) || "",
+    }),
+    toPayload: (values, mode) => (mode === "edit"
+        ? {} // read-only snapshot — no field can actually change through Save
+        : Object.fromEntries(Object.entries(values).filter(([key]) => ["employeeId", "startDate", "endDate", "salaryStructureAssignmentId"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value]))),
+};
+
 export const ADVANCED_ENTITIES = [
     shiftTypeConfig, shiftLocationConfig, shiftAssignmentConfig, shiftScheduleConfig, shiftScheduleAssignmentConfig, employeeCheckinConfig,
     shiftRequestConfig, attendanceRequestConfig,
@@ -3414,4 +3607,5 @@ export const ADVANCED_ENTITIES = [
     leaveAdjustmentConfig, compensatoryLeaveRequestConfig, leaveApplicationConfig,
     leaveEncashmentConfig, leaveBlockListConfig,
     salaryComponentConfig, salaryStructureConfig, salaryStructureAssignmentConfig,
+    payrollPeriodConfig, salarySlipConfig,
 ];

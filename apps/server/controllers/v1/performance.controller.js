@@ -888,7 +888,8 @@ export const deleteAppraisal = async (req, res) => {
     const doc = await Appraisal.findById(req.params.id);
     if (!doc) throwError(404, "Appraisal not found");
     if (doc.status === "submitted") throwError(400, "Submitted documents must be cancelled before deletion");
-    await doc.softDelete();
+    doc.isDeleted = true;
+    await doc.save();
     return res.status(200).json({ isOk: true, status: 200, message: "Appraisal deleted" });
   } catch (error) { return failure(res, error); }
 };

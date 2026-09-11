@@ -4635,11 +4635,16 @@ export const appraisalConfig = {
         { name: "reflections", label: "Reflections", section: "notes", type: "text" },
     ],
     viewFields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId" },
+        { name: "appraisalCycleId", label: "Appraisal Cycle", section: "details", type: "select", optionsFrom: "appraisalCycleId" },
+        { name: "appraisalTemplateId", label: "Appraisal Template", section: "details", type: "select", optionsFrom: "appraisalTemplateId" },
         { name: "status", label: "Status", section: "details", type: "text" },
         { name: "totalScore", label: "Goal Score", section: "details", type: "number" },
         { name: "selfScore", label: "Self Score", section: "details", type: "number" },
         { name: "avgFeedbackScore", label: "Average Feedback Score", section: "details", type: "number" },
         { name: "finalScore", label: "Final Score", section: "details", type: "number" },
+        { name: "remarks", label: "Remarks", section: "notes", type: "text" },
+        { name: "reflections", label: "Reflections", section: "notes", type: "text" },
     ],
     renderExtra: ({ mode, id, values, setValues }) => (
         <>

@@ -3525,4 +3525,33 @@ Copy this block. Number sequentially.
   extended to a fourth producer and the read-only-ledger access model are both the same "deliberate
   improvement" category already established repeatedly this session).
 
+### As built
+
+- **Models added**:
+  - `apps/server/models/EmployeeBenefitApplication.js`: folded docstatus (`draft`, `submitted`, `cancelled`), embedded `EmployeeBenefitDetailSchema` with `salaryComponentId` and `amount`, plus `currency`, `maxBenefits`, `totalAmount`, `remainingBenefit`, `remarks`. Enforces positive amounts, component ceiling (`comp.maxBenefitAmount`), structure ceiling (`maxBenefits`), active employee check, and duplicate active application rejection.
+  - `apps/server/models/EmployeeBenefitClaim.js`: folded docstatus (`draft`, `submitted`, `cancelled`), `employeeId`, `companyId`, `salaryComponentId`, `claimDate`, `payrollDate`, `currency`, `claimedAmount`, `yearlyBenefit`, `maxAmountEligible`, `additionalSalaryId`, `remarks`. Submit action creates an active additive `AdditionalSalary` record (`type: "Earning"`, `refDoctype: "EmployeeBenefitClaim"`). Cancel action cascades to cancel the linked `AdditionalSalary`.
+  - `apps/server/models/EmployeeBenefitLedger.js`: append-only domain ledger with `postingDate`, `employeeId`, `companyId`, `salaryComponentId`, `payrollPeriodId`, `transactionType` (`"Accrual" | "Payout"`), `amount`, `yearlyBenefit`, `flexibleBenefit`, `salarySlipId`, `refDoctype` (`"EmployeeBenefitApplication" | "EmployeeBenefitClaim" | "SalaryStructureAssignment" | "PayrollCorrection" | "Arrear" | "SalarySlip"`), `refDocnameId`, `isDeleted`, `remarks`. Protected read-only API (`GET /` and `POST /search` and `GET /:id` only; create/update/delete return 404).
+  - `apps/server/models/PayrollCorrection.js`: folded docstatus (`draft`, `submitted`, `cancelled`), `employeeId`, `companyId`, `salarySlipId`, `payrollPeriodId`, `payrollDate`, `daysToReverse`, embedded `earningArrears[]`, `deductionArrears[]`, `accrualArrears[]`, `status`, `remarks`. Submit creates `AdditionalSalary` rows for earning/deduction arrears and `EmployeeBenefitLedger` Accrual entries. Cancel cascades cancellation to all linked AdditionalSalary rows and soft-deletes linked ledger entries.
+- **Precursor retrofits**:
+  - `apps/server/models/SalaryComponent.js`: added `isFlexibleBenefit`, `maxBenefitAmount`, `payoutMethod` (enum: 3 methods), `finalCycleAccrualPayout`. Validation guards ensure flexible components declare a valid `payoutMethod`, and accrual-based methods require `accrualComponent: true` and `type: "Earning"`.
+  - `apps/server/models/SalaryStructure.js` & `SalaryStructureAssignment.js`: added `maxBenefits`, `employeeBenefits[]` using shared `EmployeeBenefitDetailSchema`.
+  - `apps/server/models/PayrollSettings.js`: added `mandatoryBenefitApplication` (Boolean, default `false`).
+  - `apps/server/models/AdditionalSalary.js`: extended `refDoctype` enum with `"EmployeeBenefitClaim"` and `"PayrollCorrection"`.
+  - `apps/server/controllers/v1/payroll.controller.js`: updated field allowlists, component validation, and resolved partial-update bug on `SalaryStructureAssignment`.
+- **Pure Calculation Engines & Utilities**:
+  - `apps/server/utils/salarySlipCalc.js`: added `previewCurrentCycleBenefitAccrual` reusing pure `calculateSalarySlip` to preview unposted cycle accruals for mid-cycle claims. Added safety guards to `mergeAdditionalSalaries` skipping orphaned/deleted component entries.
+  - `apps/server/utils/employeeBenefitSource.js`: implemented `getBenefitsDetailsParent` with application vs assignment fallback chain gated by `mandatoryBenefitApplication`.
+  - `apps/server/utils/employeeBenefitLedger.js`: implemented immutable domain ledger write helpers (`createBenefitLedgerEntry`, `getBenefitLedgerBalance` with explicit `{ isDeleted: { $ne: true } }` filtering in aggregation match stage, `deleteBenefitLedgerEntriesBySalarySlip`, `deleteBenefitLedgerEntriesByReference`).
+  - `apps/server/utils/payrollCorrectionCalc.js`: pure calculation function `calculatePayrollCorrectionBreakup` computing LWP reversal delta for earnings, deductions, and benefit accruals.
+  - `apps/server/utils/payrollBenefits.test.js`: comprehensive unit test suite covering eligibility formulas, ledger balances, proration previews, and correction breakups. Wired into `npm test`.
+- **Controller & Routes**:
+  - `apps/server/controllers/v1/payrollBenefits.controller.js`: full CRUD, submit/cancel workflows, and calculation preview endpoints.
+  - `apps/server/routes/v1/payrollBenefits.routes.js`: mounted at `/api/v1` in `server.js` with OpenAPI/Swagger docs, auth middleware, and validation.
+- **Admin UI & Widgets**:
+  - `apps/admin/src/api/endpoints.jsx` & `apps/admin/src/api/payrollBenefits.api.jsx`: full API client.
+  - `apps/admin/src/entities/advanced.jsx`: entity configs for `EmployeeBenefitApplication`, `EmployeeBenefitClaim`, `EmployeeBenefitLedger`, and `PayrollCorrection` registered in `ADVANCED_ENTITIES`.
+  - `apps/server/seed/index.js`: seeded 4 menu rows in Payroll menu group with role permissions.
+  - `apps/server/config/widgetSources.js`: registered all 4 models for dashboard reporting.
+  - `docs-src/manifest.js`: documentation manifest updated with all 4 screens.
+
 

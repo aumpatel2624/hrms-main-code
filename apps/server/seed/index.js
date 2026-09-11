@@ -309,6 +309,11 @@ const MENU_GROUPS = [
       { menuName: "Retention Bonus", menuUrl: "/retention-bonus", icon: "ri-medal-line" },
       { menuName: "Employee Incentive", menuUrl: "/employee-incentive", icon: "ri-award-line" },
       { menuName: "Employee Other Income", menuUrl: "/employee-other-income", icon: "ri-file-shield-2-line" },
+      // ADR-029 (module 13, feat/payroll-benefits).
+      { menuName: "Employee Benefit Application", menuUrl: "/employee-benefit-application", icon: "ri-hand-heart-line" },
+      { menuName: "Employee Benefit Claim", menuUrl: "/employee-benefit-claim", icon: "ri-coins-line" },
+      { menuName: "Employee Benefit Ledger", menuUrl: "/employee-benefit-ledger", icon: "ri-booklet-line" },
+      { menuName: "Payroll Correction", menuUrl: "/payroll-correction", icon: "ri-edit-circle-line" },
     ],
   },
   {
@@ -1800,6 +1805,8 @@ const seedShiftAttendanceTransactionsRoles = async () => {
 const seedPayrollRoles = async () => {
   const full = { write: true, read: true, edit: true, delete: true, print: true, mail: true };
   const fullNoDelete = { write: true, read: true, edit: true, delete: false, print: true, mail: true, dataScope: SCOPES.OWN };
+  const readOnly = { write: false, read: true, edit: false, delete: false, print: true, mail: false };
+  const readOnlyOwn = { write: false, read: true, edit: false, delete: false, print: true, mail: false, dataScope: SCOPES.OWN };
 
   const GRANTS = {
     "/salary-component": { "HR User": full, "HR Manager": full },
@@ -1824,6 +1831,26 @@ const seedPayrollRoles = async () => {
       "HR User": full,
       "HR Manager": full,
       "Employee": fullNoDelete,
+    },
+    // ADR-029 (module 13, feat/payroll-benefits).
+    "/employee-benefit-application": {
+      "HR User": full,
+      "HR Manager": full,
+      "Employee": fullNoDelete,
+    },
+    "/employee-benefit-claim": {
+      "HR User": full,
+      "HR Manager": full,
+      "Employee": fullNoDelete,
+    },
+    "/employee-benefit-ledger": {
+      "HR User": readOnly,
+      "HR Manager": readOnly,
+      "Employee": readOnlyOwn,
+    },
+    "/payroll-correction": {
+      "HR User": full,
+      "HR Manager": full,
     },
   };
 

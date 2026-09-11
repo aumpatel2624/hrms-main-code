@@ -57,13 +57,15 @@ export const mergeAdditionalSalaries = ({ earnings = [], deductions = [], additi
 
   for (const addSal of additionalSalaries) {
     if (!addSal || addSal.status === "cancelled") continue;
+    const resolvedCompId = addSal.salaryComponentId?._id || addSal.salaryComponentId;
+    if (!resolvedCompId) continue;
     if (startDate && endDate && !isAdditionalSalaryInPeriod(addSal, startDate, endDate)) {
       continue;
     }
 
     const isDeduction = addSal.type === "Deduction";
     const targetTable = isDeduction ? clonedDeductions : clonedEarnings;
-    const compIdStr = getComponentIdStr(addSal.salaryComponentId);
+    const compIdStr = getComponentIdStr(resolvedCompId);
 
     const existingRow = targetTable.find((r) => getComponentIdStr(r.salaryComponentId) === compIdStr);
     const adjAmount = round2(Number(addSal.amount) || 0);
@@ -82,7 +84,7 @@ export const mergeAdditionalSalaries = ({ earnings = [], deductions = [], additi
     } else {
       const comp = typeof addSal.salaryComponentId === "object" && addSal.salaryComponentId !== null ? addSal.salaryComponentId : {};
       targetTable.push({
-        salaryComponentId: comp._id || addSal.salaryComponentId,
+        salaryComponentId: resolvedCompId,
         abbreviation: comp.abbreviation || addSal.abbreviation || "",
         statisticalComponent: false, // AdditionalSalary cannot be statistical per ADR-028
         isTaxApplicable: comp.isTaxApplicable ?? false,
@@ -162,7 +164,7 @@ export const calculateSalarySlip = ({
   startDate,
   endDate,
 }) => {
-  const { paymentDays, totalWorkingDays } = paymentDaysResult;
+  const { paymentDays = 0, totalWorkingDays = 0 } = paymentDaysResult || {};
   const context = {
     base: Number(assignment?.base) || 0,
     variable: Number(assignment?.variable) || 0,
@@ -255,3 +257,47 @@ export const calculateSalarySlipForEmployee = async ({
 
   return { ...paymentDaysResult, ...calc };
 };
+
+/**
+ * ADR-029 (Payroll — Benefits).
+ *
+ * Previews the expected benefit accrual for a specific component in the current cycle
+ * without persisting a Salary Slip. Reuses the unchanged `calculateSalarySlip` engine.
+ */
+export const previewCurrentCycleBenefitAccrual = ({
+  structure,
+  assignment,
+  paymentDaysResult = { paymentDays: 30, totalWorkingDays: 30 },
+  salaryComponentId,
+  yearlyBenefit = 0,
+  dependsOnPaymentDays = false,
+}) => {
+  const compIdStr = String(salaryComponentId?._id || salaryComponentId || "");
+  const calc = calculateSalarySlip({
+    structure,
+    assignment,
+    paymentDaysResult,
+  });
+
+  const matchingEarning = (calc.earnings || []).find(
+    (r) => String(r.salaryComponentId?._id || r.salaryComponentId || "") === compIdStr,
+  );
+
+  if (matchingEarning) {
+    return round2(Number(matchingEarning.defaultAmount ?? matchingEarning.amount) || 0);
+  }
+
+  // If not directly in structure.earnings, compute pro-rata from yearlyBenefit and payrollFrequency
+  const freq = structure?.payrollFrequency || "Monthly";
+  const cycles = { Monthly: 12, Fortnightly: 26, Bimonthly: 24, Weekly: 52, Daily: 365 }[freq] || 12;
+  let cycleAmount = cycles > 0 ? yearlyBenefit / cycles : 0;
+
+  if (dependsOnPaymentDays) {
+    const { paymentDays = 0, totalWorkingDays = 0 } = paymentDaysResult || {};
+    const ratio = totalWorkingDays > 0 ? paymentDays / totalWorkingDays : 0;
+    cycleAmount *= ratio;
+  }
+
+  return round2(cycleAmount);
+};
+

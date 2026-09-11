@@ -87,6 +87,35 @@ export const ENDPOINTS = {
         SUBMIT: (id) => `${V1}/employee-other-incomes/${id}/submit`,
         CANCEL: (id) => `${V1}/employee-other-incomes/${id}/cancel`,
     },
+    // ADR-029 (Payroll — Benefits).
+    EMPLOYEE_BENEFIT_APPLICATIONS: {
+        BASE: `${V1}/employee-benefit-applications`,
+        SEARCH: `${V1}/employee-benefit-applications/search`,
+        BY_ID: (id) => `${V1}/employee-benefit-applications/${id}`,
+        SUBMIT: (id) => `${V1}/employee-benefit-applications/${id}/submit`,
+        CANCEL: (id) => `${V1}/employee-benefit-applications/${id}/cancel`,
+    },
+    EMPLOYEE_BENEFIT_CLAIMS: {
+        BASE: `${V1}/employee-benefit-claims`,
+        SEARCH: `${V1}/employee-benefit-claims/search`,
+        BY_ID: (id) => `${V1}/employee-benefit-claims/${id}`,
+        CALCULATE_ELIGIBILITY: `${V1}/employee-benefit-claims/calculate-eligibility`,
+        SUBMIT: (id) => `${V1}/employee-benefit-claims/${id}/submit`,
+        CANCEL: (id) => `${V1}/employee-benefit-claims/${id}/cancel`,
+    },
+    EMPLOYEE_BENEFIT_LEDGERS: {
+        BASE: `${V1}/employee-benefit-ledgers`,
+        SEARCH: `${V1}/employee-benefit-ledgers/search`,
+        BY_ID: (id) => `${V1}/employee-benefit-ledgers/${id}`,
+    },
+    PAYROLL_CORRECTIONS: {
+        BASE: `${V1}/payroll-corrections`,
+        SEARCH: `${V1}/payroll-corrections/search`,
+        BY_ID: (id) => `${V1}/payroll-corrections/${id}`,
+        CALCULATE_BREAKUP: `${V1}/payroll-corrections/calculate-breakup`,
+        SUBMIT: (id) => `${V1}/payroll-corrections/${id}/submit`,
+        CANCEL: (id) => `${V1}/payroll-corrections/${id}/cancel`,
+    },
     EMPLOYEE_ATTENDANCE_TOOL: {
         MARK: `${V1}/employee-attendance-tool/mark`,
         RESOLVE_HALF_DAY: `${V1}/employee-attendance-tool/resolve-half-day`,

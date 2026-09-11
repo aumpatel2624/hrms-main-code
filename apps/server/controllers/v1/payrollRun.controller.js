@@ -24,9 +24,18 @@ import PayrollSettings from "../../models/PayrollSettings.js";
 import SalarySlip from "../../models/SalarySlip.js";
 import SalaryStructure from "../../models/SalaryStructure.js";
 import SalaryStructureAssignment from "../../models/SalaryStructureAssignment.js";
+import SalaryComponent from "../../models/SalaryComponent.js";
+import AdditionalSalary from "../../models/AdditionalSalary.js";
+import EmployeeBenefitLedger from "../../models/EmployeeBenefitLedger.js";
 import Employee from "../../models/Employee.js";
 import LeaveType from "../../models/LeaveType.js";
 import LeaveAllocation from "../../models/LeaveAllocation.js";
+import {
+  createBenefitLedgerEntry,
+  getBenefitLedgerBalance,
+  deleteBenefitLedgerEntriesBySalarySlip,
+} from "../../utils/employeeBenefitLedger.js";
+import { getBenefitsDetailsParent } from "../../utils/employeeBenefitSource.js";
 
 const failure = (res, error) => {
   if (error.status) return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
@@ -138,7 +147,7 @@ export const deletePayrollPeriod = async (req, res) => {
 export const PAYROLLSETTINGS_FIELDS = [
   "payrollBasedOn", "considerUnmarkedAttendanceAs", "includeHolidaysInTotalWorkingDays",
   "considerMarkedAttendanceOnHolidays", "dailyWagesFractionForHalfDay", "disableRoundedTotal",
-  "showLeaveBalancesInSalarySlip",
+  "showLeaveBalancesInSalarySlip", "mandatoryBenefitApplication",
 ];
 
 export const getPayrollSettingsDoc = async () => {
@@ -367,6 +376,123 @@ export const submitSalarySlipById = async (salarySlipId, scopeFilter = {}) => {
 
     doc.status = "submitted";
     await doc.save();
+
+    // ADR-029 (Payroll — Benefits): Post Accrual and Payout rows to EmployeeBenefitLedger
+    try {
+      const payrollPeriod = await PayrollPeriod.findOne({
+        companyId: doc.companyId,
+        startDate: { $lte: doc.endDate },
+        endDate: { $gte: doc.startDate },
+        isActive: true,
+      });
+
+      if (payrollPeriod) {
+        // 1. Post Accrual rows for every earnings row flagged accrualComponent: true
+        for (const earning of doc.earnings || []) {
+          if (earning.accrualComponent && (earning.defaultAmount ?? earning.amount ?? 0) > 0) {
+            const comp = await SalaryComponent.findById(earning.salaryComponentId).lean();
+            await createBenefitLedgerEntry({
+              postingDate: doc.endDate,
+              employeeId: doc.employeeId,
+              companyId: doc.companyId,
+              salaryComponentId: earning.salaryComponentId,
+              payrollPeriodId: payrollPeriod._id,
+              transactionType: "Accrual",
+              amount: earning.defaultAmount ?? earning.amount ?? 0,
+              yearlyBenefit: comp?.maxBenefitAmount || 0,
+              flexibleBenefit: Boolean(comp?.isFlexibleBenefit),
+              salarySlipId: doc._id,
+              refDoctype: "SalarySlip",
+              refDocnameId: doc._id,
+              remarks: `Accrual from Salary Slip for ${comp?.name || earning.abbreviation || "component"}`,
+            });
+          }
+        }
+
+        // 2. Post Payout rows for benefit components paid on this slip via AdditionalSalary linked to EmployeeBenefitClaim
+        const claimAdditionalSalaries = await AdditionalSalary.find({
+          employeeId: doc.employeeId,
+          refDoctype: "EmployeeBenefitClaim",
+          status: "active",
+          $or: [
+            { isRecurring: false, payrollDate: { $gte: doc.startDate, $lte: doc.endDate } },
+            { isRecurring: true, fromDate: { $lte: doc.endDate }, toDate: { $gte: doc.startDate } },
+          ],
+        }).populate("salaryComponentId");
+
+        for (const addSal of claimAdditionalSalaries) {
+          const compId = addSal.salaryComponentId?._id || addSal.salaryComponentId;
+          await createBenefitLedgerEntry({
+            postingDate: doc.endDate,
+            employeeId: doc.employeeId,
+            companyId: doc.companyId,
+            salaryComponentId: compId,
+            payrollPeriodId: payrollPeriod._id,
+            transactionType: "Payout",
+            amount: addSal.amount,
+            yearlyBenefit: 0,
+            flexibleBenefit: true,
+            salarySlipId: doc._id,
+            refDoctype: "EmployeeBenefitClaim",
+            refDocnameId: addSal.refDocnameId,
+            remarks: "Payout via Employee Benefit Claim",
+          });
+        }
+
+        // 3. Final cycle automatic payout check
+        const isFinalCycle = new Date(doc.endDate) >= new Date(payrollPeriod.endDate);
+        if (isFinalCycle) {
+          const ledgerComponentIds = await EmployeeBenefitLedger.distinct("salaryComponentId", {
+            employeeId: doc.employeeId,
+            payrollPeriodId: payrollPeriod._id,
+            isDeleted: { $ne: true },
+          });
+
+          const parentConfig = await getBenefitsDetailsParent(doc.employeeId, payrollPeriod._id, doc.endDate);
+          const configComponentIds = (parentConfig?.benefits || []).map((b) => b.salaryComponentId);
+
+          const allComponentIds = Array.from(
+            new Set([...ledgerComponentIds.map(String), ...configComponentIds.map(String)])
+          );
+
+          for (const compId of allComponentIds) {
+            const comp = await SalaryComponent.findById(compId).lean();
+            if (!comp || !comp.isFlexibleBenefit) continue;
+
+            const shouldAutoPayout =
+              comp.payoutMethod === "Accrue and payout at end of payroll period" ||
+              (comp.payoutMethod === "Accrue per cycle, pay only on claim" && comp.finalCycleAccrualPayout === true);
+
+            if (shouldAutoPayout) {
+              const balance = await getBenefitLedgerBalance(doc.employeeId, comp._id, payrollPeriod._id);
+              if (balance.netAccrued > 0) {
+                const benefitRow = (parentConfig?.benefits || []).find(
+                  (b) => String(b.salaryComponentId) === String(comp._id)
+                );
+                await createBenefitLedgerEntry({
+                  postingDate: doc.endDate,
+                  employeeId: doc.employeeId,
+                  companyId: doc.companyId,
+                  salaryComponentId: comp._id,
+                  payrollPeriodId: payrollPeriod._id,
+                  transactionType: "Payout",
+                  amount: balance.netAccrued,
+                  yearlyBenefit: benefitRow?.amount || comp.maxBenefitAmount || 0,
+                  flexibleBenefit: true,
+                  salarySlipId: doc._id,
+                  refDoctype: "SalarySlip",
+                  refDocnameId: doc._id,
+                  remarks: `Final cycle automatic payout for ${comp.salaryComponentName || comp.name || "flexible benefit"}`,
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to post EmployeeBenefitLedger entries during Salary Slip submission:", err);
+    }
+
     return doc;
 };
 
@@ -376,7 +502,7 @@ export const submitSalarySlip = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) { return failure(res, error); }
 };
-/** Status flip only — no GL/ledger reversal (ADR-016/027's no-GL scope). */
+/** Status flip + ledger reversal cascade (ADR-029). */
 export const cancelSalarySlipById = async (salarySlipId, scopeFilter = {}) => {
     const doc = await SalarySlip.findOne({ $and: [{ _id: salarySlipId }, scopeFilter] });
     if (!doc) throwError(404, "Salary Slip not found");
@@ -384,6 +510,14 @@ export const cancelSalarySlipById = async (salarySlipId, scopeFilter = {}) => {
 
     doc.status = "cancelled";
     await doc.save();
+
+    // ADR-029: Delete (soft-delete) every ledger row matching salarySlipId: doc._id
+    try {
+      await deleteBenefitLedgerEntriesBySalarySlip(doc._id);
+    } catch (err) {
+      console.error("Failed to reverse EmployeeBenefitLedger entries during Salary Slip cancellation:", err);
+    }
+
     return doc;
 };
 

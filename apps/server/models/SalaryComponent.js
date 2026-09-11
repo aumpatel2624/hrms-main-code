@@ -27,6 +27,20 @@ const SalaryComponentSchema = new mongoose.Schema(
     arrearComponent: { type: Boolean, default: false },
     // Only valid when type === "Earning" — validated in the controller.
     accrualComponent: { type: Boolean, default: false },
+    // ADR-029 (Payroll — Benefits)
+    isFlexibleBenefit: { type: Boolean, default: false },
+    maxBenefitAmount: { type: Number, default: null, min: 0 },
+    payoutMethod: {
+      type: String,
+      enum: [
+        "Accrue and payout at end of payroll period",
+        "Accrue per cycle, pay only on claim",
+        "Allow claim for full benefit amount",
+        null,
+      ],
+      default: null,
+    },
+    finalCycleAccrualPayout: { type: Boolean, default: false },
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
     isActive: { type: Boolean, default: true, required: true },
   },

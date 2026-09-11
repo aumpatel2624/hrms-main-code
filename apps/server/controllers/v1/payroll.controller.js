@@ -37,6 +37,7 @@ const SALARYCOMPONENT_FIELDS = [
   "salaryComponentName", "abbreviation", "type", "isTaxApplicable", "dependsOnPaymentDays",
   "doNotIncludeInTotal", "statisticalComponent", "roundToNearestInteger", "exemptedFromIncomeTax",
   "removeIfZeroValued", "variableBasedOnTaxableSalary", "arrearComponent", "accrualComponent",
+  "isFlexibleBenefit", "maxBenefitAmount", "payoutMethod", "finalCycleAccrualPayout",
   "companyId", "isActive",
 ];
 export { SALARYCOMPONENT_FIELDS };
@@ -47,6 +48,24 @@ const validateSalaryComponentFlags = (payload) => {
   }
   if (payload.accrualComponent && payload.type !== "Earning") {
     throwError(400, "Accrual Component can only be set for Earning Salary Components");
+  }
+  if (payload.isFlexibleBenefit) {
+    if (payload.type !== "Earning") {
+      throwError(400, "Flexible Benefit can only be set for Earning Salary Components");
+    }
+    if (!payload.payoutMethod) {
+      throwError(400, "Payout Method is required for Flexible Benefit Salary Components");
+    }
+    const accrualMethods = [
+      "Accrue and payout at end of payroll period",
+      "Accrue per cycle, pay only on claim",
+    ];
+    if (accrualMethods.includes(payload.payoutMethod) && !payload.accrualComponent) {
+      throwError(400, "Accrual Component must be set for Flexible Benefit Salary Components with accrual payout methods");
+    }
+    if (payload.payoutMethod === "Allow claim for full benefit amount" && payload.accrualComponent) {
+      throwError(400, "Accrual Component cannot be set for Allow claim for full benefit amount payout method");
+    }
   }
 };
 
@@ -146,8 +165,51 @@ export const deleteSalaryComponent = async (req, res) => {
 
 // ============================================================ SalaryStructure --
 
-const SALARYSTRUCTURE_TOP_FIELDS = ["companyId", "payrollFrequency", "isActive", "leaveEncashmentAmountPerDay", "currency"];
-export const SALARYSTRUCTURE_FIELDS = [...SALARYSTRUCTURE_TOP_FIELDS, "earnings", "deductions", "employerContributions"];
+export const validateEmployeeBenefits = async (employeeBenefits, maxBenefits, companyId) => {
+  if (!employeeBenefits || !Array.isArray(employeeBenefits) || employeeBenefits.length === 0) {
+    return;
+  }
+  const seenIds = new Set();
+  let total = 0;
+  for (const item of employeeBenefits) {
+    if (!item.salaryComponentId) {
+      throwError(400, "Each employee benefit row requires a salaryComponentId");
+    }
+    const idStr = String(item.salaryComponentId._id || item.salaryComponentId);
+    if (seenIds.has(idStr)) {
+      throwError(400, "Duplicate salary component in employee benefits");
+    }
+    seenIds.add(idStr);
+
+    const comp = await SalaryComponent.findOne({ _id: idStr, companyId });
+    if (!comp) {
+      throwError(400, `Salary Component ${idStr} not found for this company`);
+    }
+    if (comp.type !== "Earning" || !comp.isFlexibleBenefit) {
+      throwError(400, `Salary Component ${comp.salaryComponentName} must be an Earning Flexible Benefit`);
+    }
+
+    const amt = Number(item.amount);
+    if (isNaN(amt) || amt < 0) {
+      throwError(400, "Benefit amount must be a non-negative number");
+    }
+    if (comp.maxBenefitAmount !== null && comp.maxBenefitAmount !== undefined && comp.maxBenefitAmount > 0) {
+      if (amt > comp.maxBenefitAmount) {
+        throwError(400, `Benefit amount for ${comp.salaryComponentName} (${amt}) exceeds maximum benefit amount of ${comp.maxBenefitAmount}`);
+      }
+    }
+    total += amt;
+  }
+
+  if (maxBenefits !== null && maxBenefits !== undefined && maxBenefits > 0) {
+    if (total > maxBenefits) {
+      throwError(400, `Total of all employee benefits (${total}) cannot be greater than Max Benefits (${maxBenefits})`);
+    }
+  }
+};
+
+const SALARYSTRUCTURE_TOP_FIELDS = ["companyId", "payrollFrequency", "isActive", "leaveEncashmentAmountPerDay", "currency", "maxBenefits"];
+export const SALARYSTRUCTURE_FIELDS = [...SALARYSTRUCTURE_TOP_FIELDS, "earnings", "deductions", "employerContributions", "employeeBenefits"];
 const ROW_TABLES = ["earnings", "deductions", "employerContributions"];
 
 /**
@@ -218,6 +280,16 @@ const buildRows = async (incomingRows, existingRows, companyId) => {
 
 /** Rebuilds all three row tables + recomputes totalEarning/totalDeduction/netPay onto `doc` (not yet saved). */
 const applyStructureRows = async (doc, req) => {
+  if (req.body.employeeBenefits !== undefined) {
+    await validateEmployeeBenefits(req.body.employeeBenefits, doc.maxBenefits, doc.companyId);
+    doc.employeeBenefits = (req.body.employeeBenefits || []).map((r) => ({
+      salaryComponentId: r.salaryComponentId,
+      amount: Number(r.amount) || 0,
+    }));
+  } else if (req.body.maxBenefits !== undefined && doc.employeeBenefits && doc.employeeBenefits.length > 0) {
+    await validateEmployeeBenefits(doc.employeeBenefits, doc.maxBenefits, doc.companyId);
+  }
+
   for (const table of ROW_TABLES) {
     if (req.body[table] !== undefined) {
       doc[table] = await buildRows(req.body[table], doc[table], doc.companyId);
@@ -262,6 +334,7 @@ export const getSalaryStructureById = async (req, res) => {
   try {
     const doc = await SalaryStructure.findOne({ $and: [{ _id: req.params.salaryStructureId }, await attendanceScope(req, false)] })
       .populate("companyId", "companyName")
+      .populate("employeeBenefits.salaryComponentId", "salaryComponentName abbreviation maxBenefitAmount payoutMethod")
       .populate("earnings.salaryComponentId", "salaryComponentName abbreviation")
       .populate("deductions.salaryComponentId", "salaryComponentName abbreviation")
       .populate("employerContributions.salaryComponentId", "salaryComponentName abbreviation");
@@ -283,7 +356,7 @@ export const searchSalaryStructures = async (req, res) => {
       scopeFilter: await attendanceScope(req, false),
       searchFields: [],
       filterable: {
-        companyId: "objectId", payrollFrequency: "string", isActive: "boolean", createdAt: "date",
+        companyId: "objectId", payrollFrequency: "string", isActive: "boolean", maxBenefits: "number", createdAt: "date",
       },
       stages: [
         { $lookup: { from: "companies", localField: "companyId", foreignField: "_id", as: "companyId_joined" } },
@@ -318,9 +391,21 @@ export const deleteSalaryStructure = async (req, res) => {
  * Throws an Error with a `.status` on any known validation failure so a
  * bulk caller can catch it per-employee without aborting the batch.
  */
-export const SALARYSTRUCTUREASSIGNMENT_FIELDS = ["employeeId", "salaryStructureId", "fromDate", "base", "variable", "leaveEncashmentAmountPerDay"];
+export const SALARYSTRUCTUREASSIGNMENT_FIELDS = [
+  "employeeId", "salaryStructureId", "fromDate", "base", "variable", "leaveEncashmentAmountPerDay",
+  "maxBenefits", "employeeBenefits",
+];
 
-export const createSalaryStructureAssignmentCore = async ({ employeeId, salaryStructureId, fromDate, base, variable, leaveEncashmentAmountPerDay }) => {
+export const createSalaryStructureAssignmentCore = async ({
+  employeeId,
+  salaryStructureId,
+  fromDate,
+  base,
+  variable,
+  leaveEncashmentAmountPerDay,
+  maxBenefits,
+  employeeBenefits,
+}) => {
   if (!employeeId || !salaryStructureId || !fromDate) {
     throwError(400, "Employee, Salary Structure and From Date are required");
   }
@@ -357,6 +442,18 @@ export const createSalaryStructureAssignmentCore = async ({ employeeId, salarySt
     ? leaveEncashmentAmountPerDay
     : (structure.leaveEncashmentAmountPerDay ?? null);
 
+  // fetch_from structure.maxBenefits, fetch_if_empty (Q-18):
+  const resolvedMaxBenefits = maxBenefits !== undefined && maxBenefits !== null
+    ? maxBenefits
+    : (structure.maxBenefits ?? null);
+
+  // fetch_from structure.employeeBenefits, fetch_if_empty (Q-18):
+  const resolvedEmployeeBenefits = employeeBenefits !== undefined && employeeBenefits !== null
+    ? employeeBenefits
+    : (structure.employeeBenefits ?? []);
+
+  await validateEmployeeBenefits(resolvedEmployeeBenefits, resolvedMaxBenefits, employee.companyId);
+
   const { annualGrossEarning, ctc } = computeCtcAndGross(structure, { base, variable });
 
   const doc = await SalaryStructureAssignment.create({
@@ -368,6 +465,11 @@ export const createSalaryStructureAssignmentCore = async ({ employeeId, salarySt
     variable: variable ?? null,
     currency: structure.currency,
     leaveEncashmentAmountPerDay: resolvedLeaveEncashmentAmountPerDay,
+    maxBenefits: resolvedMaxBenefits,
+    employeeBenefits: (resolvedEmployeeBenefits || []).map((r) => ({
+      salaryComponentId: r.salaryComponentId,
+      amount: Number(r.amount) || 0,
+    })),
     annualGrossEarning,
     ctc,
   });
@@ -383,6 +485,8 @@ export const createSalaryStructureAssignment = async (req, res) => {
       base: req.body.base,
       variable: req.body.variable,
       leaveEncashmentAmountPerDay: req.body.leaveEncashmentAmountPerDay,
+      maxBenefits: req.body.maxBenefits,
+      employeeBenefits: req.body.employeeBenefits,
     });
     return res.status(201).json({ isOk: true, status: 201, data: doc, message: "Salary Structure Assignment created successfully" });
   } catch (error) { return failure(res, error); }
@@ -395,6 +499,18 @@ export const updateSalaryStructureAssignment = async (req, res) => {
 
     if (req.body.base !== undefined) doc.base = req.body.base;
     if (req.body.variable !== undefined) doc.variable = req.body.variable;
+    if (req.body.leaveEncashmentAmountPerDay !== undefined) doc.leaveEncashmentAmountPerDay = req.body.leaveEncashmentAmountPerDay;
+    if (req.body.maxBenefits !== undefined) doc.maxBenefits = req.body.maxBenefits;
+
+    if (req.body.employeeBenefits !== undefined) {
+      await validateEmployeeBenefits(req.body.employeeBenefits, doc.maxBenefits, doc.companyId);
+      doc.employeeBenefits = (req.body.employeeBenefits || []).map((r) => ({
+        salaryComponentId: r.salaryComponentId,
+        amount: Number(r.amount) || 0,
+      }));
+    } else if (req.body.maxBenefits !== undefined && doc.employeeBenefits && doc.employeeBenefits.length > 0) {
+      await validateEmployeeBenefits(doc.employeeBenefits, doc.maxBenefits, doc.companyId);
+    }
 
     const structure = await SalaryStructure.findById(doc.salaryStructureId);
     if (!structure) return res.status(400).json({ isOk: false, status: 400, message: "Salary Structure not found" });
@@ -412,6 +528,7 @@ export const getSalaryStructureAssignmentById = async (req, res) => {
     const doc = await SalaryStructureAssignment.findOne({ $and: [{ _id: req.params.salaryStructureAssignmentId }, await attendanceScope(req, false)] })
       .populate("employeeId", "employeeName employeeCode")
       .populate("salaryStructureId", "payrollFrequency currency")
+      .populate("employeeBenefits.salaryComponentId", "salaryComponentName abbreviation maxBenefitAmount payoutMethod")
       .populate("companyId", "companyName");
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Salary Structure Assignment not found" });
     return res.status(200).json({ isOk: true, status: 200, data: doc });
@@ -432,7 +549,7 @@ export const searchSalaryStructureAssignments = async (req, res) => {
       searchFields: [],
       filterable: {
         employeeId: "objectId", salaryStructureId: "objectId", fromDate: "date",
-        companyId: "objectId", createdAt: "date",
+        companyId: "objectId", maxBenefits: "number", createdAt: "date",
       },
       stages: [
         { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employeeId_joined" } },

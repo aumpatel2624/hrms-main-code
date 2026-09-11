@@ -129,7 +129,7 @@ import {
     createLeavePolicy, deleteLeavePolicy, getLeavePolicyById, updateLeavePolicy, searchLeavePolicies, getAllLeavePolicies,
     createLeavePolicyAssignment, deleteLeavePolicyAssignment, getLeavePolicyAssignmentById,
     updateLeavePolicyAssignment, searchLeavePolicyAssignments, grantLeavePolicyAssignmentAllocations,
-    createLeaveAllocation, deleteLeaveAllocation, getLeaveAllocationById, updateLeaveAllocation,
+    createLeaveAllocation, deleteLeaveAllocation, getAllLeaveAllocations, getLeaveAllocationById, updateLeaveAllocation,
     searchLeaveAllocations, adjustLeaveAllocation,
     createLeaveAdjustment, getLeaveAdjustmentById, searchLeaveAdjustments,
     createCompensatoryLeaveRequest, updateCompensatoryLeaveRequest, deleteCompensatoryLeaveRequest,

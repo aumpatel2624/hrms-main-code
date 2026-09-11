@@ -42,7 +42,7 @@ import {
     createKRA, getKRAById, updateKRA, deleteKRA, searchKRAs, getAllKRAs,
     createEmployeeFeedbackCriteria, getEmployeeFeedbackCriteriaById, updateEmployeeFeedbackCriteria, deleteEmployeeFeedbackCriteria, searchEmployeeFeedbackCriteria, getAllEmployeeFeedbackCriteria,
     createAppraisalTemplate, getAppraisalTemplateById, updateAppraisalTemplate, deleteAppraisalTemplate, searchAppraisalTemplates, getAllAppraisalTemplates,
-    createAppraisalCycle, getAppraisalCycleById, updateAppraisalCycle, deleteAppraisalCycle, searchAppraisalCycles,
+    createAppraisalCycle, getAppraisalCycleById, updateAppraisalCycle, deleteAppraisalCycle, searchAppraisalCycles, getAllAppraisalCycles,
     getEligibleEmployeesForCycle, createAppraisalsForCycle, completeAppraisalCycle,
     createAppraisal, getAppraisalById, updateAppraisal, deleteAppraisal, searchAppraisals, submitAppraisal, cancelAppraisal,
 } from "../api/performance.api";

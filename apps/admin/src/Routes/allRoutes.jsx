@@ -1,7 +1,8 @@
+import PayrollEntry from "../pages/Payroll/PayrollEntry";
 import { Navigate } from "react-router-dom";
 import { crudRoutes } from "@/components/crud";
 import { UNIFORM_ENTITIES } from "@/entities";
-import { ADVANCED_ENTITIES, seoPageConfig } from "@/entities/advanced";
+import { ADVANCED_ENTITIES, seoPageConfig, payrollEntryConfig } from "@/entities/advanced";
 
 import Login from "../pages/Authentication/Login";
 import UserProfile from "../pages/Authentication/user-profile";
@@ -51,6 +52,10 @@ const authProtectedRoutes = [
     { path: "/seo-settings", component: <SeoSettings /> },
     // ADR-027 (Payroll — Run, foundation half): a true global singleton, same
     // "genuinely not CRUD" shape as SeoSettings above.
+    crudRoutes(payrollEntryConfig)[0],
+    { path: "/payroll-entry/add", component: <PayrollEntry /> },
+    { path: "/payroll-entry/:id", component: <PayrollEntry /> },
+    { path: "/payroll-entry/:id/edit", component: <PayrollEntry /> },
     { path: "/payroll-settings", component: <PayrollSettings /> },
     { path: "/seo-404", component: <SeoNotFoundLog /> },
     // ADR-024: LeaveLedgerEntry is append-only/system-written, no create/

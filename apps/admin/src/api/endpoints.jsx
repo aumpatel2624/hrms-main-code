@@ -41,6 +41,10 @@ export const ENDPOINTS = {
         ASSIGN: `${V1}/payroll/bulk-salary-structure-assignment/assign`,
     },
     // ADR-027 (Payroll — Run, foundation half).
+    PAYROLL_ENTRIES: { BASE: `${V1}/payroll-entries`, SEARCH: `${V1}/payroll-entries/search`, BY_ID: (id) => `${V1}/payroll-entries/${id}`,
+        CREATE_SLIPS: (id) => `${V1}/payroll-entries/${id}/create-slips`, SUBMIT_SLIPS: (id) => `${V1}/payroll-entries/${id}/submit-slips`, CANCEL: (id) => `${V1}/payroll-entries/${id}/cancel` },
+    SALARY_WITHHOLDINGS: { BASE: `${V1}/salary-withholdings`, SEARCH: `${V1}/salary-withholdings/search`, BY_ID: (id) => `${V1}/salary-withholdings/${id}`,
+        RELEASE_CYCLE: (id) => `${V1}/salary-withholdings/${id}/release-cycle`, RELEASE_ALL: (id) => `${V1}/salary-withholdings/${id}/release-all`, CANCEL: (id) => `${V1}/salary-withholdings/${id}/cancel` },
     PAYROLL_PERIODS: { BASE: `${V1}/payroll-periods`, SEARCH: `${V1}/payroll-periods/search`, BY_ID: (id) => `${V1}/payroll-periods/${id}` },
     PAYROLL_SETTINGS: { BASE: `${V1}/payroll-settings` },
     SALARY_SLIPS: {

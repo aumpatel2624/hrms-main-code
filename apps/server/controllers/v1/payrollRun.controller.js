@@ -1,3 +1,5 @@
+import { getReferencingCounts, formatReferenceMessage } from "../../utils/referenceHelper.js";
+import { withWithholdingDisplay } from "../../utils/payrollWithholding.js";
 /**
  * ADR-027 — Payroll (Run), foundation half. `PayrollPeriod` (company-scoped
  * date-range bookkeeping), `PayrollSettings` (global singleton, SeoSettings.js's
@@ -193,56 +195,56 @@ const buildLeaveSnapshot = async (employeeId, asOfDate) => {
   return rows;
 };
 
-export const createSalarySlip = async (req, res) => {
-  try {
-    const { employeeId, startDate, endDate } = req.body;
+export const createSalarySlipForEmployee = async ({ employeeId, startDate, endDate, salaryStructureAssignmentId }) => {
+    
     if (!employeeId || !startDate || !endDate) {
-      return res.status(400).json({ isOk: false, status: 400, message: "Employee, Start Date and End Date are required" });
+      throwError(400, "Employee, Start Date and End Date are required");
     }
     const start = new Date(startDate);
     const end = new Date(endDate);
-    if (start > end) return res.status(400).json({ isOk: false, status: 400, message: "Start Date cannot be after End Date" });
+    if (!Number.isFinite(+start) || !Number.isFinite(+end) || start > end) throwError(400, "Start Date and End Date must be valid and ordered");
 
     const employee = await Employee.findById(employeeId).lean();
-    if (!employee) return res.status(404).json({ isOk: false, status: 404, message: "Employee not found" });
+    if (!employee) throwError(404, "Employee not found");
     // Reuses this project's established active-employee guard.
     if (employee.status === "Inactive") {
-      return res.status(400).json({ isOk: false, status: 400, message: `Transactions cannot be created for an Inactive Employee ${employee.employeeName}` });
+      throwError(400, `Transactions cannot be created for an Inactive Employee ${employee.employeeName}`);
     }
     if (!employee.dateOfJoining) {
-      return res.status(400).json({ isOk: false, status: 400, message: `Please set the Date Of Joining for employee ${employee.employeeName}` });
+      throwError(400, `Please set the Date Of Joining for employee ${employee.employeeName}`);
     }
     // Source's real `validate_dates()` guards (Salary Slip.md rules 6/7).
     if (new Date(employee.dateOfJoining) > end) {
-      return res.status(400).json({ isOk: false, status: 400, message: "Cannot create Salary Slip for Employee joining after Payroll Period" });
+      throwError(400, "Cannot create Salary Slip for Employee joining after Payroll Period");
     }
     if (employee.relievingDate && new Date(employee.relievingDate) < start) {
-      return res.status(400).json({ isOk: false, status: 400, message: "Cannot create Salary Slip for Employee who has left before Payroll Period" });
+      throwError(400, "Cannot create Salary Slip for Employee who has left before Payroll Period");
     }
 
     // Exact-duplicate-(employeeId,startDate,endDate) guard — a clean message
     // ahead of the real unique index backing it (source's `check_existing()`).
     const duplicate = await SalarySlip.findOne({ employeeId, startDate: start, endDate: end });
     if (duplicate) {
-      return res.status(400).json({ isOk: false, status: 400, message: `Salary Slip of employee ${employee.employeeName} already created for this period` });
+      throwError(400, `Salary Slip of employee ${employee.employeeName} already created for this period`);
     }
 
     let assignment;
-    if (req.body.salaryStructureAssignmentId) {
-      assignment = await SalaryStructureAssignment.findById(req.body.salaryStructureAssignmentId);
-      if (!assignment) return res.status(404).json({ isOk: false, status: 404, message: "Salary Structure Assignment not found" });
+    if (salaryStructureAssignmentId) {
+      assignment = await SalaryStructureAssignment.findById(salaryStructureAssignmentId);
+      if (!assignment) throwError(404, "Salary Structure Assignment not found");
     } else {
       assignment = await getCurrentSalaryStructureAssignment(employeeId, end);
       if (!assignment) {
-        return res.status(400).json({
-          isOk: false, status: 400,
-          message: `Please assign a Salary Structure for Employee ${employee.employeeName} applicable from or before ${end.toISOString().slice(0, 10)} first`,
-        });
+        throwError(400, `Please assign a Salary Structure for Employee ${employee.employeeName} applicable from or before ${end.toISOString().slice(0, 10)} first`);
       }
     }
 
+    if (String(assignment.employeeId) !== String(employeeId) || assignment.fromDate > end) {
+      throwError(400, "Salary Structure Assignment must belong to this employee and be effective by the period end");
+    }
+
     const structure = await SalaryStructure.findById(assignment.salaryStructureId);
-    if (!structure) return res.status(400).json({ isOk: false, status: 400, message: "Salary Structure not found" });
+    if (!structure) throwError(400, "Salary Structure not found");
 
     const settings = await getPayrollSettingsDoc();
 
@@ -271,6 +273,12 @@ export const createSalarySlip = async (req, res) => {
       leaves,
       status: "draft",
     });
+    return doc;
+};
+
+export const createSalarySlip = async (req, res) => {
+  try {
+    const doc = await createSalarySlipForEmployee(req.body);
     return res.status(201).json({ isOk: true, status: 201, data: doc, message: "Salary Slip created successfully" });
   } catch (error) { return failure(res, error); }
 };
@@ -301,14 +309,14 @@ export const getSalarySlipById = async (req, res) => {
       .populate("employerContributions.salaryComponentId", "salaryComponentName abbreviation")
       .populate("leaves.leaveTypeId", "leaveTypeName");
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Salary Slip not found" });
-    return res.status(200).json({ isOk: true, status: 200, data: doc });
+    return res.status(200).json({ isOk: true, status: 200, data: await withWithholdingDisplay(doc) });
   } catch (error) { return failure(res, error); }
 };
 
 export const listSalarySlips = async (req, res) => {
   try {
     const docs = await SalarySlip.find(await attendanceScope(req, false));
-    return res.status(200).json({ isOk: true, status: 200, data: docs });
+    return res.status(200).json({ isOk: true, status: 200, data: await Promise.all(docs.map(withWithholdingDisplay)) });
   } catch (error) { return failure(res, error); }
 };
 
@@ -330,6 +338,7 @@ export const searchSalarySlips = async (req, res) => {
         { $project: { companyId_joined: 0 } },
       ],
     });
+    for (const page of data) page.data = await Promise.all(page.data.map(withWithholdingDisplay));
     return res.status(200).json({ isOk: true, status: 200, data });
   } catch (error) { return failure(res, error); }
 };
@@ -338,6 +347,8 @@ export const deleteSalarySlip = async (req, res) => {
   try {
     const doc = await SalarySlip.findOne({ $and: [{ _id: req.params.salarySlipId }, await attendanceScope(req, false)] });
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Salary Slip not found" });
+    const references = await getReferencingCounts("SalarySlip", doc._id);
+    if (references.totalReferences) return res.status(409).json({ isOk: false, status: 409, message: "Salary Slip is linked to other records", totalReferences: references.totalReferences, references: references.details, formattedMessage: formatReferenceMessage(references.details) });
     await SalarySlip.findByIdAndUpdate(doc._id, { isDeleted: true });
     return res.status(200).json({ isOk: true, status: 200, message: "Salary Slip deleted successfully" });
   } catch (error) { return failure(res, error); }
@@ -348,28 +359,37 @@ export const deleteSalarySlip = async (req, res) => {
  * be negative, only submit enforces this) and flips status. No GL, no
  * email, no linked-doctype side effects (all out of this module's scope).
  */
-export const submitSalarySlip = async (req, res) => {
-  try {
-    const doc = await SalarySlip.findOne({ $and: [{ _id: req.params.salarySlipId }, await attendanceScope(req, false)] });
-    if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Salary Slip not found" });
-    if (doc.status !== "draft") return res.status(400).json({ isOk: false, status: 400, message: "Only a draft Salary Slip can be submitted" });
-    if (doc.netPay < 0) return res.status(400).json({ isOk: false, status: 400, message: "Net Pay cannot be less than 0" });
+export const submitSalarySlipById = async (salarySlipId, scopeFilter = {}) => {
+    const doc = await SalarySlip.findOne({ $and: [{ _id: salarySlipId }, scopeFilter] });
+    if (!doc) throwError(404, "Salary Slip not found");
+    if (doc.status !== "draft") throwError(400, "Only a draft Salary Slip can be submitted");
+    if (doc.netPay < 0) throwError(400, "Net Pay cannot be less than 0");
 
     doc.status = "submitted";
     await doc.save();
-    return res.status(200).json({ isOk: true, status: 200, data: doc, message: "Salary Slip submitted successfully" });
-  } catch (error) { return failure(res, error); }
+    return doc;
 };
 
-/** Status flip only — no GL/ledger reversal (ADR-016/027's no-GL scope). */
-export const cancelSalarySlip = async (req, res) => {
+export const submitSalarySlip = async (req, res) => {
   try {
-    const doc = await SalarySlip.findOne({ $and: [{ _id: req.params.salarySlipId }, await attendanceScope(req, false)] });
-    if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Salary Slip not found" });
-    if (doc.status === "cancelled") return res.status(400).json({ isOk: false, status: 400, message: "Salary Slip is already cancelled" });
+    const doc = await submitSalarySlipById(req.params.salarySlipId, await attendanceScope(req, false));
+    return res.status(200).json({ isOk: true, status: 200, data: doc });
+  } catch (error) { return failure(res, error); }
+};
+/** Status flip only — no GL/ledger reversal (ADR-016/027's no-GL scope). */
+export const cancelSalarySlipById = async (salarySlipId, scopeFilter = {}) => {
+    const doc = await SalarySlip.findOne({ $and: [{ _id: salarySlipId }, scopeFilter] });
+    if (!doc) throwError(404, "Salary Slip not found");
+    if (doc.status === "cancelled") throwError(400, "Salary Slip is already cancelled");
 
     doc.status = "cancelled";
     await doc.save();
-    return res.status(200).json({ isOk: true, status: 200, data: doc, message: "Salary Slip cancelled successfully" });
+    return doc;
+};
+
+export const cancelSalarySlip = async (req, res) => {
+  try {
+    const doc = await cancelSalarySlipById(req.params.salarySlipId, await attendanceScope(req, false));
+    return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) { return failure(res, error); }
 };

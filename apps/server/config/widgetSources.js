@@ -1149,6 +1149,27 @@ export const WIDGET_SOURCES = Object.freeze({
     companyConfined: true,
     employeeOwned: false,
   },
+  "payroll-entries": {
+    label: "Payroll Entries", model: "PayrollEntry", menuUrl: "/payroll-entry",
+    aggregatable: {},
+    groupable: { status: { label: "Status" }, payrollFrequency: { label: "Frequency" }, companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } } },
+    dateFields: { startDate: "Start date", endDate: "End date", createdAt: "Created" },
+    filterable: { companyId: "objectId", startDate: "date", endDate: "date", payrollFrequency: "string", status: "string", createdAt: "date" },
+    scopeable: {}, companyConfined: true, employeeOwned: false,
+  },
+  "salary-withholdings": {
+    label: "Salary Withholdings", model: "SalaryWithholding", menuUrl: "/salary-withholding",
+    aggregatable: { numberOfWithholdingCycles: { label: "Cycles" } },
+    groupable: {
+      status: { label: "Status" },
+      payrollFrequency: { label: "Frequency" },
+      companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
+      employeeId: { label: "Employee", lookup: { from: "employees", labelField: "employeeName" } },
+    },
+    dateFields: { fromDate: "From date", createdAt: "Created" },
+    filterable: { employeeId: "objectId", companyId: "objectId", fromDate: "date", payrollFrequency: "string", numberOfWithholdingCycles: "number", status: "string", createdAt: "date" },
+    scopeable: {}, companyConfined: true, employeeOwned: false,
+  },
   "salary-slips": {
     label: "Salary Slip",
     model: "SalarySlip",

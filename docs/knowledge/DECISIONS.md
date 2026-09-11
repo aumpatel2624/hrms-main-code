@@ -3662,4 +3662,124 @@ in favor of clean mathematical slicing; reuse `payrollFormula.js`'s `evaluateCon
 - **Closes**: `OPEN-QUESTIONS.md` Q-19 (`SalaryStructureAssignment.incomeTaxSlabId`), Q-21
   (`SalarySlip` tax annualization), Q-23 (`EmployeeOtherIncome` gains its first real consumer).
 
+### ADR-031 — Payroll (Gratuity): payout always routes through `AdditionalSalary` (the dead
+GL-vs-salary-slip toggle is dropped entirely, not ported as a choice); cancellation cascades to the
+linked `AdditionalSalary`, fixing the source asymmetry; slab-walk tenure math reuses the LWP-day
+resolution branching already established, as a new dedicated function, not a third divergent copy;
+`Full and Final Statement` retrofit auto-suggests a Gratuity payable line at creation time
+
+- **Date**: 2026-09-11
+- **Status**: accepted
+- **Context**: `system-design` for HRMS module 15, following module 14 (Tax & Exemptions, ADR-030,
+  shipped and merged). Read a Claude fork's research pass in full covering all 4 real per-doctype/
+  child-table specs (`Gratuity`, `Gratuity Rule`, `Gratuity Rule Slab`, `Gratuity Applicable
+  Component`) under `docs/knowledge/input/hrms/HRMS-Port-Spec/01-Modules/Payroll/`, plus ADR-016 (no
+  GL), ADR-020 (Onboarding & Separation — `FullAndFinalStatement`'s six deliberately-cut
+  auto-population inputs, of which Gratuity is one), ADR-026 (`SalaryComponent`'s exact current
+  fields), ADR-028 (`AdditionalSalary` as this project's universal payout-ingestion primitive, and
+  its now-established uniform cancellation-cascade pattern), ADR-030 (`incomeTaxCalc.js`'s current
+  shape, confirmed to have no hook for a statutory-exemption lump sum today), and this project's
+  current code (`SalaryComponent.js`, `Employee.js`, `AdditionalSalary.js`,
+  `utils/payrollPaymentDays.js`'s LWP-day-resolution branching, `FullAndFinalStatement.js`'s current
+  fields).
+- **The dead `payViaSalarySlip` toggle is not ported at all.** Source's `Gratuity` has two payout
+  branches: via a real `Additional Salary` record, or via a standalone GL/Journal-Entry path
+  (`costCenter`/`modeOfPayment`/`expenseAccount`/`payableAccount`). ADR-016 already cuts the entire
+  GL branch project-wide, which leaves exactly one payout mechanism — so there is no real toggle left
+  to model. `Gratuity` always creates an `AdditionalSalary` row on submit, the same as
+  `RetentionBonus`/`EmployeeIncentive`/`EmployeeBenefitClaim` before it (ADR-028/029). `payrollDate`
+  and `salaryComponentId` (which earning component the payout posts against — required, an `Earning`-
+  type component drawn from the rule's `Gratuity Applicable Component` list or any earning component,
+  your call at implementation time to restrict or not, default to any earning component matching this
+  project's looser convention elsewhere) are the only payment-tab fields kept.
+- **Cancellation cascades to the linked `AdditionalSalary` — fixing a real source asymmetry, not
+  preserving it.** Source only reverses the GL branch on cancel; the `AdditionalSalary` branch is left
+  submitted/untouched, a genuine gap the research flagged explicitly. Since the GL branch doesn't
+  exist here at all, there is nothing to *not* fix — `Gratuity`'s cancel action cascades to cancel its
+  linked `AdditionalSalary`, the same uniform pattern already established for every other
+  `AdditionalSalary`-producing doctype on this board (ADR-028's `RetentionBonus`/`EmployeeIncentive`
+  fix, ADR-029's `EmployeeBenefitClaim`/`PayrollCorrection`). This is not a new decision so much as
+  applying an already-settled project convention to a fifth doctype.
+- **`Gratuity`, `Gratuity Rule` folds source's docstatus/naming-series/dead-"Submitted"-status/
+  `amendedFrom` chain into a plain `status: draft|submitted|cancelled` enum and an ObjectId**, the
+  standard ADR-016 shape. `Gratuity Rule` is a plain CRUD master (not submittable, matching source),
+  user-typed `name` kept as a plain string field (not a naming-series primary key — same "friendly
+  label, ObjectId is the real key" pattern as every other named master on this board).
+- **`Gratuity Rule.disable` is enforced, not ported as a dead field.** Source defines it but never
+  filters a disabled rule out of selection anywhere — a real, flagged source gap. This project already
+  respects analogous flags at selection time (`EmployeeTaxExemptionCategory.isActive` gates which
+  categories `prepareDeclarationRows` will even consider, ADR-030) — `disabled` rules are excluded
+  from whatever picks a rule for a new `Gratuity` record (list/dropdown-backing endpoint), a deliberate
+  improvement in the same spirit, not a new pattern.
+- **`Gratuity Rule Slab` gets real overlap/gap validation at save time, the same deliberate
+  improvement ADR-030 already made for `Income Tax Slab`'s brackets.** Source has zero
+  contiguity/overlap validation for these year-of-service brackets (a flagged gap, same shape as the
+  tax-slab gap ADR-030 closed) — closing it here for the same reason: a misconfigured slab table
+  silently produces wrong payouts, and this project has already established the "validate bracket
+  tables at save time" convention. Slabs are ordinary half-open-by-convention ranges (`fromYear` to
+  `toYear` inclusive, `toYear: null` meaning the final open-ended slab — same `null`-means-unbounded
+  convention as `IncomeTaxSlab.toAmount`, not source's `0`-means-unbounded overload) with the same
+  "only the last slab may be open-ended, no overlaps" validation `payrollTax.controller.js`'s
+  `validateTaxSlabs` already implements — reuse that function's *shape*, not its literal code (the
+  units differ: years vs. currency amounts).
+- **The `fraction === 0` "treated as not found, keep scanning" quirk in source's "Current Slab" mode
+  is preserved as literal fidelity, not fixed.** Unlike the tax bracket's "+1" quirk (ADR-030, which
+  affected every single calculation and was fixed), this quirk only manifests in a narrow
+  misconfiguration edge case (a deliberately-zero-fraction slab that's supposed to mean "no gratuity
+  yet" colliding with real slab data) and the research found no clear "more correct" alternative
+  behavior obviously intended instead — reproduced as-is per the general "don't silently invent
+  behavior" principle, flagged here so a future session doesn't rediscover it and wonder if it's a
+  bug in the port.
+- **Both `calculateGratuityAmountBasedOn` modes ("Current Slab" and "Sum of all previous slabs") are
+  ported faithfully — this is real, intentional business configuration, not a quirk.** The "Sum of all
+  previous slabs" mode is genuinely progressive-bracket-shaped, structurally analogous to
+  `Income Tax Slab`'s marginal brackets (ADR-030) but bracketed on **years of service**, not currency,
+  with a fraction-of-earnings multiplier instead of a tax rate. Both modes, and all three
+  `workExperienceCalculationFunction` options ("Round off Work Experience" / "Take Exact Completed
+  Years" / "Manual"), are ported as real configuration options, not simplified to one.
+- **Work-experience tenure math reuses this project's already-established LWP-day-resolution
+  branching (`settings.payrollBasedOn` → `Attendance` rows' `isLwp`-flagged status vs. submitted
+  `LeaveApplication` rows whose `LeaveType.isLwp` is true) as a new dedicated function, not a third
+  divergent implementation.** `utils/payrollPaymentDays.js`'s existing `computePaymentDays` computes a
+  *ratio within one payroll period* (payment days ÷ total working days for that cycle) — a materially
+  different question from Gratuity's *calendar span across an employee's entire tenure* (relieving
+  date minus joining date, minus LWP days counted across that whole multi-year window). Force-fitting
+  the existing function to a multi-year span would be an awkward semantic stretch, so a new function,
+  `countLwpDaysInRange` in the new `utils/gratuityCalc.js`, re-implements only the same LWP-day
+  resolution branch (same two data sources, same `isLwp` semantics) over an arbitrary date range — one
+  concept (what counts as an LWP day) with two call sites shaped for their own period lengths, not two
+  competing definitions of LWP.
+- **A new pure-calculation file, `utils/gratuityCalc.js`, houses the whole engine** — `getWorkExperience`
+  (the three rounding modes) and `getGratuityAmount` (the applicable-component sum off the employee's
+  most recent submitted `SalarySlip`, then the two-mode slab walk) — the same "small dedicated
+  calculation file per module" pattern as `arrearCalc.js`/`payrollCorrectionCalc.js`, not inlined
+  directly in the controller, since the slab-walk logic is real enough to warrant its own unit tests.
+  This is meaningfully smaller in scope than `incomeTaxCalc.js` (one calculation entry point, not a
+  full annualization pipeline) — **single-branch build** (`feat/gratuity`), matching modules 12-14.
+- **No statutory tax-exemption interaction is invented.** Source has zero reference to `Income Tax
+  Slab`/tax computation anywhere in these four doctypes — a real-world "gratuity exempt up to a
+  statutory cap" rule (relevant in India, for instance) is not in this core Payroll module's source at
+  all, and is not fabricated here. Flagged as a new open question (`OPEN-QUESTIONS.md` Q-25) pointing
+  at the Regional module (17) as the only place such a jurisdiction-specific rule could ever belong,
+  should Apidel ever ask for it.
+- **`FullAndFinalStatement` (module 4, ADR-020) gets a small, named retrofit in this same branch, not
+  a separate follow-up.** ADR-020 correctly deferred all six of source's auto-population inputs
+  because none of them existed yet; Gratuity is the last of those six that will ever be built on this
+  17-module board (per `STATE.md`), so there is no future module left to defer to. The retrofit is
+  intentionally minimal and matches the worksheet's existing manual-entry philosophy: at creation
+  time, if a `submitted` `Gratuity` record exists for the target employee, the create endpoint
+  pre-fills one `payables` row (`component: "Gratuity"`, the computed `amount`, `status: "Unsettled"`)
+  as a starting suggestion — HR can edit or remove it like any other hand-entered line, exactly as
+  every other field on this worksheet already works. No new `gratuityId` reference field, no live link
+  — a one-time denormalized suggestion, the same "fetch once at creation, not a live join" pattern
+  already used for `LeaveEncashment.perDayEncashmentAmount`'s default (ADR-026) and `SalaryStructure`
+  Assignment's fetched `currency` (ADR-026).
+- **No GL surface anywhere in this module** — confirmed by the research: the entire GL-adjacent field
+  set (`costCenter`/`modeOfPayment`/`expenseAccount`/`payableAccount`, the Advance Payment Ledger
+  Entry dependency for `paidAmount`) is confined to the now-dropped GL payout branch on `Gratuity`
+  itself; `Gratuity Rule`/`Slab`/`Applicable Component` have zero GL-adjacent fields to begin with.
+- **Nothing in these four core doctypes is Regional-only.** The research confirmed the India/UAE
+  gratuity setup specs are entirely separate files under the Regional module (17) with no fields
+  bleeding into this module's schema — a clean deferral, not a gap in this design.
+
 

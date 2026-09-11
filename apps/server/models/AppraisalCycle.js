@@ -73,7 +73,9 @@ const AppraisalCycleSchema = new mongoose.Schema(
 AppraisalCycleSchema.index({ cycleName: 1 }, { unique: true });
 AppraisalCycleSchema.index({ companyId: 1 });
 AppraisalCycleSchema.index({ status: 1 });
-AppraisalCycleSchema.index({ startDate: 1, endDate: 1 });
+AppraisalCycleSchema.index({ kraEvaluationMethod: 1 });
+AppraisalCycleSchema.index({ startDate: 1 });
+AppraisalCycleSchema.index({ endDate: 1 });
 AppraisalCycleSchema.index({ createdAt: -1 });
 
 export default mongoose.model("AppraisalCycle", AppraisalCycleSchema);

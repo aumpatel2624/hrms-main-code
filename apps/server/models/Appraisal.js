@@ -89,6 +89,8 @@ AppraisalSchema.index({ companyId: 1 });
 AppraisalSchema.index({ appraisalCycleId: 1 });
 AppraisalSchema.index({ appraisalTemplateId: 1 });
 AppraisalSchema.index({ status: 1 });
+AppraisalSchema.index({ startDate: 1 });
+AppraisalSchema.index({ endDate: 1 });
 AppraisalSchema.index({ createdAt: -1 });
 // Foundation-half duplicate guard is one employee/one cycle (ADR-032 scopes
 // down source's fuller "or overlapping date range" invariant for the bulk

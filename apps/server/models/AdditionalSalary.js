@@ -83,10 +83,10 @@ const AdditionalSalarySchema = new mongoose.Schema(
       default: "active",
       required: true,
     },
-    // Polymorphic back-reference (ADR-024 / ADR-028 pattern)
+    // Polymorphic back-reference (ADR-024 / ADR-028 / ADR-029 pattern)
     refDoctype: {
       type: String,
-      enum: ["RetentionBonus", "EmployeeIncentive", "Arrear", null],
+      enum: ["RetentionBonus", "EmployeeIncentive", "Arrear", "EmployeeBenefitClaim", "PayrollCorrection", null],
       default: null,
     },
     refDocnameId: {

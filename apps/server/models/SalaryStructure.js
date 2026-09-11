@@ -46,6 +46,16 @@ export const SalaryDetailSchema = new mongoose.Schema(
   { _id: true },
 );
 
+// ADR-029 (Payroll — Benefits). Shared "Employee Benefit Detail" row shape,
+// used by SalaryStructure, SalaryStructureAssignment, and EmployeeBenefitApplication.
+export const EmployeeBenefitDetailSchema = new mongoose.Schema(
+  {
+    salaryComponentId: { type: mongoose.Schema.Types.ObjectId, ref: "SalaryComponent", required: true },
+    amount: { type: Number, required: true, min: 0 },
+  },
+  { _id: true },
+);
+
 const SalaryStructureSchema = new mongoose.Schema(
   {
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
@@ -57,6 +67,9 @@ const SalaryStructureSchema = new mongoose.Schema(
     // carries forward onto every SalaryStructureAssignment referencing it.
     leaveEncashmentAmountPerDay: { type: Number, default: null, min: 0 },
     currency: { type: String, required: true, trim: true },
+    // Q-18 / ADR-029. Optional flexible benefit pool cap and component distributions.
+    maxBenefits: { type: Number, default: null, min: 0 },
+    employeeBenefits: { type: [EmployeeBenefitDetailSchema], default: [] },
     earnings: { type: [SalaryDetailSchema], default: [] },
     deductions: { type: [SalaryDetailSchema], default: [] },
     employerContributions: { type: [SalaryDetailSchema], default: [] },

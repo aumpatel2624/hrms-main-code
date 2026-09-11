@@ -21,6 +21,12 @@ import {
     createEmployeeIncentive, getEmployeeIncentiveById, updateEmployeeIncentive, deleteEmployeeIncentive, searchEmployeeIncentives, submitEmployeeIncentive, cancelEmployeeIncentive,
     createEmployeeOtherIncome, getEmployeeOtherIncomeById, updateEmployeeOtherIncome, deleteEmployeeOtherIncome, searchEmployeeOtherIncomes, submitEmployeeOtherIncome, cancelEmployeeOtherIncome,
 } from "../api/payrollAdjustments.api";
+import {
+    createEmployeeBenefitApplication, getEmployeeBenefitApplicationById, updateEmployeeBenefitApplication, deleteEmployeeBenefitApplication, searchEmployeeBenefitApplications, submitEmployeeBenefitApplication, cancelEmployeeBenefitApplication,
+    createEmployeeBenefitClaim, getEmployeeBenefitClaimById, updateEmployeeBenefitClaim, deleteEmployeeBenefitClaim, searchEmployeeBenefitClaims, submitEmployeeBenefitClaim, cancelEmployeeBenefitClaim,
+    getEmployeeBenefitLedgerById, searchEmployeeBenefitLedgers,
+    createPayrollCorrection, getPayrollCorrectionById, updatePayrollCorrection, deletePayrollCorrection, searchPayrollCorrections, submitPayrollCorrection, cancelPayrollCorrection,
+} from "../api/payrollBenefits.api";
 import { GenerateShiftsPanel } from "../components/hrms/generate-shifts-panel";
 import { Building07, Hash02, Link01, Mail01, MarkerPin01, Phone, Shield01, Tag01, Type01, User01 } from "@untitledui/icons";
 import { isStrongPassword, isValidEmail, PASSWORD } from "@demo-panel/shared/validation";
@@ -4110,4 +4116,309 @@ export const ADVANCED_ENTITIES = [
     payrollPeriodConfig, salarySlipConfig, salaryWithholdingConfig,
     additionalSalaryConfig, arrearConfig, retentionBonusConfig,
     employeeIncentiveConfig, employeeOtherIncomeConfig,
+    employeeBenefitApplicationConfig, employeeBenefitClaimConfig,
+    employeeBenefitLedgerConfig, payrollCorrectionConfig,
 ];
+
+const EMPLOYEE_BENEFIT_DETAIL_COLUMNS = [
+    { key: "salaryComponentId", label: "Salary Component ID", type: "text", placeholder: "Component ObjectId" },
+    { key: "amount", label: "Amount", type: "number", placeholder: "0.00" },
+];
+
+export const employeeBenefitApplicationConfig = {
+    key: "employee-benefit-application",
+    path: "/employee-benefit-application",
+    section: "Payroll",
+    singular: "Employee Benefit Application",
+    plural: "Employee Benefit Applications",
+    description: "Annual or periodic flexible benefit election by an employee allocating allowance across eligible flexible benefit components.",
+    api: {
+        search: searchEmployeeBenefitApplications,
+        getById: getEmployeeBenefitApplicationById,
+        create: createEmployeeBenefitApplication,
+        update: updateEmployeeBenefitApplication,
+        remove: deleteEmployeeBenefitApplication,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        payrollPeriodId: asOptions(getAllPayrollPeriods, "startDate"),
+    },
+    sections: [
+        { id: "details", title: "Application Details" },
+        { id: "status", title: "Status & Totals" },
+    ],
+    fields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "payrollPeriodId", label: "Payroll Period", section: "details", type: "select", optionsFrom: "payrollPeriodId", required: true, error: "Payroll Period is required" },
+        { name: "date", label: "Application Date", section: "details", type: "date" },
+        { name: "remarks", label: "Remarks", section: "details", type: "text" },
+    ],
+    viewFields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId" },
+        { name: "payrollPeriodId", label: "Payroll Period", section: "details", type: "select", optionsFrom: "payrollPeriodId" },
+        { name: "currency", label: "Currency", section: "status", type: "text" },
+        { name: "maxBenefits", label: "Max Benefits", section: "status", type: "number" },
+        { name: "totalAmount", label: "Total Amount", section: "status", type: "number" },
+        { name: "remainingBenefit", label: "Remaining Benefit", section: "status", type: "number" },
+        { name: "status", label: "Status", section: "status", type: "text" },
+        { name: "date", label: "Date", section: "details", type: "date" },
+    ],
+    renderExtra: ({ mode, id, values, setValues }) => (
+        <>
+            <SimpleArrayField
+                title="Benefit Components"
+                description="Specify salary component ID and elected amount for each flexible benefit."
+                fieldName="employeeBenefits"
+                columns={EMPLOYEE_BENEFIT_DETAIL_COLUMNS}
+                values={values}
+                setValues={setValues}
+            />
+            {mode === "edit" && id && values.status === "draft" && (
+                <SimpleActionButton
+                    label="Submit"
+                    description="Finalizes and approves this benefit election."
+                    onRun={() => submitEmployeeBenefitApplication(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+            {mode === "edit" && id && values.status === "submitted" && (
+                <SimpleActionButton
+                    label="Cancel"
+                    description="Cancels this benefit election."
+                    onRun={() => cancelEmployeeBenefitApplication(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+        </>
+    ),
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "payrollPeriodId", label: "Payroll Period", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    columns: [
+        { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Payroll Period", selector: (r) => (r.payrollPeriodId?.startDate ? String(r.payrollPeriodId.startDate).slice(0, 10) : "—") },
+        { name: "Total Amount", selector: (r) => r.totalAmount ?? "—" },
+        { name: "Remaining", selector: (r) => r.remainingBenefit ?? "—" },
+        { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" },
+        { name: "Date", selector: (r) => String(r.date ?? "").slice(0, 10), sortable: true, sortField: "date" },
+    ],
+    recordTitle: (r) => `Employee Benefit Application — ${r.totalAmount ?? ""}`,
+    toForm: (data) => ({
+        ...data,
+        employeeId: refId(data.employeeId),
+        payrollPeriodId: refId(data.payrollPeriodId),
+        date: data.date?.slice(0, 10) || "",
+        employeeBenefits: (data.employeeBenefits || []).map((row) => ({ ...row, salaryComponentId: refId(row.salaryComponentId) })),
+    }),
+    toPayload: (values, mode) => ({
+        employeeId: values.employeeId,
+        payrollPeriodId: values.payrollPeriodId,
+        date: values.date,
+        remarks: values.remarks,
+        employeeBenefits: (values.employeeBenefits || []).map((b) => ({
+            salaryComponentId: refId(b.salaryComponentId),
+            amount: Number(b.amount),
+        })),
+    }),
+};
+
+export const employeeBenefitClaimConfig = {
+    key: "employee-benefit-claim",
+    path: "/employee-benefit-claim",
+    section: "Payroll",
+    singular: "Employee Benefit Claim",
+    plural: "Employee Benefit Claims",
+    description: "Disbursement claim against an accrued or annual flexible benefit allowance.",
+    api: {
+        search: searchEmployeeBenefitClaims,
+        getById: getEmployeeBenefitClaimById,
+        create: createEmployeeBenefitClaim,
+        update: updateEmployeeBenefitClaim,
+        remove: deleteEmployeeBenefitClaim,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        salaryComponentId: asOptions(getAllSalaryComponents, "salaryComponentName"),
+    },
+    sections: [
+        { id: "details", title: "Claim Details" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "salaryComponentId", label: "Salary Component", section: "details", type: "select", optionsFrom: "salaryComponentId", required: true, error: "Salary Component is required" },
+        { name: "claimedAmount", label: "Claimed Amount", section: "details", type: "number", required: true, error: "Claimed Amount is required" },
+        { name: "claimDate", label: "Claim Date", section: "details", type: "date", required: true, error: "Claim Date is required" },
+        { name: "remarks", label: "Remarks", section: "details", type: "text" },
+    ],
+    columns: [
+        { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Component", selector: (r) => r.salaryComponentId?.salaryComponentName || r.salaryComponentIdLabel || "—" },
+        { name: "Claimed Amount", selector: (r) => r.claimedAmount ?? "—" },
+        { name: "Claim Date", selector: (r) => String(r.claimDate ?? "").slice(0, 10), sortable: true, sortField: "claimDate" },
+        { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" },
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        <>
+            {mode === "edit" && id && values.status === "draft" && (
+                <SimpleActionButton
+                    label="Submit"
+                    description="Approves claim and generates an active Additional Salary row."
+                    onRun={() => submitEmployeeBenefitClaim(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+            {mode === "edit" && id && values.status === "submitted" && (
+                <SimpleActionButton
+                    label="Cancel"
+                    description="Cancels claim and its linked Additional Salary."
+                    onRun={() => cancelEmployeeBenefitClaim(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+        </>
+    ),
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "salaryComponentId", label: "Salary Component", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "claimDate", label: "Claim date", type: "date" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => `Employee Benefit Claim — ${r.claimedAmount ?? ""}`,
+    toForm: (data) => ({
+        ...data,
+        employeeId: refId(data.employeeId),
+        salaryComponentId: refId(data.salaryComponentId),
+        claimDate: data.claimDate?.slice(0, 10) || "",
+    }),
+    toPayload: (values, mode) => (mode === "edit"
+        ? { claimedAmount: Number(values.claimedAmount), claimDate: values.claimDate, salaryComponentId: values.salaryComponentId, remarks: values.remarks }
+        : {
+            employeeId: values.employeeId,
+            salaryComponentId: values.salaryComponentId,
+            claimedAmount: Number(values.claimedAmount),
+            claimDate: values.claimDate,
+            remarks: values.remarks,
+        }),
+};
+
+export const employeeBenefitLedgerConfig = {
+    key: "employee-benefit-ledger",
+    path: "/employee-benefit-ledger",
+    section: "Payroll",
+    singular: "Employee Benefit Ledger Entry",
+    plural: "Employee Benefit Ledger",
+    description: "Append-only operational running balance of flexible benefit accruals and payouts per employee and component.",
+    api: {
+        search: searchEmployeeBenefitLedgers,
+        getById: getEmployeeBenefitLedgerById,
+    },
+    sections: [
+        { id: "details", title: "Ledger Transaction" },
+    ],
+    fields: [
+        { name: "postingDate", label: "Posting Date", section: "details", type: "date" },
+        { name: "transactionType", label: "Transaction Type", section: "details", type: "text" },
+        { name: "amount", label: "Amount", section: "details", type: "number" },
+        { name: "yearlyBenefit", label: "Yearly Benefit", section: "details", type: "number" },
+        { name: "remarks", label: "Remarks", section: "details", type: "text" },
+    ],
+    columns: [
+        { name: "Posting Date", selector: (r) => String(r.postingDate ?? "").slice(0, 10), sortable: true, sortField: "postingDate" },
+        { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Component", selector: (r) => r.salaryComponentId?.salaryComponentName || r.salaryComponentIdLabel || "—" },
+        { name: "Type", selector: (r) => r.transactionType, sortable: true, sortField: "transactionType" },
+        { name: "Amount", selector: (r) => r.amount ?? "—" },
+        { name: "Ref Doctype", selector: (r) => r.refDoctype || "—" },
+    ],
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "salaryComponentId", label: "Salary Component", type: "objectId" },
+        { name: "payrollPeriodId", label: "Payroll Period", type: "objectId" },
+        { name: "transactionType", label: "Transaction Type", type: "string" },
+        { name: "postingDate", label: "Posting Date", type: "date" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => `Benefit Ledger — ${r.transactionType}: ${r.amount}`,
+    toForm: (data) => ({
+        ...data,
+        postingDate: data.postingDate?.slice(0, 10) || "",
+    }),
+};
+
+export const payrollCorrectionConfig = {
+    key: "payroll-correction",
+    path: "/payroll-correction",
+    section: "Payroll",
+    singular: "Payroll Correction",
+    plural: "Payroll Corrections",
+    description: "Reverses mistaken LWP days on submitted Salary Slips, generating earning/deduction arrears and benefit accrual top-ups.",
+    api: {
+        search: searchPayrollCorrections,
+        getById: getPayrollCorrectionById,
+        create: createPayrollCorrection,
+        update: updatePayrollCorrection,
+        remove: deletePayrollCorrection,
+    },
+    lookups: {
+        salarySlipId: asOptions(getAllSalarySlips, "employeeId"),
+    },
+    sections: [
+        { id: "details", title: "Correction Details" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "salarySlipId", label: "Salary Slip ID", section: "details", type: "text", required: true, error: "Salary Slip ID is required", placeholder: "Paste target submitted SalarySlip ObjectId" },
+        { name: "daysToReverse", label: "Days to Reverse", section: "details", type: "number", required: true, error: "Days to reverse is required" },
+        { name: "remarks", label: "Remarks", section: "details", type: "text" },
+    ],
+    columns: [
+        { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Salary Slip", selector: (r) => (r.salarySlipId?._id ? String(r.salarySlipId._id) : String(r.salarySlipId || "—")) },
+        { name: "Days Reversed", selector: (r) => r.daysToReverse ?? "—" },
+        { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" },
+        { name: "Created", selector: (r) => String(r.createdAt ?? "").slice(0, 10), sortable: true, sortField: "createdAt" },
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        <>
+            {mode === "edit" && id && values.status === "draft" && (
+                <SimpleActionButton
+                    label="Submit"
+                    description="Generates Additional Salary arrears and Benefit Ledger accruals."
+                    onRun={() => submitPayrollCorrection(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+            {mode === "edit" && id && values.status === "submitted" && (
+                <SimpleActionButton
+                    label="Cancel"
+                    description="Cancels linked Additional Salary arrears and reverses Benefit Ledger accruals."
+                    onRun={() => cancelPayrollCorrection(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+        </>
+    ),
+    filterFields: [
+        { name: "salarySlipId", label: "Salary Slip", type: "objectId" },
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => `Payroll Correction — ${r.daysToReverse ?? ""} days`,
+    toForm: (data) => ({
+        ...data,
+        salarySlipId: refId(data.salarySlipId),
+    }),
+    toPayload: (values, mode) => (mode === "edit"
+        ? { daysToReverse: Number(values.daysToReverse), remarks: values.remarks }
+        : {
+            salarySlipId: values.salarySlipId,
+            daysToReverse: Number(values.daysToReverse),
+            remarks: values.remarks,
+        }),
+};

@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { EmployeeBenefitDetailSchema } from "./SalaryStructure.js";
 
 // ADR-026. No `toDate` field at all, deliberately — see
 // `getCurrentSalaryStructureAssignment` (utils/payrollAssignment.js) for how
@@ -18,6 +19,9 @@ const SalaryStructureAssignmentSchema = new mongoose.Schema(
     // Fetched from the referenced SalaryStructure, defaulting only when the
     // assignment's own value isn't explicitly set (fetch_if_empty, Q-14).
     leaveEncashmentAmountPerDay: { type: Number, default: null, min: 0 },
+    // Q-18 / ADR-029. Flexible benefit pool cap and employee component distributions.
+    maxBenefits: { type: Number, default: null, min: 0 },
+    employeeBenefits: { type: [EmployeeBenefitDetailSchema], default: [] },
     // Server-computed — see utils/payrollCtc.js.
     annualGrossEarning: { type: Number, default: 0 },
     ctc: { type: Number, default: 0 },

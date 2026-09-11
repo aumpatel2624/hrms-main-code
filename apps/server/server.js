@@ -263,6 +263,7 @@ import shiftAttendanceTransactionsRoutes from "./routes/v1/shiftAttendanceTransa
 import payrollRoutes from "./routes/v1/payroll.routes.js";
 import payrollRunRoutes from "./routes/v1/payrollRun.routes.js";
 import payrollAdjustmentsRoutes from "./routes/v1/payrollAdjustments.routes.js";
+import payrollBenefitsRoutes from "./routes/v1/payrollBenefits.routes.js";
 import attendanceRoutes from "./routes/v1/attendance.routes.js";
 import seoPublicRoutes from "./routes/v1/seoPublic.routes.js";
 import jobsPublicRoutes from "./routes/v1/jobsPublic.routes.js";
@@ -300,6 +301,7 @@ app.use("/api/v1", shiftAttendanceTransactionsRoutes);
 app.use("/api/v1", payrollRoutes);
 app.use("/api/v1", payrollRunRoutes);
 app.use("/api/v1", payrollAdjustmentsRoutes);
+app.use("/api/v1", payrollBenefitsRoutes);
 app.use("/api/v1/otp", otpRoutes);
 
 // Unauthenticated on purpose — the public website has no session. See

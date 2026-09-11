@@ -27,6 +27,7 @@ const PayrollSettingsSchema = new mongoose.Schema(
     dailyWagesFractionForHalfDay: { type: Number, default: 0.5, min: 0, max: 1 },
     disableRoundedTotal: { type: Boolean, default: false },
     showLeaveBalancesInSalarySlip: { type: Boolean, default: true },
+    mandatoryBenefitApplication: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

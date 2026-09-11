@@ -30,6 +30,17 @@ import dotenv from "dotenv";
 import AdminUser from "../models/AdminUser.js";
 import City from "../models/City.js";
 import Company from "../models/Company.js";
+import Employee from "../models/Employee.js";
+import Branch from "../models/Branch.js";
+import Designation from "../models/Designation.js";
+import ShiftType from "../models/ShiftType.js";
+import ShiftLocation from "../models/ShiftLocation.js";
+import ShiftAssignment from "../models/ShiftAssignment.js";
+import ShiftSchedule from "../models/ShiftSchedule.js";
+import ShiftScheduleAssignment from "../models/ShiftScheduleAssignment.js";
+import EmployeeCheckin from "../models/EmployeeCheckin.js";
+import Attendance from "../models/Attendance.js";
+
 import Country from "../models/Country.js";
 import CurrencyMaster from "../models/CurrencyMaster.js";
 import DashboardWidget from "../models/DashboardWidget.js";
@@ -130,6 +141,7 @@ const emailFor = (name) => `${name.toLowerCase().replace(/[^a-z]+/g, ".")}@examp
  */
 const wipe = async () => {
   const models = [
+    Employee, Branch, Designation, ShiftType, ShiftLocation, ShiftAssignment, ShiftSchedule, ShiftScheduleAssignment, EmployeeCheckin, Attendance,
     City, Company, Country, CurrencyMaster, DashboardWidget, Department, EmailFor,
     EmailSetup, EmailTemplate, LoginAttempt, RoleDashboard, RoleMaster,
     SeoPage, SeoRedirect, State, User,
@@ -377,6 +389,25 @@ const seedDashboard = async () => {
   console.log(`✅ Dashboard: ${widgets.length} widgets pinned to the default dashboard`);
 };
 
+
+// ADR-025: fictional records for all seven foundation screens, only in the guarded docs DB.
+const seedShiftAttendance = async () => {
+  const department = await Department.findOne({ departmentName: "Operations" });
+  const companyId = department.companyId;
+  const branch = await Branch.create({ branchName: "Central Office", companyId });
+  const designation = await Designation.create({ designationName: "Operations Specialist", companyId });
+  const employee = await Employee.create({ employeeCode: "DOC-SHIFT-001", employeeName: "Morgan Taylor", companyId,
+    departmentId: department._id, branchId: branch._id, designationId: designation._id, dateOfJoining: "2026-01-01" });
+  const shift = await ShiftType.create({ shiftTypeName: "Office Day", companyId, startTime: "09:00", endTime: "17:00" });
+  const location = await ShiftLocation.create({ locationName: "Central Office", companyId, latitude: 51.5074, longitude: -0.1278, checkinRadius: 150 });
+  const schedule = await ShiftSchedule.create({ companyId, shiftTypeId: shift._id, frequency: "every-1-week", repeatOnDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"] });
+  const recurring = await ShiftScheduleAssignment.create({ employeeId: employee._id, companyId, shiftScheduleId: schedule._id, shiftLocationId: location._id, createShiftsAfter: "2026-10-01" });
+  await ShiftAssignment.create({ employeeId: employee._id, companyId, shiftTypeId: shift._id, shiftLocationId: location._id, shiftScheduleAssignmentId: recurring._id, startDate: "2026-09-01", endDate: "2026-09-30" });
+  const attendance = await Attendance.create({ employeeId: employee._id, companyId, departmentId: department._id, shiftId: shift._id,
+    attendanceDate: "2026-09-10", status: "Present", workingHours: 8, standardWorkingHours: 8, inTime: "2026-09-10T09:00:00Z", outTime: "2026-09-10T17:00:00Z" });
+  await EmployeeCheckin.create({ employeeId: employee._id, companyId, shiftId: shift._id, attendanceId: attendance._id, time: "2026-09-10T09:00:00Z", logType: "IN", offshift: false, deviceId: "Office terminal" });
+};
+
 const run = async () => {
   const uri = process.env.DOCS_DATABASE || process.env.DATABASE;
   if (!uri) {
@@ -392,6 +423,7 @@ const run = async () => {
   await wipe();
   const place = await seedLocations();
   await seedPeople(place);
+  await seedShiftAttendance();
   await seedLoginAttempts();
   await seedEmails();
   await seedSeo();

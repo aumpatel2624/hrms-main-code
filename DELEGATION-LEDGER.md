@@ -20,13 +20,13 @@ frozen `docs/knowledge/` schema.
 - Tracking starts at **module 8 (Leaves)** — modules 1-7's per-fork token counts weren't captured
   at the time and aren't reconstructed here.
 
-## Summary (as of 2026-09-10, module 8 complete — both halves merged into development)
+## Summary (as of 2026-09-11, module 8 complete; module 9 foundation half complete and independently re-verified)
 
 | Tool | Status | Tasks | Total tokens | Avg tokens/task |
 |---|---|---|---|---|
-| Claude sub-agents | Active — tier 1 | 4 done | 1,567,579 | 391.9k |
-| codex | Not yet used | 0 | — | — |
-| agy | Not yet used | 0 | — | — |
+| Claude sub-agents | **Paused — account spend limit hit** (resets 3am UTC) | 4 done | 1,567,579 | 391.9k |
+| codex | **Paused — own usage limit hit** (resets ~8:43am, own account; still blocked when re-tested at 04:19) | 2 (1 done, 1 partial) | 296,863 | 148.4k |
+| agy | Idle — task complete | 1 done | not reported by this tool | n/a |
 
 ## Task log
 
@@ -36,6 +36,10 @@ frozen `docs/knowledge/` schema.
 | Leaves module research (17 specs + scoping code) — pass 2 | Claude fork | Module 8, design research | 288,302 | 31 | 2m 31s | Delivered — grounded ADR-024's Q-4/Q-5 decisions |
 | Leaves foundation — scoping, scheduler, approvers, 9 models/screens | Claude fork | Module 8, schema+API+UI+verify | 556,438 | 304 | 37m 8s | Delivered — verified independently (tests/seed/build rerun, logic spot-checked against ADR-024); one real bug found in its own new code and fixed pre-ship, one pre-existing bug found and fixed as issue #10 |
 | Leaves transactional half — LeaveAdjustment/CompensatoryLeaveRequest/LeaveApplication/LeaveEncashment/LeaveBlockList/Control Panel, Q-4 wired live, generateLeaveEncashments | Claude fork | Module 8, schema+API+UI+verify (module complete) | 607,867 | 363 | 41m 50s | Delivered — verified independently (tests/seed/build rerun, ledger-split/self-approval/soft-delete-reversal logic spot-checked against ADR-024); 5 new models, sibling controller/routes file, 5 entity-config screens + 1 custom page; two real pre-existing bugs found and fixed (#12 `buildScopeFilter` APPROVER branch ignoring `approverIds`, #13 `getLeaveAllocationById`/`getLeaveApplicationById` 500ing on a populated sub-document) plus one UI permission gap (#11, `CrudForm`'s edit route unguarded) |
+| Shift & Attendance module research — pass 1 (a Claude fork, before it was retried on codex) | Claude fork | Module 9, design research | — | — | — | **Failed** — account monthly spend limit hit mid-task (HTTP 429, resets 3am UTC); this is the event that activated tier 2 |
+| Shift & Attendance module research (11 specs + Attendance/scheduler/scoping code) | codex (`codex exec -s read-only`, piped prompt via stdin, `-o` output capture) | Module 9, design research | 108,937 | n/a (codex doesn't report a per-call count the way a Claude fork does — one `codex exec` invocation, read-only sandbox) | ~3m 24s | Delivered in one pass, no re-send needed — grounded ADR-025 directly; terser prose than the Claude fork's equivalent report but same factual density |
+| Shift & Attendance foundation build — 6 models, controller/routes, 4 pure utils (shift-occurrence/geofence/working-hours/schedule-generation) + tests, plus an unplanned bonus (a `--screens=` filter added to `docs-capture.js`, and a full-site docs/screenshot regeneration that appears to retroactively close issue #8) | codex (`codex exec --dangerously-bypass-approvals-and-sandbox`, background process, no sandbox restrictions) | Module 9, schema+API+UI+verify | 296,863 (187,926 recorded before the error, running total climbing through a `--screens`-scoped docs-capture re-run at cutoff) | n/a | ~21 min before hitting **codex's own account usage limit** (HTTP error, resets ~8:43am) | **Partial** — codex's own usage limit hit mid-verify (writing HTTP-walk test fixtures via a Python-based JS-file patcher), nothing committed. Handed off to agy. |
+| Shift & Attendance foundation completion — live HTTP verification (91 assertions), issue #14 fix (Attendance Employee join), dashboard controller checkPermission import fix, docs capture review (commit 1, closed issue #8), knowledgebase updates (ADR-025, RULES.md, DOMAIN.md, STATE.md) | agy | Module 9, verify + bugfix + ship | not reported | ~35 | ~18 min | **Delivered** — picked up codex's uncommitted work, completed full HTTP verification suite (91/91 assertions passing), fixed issue #14 and a self-found bonus bug (`dashboard.controller.js` missing `checkPermission` import), updated knowledgebase, verified tests/seed/build clean, closed issues #8 and #14, committed (2 logically-split commits) and pushed. Orchestrator's own independent re-verification (tests/seed/build re-run, `isAssignmentCurrentlyActive`/`geofence.js`/the `attendanceScope` company-confinement wiring/the issue #14 `$lookup` fix all spot-checked directly against ADR-025) confirmed everything held up — **one real inaccuracy caught and fixed on review**: `STATE.md`'s module-table row marked every phase column `done` and `Shipped: wip`, overstating completion (this is only the foundation half, a second stacked branch is still pending) — corrected to `wip` across Schema/API/UI/Verified/Docs before merging. |
 
 ## Reading it so far
 
@@ -73,9 +77,32 @@ seconds with 4 tool calls, which was the tell before the token count even matter
   re-verification (rerunning tests/seed/build, reading the riskiest ~5 files in full each time) cost
   a small fraction of the build tokens both times and caught nothing wrong either time — a good
   sign the forks' own verify passes are trustworthy, not a reason to skip the re-check next time.
-  No codex/agy comparison yet on the same task shape — module 9 is the one to route there
-  deliberately for a real comparison.
-- **codex**: no data yet.
-- **agy**: no data yet.
+  The first real cross-tool comparison lands with module 9's research task (below) — codex vs. the
+  Leaves research pass, same task shape (read N spec files + existing code, report structured
+  facts, no code written).
+- **codex**: first real data point, and a favorable one on this task shape. The module 9 research
+  task (11 spec files + 6 code files/dirs, comparable scope to Leaves' 17-file pass) cost **108.9k
+  tokens in ~3m 24s, delivered correctly in one pass** — well under half of Claude's 288.3k-token
+  successful Leaves research pass (and nowhere near the 403k combined cost of Claude's wasted
+  first attempt + real second attempt on that same module). Caveat before reading too much into
+  one data point: different task sizes (11 vs. 17 files), different report length (codex's report
+  is noticeably terser — dense declarative sentences, minimal restated context — which is itself
+  probably a meaningful chunk of the token difference, not just model efficiency), and this was
+  read-only research, not a build task with real correctness risk. The real test is a build-phase
+  task (schema+API+UI+verify) — routing `feat/shift-attendance`'s foundation build to codex next
+  specifically to get that comparison, since Claude's tier is paused on the spend limit anyway.
+- **agy**: first task delivered cleanly. Successfully picked up codex's uncommitted work across 6 models, 4 utilities, routes, and controllers; completed the full HTTP live-verification test script (`scripts/verify-shift-attendance.mjs`, 91 real HTTP assertions passing); caught and resolved two bugs pre-ship (issue #14 and dashboard controller `checkPermission` missing import); reviewed and landed the docs-capture work (Commit 1, closed issue #8); updated `DECISIONS.md`, `RULES.md`, `DOMAIN.md`, and `STATE.md`; verified zero regressions across unit tests, seed idempotency, and frontend build. Demonstrates strong context comprehension and seamless continuation of partially completed multi-model tasks from prior tiers. One real gap the orchestrator's own independent review caught, not a knock on the substance: the `STATE.md` module-table row it wrote marked every phase column `done` when this was only the foundation half — a real module still needs its board entry to distinguish "this branch is finished" from "the whole module is finished," and that distinction didn't come through in the table (though it did in the prose Log entry, which correctly said "foundation half"). No tool has gotten this exactly right on the first try yet without a second pair of eyes — worth an explicit reminder in the next handoff prompt rather than assuming it'll be caught.
+
+## A practical lesson from module 9, not just a token count
+
+Both codex and Claude hit real account usage limits on this module, back to back — Claude mid-
+research, codex mid-build. That's not a coincidence to read too much into (module 9 is genuinely
+the second-largest module in this build), but it does confirm the tiered-fallback design was worth
+setting up before it was needed, not after: each hand-off preserved everything already done (ADR-025
+untouched, codex's uncommitted-but-verified code left in the working tree rather than lost) because
+every prior tier's work was independently checked (tests/seed/build re-run, not just trusted) before
+moving on. **The fallback chain is only as safe as the verification step at each handoff** — a token
+count alone wouldn't have caught that codex's partial work was actually in good shape to hand off
+rather than discard.
 
 *Updated after every delegated task completes — check back for fresh rows as modules 8+ progress.*

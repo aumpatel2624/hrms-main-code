@@ -31,7 +31,7 @@ router.post("/attendances", authMiddleware(ANY_ROLE), checkPermission("/attendan
  *     responses:
  *       200: { description: List of attendance records }
  */
-router.get("/attendances", authMiddleware(ANY_ROLE), listAttendances);
+router.get("/attendances", authMiddleware(ANY_ROLE), checkPermission("/attendance", "read"), listAttendances);
 
 /**
  * @swagger

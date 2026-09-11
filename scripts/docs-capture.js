@@ -7,6 +7,7 @@
  *
  *   npm run docs              generate + capture what changed
  *   npm run docs -- --force   recapture everything
+ *   npm run docs -- --screens=shift-type,shift-location   capture selected screens only
  *   npm run docs -- --skip-capture   regenerate the markdown only
  *
  * Two rules this file exists to enforce:
@@ -25,7 +26,7 @@ import { chromium } from "playwright";
 import { FIXTURE_ADMIN, FIXTURE_DB_NAME } from "../apps/server/seed/fixtures.js";
 import { ALL_SCREENS } from "../docs-src/manifest.js";
 import { generate } from "./docs-generate.js";
-import { planCapture, shotName, shotsFor, SHOTS_DIR, THEMES, writeStored } from "./docs-fingerprint.js";
+import { planCapture, shotName, shotsFor, SHOTS_DIR, THEMES, readStored, writeStored } from "./docs-fingerprint.js";
 
 const REPO_ROOT = path.join(import.meta.dirname, "..");
 // Windows resolves the npm executable as `npm.cmd`, a batch file — spawning it
@@ -335,7 +336,11 @@ const main = async () => {
         return;
     }
 
-    const { capture: todo, reuse, fingerprints } = planCapture(REPO_ROOT, ALL_SCREENS, { force });
+    const requested = process.argv.find(arg => arg.startsWith("--screens="))?.slice(10).split(",");
+    if (requested?.some(key => !ALL_SCREENS.some(screen => screen.key === key))) throw new Error("Unknown --screens key");
+    const plan = planCapture(REPO_ROOT, ALL_SCREENS, { force });
+    const todo = requested ? plan.capture.filter(({ screen }) => requested.includes(screen.key)) : plan.capture;
+    const { reuse, fingerprints } = plan;
     console.log(`→ ${todo.length} screen(s) to capture, ${reuse.length} reused`);
     for (const { screen, reason } of todo) console.log(`   • ${screen.key} (${reason})`);
 
@@ -405,7 +410,7 @@ const main = async () => {
         await browser.close();
     }
 
-    writeStored(REPO_ROOT, fingerprints);
+    writeStored(REPO_ROOT, requested ? { ...readStored(REPO_ROOT), ...Object.fromEntries(todo.map(({ screen }) => [screen.key, fingerprints[screen.key]])) } : fingerprints);
     console.log(`✅ Captured ${shot} image(s) across ${todo.length} screen(s)`);
 };
 

@@ -20,6 +20,254 @@
  * - scopeable    ADR-002 scope dimensions, passed to buildScopeFilter at run
  */
 export const WIDGET_SOURCES = Object.freeze({
+  "shift-types": {
+  "label": "Shift Type",
+  "model": "ShiftType",
+  menuUrl: "/shift-type",
+  "aggregatable": {},
+  "groupable": {
+    "companyId": {
+      "label": "Company",
+      "lookup": {
+        "from": "companies",
+        "labelField": "companyName"
+      }
+    },
+    "isActive": {
+      "label": "Is active"
+    }
+  },
+  "dateFields": {
+    "createdAt": "createdAt"
+  },
+  "filterable": {
+    "shiftTypeName": "string",
+    "holidayListId": "objectId",
+    "enableAutoAttendance": "boolean",
+    "companyId": "objectId",
+    "isActive": "boolean",
+    "createdAt": "date"
+  },
+  "scopeable": {},
+  "companyConfined": true,
+  "employeeOwned": false
+},
+  "shift-locations": {
+  "label": "Shift Location",
+  "model": "ShiftLocation",
+  menuUrl: "/shift-location",
+  "aggregatable": {},
+  "groupable": {
+    "companyId": {
+      "label": "Company",
+      "lookup": {
+        "from": "companies",
+        "labelField": "companyName"
+      }
+    },
+    "isActive": {
+      "label": "Is active"
+    }
+  },
+  "dateFields": {
+    "createdAt": "createdAt"
+  },
+  "filterable": {
+    "locationName": "string",
+    "companyId": "objectId",
+    "isActive": "boolean",
+    "createdAt": "date"
+  },
+  "scopeable": {},
+  "companyConfined": true,
+  "employeeOwned": false
+},
+  "shift-assignments": {
+  "label": "Shift Assignment",
+  "model": "ShiftAssignment",
+  menuUrl: "/shift-assignment",
+  "aggregatable": {},
+  "groupable": {
+    "shiftTypeId": {
+      "label": "Shift type",
+      "lookup": {
+        "from": "shifttypes",
+        "labelField": "shiftTypeName"
+      }
+    },
+    "status": {
+      "label": "Status"
+    },
+    "companyId": {
+      "label": "Company",
+      "lookup": {
+        "from": "companies",
+        "labelField": "companyName"
+      }
+    },
+    "isActive": {
+      "label": "Is active"
+    }
+  },
+  "dateFields": {
+    "startDate": "startDate",
+    "endDate": "endDate",
+    "createdAt": "createdAt"
+  },
+  "filterable": {
+    "employeeId": "objectId",
+    "shiftTypeId": "objectId",
+    "shiftLocationId": "objectId",
+    "shiftScheduleAssignmentId": "objectId",
+    "startDate": "date",
+    "endDate": "date",
+    "status": "string",
+    "companyId": "objectId",
+    "isActive": "boolean",
+    "createdAt": "date"
+  },
+  "scopeable": {
+    "owner": "employeeId"
+  },
+  "companyConfined": true,
+  "employeeOwned": true
+},
+  "shift-schedules": {
+  "label": "Shift Schedule",
+  "model": "ShiftSchedule",
+  menuUrl: "/shift-schedule",
+  "aggregatable": {},
+  "groupable": {
+    "frequency": {
+      "label": "Frequency"
+    },
+    "shiftTypeId": {
+      "label": "Shift type",
+      "lookup": {
+        "from": "shifttypes",
+        "labelField": "shiftTypeName"
+      }
+    },
+    "companyId": {
+      "label": "Company",
+      "lookup": {
+        "from": "companies",
+        "labelField": "companyName"
+      }
+    },
+    "isActive": {
+      "label": "Is active"
+    }
+  },
+  "dateFields": {
+    "createdAt": "createdAt"
+  },
+  "filterable": {
+    "frequency": "string",
+    "shiftTypeId": "objectId",
+    "companyId": "objectId",
+    "isActive": "boolean",
+    "createdAt": "date"
+  },
+  "scopeable": {},
+  "companyConfined": true,
+  "employeeOwned": false
+},
+  "shift-schedule-assignments": {
+  "label": "Shift Schedule Assignment",
+  "model": "ShiftScheduleAssignment",
+  menuUrl: "/shift-schedule-assignment",
+  "aggregatable": {},
+  "groupable": {
+    "enabled": {
+      "label": "Enabled"
+    },
+    "status": {
+      "label": "Status"
+    },
+    "companyId": {
+      "label": "Company",
+      "lookup": {
+        "from": "companies",
+        "labelField": "companyName"
+      }
+    },
+    "isActive": {
+      "label": "Is active"
+    }
+  },
+  "dateFields": {
+    "createShiftsAfter": "createShiftsAfter",
+    "createdAt": "createdAt"
+  },
+  "filterable": {
+    "employeeId": "objectId",
+    "shiftScheduleId": "objectId",
+    "shiftLocationId": "objectId",
+    "enabled": "boolean",
+    "createShiftsAfter": "date",
+    "status": "string",
+    "companyId": "objectId",
+    "isActive": "boolean",
+    "createdAt": "date"
+  },
+  "scopeable": {
+    "owner": "employeeId"
+  },
+  "companyConfined": true,
+  "employeeOwned": true
+},
+  "employee-checkins": {
+  "label": "Employee Checkin",
+  "model": "EmployeeCheckin",
+  menuUrl: "/employee-checkin",
+  "aggregatable": {},
+  "groupable": {
+    "shiftId": {
+      "label": "Shift",
+      "lookup": {
+        "from": "shifttypes",
+        "labelField": "shiftTypeName"
+      }
+    },
+    "offshift": {
+      "label": "Offshift"
+    },
+    "companyId": {
+      "label": "Company",
+      "lookup": {
+        "from": "companies",
+        "labelField": "companyName"
+      }
+    },
+    "isActive": {
+      "label": "Is active"
+    }
+  },
+  "dateFields": {
+    "time": "time",
+    "createdAt": "createdAt"
+  },
+  "filterable": {
+    "employeeId": "objectId",
+    "shiftId": "objectId",
+    "attendanceId": "objectId",
+    "time": "date",
+    "logType": "string",
+    "deviceId": "objectId",
+    "skipAutoAttendance": "boolean",
+    "offshift": "boolean",
+    "companyId": "objectId",
+    "isActive": "boolean",
+    "createdAt": "date"
+  },
+  "scopeable": {
+    "owner": "employeeId"
+  },
+  "companyConfined": true,
+  "employeeOwned": true
+},
+
   users: {
     label: "Users",
     model: "User",
@@ -581,15 +829,29 @@ export const WIDGET_SOURCES = Object.freeze({
   },
 
   attendances: {
+    companyConfined: true, employeeOwned: true, menuUrl: "/attendance",
     label: "Attendance",
     model: "Attendance",
-    aggregatable: {},
+    aggregatable: { workingHours: "Working hours", standardWorkingHours: "Standard hours", actualOvertimeDuration: "Overtime hours" },
     groupable: {
+      shiftId: { label: "Shift", lookup: { from: "shifttypes", labelField: "shiftTypeName" } },
+      departmentId: { label: "Department", lookup: { from: "departments", labelField: "departmentName" } },
       status: { label: "Status" },
       companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
     },
-    dateFields: { attendanceDate: "Attendance date", createdAt: "Created" },
+    dateFields: { inTime: "In time", outTime: "Out time", attendanceDate: "Attendance date", createdAt: "Created" },
     filterable: {
+      departmentId: "objectId",
+      shiftId: "objectId",
+      workingHours: "number",
+      standardWorkingHours: "number",
+      actualOvertimeDuration: "number",
+      lateEntry: "boolean",
+      earlyExit: "boolean",
+      inTime: "date",
+      outTime: "date",
+      halfDayStatus: "string",
+
       employeeId: "objectId",
       companyId: "objectId",
       status: "string",

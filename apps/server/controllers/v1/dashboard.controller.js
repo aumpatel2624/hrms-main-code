@@ -1,3 +1,4 @@
+import { attendanceScope } from "../../utils/attendanceScope.js";
 import { ROLES } from "@demo-panel/shared/roles";
 import DashboardWidget from "../../models/DashboardWidget.js";
 import RoleDashboard from "../../models/RoleDashboard.js";
@@ -5,7 +6,7 @@ import { WIDGET_SOURCES } from "../../config/widgetSources.js";
 import { runListQuery, OPERATORS } from "../../utils/listQuery.js";
 import { buildScopeFilter } from "../../utils/scope.js";
 import { validateWidget, runWidgetQuery, runWidgetBreakdown } from "../../utils/widgetQuery.js";
-import { resolveUserScope } from "../../middlewares/checkPermission.js";
+import { resolveUserScope, checkPermission } from "../../middlewares/checkPermission.js";
 import { getReferencingCounts, formatReferenceMessage } from "../../utils/referenceHelper.js";
 
 /**
@@ -228,7 +229,13 @@ const executeWidget = async (req, res, widget) => {
   if (!(await resolveUserScope(req))) {
     return res.status(401).json({ isOk: false, status: 401, message: "Session invalid or expired" });
   }
-  const scopeFilter = buildScopeFilter(req.user, source.scopeable);
+  if (source.companyConfined) {
+    await checkPermission(source.menuUrl, "read")(req, res, () => {});
+    if (res.headersSent) return;
+  }
+  const scopeFilter = source.companyConfined
+    ? await attendanceScope(req, source.employeeOwned)
+    : buildScopeFilter(req.user, source.scopeable);
 
   const rows = await runWidgetQuery(widget, source, scopeFilter);
 

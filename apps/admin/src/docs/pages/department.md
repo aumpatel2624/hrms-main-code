@@ -1,6 +1,6 @@
 # Departments
 
-Departments are the teams people belong to — Sales, Finance, Warehouse. Every user is assigned to exactly one, and that assignment does more than label them: it decides who can see their records.
+Departments are the teams people belong to — Sales, Finance, Warehouse. Every user is assigned to exactly one, and that assignment does more than label them: it decides who can see their records. Every department now also belongs to a company — see Company below.
 
 ![Departments](../screenshots/department-light.png "light")
 
@@ -14,8 +14,10 @@ Add a department when a new team is formed. Mark one inactive when a team is wou
 
 ### Department details
 
+- **Company** *(required, chosen from a list)*
 - **Department Name** *(required)*
-- **Department Code** *(required)*
+- **Department Code**
+- **Parent Department** *(chosen from a list)* — Used to resolve a Leave/Expense/Shift Request approver when the employee's own department has none set.
 
 ### Status
 
@@ -27,6 +29,7 @@ Use the search box for a quick look-up, or open the filter panel to narrow the l
 
 - Department Name
 - Department Code
+- Company
 - Active
 - Created
 
@@ -93,7 +96,10 @@ Deleting hides the record rather than destroying it, so history and past reports
 > You cannot delete a department while users are still assigned to it. The panel will tell you how many, so move those people first.
 
 > [!WARNING] Worth knowing
-> Department codes are short labels used in reports and exports. Keep them stable — changing one changes how older reports read.
+> Department codes are optional and short — used in reports and exports where you have one. Keep them stable once set; changing one changes how older reports read.
+
+> [!WARNING] Worth knowing
+> Department names only have to be unique within the same company — two companies can each have their own "Finance" department.
 
 ## What your role controls
 

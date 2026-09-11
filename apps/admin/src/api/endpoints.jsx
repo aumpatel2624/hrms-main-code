@@ -7,6 +7,13 @@
 const V1 = "/api/v1";
 
 export const ENDPOINTS = {
+    SHIFT_TYPES: { BASE: "/shift-types", SEARCH: "/shift-types/search", BY_ID: (id) => `/shift-types/${id}` },
+    SHIFT_LOCATIONS: { BASE: "/shift-locations", SEARCH: "/shift-locations/search", BY_ID: (id) => `/shift-locations/${id}` },
+    SHIFT_ASSIGNMENTS: { BASE: "/shift-assignments", SEARCH: "/shift-assignments/search", BY_ID: (id) => `/shift-assignments/${id}` },
+    SHIFT_SCHEDULES: { BASE: "/shift-schedules", SEARCH: "/shift-schedules/search", BY_ID: (id) => `/shift-schedules/${id}` },
+    SHIFT_SCHEDULE_ASSIGNMENTS: { BASE: "/shift-schedule-assignments", SEARCH: "/shift-schedule-assignments/search", BY_ID: (id) => `/shift-schedule-assignments/${id}` },
+    EMPLOYEE_CHECKINS: { BASE: "/employee-checkins", SEARCH: "/employee-checkins/search", BY_ID: (id) => `/employee-checkins/${id}` },
+
     // Auth endpoints
     AUTH: {
         LOGIN: `${V1}/auth/login`,

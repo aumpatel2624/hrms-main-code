@@ -79,6 +79,79 @@ export const FIXTURE_SOURCES = ["apps/server/seed/fixtures.js"];
  */
 export const CONFIG_SCREENS = [
     {
+    "key": "shift-type",
+    "config": "shiftTypeConfig",
+    "source": "apps/admin/src/entities/advanced.jsx",
+    "path": "/shift-type",
+    "intro": "Define shift hours and how punches become worked hours.",
+    "when": "Use this screen when setting up shifts or recording attendance.",
+    "gotchas": [
+        "Records referenced elsewhere cannot be deleted."
+    ],
+    "roles": "HR User and HR Manager manage records within their company. Employees can read shift types and their own assignments, and create/read their own checkins."
+},
+    {
+    "key": "shift-location",
+    "config": "shiftLocationConfig",
+    "source": "apps/admin/src/entities/advanced.jsx",
+    "path": "/shift-location",
+    "intro": "Set where employees may check in when they supply their location.",
+    "when": "Use this screen when setting up shifts or recording attendance.",
+    "gotchas": [
+        "Records referenced elsewhere cannot be deleted."
+    ],
+    "roles": "HR User and HR Manager manage records within their company. Employees can read shift types and their own assignments, and create/read their own checkins."
+},
+    {
+    "key": "shift-assignment",
+    "config": "shiftAssignmentConfig",
+    "source": "apps/admin/src/entities/advanced.jsx",
+    "path": "/shift-assignment",
+    "intro": "Give an employee one shift for a date range.",
+    "when": "Use this screen when setting up shifts or recording attendance.",
+    "gotchas": [
+        "Dates and times use UTC.",
+        "Active assignments cannot overlap. A location radius of zero disables location enforcement."
+    ],
+    "roles": "HR User and HR Manager manage records within their company. Employees can read shift types and their own assignments, and create/read their own checkins."
+},
+    {
+    "key": "shift-schedule",
+    "config": "shiftScheduleConfig",
+    "source": "apps/admin/src/entities/advanced.jsx",
+    "path": "/shift-schedule",
+    "intro": "Define the weekdays in a repeating shift pattern.",
+    "when": "Use this screen when setting up shifts or recording attendance.",
+    "gotchas": [
+        "Records referenced elsewhere cannot be deleted."
+    ],
+    "roles": "HR User and HR Manager manage records within their company. Employees can read shift types and their own assignments, and create/read their own checkins."
+},
+    {
+    "key": "shift-schedule-assignment",
+    "config": "shiftScheduleAssignmentConfig",
+    "source": "apps/admin/src/entities/advanced.jsx",
+    "path": "/shift-schedule-assignment",
+    "intro": "Generate dated assignments from a repeating schedule.",
+    "when": "Use this screen when setting up shifts or recording attendance.",
+    "gotchas": [
+        "Records referenced elsewhere cannot be deleted."
+    ],
+    "roles": "HR User and HR Manager manage records within their company. Employees can read shift types and their own assignments, and create/read their own checkins."
+},
+    {
+    "key": "employee-checkin",
+    "config": "employeeCheckinConfig",
+    "source": "apps/admin/src/entities/advanced.jsx",
+    "path": "/employee-checkin",
+    "intro": "Record check-in and check-out times for your assigned shift.",
+    "when": "Use this screen when setting up shifts or recording attendance.",
+    "gotchas": [
+        "Records referenced elsewhere cannot be deleted."
+    ],
+    "roles": "HR User and HR Manager manage records within their company. Employees can read shift types and their own assignments, and create/read their own checkins."
+},
+    {
         key: "department",
         config: "departmentConfig",
         source: "apps/admin/src/entities/advanced.jsx",

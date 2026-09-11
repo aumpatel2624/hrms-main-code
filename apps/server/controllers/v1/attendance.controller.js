@@ -5,6 +5,9 @@
  * Application/Compensatory Leave Request have something to reference.
  */
 import { runListQuery } from "../../utils/listQuery.js";
+import { dayStart } from "../../utils/shiftOccurrence.js";
+import ShiftType from "../../models/ShiftType.js";
+import { attendanceScope } from "../../utils/attendanceScope.js";
 import Attendance from "../../models/Attendance.js";
 import Employee from "../../models/Employee.js";
 import {
@@ -12,7 +15,7 @@ import {
   formatReferenceMessage,
 } from "../../utils/referenceHelper.js";
 
-const ATTENDANCE_FIELDS = ["employeeId", "companyId", "attendanceDate", "status", "leaveApplicationId", "leaveTypeId", "isActive"];
+const ATTENDANCE_FIELDS = ["departmentId", "shiftId", "workingHours", "standardWorkingHours", "actualOvertimeDuration", "lateEntry", "earlyExit", "inTime", "outTime", "halfDayStatus", "employeeId", "companyId", "attendanceDate", "status", "leaveApplicationId", "leaveTypeId", "isActive"];
 
 export const createAttendance = async (req, res) => {
   try {
@@ -20,7 +23,7 @@ export const createAttendance = async (req, res) => {
     if (!employeeId || !attendanceDate || !status) {
       return res.status(400).json({ isOk: false, status: 400, message: "Employee, Attendance Date and Status are required" });
     }
-    const employee = await Employee.findById(employeeId).lean();
+    const employee = await Employee.findOne({ $and: [{ _id: employeeId }, await attendanceScope(req, false)] }).lean();
     if (!employee) return res.status(404).json({ isOk: false, status: 404, message: "Employee not found" });
 
     const existing = await Attendance.findOne({ employeeId, attendanceDate });
@@ -30,11 +33,15 @@ export const createAttendance = async (req, res) => {
 
     const payload = {};
     for (const field of ATTENDANCE_FIELDS) if (req.body[field] !== undefined) payload[field] = req.body[field];
-    if (!payload.companyId) payload.companyId = employee.companyId;
+    payload.companyId = employee.companyId;
+    payload.departmentId = employee.departmentId;
 
+    payload.attendanceDate = dayStart(payload.attendanceDate);
+    if (payload.shiftId && !await ShiftType.exists({ _id: payload.shiftId, companyId: employee.companyId })) return res.status(400).json({ isOk: false, status: 400, message: "Shift must belong to the employee company" });
     await Attendance.create(payload);
     return res.status(201).json({ isOk: true, status: 201, message: "Attendance created successfully" });
   } catch (error) {
+    if (error.name === "ValidationError" || error.name === "CastError" || error.name === "RangeError" || error.code === 11000) return res.status(400).json({ isOk: false, status: 400, message: error.code === 11000 ? "Attendance already recorded for this employee on this date" : "Invalid attendance data" });
     console.log("Error in createAttendance", error);
     return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
   }
@@ -43,12 +50,19 @@ export const createAttendance = async (req, res) => {
 export const updateAttendance = async (req, res) => {
   try {
     const { attendanceId } = req.params;
-    const doc = await Attendance.findById(attendanceId);
+    const doc = await Attendance.findOne({ $and: [{ _id: attendanceId }, await attendanceScope(req)] });
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Attendance not found" });
     for (const field of ATTENDANCE_FIELDS) if (req.body[field] !== undefined) doc[field] = req.body[field];
+    const employee = await Employee.findOne({ $and: [{ _id: doc.employeeId }, await attendanceScope(req, false)] }).lean();
+    if (!employee) return res.status(400).json({ isOk: false, status: 400, message: "Employee not available in your company" });
+    doc.companyId = employee.companyId;
+    doc.departmentId = employee.departmentId;
+    doc.attendanceDate = dayStart(doc.attendanceDate);
+    if (doc.shiftId && !await ShiftType.exists({ _id: doc.shiftId, companyId: employee.companyId })) return res.status(400).json({ isOk: false, status: 400, message: "Shift must belong to the employee company" });
     await doc.save();
     return res.status(200).json({ isOk: true, status: 200, message: "Attendance updated successfully" });
   } catch (error) {
+    if (error.name === "ValidationError" || error.name === "CastError" || error.name === "RangeError" || error.code === 11000) return res.status(400).json({ isOk: false, status: 400, message: error.code === 11000 ? "Attendance already recorded for this employee on this date" : "Invalid attendance data" });
     console.log("Error in updateAttendance", error);
     return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
   }
@@ -57,7 +71,7 @@ export const updateAttendance = async (req, res) => {
 export const deleteAttendance = async (req, res) => {
   try {
     const { attendanceId } = req.params;
-    const doc = await Attendance.findById(attendanceId);
+    const doc = await Attendance.findOne({ $and: [{ _id: attendanceId }, await attendanceScope(req)] });
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Attendance not found" });
     const referenceInfo = await getReferencingCounts("Attendance", attendanceId);
     if (referenceInfo.totalReferences > 0) {
@@ -73,6 +87,7 @@ export const deleteAttendance = async (req, res) => {
     await Attendance.findByIdAndUpdate(attendanceId, { isDeleted: true });
     return res.status(200).json({ isOk: true, status: 200, message: "Attendance deleted successfully" });
   } catch (error) {
+    if (error.name === "ValidationError" || error.name === "CastError" || error.name === "RangeError" || error.code === 11000) return res.status(400).json({ isOk: false, status: 400, message: error.code === 11000 ? "Attendance already recorded for this employee on this date" : "Invalid attendance data" });
     console.log("Error in deleteAttendance", error);
     return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
   }
@@ -80,13 +95,16 @@ export const deleteAttendance = async (req, res) => {
 
 export const getAttendanceById = async (req, res) => {
   try {
-    const doc = await Attendance.findById(req.params.attendanceId)
+    const doc = await Attendance.findOne({ $and: [{ _id: req.params.attendanceId }, await attendanceScope(req)] })
       .populate("employeeId", "employeeName employeeCode")
       .populate("companyId", "companyName")
-      .populate("leaveTypeId", "leaveTypeName");
+      .populate("leaveTypeId", "leaveTypeName")
+      .populate("shiftId", "shiftTypeName")
+      .populate("departmentId", "departmentName");
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Attendance not found" });
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
+    if (error.name === "ValidationError" || error.name === "CastError" || error.name === "RangeError" || error.code === 11000) return res.status(400).json({ isOk: false, status: 400, message: error.code === 11000 ? "Attendance already recorded for this employee on this date" : "Invalid attendance data" });
     console.log("Error in getAttendanceById", error);
     return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
   }
@@ -94,11 +112,12 @@ export const getAttendanceById = async (req, res) => {
 
 export const listAttendances = async (req, res) => {
   try {
-    const filter = { isActive: true };
+    const filter = { $and: [{ isActive: true }, await attendanceScope(req)] };
     if (req.query.employeeId) filter.employeeId = req.query.employeeId;
     const docs = await Attendance.find(filter).select("employeeId attendanceDate status");
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
+    if (error.name === "ValidationError" || error.name === "CastError" || error.name === "RangeError" || error.code === 11000) return res.status(400).json({ isOk: false, status: 400, message: error.code === 11000 ? "Attendance already recorded for this employee on this date" : "Invalid attendance data" });
     console.log("Error in listAttendances", error);
     return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
   }
@@ -107,8 +126,30 @@ export const listAttendances = async (req, res) => {
 export const listAttendanceByParams = async (req, res) => {
   try {
     const list = await runListQuery(Attendance, req.body, {
-      searchFields: [],
+      scopeFilter: await attendanceScope(req),
+      stages: [
+        { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employee" } },
+        {
+          $addFields: {
+            employeeName: { $arrayElemAt: ["$employee.employeeName", 0] },
+            employeeIdLabel: { $arrayElemAt: ["$employee.employeeName", 0] },
+          },
+        },
+        { $project: { employee: 0 } },
+      ],
+      searchFields: ["employeeName", "status"],
       filterable: {
+        departmentId: "objectId",
+        shiftId: "objectId",
+        workingHours: "number",
+        standardWorkingHours: "number",
+        actualOvertimeDuration: "number",
+        lateEntry: "boolean",
+        earlyExit: "boolean",
+        inTime: "date",
+        outTime: "date",
+        halfDayStatus: "string",
+
         employeeId: "objectId",
         companyId: "objectId",
         status: "string",
@@ -119,6 +160,7 @@ export const listAttendanceByParams = async (req, res) => {
     });
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
+    if (error.name === "ValidationError" || error.name === "CastError" || error.name === "RangeError" || error.code === 11000) return res.status(400).json({ isOk: false, status: 400, message: error.code === 11000 ? "Attendance already recorded for this employee on this date" : "Invalid attendance data" });
     console.log("Error in listAttendanceByParams", error);
     return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
   }

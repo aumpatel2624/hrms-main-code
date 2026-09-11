@@ -11,7 +11,7 @@ import {
 } from "../api/payroll.api";
 import {
     createPayrollPeriod, getPayrollPeriodById, updatePayrollPeriod, deletePayrollPeriod, searchPayrollPeriods, getAllPayrollPeriods,
-    createSalarySlip, getSalarySlipById, updateSalarySlip, deleteSalarySlip, searchSalarySlips,
+    createSalarySlip, getAllSalarySlips, getSalarySlipById, updateSalarySlip, deleteSalarySlip, searchSalarySlips,
     submitSalarySlip, cancelSalarySlip,
 } from "../api/payrollRun.api";
 import {
@@ -129,7 +129,7 @@ import {
     createLeavePolicy, deleteLeavePolicy, getLeavePolicyById, updateLeavePolicy, searchLeavePolicies, getAllLeavePolicies,
     createLeavePolicyAssignment, deleteLeavePolicyAssignment, getLeavePolicyAssignmentById,
     updateLeavePolicyAssignment, searchLeavePolicyAssignments, grantLeavePolicyAssignmentAllocations,
-    createLeaveAllocation, deleteLeaveAllocation, getLeaveAllocationById, updateLeaveAllocation,
+    createLeaveAllocation, deleteLeaveAllocation, getAllLeaveAllocations, getLeaveAllocationById, updateLeaveAllocation,
     searchLeaveAllocations, adjustLeaveAllocation,
     createLeaveAdjustment, getLeaveAdjustmentById, searchLeaveAdjustments,
     createCompensatoryLeaveRequest, updateCompensatoryLeaveRequest, deleteCompensatoryLeaveRequest,
@@ -4107,37 +4107,6 @@ export const employeeOtherIncomeConfig = {
         }),
 };
 
-export const ADVANCED_ENTITIES = [
-    shiftTypeConfig, shiftLocationConfig, shiftAssignmentConfig, shiftScheduleConfig, shiftScheduleAssignmentConfig, employeeCheckinConfig,
-    shiftRequestConfig, attendanceRequestConfig,
-    adminUserConfig, userConfig, menuMasterConfig, emailTemplateConfig,
-    departmentConfig, branchConfig, designationConfig, employeeConfig,
-    jobApplicantSourceConfig, interviewTypeConfig, jobOfferTermTemplateConfig,
-    jobRequisitionConfig, jobOpeningConfig, jobApplicantConfig,
-    interviewConfig, interviewFeedbackConfig, jobOfferConfig,
-    employeeOnboardingTemplateConfig, employeeOnboardingConfig,
-    employeeSeparationTemplateConfig, employeeSeparationConfig,
-    exitInterviewConfig, fullAndFinalStatementConfig,
-    grievanceTypeConfig, employeeGrievanceConfig, employeeTransferConfig,
-    employeePromotionConfig, employeeReferralConfig, staffingPlanConfig,
-    trainingProgramConfig, trainingEventConfig, trainingFeedbackConfig,
-    skillConfig, employeeSkillMapConfig,
-    purposeOfTravelConfig, identificationDocumentTypeConfig, travelRequestConfig,
-    leaveTypeConfig, leavePeriodConfig, holidayListConfig, holidayListAssignmentConfig,
-    leavePolicyConfig, leavePolicyAssignmentConfig, leaveAllocationConfig, attendanceConfig,
-    leaveAdjustmentConfig, compensatoryLeaveRequestConfig, leaveApplicationConfig,
-    leaveEncashmentConfig, leaveBlockListConfig,
-    salaryComponentConfig, salaryStructureConfig, salaryStructureAssignmentConfig,
-    payrollPeriodConfig, salarySlipConfig, salaryWithholdingConfig,
-    additionalSalaryConfig, arrearConfig, retentionBonusConfig,
-    employeeIncentiveConfig, employeeOtherIncomeConfig,
-    employeeBenefitApplicationConfig, employeeBenefitClaimConfig,
-    employeeBenefitLedgerConfig, payrollCorrectionConfig,
-    incomeTaxSlabConfig, employeeTaxExemptionCategoryConfig,
-    employeeTaxExemptionSubCategoryConfig, employeeTaxExemptionDeclarationConfig,
-    employeeTaxExemptionProofSubmissionConfig,
-];
-
 const EMPLOYEE_BENEFIT_DETAIL_COLUMNS = [
     { key: "salaryComponentId", label: "Salary Component ID", type: "text", placeholder: "Component ObjectId" },
     { key: "amount", label: "Amount", type: "number", placeholder: "0.00" },
@@ -4790,3 +4759,34 @@ export const employeeTaxExemptionProofSubmissionConfig = {
         submissionDate: data.submissionDate?.slice(0, 10) || "",
     }),
 };
+
+export const ADVANCED_ENTITIES = [
+    shiftTypeConfig, shiftLocationConfig, shiftAssignmentConfig, shiftScheduleConfig, shiftScheduleAssignmentConfig, employeeCheckinConfig,
+    shiftRequestConfig, attendanceRequestConfig,
+    adminUserConfig, userConfig, menuMasterConfig, emailTemplateConfig,
+    departmentConfig, branchConfig, designationConfig, employeeConfig,
+    jobApplicantSourceConfig, interviewTypeConfig, jobOfferTermTemplateConfig,
+    jobRequisitionConfig, jobOpeningConfig, jobApplicantConfig,
+    interviewConfig, interviewFeedbackConfig, jobOfferConfig,
+    employeeOnboardingTemplateConfig, employeeOnboardingConfig,
+    employeeSeparationTemplateConfig, employeeSeparationConfig,
+    exitInterviewConfig, fullAndFinalStatementConfig,
+    grievanceTypeConfig, employeeGrievanceConfig, employeeTransferConfig,
+    employeePromotionConfig, employeeReferralConfig, staffingPlanConfig,
+    trainingProgramConfig, trainingEventConfig, trainingFeedbackConfig,
+    skillConfig, employeeSkillMapConfig,
+    purposeOfTravelConfig, identificationDocumentTypeConfig, travelRequestConfig,
+    leaveTypeConfig, leavePeriodConfig, holidayListConfig, holidayListAssignmentConfig,
+    leavePolicyConfig, leavePolicyAssignmentConfig, leaveAllocationConfig, attendanceConfig,
+    leaveAdjustmentConfig, compensatoryLeaveRequestConfig, leaveApplicationConfig,
+    leaveEncashmentConfig, leaveBlockListConfig,
+    salaryComponentConfig, salaryStructureConfig, salaryStructureAssignmentConfig,
+    payrollPeriodConfig, salarySlipConfig, salaryWithholdingConfig,
+    additionalSalaryConfig, arrearConfig, retentionBonusConfig,
+    employeeIncentiveConfig, employeeOtherIncomeConfig,
+    employeeBenefitApplicationConfig, employeeBenefitClaimConfig,
+    employeeBenefitLedgerConfig, payrollCorrectionConfig,
+    incomeTaxSlabConfig, employeeTaxExemptionCategoryConfig,
+    employeeTaxExemptionSubCategoryConfig, employeeTaxExemptionDeclarationConfig,
+    employeeTaxExemptionProofSubmissionConfig,
+];

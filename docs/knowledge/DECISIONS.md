@@ -2902,4 +2902,85 @@ Copy this block. Number sequentially.
   hours, shift occurrence — computed a fixed, known formula; this one *interprets user-authored
   formula text*). Not a deviation from any existing decision, just named here as a first, since the
   next agent touching it should know it's parsing untrusted-ish text and must stay off `eval`.
+- **As built**: everything above shipped on `feat/payroll-structure`, built directly against this
+  design — no re-litigation of any decision above. `SalaryComponent` (abbreviation auto-derived +
+  deduped, mutual-exclusion and accrual-only-on-Earning guards, no GL/Benefits fields), the formula
+  evaluator (`utils/payrollFormula.js` — recursive-descent tokenizer/parser, `evaluateFormula`/
+  `evaluateCondition`, no `eval`), `SalaryStructure` (embedded `SalaryDetail` rows, server-computed
+  `totalEarning`/`totalDeduction`/`netPay` via a new shared `utils/payrollCtc.js`),
+  `SalaryStructureAssignment` (server-computed `annualGrossEarning`/`ctc`, same `payrollCtc.js`
+  machinery with real `base`/`variable`), `getCurrentSalaryStructureAssignment`
+  (`utils/payrollAssignment.js`), and the Bulk Salary Structure Assignment tool (`eligible-employees`
+  + `assign`, both reusing one `createSalaryStructureAssignmentCore` function). Q-14 closed: `Leave
+  Encashment`'s `perDayEncashmentAmount` is now optional, resolving from
+  `getCurrentSalaryStructureAssignment` when omitted.
+  - **Judgment calls this design left open**:
+    - **Abbreviation dedup scope is `companyId`, not global.** Source has no `company` field on
+      Salary Component at all (single-tenant); this project is multi-company, and an abbreviation
+      only has to be unique within the company whose formulas actually reference it via
+      `evaluateComponentTable`'s injected context. A cross-company name collision (two different
+      companies both naming a component "Basic Salary") is legal and expected — each gets its own
+      "BS", independently.
+    - **A condition-gated row that evaluates false gets NO entry in the formula context at all** —
+      not even a `0`. This matches source's `_evaluate_component_table` exactly: the `continue`
+      happens *before* the `data[row.abbr] = ...` injection line, so a later row referencing that
+      abbreviation by name gets `evaluateFormula`'s real "undefined variable" error, not a silent 0.
+      Confirmed with a dedicated `payrollCtc.test.js` case (a skipped row's abbreviation is absent
+      from `context` via `hasOwnProperty`, not merely falsy) and reproduced live in
+      `scripts/verify-payroll-structure.mjs`.
+    - **`totalEarning` excludes `statisticalComponent`/`doNotIncludeInTotal` rows (matches source's
+      real `gross_pay` computation); `totalDeduction` does not exclude anything.** The real spec
+      (`Salary Structure Assignment.md`'s `_evaluate_all_components`) only ever filters the earnings
+      side when building `gross_pay`/CTC — nothing in source filters a deduction row out of any
+      total anywhere. Read literally rather than assumed-symmetric: inventing a deduction-side
+      exclusion nobody asked for would be scope creep in the wrong direction.
+    - **One-time denormalization is enforced by matching a `SalaryDetail` row's Mongoose subdocument
+      `_id` across an update**, not by position in the array. A row whose `_id` matches an existing
+      subdocument keeps its already-copied flags untouched (only `amount`/`formula`/`condition`/
+      `amountBasedOnFormula` are taken from the incoming payload); a row with no matching `_id` is
+      treated as brand-new and gets a fresh flag snapshot copied from its `SalaryComponent` right
+      then. The admin UI's `SimpleArrayField` round-trips `_id` as an ordinary (if UI-invisible) key
+      on each row object precisely so this works without a dedicated array-diffing UI.
+    - **The admin Salary Structure screen does not expose the copied flags (`statisticalComponent`,
+      `isTaxApplicable`, etc.) as editable checkboxes**, only `salaryComponentId`/`amount`/`formula`/
+      `condition`/`amountBasedOnFormula`. `SimpleArrayField` defaults every checkbox column to
+      `false` on a brand-new row — exposing e.g. `statisticalComponent` there would silently override
+      a component whose real default is `true` unless a user remembered to tick it by hand. The
+      fields themselves are still ordinary, independently-editable schema fields any direct API
+      caller can set — this is a UI-screen scope limit, not a backend one.
+    - **Company confinement reuses `attendanceScope(req, false)`** (ADR-025) across all three
+      collections rather than inventing a second company-scoping helper — the function is generic
+      enough (it degrades to a plain `{ companyId }` filter when `employeeOwned` is false) despite
+      its shift-and-attendance-flavored name. Same choice made for the three `widgetSources.js`
+      entries (`companyConfined: true, employeeOwned: false`).
+  - **Bug found and fixed — GitHub issue #16, closed same session**: `updateEmployeeGrade`
+    (`organizationSetup.controller.js`) unconditionally overwrote `gradeName`/`isActive` from the
+    request body with no `!== undefined` guard — the identical bug class already found and fixed in
+    `updateDesignation` before module 6. Surfaced because this module was the first to add a second
+    field (`defaultSalaryStructureId`/`defaultBasePay`) to that handler since it was written; without
+    the fix, any partial update omitting either original field would have silently dropped it.
+  - **Phase 7.5 (client-docs prose + screenshots) was deliberately skipped**, named rather than
+    silently dropped — the task scoping this module named phases 2-8 explicitly, and asked only for
+    `docs-src/manifest.js` registration (done, all 4 screens/pages), not the generated end-user pages
+    or the screenshot capture pass. `npm run docs` has not been re-run for this module.
+  - **Verified live**: `npm test` green (21 suites — `payrollFormula.test.js`, `payrollCtc.test.js`,
+    `payrollAbbreviation.test.js` all new and passing, arithmetic/comparison/boolean/functions/
+    variables/errors all covered plus a combined case), `npm run seed` run twice (idempotent — 8 new
+    Payroll menu grants first run, 0 second run, 195 employees both times), `npm run build` clean.
+    Full HTTP walk via `scripts/verify-payroll-structure.mjs` (29 real assertions): `SalaryComponent`
+    CRUD, abbreviation auto-derivation ("Basic Salary" -> "BS") and company-scoped dedup ("Bright
+    Star" -> "BS_1") confirmed, both guards (mutual-exclusion, accrual-only-on-Earning) confirmed as
+    400s; `SalaryStructure` create with flat + formula-based rows hand-checked (totalEarning=42000
+    excluding a statistical row, totalDeduction=1800, netPay=40200), a row's formula referencing an
+    earlier row's abbreviation confirmed (HRA = BS*0.4 = 12000), a condition-gated row confirmed
+    skipped when false; `SalaryStructureAssignment` create hand-checked against a genuinely
+    base-dependent structure (base=50000 -> annualGrossEarning=840000, ctc=912000), exact-duplicate-
+    fromDate 400 confirmed, a second later-fromDate assignment confirmed to succeed (not an overlap),
+    `getCurrentSalaryStructureAssignment` confirmed to resolve the earlier one before the later
+    `fromDate` and the later one after it; bulk assignment confirmed with a mixed batch (2 succeed,
+    then a deliberate duplicate-fromDate re-run fails in isolation) plus the eligible-employees
+    dedupe confirmed both directions (eligible before assigning, excluded after); Q-14 confirmed live
+    three ways (defaults from the current assignment, an explicit override still works, 400 when
+    neither resolves). All throwaway fixtures cleaned up; employee count and all three new
+    collections' counts back to baseline/0.
 

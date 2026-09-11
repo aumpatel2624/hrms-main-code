@@ -992,7 +992,7 @@ export const CONFIG_SCREENS = [
         when: "Use this to pay an employee for leave they won't use, instead of letting it expire or carry forward.",
         gotchas: [
             "Create is the action — saving computes the eligible days and debits the Leave Ledger immediately.",
-            "Per Day Encashment Amount is entered by hand — this project has no Payroll module yet to look it up from.",
+            "Per Day Encashment Amount is optional (ADR-026): leave it blank to use the employee's current Salary Structure Assignment rate, or type one in to override it.",
             "Mark as Paid records the payment manually (amount, date, reference) — there is no GL posting or Payment Entry.",
         ],
         roles: "HR User and HR Manager only — no Employee access.",
@@ -1008,6 +1008,48 @@ export const CONFIG_SCREENS = [
             "At least one Block Date row is required.",
         ],
         roles: "HR User and HR Manager only — no Employee access.",
+    },
+    // ADR-026 (Payroll — Structure & Assignment). HR-configuration screens
+    // only — no self-service, unlike Leaves/Shift & Attendance.
+    {
+        key: "salary-component",
+        config: "salaryComponentConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A reusable pay line item — Basic Salary, HRA, PF, TDS — addable to any Salary Structure.",
+        when: "Set these up before building a Salary Structure; every earning, deduction and employer contribution row references one of these.",
+        gotchas: [
+            "Leave Abbreviation blank to auto-derive it from the name's initials; it's de-duplicated within the company if it collides.",
+            "Arrear Component and Variable Based On Taxable Salary cannot both be set. Accrual Component only applies when Type is Earning.",
+            "Records referenced elsewhere cannot be deleted.",
+        ],
+        roles: "HR User and HR Manager manage records within their company.",
+    },
+    {
+        key: "salary-structure",
+        config: "salaryStructureConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A pay template — earnings, deductions and employer contributions — assignable to employees.",
+        when: "Use this to define what a payroll frequency's pay actually consists of, before assigning it to anyone.",
+        gotchas: [
+            "Total Earning, Total Deduction and Net Pay are computed by the server from the rows below — they cannot be typed in directly.",
+            "A row's formula can reference an earlier row's Salary Component by its abbreviation (e.g. \"BASIC * 0.4\").",
+            "A row's Condition, when it evaluates false, is skipped entirely for that computation — it contributes nothing.",
+            "Records referenced elsewhere cannot be deleted.",
+        ],
+        roles: "HR User and HR Manager manage records within their company.",
+    },
+    {
+        key: "salary-structure-assignment",
+        config: "salaryStructureAssignmentConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Assigns a Salary Structure to one employee starting from a given date.",
+        when: "Use this to give (or change) an individual employee's pay structure. For many employees at once, use the Bulk Salary Structure Assignment tool instead.",
+        gotchas: [
+            "Annual Gross Earning and CTC are computed by the server from the Salary Structure's rows plus this assignment's Base/Variable.",
+            "There is no end date. A later From Date simply supersedes an earlier one for that employee — it does not need to avoid overlapping it.",
+            "Only one assignment per employee may share the exact same From Date.",
+        ],
+        roles: "HR User and HR Manager manage records within their company.",
     },
 ];
 
@@ -1357,6 +1399,39 @@ export const CUSTOM_SCREENS = [
             {
                 heading: "HR Manager only",
                 text: "Unlike most Shift & Attendance screens, this one is restricted to the HR Manager role.",
+            },
+        ],
+    },
+    {
+        key: "bulk-salary-structure-assignment",
+        title: "Bulk Salary Structure Assignment",
+        path: "/bulk-salary-structure-assignment",
+        source: "apps/admin/src/pages/Payroll/BulkSalaryStructureAssignmentTool.jsx",
+        intro:
+            "Find employees eligible for a From Date, then assign the same Salary Structure to as many as you " +
+            "select at once.",
+        body: [
+            {
+                heading: "Two steps: find, then assign",
+                text:
+                    "Choose a From Date (and optionally narrow by Company, Department, Grade or Employment Type) and " +
+                    "click \"Find Eligible Employees\". The list only shows active employees who don't already have " +
+                    "an assignment for that exact date — everyone else is silently excluded, not shown as an error. " +
+                    "Pick a Salary Structure and an optional Base/Variable, then assign.",
+            },
+            {
+                heading: "One failure doesn't stop the rest",
+                text:
+                    "Each selected employee is processed on its own. If one turns out to already have a conflicting " +
+                    "assignment (a race between the search and the assign step), only that row shows Failed — " +
+                    "everyone else still goes through. The results table after a run shows exactly who succeeded and " +
+                    "who didn't, and why.",
+            },
+            {
+                heading: "Nothing is saved here",
+                text:
+                    "This page holds no records of its own — it dispatches individual Salary Structure Assignment " +
+                    "creations per employee. Refreshing the page clears your search and selection.",
             },
         ],
     },

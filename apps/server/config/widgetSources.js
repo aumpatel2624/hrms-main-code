@@ -1060,4 +1060,73 @@ export const WIDGET_SOURCES = Object.freeze({
       createdAt: "date",
     },
   },
+
+  // ADR-026 (Payroll — Structure & Assignment). Company-confined via
+  // attendanceScope(req, false) the same way the controller itself is —
+  // this module has no self-service/employee-owned dimension at all.
+  "salary-components": {
+    label: "Salary Component",
+    model: "SalaryComponent",
+    menuUrl: "/salary-component",
+    aggregatable: {},
+    groupable: {
+      type: { label: "Type" },
+      companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
+      isActive: { label: "Is active" },
+    },
+    dateFields: { createdAt: "Created" },
+    filterable: {
+      salaryComponentName: "string",
+      abbreviation: "string",
+      type: "string",
+      companyId: "objectId",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+    scopeable: {},
+    companyConfined: true,
+    employeeOwned: false,
+  },
+  "salary-structures": {
+    label: "Salary Structure",
+    model: "SalaryStructure",
+    menuUrl: "/salary-structure",
+    aggregatable: { totalEarning: "Total earning", totalDeduction: "Total deduction", netPay: "Net pay" },
+    groupable: {
+      payrollFrequency: { label: "Payroll frequency" },
+      companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
+      isActive: { label: "Is active" },
+    },
+    dateFields: { createdAt: "Created" },
+    filterable: {
+      companyId: "objectId",
+      payrollFrequency: "string",
+      isActive: "boolean",
+      createdAt: "date",
+    },
+    scopeable: {},
+    companyConfined: true,
+    employeeOwned: false,
+  },
+  "salary-structure-assignments": {
+    label: "Salary Structure Assignment",
+    model: "SalaryStructureAssignment",
+    menuUrl: "/salary-structure-assignment",
+    aggregatable: { ctc: "CTC", annualGrossEarning: "Annual gross earning", base: "Base", variable: "Variable" },
+    groupable: {
+      companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
+      salaryStructureId: { label: "Salary Structure", lookup: { from: "salarystructures", labelField: "currency" } },
+    },
+    dateFields: { fromDate: "From date", createdAt: "Created" },
+    filterable: {
+      employeeId: "objectId",
+      salaryStructureId: "objectId",
+      fromDate: "date",
+      companyId: "objectId",
+      createdAt: "date",
+    },
+    scopeable: {},
+    companyConfined: true,
+    employeeOwned: false,
+  },
 });

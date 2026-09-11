@@ -191,6 +191,18 @@ mongoose
     setInterval(() => {
       runDueJobs().catch((error) => console.error("leaveScheduler: scheduled run failed:", error));
     }, 5 * 60 * 1000);
+
+    // ADR-025: processAutoAttendance — the third of ADR-016's three named
+    // background jobs (Leaves already built the other two categories, above).
+    // A separate, independent runner (its own SchedulerRunLog jobName, its
+    // own setTimeout/setInterval) rather than folded into leaveScheduler's
+    // own JOBS array — the two runners are not sequentially coupled.
+    setTimeout(() => {
+      runDueAttendanceJobs().catch((error) => console.error("attendanceScheduler: initial run failed:", error));
+    }, 10_000);
+    setInterval(() => {
+      runDueAttendanceJobs().catch((error) => console.error("attendanceScheduler: scheduled run failed:", error));
+    }, 5 * 60 * 1000);
   })
   .catch((err) => {
     console.error("❌ DB Connection Error =>", err);
@@ -247,10 +259,12 @@ import travelRoutes from "./routes/v1/travel.routes.js";
 import leavesRoutes from "./routes/v1/leaves.routes.js";
 import leavesTransactionsRoutes from "./routes/v1/leavesTransactions.routes.js";
 import shiftAttendanceRoutes from "./routes/v1/shiftAttendance.routes.js";
+import shiftAttendanceTransactionsRoutes from "./routes/v1/shiftAttendanceTransactions.routes.js";
 import attendanceRoutes from "./routes/v1/attendance.routes.js";
 import seoPublicRoutes from "./routes/v1/seoPublic.routes.js";
 import jobsPublicRoutes from "./routes/v1/jobsPublic.routes.js";
 import { runDueJobs } from "./jobs/leaveScheduler.js";
+import { runDueJobs as runDueAttendanceJobs } from "./jobs/attendanceScheduler.js";
 
 app.use("/api/v1", authRoutes);
 app.use("/api/v1", adminUsersRoutes);
@@ -279,6 +293,7 @@ app.use("/api/v1", leavesRoutes);
 app.use("/api/v1", leavesTransactionsRoutes);
 app.use("/api/v1", attendanceRoutes);
 app.use("/api/v1", shiftAttendanceRoutes);
+app.use("/api/v1", shiftAttendanceTransactionsRoutes);
 app.use("/api/v1/otp", otpRoutes);
 
 // Unauthenticated on purpose — the public website has no session. See

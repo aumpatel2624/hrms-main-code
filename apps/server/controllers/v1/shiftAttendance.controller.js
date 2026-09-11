@@ -361,29 +361,48 @@ export const deleteEmployeeCheckin = async (req, res) => {
   } catch (error) { return failure(res, error); }
 };
 
-export const generateShiftScheduleAssignments = async (req, res) => withShiftWriteLock(`schedule:${req.params.shiftScheduleAssignmentId}`, async () => {
-  try {
-    const doc = await ShiftScheduleAssignment.findOne({ $and: [{ _id: req.params.shiftScheduleAssignmentId }, await attendanceScope(req)] });
-    if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Shift Schedule Assignment not found" });
-    if (!doc.enabled || !doc.createShiftsAfter) return res.status(400).json({ isOk: false, status: 400, message: "Enable the schedule assignment and set create shifts after before generating" });
-    const schedule = await ShiftSchedule.findOne({ _id: doc.shiftScheduleId, companyId: doc.companyId, isActive: true });
-    if (!schedule) return res.status(400).json({ isOk: false, status: 400, message: "Active Shift Schedule not found" });
-    const ranges = generateShiftRanges(schedule, doc.createShiftsAfter, req.body.endDate);
-    const results = [];
-    for (const range of ranges) {
-      try {
-        const assignment = new ShiftAssignment({ employeeId: doc.employeeId, companyId: doc.companyId,
-          shiftTypeId: schedule.shiftTypeId, shiftLocationId: doc.shiftLocationId,
-          shiftScheduleAssignmentId: doc._id, status: doc.status, ...range,
-        });
-        await saveShiftRecord(assignment, null, req);
-        doc.createShiftsAfter = new Date(+range.endDate + DAY_MS);
-        await doc.save();
-        results.push({ ...range, success: true, shiftAssignmentId: assignment._id });
-      } catch (error) {
-        results.push({ ...range, success: false, message: error.status === 400 || error.name === "ValidationError" ? error.message : "Could not generate this range" });
-      }
+/**
+ * Reusable core of the `generate` action, extracted so the Shift Assignment
+ * Tool's bulk-assign-schedule action (ADR-025, second fork) can call it
+ * directly per employee instead of duplicating this logic — same
+ * "thin HTTP wrapper around a plain function" split as leaves.controller.js's
+ * `grantAllocationsForAssignment`/`grantLeavePolicyAssignmentAllocations`
+ * (AGENTS.md #2: reuse before you write). Throws an `Error` with a `.status`
+ * property on a known failure (404/400); the HTTP wrapper below translates
+ * that, and a bulk caller can catch it per-item.
+ */
+export const generateShiftsForScheduleAssignment = (shiftScheduleAssignmentId, req, endDate) => withShiftWriteLock(`schedule:${shiftScheduleAssignmentId}`, async () => {
+  const doc = await ShiftScheduleAssignment.findOne({ $and: [{ _id: shiftScheduleAssignmentId }, await attendanceScope(req)] });
+  if (!doc) { const error = new Error("Shift Schedule Assignment not found"); error.status = 404; throw error; }
+  if (!doc.enabled || !doc.createShiftsAfter) { const error = new Error("Enable the schedule assignment and set create shifts after before generating"); error.status = 400; throw error; }
+  const schedule = await ShiftSchedule.findOne({ _id: doc.shiftScheduleId, companyId: doc.companyId, isActive: true });
+  if (!schedule) { const error = new Error("Active Shift Schedule not found"); error.status = 400; throw error; }
+  const ranges = generateShiftRanges(schedule, doc.createShiftsAfter, endDate);
+  const results = [];
+  for (const range of ranges) {
+    try {
+      const assignment = new ShiftAssignment({ employeeId: doc.employeeId, companyId: doc.companyId,
+        shiftTypeId: schedule.shiftTypeId, shiftLocationId: doc.shiftLocationId,
+        shiftScheduleAssignmentId: doc._id, status: doc.status, ...range,
+      });
+      await saveShiftRecord(assignment, null, req); // eslint-disable-line no-await-in-loop
+      doc.createShiftsAfter = new Date(+range.endDate + DAY_MS);
+      await doc.save(); // eslint-disable-line no-await-in-loop
+      results.push({ ...range, success: true, shiftAssignmentId: assignment._id });
+    } catch (error) {
+      results.push({ ...range, success: false, message: error.status === 400 || error.name === "ValidationError" ? error.message : "Could not generate this range" });
     }
-    return res.status(200).json({ isOk: true, status: 200, data: { results, createShiftsAfter: doc.createShiftsAfter } });
-  } catch (error) { return failure(res, error); }
+  }
+  return { results, createShiftsAfter: doc.createShiftsAfter };
 });
+
+/** Thin HTTP wrapper around generateShiftsForScheduleAssignment — see its own doc comment. */
+export const generateShiftScheduleAssignments = async (req, res) => {
+  try {
+    const data = await generateShiftsForScheduleAssignment(req.params.shiftScheduleAssignmentId, req, req.body.endDate);
+    return res.status(200).json({ isOk: true, status: 200, data });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
+    return failure(res, error);
+  }
+};

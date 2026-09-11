@@ -467,7 +467,35 @@ try {
   await call("DELETE", `/employee-other-incomes/${empIncome._id}`, undefined, 403, empCookie);
 
   // =========================================================================
-  // 6. SalarySlip Live Retrofit with AdditionalSalary
+  // 6. List/Search Query Contract (GitHub #23)
+  // =========================================================================
+  // Both endpoint variants must return the CRUD list envelope: data[0] holds
+  // the paginated { count, data } aggregate result.
+  const assertListResult = (response, expectedId, labels, path) => {
+    assert.ok(Array.isArray(response.data), `${path} response.data is an array`);
+    assert.ok(response.data[0], `${path} has a page result`);
+    assert.ok(Array.isArray(response.data[0].data), `${path} page has rows`);
+    assert.ok(response.data[0].count >= 1, `${path} reports a row count`);
+    const row = response.data[0].data.find((item) => String(item._id) === String(expectedId));
+    assert.ok(row, `${path} contains its fixture`);
+    for (const field of labels) assert.ok(row[field], `${path} resolves ${field}`);
+  };
+
+  const listEndpoints = [
+    ["/additional-salaries", as1._id, ["employeeIdLabel", "companyIdLabel", "salaryComponentIdLabel"]],
+    ["/arrears", arrear._id, ["employeeIdLabel", "companyIdLabel"]],
+    ["/retention-bonuses", rb._id, ["employeeIdLabel", "companyIdLabel", "salaryComponentIdLabel"]],
+    ["/employee-incentives", ei._id, ["employeeIdLabel", "companyIdLabel", "salaryComponentIdLabel"]],
+    ["/employee-other-incomes", otherEmpIncome._id, ["employeeIdLabel", "companyIdLabel", "payrollPeriodIdLabel"]],
+  ];
+  for (const [path, expectedId, labels] of listEndpoints) {
+    assertListResult(await call("GET", `${path}?per_page=1000`), expectedId, labels, `GET ${path}`); // eslint-disable-line no-await-in-loop
+    assertListResult(await call("POST", `${path}/search`, { per_page: 1000 }), expectedId, labels, `POST ${path}/search`); // eslint-disable-line no-await-in-loop
+  }
+  console.log("PASS: #23 10 list/search endpoints return the data[0].{count,data} envelope with resolved reference labels.");
+
+  // =========================================================================
+  // 7. SalarySlip Live Retrofit with AdditionalSalary
   // =========================================================================
   // Structure: Basic 30000 (dependsOnPaymentDays: true), PT 1000 (Deduction)
   const slipStruct = await create(SalaryStructure, "/salary-structures", {

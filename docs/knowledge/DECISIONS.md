@@ -3782,4 +3782,115 @@ resolution branching already established, as a new dedicated function, not a thi
   gratuity setup specs are entirely separate files under the Regional module (17) with no fields
   bleeding into this module's schema — a clean deferral, not a gap in this design.
 
+### ADR-032 — Performance: `KRA` built now as a trivial plain master (its spec was simply missing,
+not out of scope); the weightage-sum-to-100 rule and all four scores live in one shared
+`utils/appraisalCalc.js`; `final_score_formula` extends `payrollFormula.js`, not a third evaluator;
+`Goal` gets real server-side transition guards, a parent-cycle guard, and `SCOPES.OWN`; two-branch
+build
+
+- **Date**: 2026-09-11
+- **Status**: accepted
+- **Context**: `system-design` for HRMS module 16, following module 15 (Gratuity, ADR-031, shipped).
+  Read a Claude fork's research pass in full covering all 10 real per-doctype/child-table specs under
+  `docs/knowledge/input/hrms/HRMS-Port-Spec/01-Modules/Performance/` (`_Module-Spec.md`, `Appraisal
+  Cycle`, `Appraisal Template`+`Appraisal Template Goal`, `Appraisal`+`Appraisal KRA`+`Appraisal
+  Goal`, `Goal`, `Employee Performance Feedback`, `Employee Feedback Criteria`+`Employee Feedback
+  Rating`), plus ADR-016 (no GL) and this project's current code (`Employee.js`'s confirmed
+  `departmentId`/`designationId`/`reportsToId`, `Designation.js`'s own code comment already
+  anticipating this exact module's `appraisalTemplateId` retrofit point).
+- **`KRA` is built now, as a plain CRUD master identical in shape to `Employee Feedback Criteria`**
+  (a unique `name` string, nothing else) — the research confirmed no spec file for it exists anywhere
+  in this port's input despite being referenced constantly by `Appraisal Template Goal`/`Appraisal
+  KRA`, and no other module claims to own it either. This is a missing-master gap in the source
+  material itself, not a deliberate out-of-scope call — there is nothing in any spec suggesting it is
+  more complex than a named list, so it is built now rather than deferred with nothing to defer to.
+- **Field-name consistency**: source names the same KRA-reference relationship `key_result_area` on
+  `Appraisal Template Goal` and `kra` on `Appraisal KRA`/`Appraisal Goal` — this project uses one
+  consistent name, `kraId`, on every child row that references it. A naming inconsistency worth
+  smoothing over, not a business rule worth preserving.
+- **`Appraisal Template Goal`/`Appraisal KRA`/`Appraisal Goal`/`Employee Feedback Rating`-shaped rows
+  are each their own concrete embedded schema, not one polymorphic child table** — following the
+  research's own recommendation and this project's already-established pattern (`EmployeeBenefitDetailSchema`,
+  ADR-029): `Employee Feedback Rating`'s three parents (`Appraisal Template.ratingCriteria`,
+  `Appraisal.selfRatings`, `EmployeePerformanceFeedback.feedbackRatings`) all embed the same shared
+  `FeedbackRatingSchema` shape (criteria ref, weightage, rating), reused by import, not duplicated by
+  hand and not force-fit into one polymorphic collection.
+- **`Appraisal Goal` (manual-rating mode)'s `kra` field is confirmed free text, genuinely distinct
+  from `Appraisal KRA`'s real `kraId` reference** — kept as a plain label field on that child row
+  (renamed `label` here to avoid the `kraId` confusion the source's overloaded field name invites),
+  not upgraded to a reference; the two child tables stay structurally different, matching what the
+  research found, not merged into one shape.
+- **A new pure-calculation file, `utils/appraisalCalc.js`, houses every piece of scoring math and the
+  weightage-sum validator** — the same "one calc file per module" pattern as
+  `gratuityCalc.js`/`incomeTaxCalc.js`: `validateWeightageSum(rows)` (the single most-repeated rule in
+  this module, reused across all six weight-bearing child-row arrays instead of six copies),
+  `calculateGoalScore`/`calculateKraScore` (automated mode: sum of `goalCompletion * weightage/100`
+  across `Appraisal KRA` rows, `goalCompletion` itself the average `progress` of every `Goal` tagged
+  to that KRA+cycle), `calculateManualGoalScore` (manual mode: sum of `score * weightage/100` across
+  `Appraisal Goal` rows), `calculateSelfScore` (`Σ(rating * NUMBER_OF_STARS * weightage/100)` across
+  `selfRatings`), `calculateFeedbackScore` (plain average of submitted `Employee Performance
+  Feedback.totalScore` rows for that employee+appraisal), and `calculateFinalScore` (simple average of
+  goal/self/feedback scores by default, or the assigned `finalScoreFormula` if
+  `calculateFinalScoreBasedOnFormula` is set). All pure, all unit-tested with hand-computed numbers,
+  matching every prior module's calc-file convention.
+- **The hardcoded-`5`-vs-dynamic-`number_of_stars` inconsistency the research flagged does not port as
+  a bug to preserve, because it isn't portable at all** — source's dynamic path reads a Frappe Rating
+  field's configured star count from doctype metadata, a concept this project's schema has no
+  equivalent of. A single constant, `NUMBER_OF_STARS = 5`, is defined once in `appraisalCalc.js` and
+  used by both `calculateSelfScore` and the feedback-scoring path — one calculation, not source's two
+  divergent ones. This is the natural consequence of not modeling Frappe metadata, not a deliberate
+  "fix" of a business rule.
+- **`final_score_formula` reuses `payrollFormula.js`'s existing evaluator, extended context, not a
+  third evaluator** — the same call made twice already (`SalarySlip`'s formula context in ADR-027,
+  `Taxable Salary Slab.condition` in ADR-030). The formula's evaluation context gets `goalScore`,
+  `selfScore`, `feedbackScore`, plus whatever `Employee`/`Appraisal` fields a real formula would
+  plausibly reference — no second hand-written expression grammar anywhere in this codebase.
+- **`Appraisal.startDate`/`endDate` default from the linked `Appraisal Cycle`'s own dates at creation
+  time** — source never populates these despite the fields existing, a real gap the research flagged;
+  defaulting from the parent cycle is the obvious, low-risk fill (matches this project's own
+  established "fetch-if-empty from the parent" convention, e.g. `LeaveEncashment.perDayEncashmentAmount`,
+  ADR-026).
+- **`Goal`'s bulk status-transition eligibility guard is enforced server-side, not left client-only**
+  — a deliberate improvement over a flagged source gap, the same "server is the real gate" discipline
+  already applied repeatedly this session (e.g. `CrudForm`'s edit-route permission gap, issue #11).
+- **`Goal.parentGoalId` assignment rejects a value that is a descendant of the goal being saved** — a
+  new, real cycle-guard on the recursive parent-progress-rollup cascade, since source has none and an
+  accepted cycle would infinite-loop the rollup. A deliberate improvement, not invented scope: the
+  research flagged this specific gap explicitly.
+- **`Goal` gets `SCOPES.OWN` RBAC, not source's unscoped full-CRUD-for-any-Employee grant** — the
+  research flagged this explicitly as needing this project's own already-established scoping pattern
+  (`LeaveApplication`, `EmployeeOtherIncome`, the Tax Exemption Declaration/Proof Submission pair,
+  ADR-030) — an employee reads/writes only their own goal tree; HR User/Manager see all.
+- **Docstatus folds per the standard ADR-016 shape**: `Appraisal` and `EmployeePerformanceFeedback`
+  (both genuinely submittable in source) become `status: draft|submitted|cancelled` plain enums, no
+  naming series, no `amendedFrom` chain. `AppraisalCycle`, `AppraisalTemplate`, `Goal`,
+  `EmployeeFeedbackCriteria`, and the new `KRA` master are all plain CRUD masters (matching source,
+  which never submits any of them).
+- **`AppraisalCycle.createAppraisals()`'s >30-appraisee background-job/progress-bar machinery is
+  dropped as a UX nicety, not a correctness rule** — ported as a synchronous bulk-create action
+  instead (this project's established "no job queue for admin bulk tools" precedent, e.g. the Leave
+  Control Panel / Shift Assignment Tool bulk actions). The real business rules this action enforces —
+  duplicate-appraisee skip, `kraEvaluationMethod` immutability once any non-cancelled `Appraisal`
+  exists under the cycle — are ported faithfully, not dropped.
+- **No GL surface anywhere in this module** — confirmed by the research: zero GL-adjacent fields
+  across all ten doctypes. Nothing for ADR-016's "no GL" rule to cut here beyond the standard
+  docstatus/naming-series/audit-trail defaults every module already drops.
+- **Two-branch build, matching Leaves/Shift & Attendance/Payroll — Run's precedent, not a single pass
+  like modules 12-15.** Foundation half: `KRA`, `AppraisalCycle`, `AppraisalTemplate`+`AppraisalTemplateGoal`,
+  `Appraisal`+`AppraisalKra`+`AppraisalGoal`+`selfRatings`, `EmployeeFeedbackCriteria`, the shared
+  `FeedbackRatingSchema`, `utils/appraisalCalc.js`. Transactional half: `Goal`'s full tree-cascade
+  machinery (parent/child rollup, the new cycle-guard, the server-side transition guard) and
+  `EmployeePerformanceFeedback` (which reads a submitted `Appraisal` and writes back its
+  `avgFeedbackScore`/`finalScore`). The research's own complexity read: comparable doctype count to
+  Tax & Exemptions (module 14, the largest single-branch build so far) but with meaningfully more
+  cascade-graph complexity (`Goal`↔`Goal` parent rollup, `Goal`→`AppraisalKra` sync,
+  `EmployeePerformanceFeedback`→`Appraisal` sync, cycle-immutability gates touching three other
+  doctypes) — the arithmetic itself is simple, the real size is in cascade orchestration, which is
+  exactly the shape that has warranted two branches every other time on this board.
+- **No cross-module effect on `Appraisal` completion** — confirmed by the research: zero references
+  to Payroll/`SalaryStructureAssignment` anywhere in these ten files. A real-world "appraisal feeds a
+  salary revision" pattern is not in this module's source at all and is not fabricated here.
+
+
+
 

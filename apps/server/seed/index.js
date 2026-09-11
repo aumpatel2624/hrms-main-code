@@ -314,6 +314,12 @@ const MENU_GROUPS = [
       { menuName: "Employee Benefit Claim", menuUrl: "/employee-benefit-claim", icon: "ri-coins-line" },
       { menuName: "Employee Benefit Ledger", menuUrl: "/employee-benefit-ledger", icon: "ri-booklet-line" },
       { menuName: "Payroll Correction", menuUrl: "/payroll-correction", icon: "ri-edit-circle-line" },
+      // ADR-030 (module 14, feat/tax-exemptions).
+      { menuName: "Income Tax Slab", menuUrl: "/income-tax-slab", icon: "ri-scales-3-line" },
+      { menuName: "Employee Tax Exemption Category", menuUrl: "/employee-tax-exemption-category", icon: "ri-folder-shield-2-line" },
+      { menuName: "Employee Tax Exemption Sub Category", menuUrl: "/employee-tax-exemption-sub-category", icon: "ri-bookmark-3-line" },
+      { menuName: "Employee Tax Exemption Declaration", menuUrl: "/employee-tax-exemption-declaration", icon: "ri-file-text-line" },
+      { menuName: "Employee Tax Exemption Proof Submission", menuUrl: "/employee-tax-exemption-proof-submission", icon: "ri-file-check-line" },
     ],
   },
   {
@@ -1851,6 +1857,20 @@ const seedPayrollRoles = async () => {
     "/payroll-correction": {
       "HR User": full,
       "HR Manager": full,
+    },
+    // ADR-030 (module 14, feat/tax-exemptions).
+    "/income-tax-slab": { "HR User": full, "HR Manager": full },
+    "/employee-tax-exemption-category": { "HR User": full, "HR Manager": full },
+    "/employee-tax-exemption-sub-category": { "HR User": full, "HR Manager": full },
+    "/employee-tax-exemption-declaration": {
+      "HR User": full,
+      "HR Manager": full,
+      "Employee": fullNoDelete,
+    },
+    "/employee-tax-exemption-proof-submission": {
+      "HR User": full,
+      "HR Manager": full,
+      "Employee": fullNoDelete,
     },
   };
 

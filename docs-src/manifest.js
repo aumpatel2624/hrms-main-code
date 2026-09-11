@@ -1196,6 +1196,64 @@ export const CONFIG_SCREENS = [
         ],
         roles: "HR User and HR Manager manage records within their company.",
     },
+    {
+        key: "income-tax-slab",
+        config: "incomeTaxSlabConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Master rate table of income-tax brackets (and any compounding surcharges) used to compute the tax deduction on a Salary Slip.",
+        when: "Setting up or updating tax rates for a new fiscal year, or configuring old vs. new tax regime as two separate slabs.",
+        gotchas: [
+            "Bracket ranges within a slab cannot overlap, and only the last bracket may be open-ended (no upper amount).",
+            "Old vs. new tax regime is not a separate setting — create two Income Tax Slab records and assign employees to whichever one applies.",
+        ],
+        roles: "HR User and HR Manager manage records within their company.",
+    },
+    {
+        key: "employee-tax-exemption-category",
+        config: "employeeTaxExemptionCategoryConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Statutory tax exemption category (e.g. Section 80C) with an overall ceiling amount.",
+        when: "Setting up the categories employees can declare exemptions and submit proofs against.",
+        gotchas: [
+            "A sub-category's own ceiling cannot exceed its parent category's ceiling.",
+        ],
+        roles: "HR User and HR Manager manage records.",
+    },
+    {
+        key: "employee-tax-exemption-sub-category",
+        config: "employeeTaxExemptionSubCategoryConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Specific exemption type (e.g. rent receipts, life insurance premium) under a parent exemption category.",
+        when: "Setting up the exact line items employees pick from when declaring exemptions or submitting proofs.",
+        gotchas: [
+            "Must belong to an existing Employee Tax Exemption Category, and its ceiling is capped by that category's ceiling.",
+        ],
+        roles: "HR User and HR Manager manage records.",
+    },
+    {
+        key: "employee-tax-exemption-declaration",
+        config: "employeeTaxExemptionDeclarationConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Employee's provisional declaration of planned tax-saving investments/expenses for the fiscal year, used for interim tax relief.",
+        when: "Employees declare planned exemptions at the start of a fiscal year so tax is not over-deducted before proofs are due.",
+        gotchas: [
+            "Only one active declaration per employee per payroll period is allowed.",
+            "This is provisional only — the final period's tax calculation uses the submitted Proof Submission instead, not this declaration.",
+        ],
+        roles: "Employees can create and manage their own declarations; HR User and HR Manager can view all in their company.",
+    },
+    {
+        key: "employee-tax-exemption-proof-submission",
+        config: "employeeTaxExemptionProofSubmissionConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Employee's substantiated proof of actual tax-saving investments/expenses, used to finalize the year's tax calculation.",
+        when: "Near the end of the fiscal year, employees submit actual proof of the exemptions they declared earlier.",
+        gotchas: [
+            "In the final payroll period of the fiscal year, a submitted proof amount completely replaces the earlier declared amount for that category — it does not add to it.",
+            "Any exemption category with no proof submitted by the final period drops to zero exemption, increasing that period's tax deduction.",
+        ],
+        roles: "Employees can create and manage their own proof submissions; HR User and HR Manager can view all in their company.",
+    },
 ];
 
 /**

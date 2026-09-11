@@ -279,6 +279,12 @@ export const createSalarySlipForEmployee = async ({ employeeId, startDate, endDa
       grossPay: calc.grossPay,
       totalDeduction: calc.totalDeduction,
       netPay: calc.netPay,
+      annualTaxableEarning: calc.annualTaxableEarning ?? 0,
+      annualIncomeTax: calc.annualIncomeTax ?? 0,
+      incomeTaxDeduction: calc.incomeTaxDeduction ?? 0,
+      totalTaxDeductedTillDate: calc.totalTaxDeductedTillDate ?? 0,
+      totalExemptionAmount: calc.totalExemptionAmount ?? 0,
+      remainingSubPeriods: calc.remainingSubPeriods ?? 0,
       leaves,
       status: "draft",
     });

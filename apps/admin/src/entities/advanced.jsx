@@ -27,6 +27,13 @@ import {
     getEmployeeBenefitLedgerById, searchEmployeeBenefitLedgers,
     createPayrollCorrection, getPayrollCorrectionById, updatePayrollCorrection, deletePayrollCorrection, searchPayrollCorrections, submitPayrollCorrection, cancelPayrollCorrection,
 } from "../api/payrollBenefits.api";
+import {
+    createIncomeTaxSlab, getIncomeTaxSlabById, updateIncomeTaxSlab, deleteIncomeTaxSlab, searchIncomeTaxSlabs, getAllIncomeTaxSlabs,
+    createEmployeeTaxExemptionCategory, getEmployeeTaxExemptionCategoryById, updateEmployeeTaxExemptionCategory, deleteEmployeeTaxExemptionCategory, searchEmployeeTaxExemptionCategories, getAllEmployeeTaxExemptionCategories,
+    createEmployeeTaxExemptionSubCategory, getEmployeeTaxExemptionSubCategoryById, updateEmployeeTaxExemptionSubCategory, deleteEmployeeTaxExemptionSubCategory, searchEmployeeTaxExemptionSubCategories, getAllEmployeeTaxExemptionSubCategories,
+    createEmployeeTaxExemptionDeclaration, getEmployeeTaxExemptionDeclarationById, updateEmployeeTaxExemptionDeclaration, deleteEmployeeTaxExemptionDeclaration, searchEmployeeTaxExemptionDeclarations, submitEmployeeTaxExemptionDeclaration, cancelEmployeeTaxExemptionDeclaration,
+    createEmployeeTaxExemptionProofSubmission, getEmployeeTaxExemptionProofSubmissionById, updateEmployeeTaxExemptionProofSubmission, deleteEmployeeTaxExemptionProofSubmission, searchEmployeeTaxExemptionProofSubmissions, submitEmployeeTaxExemptionProofSubmission, cancelEmployeeTaxExemptionProofSubmission,
+} from "../api/payrollTax.api";
 import { GenerateShiftsPanel } from "../components/hrms/generate-shifts-panel";
 import { Building07, Hash02, Link01, Mail01, MarkerPin01, Phone, Shield01, Tag01, Type01, User01 } from "@untitledui/icons";
 import { isStrongPassword, isValidEmail, PASSWORD } from "@demo-panel/shared/validation";
@@ -3376,22 +3383,29 @@ export const salaryStructureAssignmentConfig = {
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
         salaryStructureId: asOptions(getAllSalaryStructures, "currency"),
+        incomeTaxSlabId: asOptions(getAllIncomeTaxSlabs, "name"),
     },
     sections: [{ id: "details", title: "Assignment details" }, { id: "computed", title: "Computed (read-only)" }],
     fields: [
         { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
         { name: "salaryStructureId", label: "Salary Structure", section: "details", type: "select", optionsFrom: "salaryStructureId", required: true, error: "Salary Structure is required" },
         { name: "fromDate", label: "From date", section: "details", type: "date", required: true, error: "From date is required" },
+        { name: "incomeTaxSlabId", label: "Income Tax Slab", section: "details", type: "select", optionsFrom: "incomeTaxSlabId", hint: "Required if structure contains a tax deduction component." },
         { name: "base", label: "Base", section: "details", type: "number", hint: "Used by any formula referencing \"base\"." },
         { name: "variable", label: "Variable", section: "details", type: "number", hint: "Used by any formula referencing \"variable\"." },
+        { name: "taxDeductedTillDate", label: "Tax Deducted Till Date", section: "details", type: "number", hint: "Opening balance of tax paid this fiscal year." },
+        { name: "taxableEarningsTillDate", label: "Taxable Earnings Till Date", section: "details", type: "number", hint: "Opening balance of taxable earnings this fiscal year." },
         { name: "leaveEncashmentAmountPerDay", label: "Leave encashment amount per day", section: "details", type: "number", hint: "Leave blank to use the Salary Structure's own rate." },
     ],
     viewFields: [
         { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId" },
         { name: "salaryStructureId", label: "Salary Structure", section: "details", type: "select", optionsFrom: "salaryStructureId" },
+        { name: "incomeTaxSlabId", label: "Income Tax Slab", section: "details", type: "select", optionsFrom: "incomeTaxSlabId" },
         { name: "fromDate", label: "From date", section: "details", type: "date" },
         { name: "base", label: "Base", section: "details", type: "number" },
         { name: "variable", label: "Variable", section: "details", type: "number" },
+        { name: "taxDeductedTillDate", label: "Tax Deducted Till Date", section: "details", type: "number" },
+        { name: "taxableEarningsTillDate", label: "Taxable Earnings Till Date", section: "details", type: "number" },
         { name: "currency", label: "Currency", section: "computed", type: "text" },
         { name: "leaveEncashmentAmountPerDay", label: "Leave encashment amount per day", section: "computed", type: "number" },
         { name: "annualGrossEarning", label: "Annual gross earning", section: "computed", type: "number" },
@@ -3400,6 +3414,7 @@ export const salaryStructureAssignmentConfig = {
     filterFields: [
         { name: "employeeId", label: "Employee", type: "objectId" },
         { name: "salaryStructureId", label: "Salary Structure", type: "objectId" },
+        { name: "incomeTaxSlabId", label: "Income Tax Slab", type: "objectId" },
         { name: "fromDate", label: "From date", type: "date" },
         { name: "companyId", label: "Company", type: "objectId" },
         { name: "createdAt", label: "Created", type: "date" },
@@ -3410,7 +3425,7 @@ export const salaryStructureAssignmentConfig = {
         { name: "CTC", selector: (row) => row.ctc ?? "—" },
     ],
     recordTitle: (r) => `Salary Structure Assignment — ${r._id}`,
-    toForm: (data) => ({ ...data, fromDate: data.fromDate?.slice(0, 10) || "", employeeId: refId(data.employeeId), salaryStructureId: refId(data.salaryStructureId) }),
+    toForm: (data) => ({ ...data, fromDate: data.fromDate?.slice(0, 10) || "", employeeId: refId(data.employeeId), salaryStructureId: refId(data.salaryStructureId), incomeTaxSlabId: refId(data.incomeTaxSlabId) }),
 };
 
 // ---------------------------------------------------------------------------
@@ -4118,6 +4133,9 @@ export const ADVANCED_ENTITIES = [
     employeeIncentiveConfig, employeeOtherIncomeConfig,
     employeeBenefitApplicationConfig, employeeBenefitClaimConfig,
     employeeBenefitLedgerConfig, payrollCorrectionConfig,
+    incomeTaxSlabConfig, employeeTaxExemptionCategoryConfig,
+    employeeTaxExemptionSubCategoryConfig, employeeTaxExemptionDeclarationConfig,
+    employeeTaxExemptionProofSubmissionConfig,
 ];
 
 const EMPLOYEE_BENEFIT_DETAIL_COLUMNS = [
@@ -4421,4 +4439,354 @@ export const payrollCorrectionConfig = {
             daysToReverse: Number(values.daysToReverse),
             remarks: values.remarks,
         }),
+};
+
+// ============================================================================
+// ADR-030 (Payroll — Tax & Exemptions)
+// ============================================================================
+
+const TAXABLE_SALARY_SLAB_COLUMNS = [
+    { key: "fromAmount", label: "From Amount", type: "number", placeholder: "0" },
+    { key: "toAmount", label: "To Amount (blank for open-ended)", type: "number", placeholder: "Optional" },
+    { key: "percentDeduction", label: "Percent Deduction (%)", type: "number", placeholder: "0-100" },
+    { key: "condition", label: "Condition", type: "text", placeholder: "e.g. age < 60" },
+];
+
+const OTHER_TAXES_AND_CHARGES_COLUMNS = [
+    { key: "description", label: "Description", type: "text", placeholder: "e.g. Surcharge, Cess" },
+    { key: "percent", label: "Percent (%)", type: "number", placeholder: "0" },
+    { key: "minTaxableIncome", label: "Min Taxable Income", type: "number", placeholder: "0" },
+    { key: "maxTaxableIncome", label: "Max Taxable Income", type: "number", placeholder: "Optional" },
+];
+
+export const incomeTaxSlabConfig = {
+    key: "income-tax-slab",
+    path: "/income-tax-slab",
+    section: "Payroll",
+    singular: "Income Tax Slab",
+    plural: "Income Tax Slabs",
+    description: "Defines progressive marginal tax brackets and surcharges for an effective date.",
+    api: {
+        search: searchIncomeTaxSlabs,
+        getById: getIncomeTaxSlabById,
+        create: createIncomeTaxSlab,
+        update: updateIncomeTaxSlab,
+        remove: deleteIncomeTaxSlab,
+    },
+    lookups: {
+        companyId: asOptions(getAllCompanies, "companyName"),
+    },
+    sections: [
+        { id: "details", title: "Slab Details" },
+    ],
+    fields: [
+        { name: "name", label: "Name", section: "details", type: "text", required: true, error: "Name is required" },
+        { name: "companyId", label: "Company", section: "details", type: "select", optionsFrom: "companyId", required: true, error: "Company is required" },
+        { name: "effectiveFromDate", label: "Effective From Date", section: "details", type: "date", required: true, error: "Effective From Date is required" },
+        { name: "allowTaxExemption", label: "Allow Tax Exemption", section: "details", type: "checkbox" },
+        { name: "standardDeduction", label: "Standard Deduction", section: "details", type: "number" },
+        { name: "taxReliefLimit", label: "Tax Relief Limit", section: "details", type: "number" },
+        { name: "disabled", label: "Disabled", section: "details", type: "checkbox" },
+        { name: "currency", label: "Currency", section: "details", type: "text" },
+    ],
+    renderExtra: ({ values, setValues }) => (
+        <>
+            <SimpleArrayField
+                title="Taxable Salary Slabs"
+                description="Progressive brackets on half-open ranges [fromAmount, toAmount)."
+                fieldName="slabs"
+                columns={TAXABLE_SALARY_SLAB_COLUMNS}
+                values={values}
+                setValues={setValues}
+            />
+            <SimpleArrayField
+                title="Other Taxes and Charges"
+                description="Sequential compounding surcharges and cesses."
+                fieldName="otherTaxesAndCharges"
+                columns={OTHER_TAXES_AND_CHARGES_COLUMNS}
+                values={values}
+                setValues={setValues}
+            />
+        </>
+    ),
+    columns: [
+        { name: "Name", selector: (r) => r.name, sortable: true, sortField: "name" },
+        { name: "Company", selector: (r) => r.companyId?.companyName || r.companyIdLabel || "—", sortable: true, sortField: "companyId" },
+        { name: "Effective From", selector: (r) => String(r.effectiveFromDate ?? "").slice(0, 10), sortable: true, sortField: "effectiveFromDate" },
+        { name: "Allow Exemption", selector: (r) => (r.allowTaxExemption ? "Yes" : "No") },
+        { name: "Standard Deduction", selector: (r) => r.standardDeduction ?? 0 },
+    ],
+    filterFields: [
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "name", label: "Name", type: "string" },
+        { name: "effectiveFromDate", label: "Effective From Date", type: "date" },
+        { name: "allowTaxExemption", label: "Allow Tax Exemption", type: "boolean" },
+        { name: "disabled", label: "Disabled", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => r.name,
+    toForm: (data) => ({
+        ...data,
+        companyId: refId(data.companyId),
+        effectiveFromDate: data.effectiveFromDate?.slice(0, 10) || "",
+    }),
+};
+
+export const employeeTaxExemptionCategoryConfig = {
+    key: "employee-tax-exemption-category",
+    path: "/employee-tax-exemption-category",
+    section: "Payroll",
+    singular: "Tax Exemption Category",
+    plural: "Tax Exemption Categories",
+    description: "Defines top-level statutory tax exemption categories and overall ceilings (e.g. Section 80C).",
+    api: {
+        search: searchEmployeeTaxExemptionCategories,
+        getById: getEmployeeTaxExemptionCategoryById,
+        create: createEmployeeTaxExemptionCategory,
+        update: updateEmployeeTaxExemptionCategory,
+        remove: deleteEmployeeTaxExemptionCategory,
+    },
+    sections: [
+        { id: "details", title: "Category Details" },
+    ],
+    fields: [
+        { name: "name", label: "Name", section: "details", type: "text", required: true, error: "Name is required" },
+        { name: "maxAmount", label: "Max Amount", section: "details", type: "number", required: true, error: "Max Amount is required" },
+        { name: "description", label: "Description", section: "details", type: "text" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Name", selector: (r) => r.name, sortable: true, sortField: "name" },
+        { name: "Max Amount", selector: (r) => r.maxAmount ?? 0, sortable: true, sortField: "maxAmount" },
+        { name: "Active", selector: (r) => (r.isActive ? "Yes" : "No") },
+        { name: "Description", selector: (r) => r.description || "—" },
+    ],
+    filterFields: [
+        { name: "name", label: "Name", type: "string" },
+        { name: "maxAmount", label: "Max Amount", type: "number" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => r.name,
+};
+
+export const employeeTaxExemptionSubCategoryConfig = {
+    key: "employee-tax-exemption-sub-category",
+    path: "/employee-tax-exemption-sub-category",
+    section: "Payroll",
+    singular: "Tax Exemption Sub Category",
+    plural: "Tax Exemption Sub Categories",
+    description: "Granular tax exemption instrument (e.g. PPF, Life Insurance) mapped to a parent category.",
+    api: {
+        search: searchEmployeeTaxExemptionSubCategories,
+        getById: getEmployeeTaxExemptionSubCategoryById,
+        create: createEmployeeTaxExemptionSubCategory,
+        update: updateEmployeeTaxExemptionSubCategory,
+        remove: deleteEmployeeTaxExemptionSubCategory,
+    },
+    lookups: {
+        exemptionCategoryId: asOptions(getAllEmployeeTaxExemptionCategories, "name"),
+    },
+    sections: [
+        { id: "details", title: "Sub Category Details" },
+    ],
+    fields: [
+        { name: "name", label: "Name", section: "details", type: "text", required: true, error: "Name is required" },
+        { name: "exemptionCategoryId", label: "Parent Exemption Category", section: "details", type: "select", optionsFrom: "exemptionCategoryId", required: true, error: "Parent category is required" },
+        { name: "maxAmount", label: "Max Amount", section: "details", type: "number", hint: "Cannot exceed parent category max amount." },
+        { name: "description", label: "Description", section: "details", type: "text" },
+        ACTIVE,
+    ],
+    columns: [
+        { name: "Name", selector: (r) => r.name, sortable: true, sortField: "name" },
+        { name: "Parent Category", selector: (r) => r.exemptionCategoryId?.name || r.exemptionCategoryIdLabel || "—" },
+        { name: "Max Amount", selector: (r) => r.maxAmount ?? 0, sortable: true, sortField: "maxAmount" },
+        { name: "Active", selector: (r) => (r.isActive ? "Yes" : "No") },
+    ],
+    filterFields: [
+        { name: "name", label: "Name", type: "string" },
+        { name: "exemptionCategoryId", label: "Exemption Category", type: "objectId" },
+        { name: "maxAmount", label: "Max Amount", type: "number" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => r.name,
+    toForm: (data) => ({
+        ...data,
+        exemptionCategoryId: refId(data.exemptionCategoryId),
+    }),
+};
+
+const EXEMPTION_DECLARATION_COLUMNS = [
+    { key: "exemptionSubCategoryId", label: "Sub-Category ID", type: "text", placeholder: "Sub-Category ObjectId" },
+    { key: "amount", label: "Declared Amount", type: "number", placeholder: "0.00" },
+];
+
+export const employeeTaxExemptionDeclarationConfig = {
+    key: "employee-tax-exemption-declaration",
+    path: "/employee-tax-exemption-declaration",
+    section: "Payroll",
+    singular: "Tax Exemption Declaration",
+    plural: "Tax Exemption Declarations",
+    description: "Provisional tax exemption declaration submitted by an employee for a payroll period.",
+    api: {
+        search: searchEmployeeTaxExemptionDeclarations,
+        getById: getEmployeeTaxExemptionDeclarationById,
+        create: createEmployeeTaxExemptionDeclaration,
+        update: updateEmployeeTaxExemptionDeclaration,
+        remove: deleteEmployeeTaxExemptionDeclaration,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        payrollPeriodId: () => getAllPayrollPeriods().then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: `${row.startDate?.slice?.(0, 10)} – ${row.endDate?.slice?.(0, 10)}` }))),
+    },
+    sections: [
+        { id: "details", title: "Declaration Details" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "payrollPeriodId", label: "Payroll Period", section: "details", type: "select", optionsFrom: "payrollPeriodId", required: true, error: "Payroll Period is required" },
+        { name: "currency", label: "Currency", section: "details", type: "text" },
+        { name: "totalDeclaredAmount", label: "Total Declared Amount", section: "details", type: "number", disabled: () => true },
+        { name: "totalExemptionAmount", label: "Total Exemption Amount", section: "details", type: "number", disabled: () => true },
+        { name: "status", label: "Status", section: "status", type: "text", disabled: () => true },
+    ],
+    renderExtra: ({ mode, id, values, setValues }) => (
+        <>
+            <SimpleArrayField
+                title="Declarations"
+                description="Tax exemption instrument declarations."
+                fieldName="declarations"
+                columns={EXEMPTION_DECLARATION_COLUMNS}
+                values={values}
+                setValues={setValues}
+            />
+            {mode === "edit" && id && values.status === "draft" && (
+                <SimpleActionButton
+                    label="Submit"
+                    description="Submit provisional tax exemption declaration."
+                    onRun={() => submitEmployeeTaxExemptionDeclaration(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+            {mode === "edit" && id && values.status === "submitted" && (
+                <SimpleActionButton
+                    label="Cancel"
+                    description="Cancel tax exemption declaration."
+                    onRun={() => cancelEmployeeTaxExemptionDeclaration(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+        </>
+    ),
+    columns: [
+        { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Payroll Period", selector: (r) => r.payrollPeriodIdLabel || (r.payrollPeriodId?.startDate ? `${r.payrollPeriodId.startDate.slice(0, 10)} – ${r.payrollPeriodId.endDate.slice(0, 10)}` : "—") },
+        { name: "Declared Amount", selector: (r) => r.totalDeclaredAmount ?? 0 },
+        { name: "Exemption Amount", selector: (r) => r.totalExemptionAmount ?? 0 },
+        { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" },
+    ],
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "payrollPeriodId", label: "Payroll Period", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => `Tax Declaration — ${r._id}`,
+    toForm: (data) => ({
+        ...data,
+        employeeId: refId(data.employeeId),
+        payrollPeriodId: refId(data.payrollPeriodId),
+    }),
+};
+
+const EXEMPTION_PROOF_COLUMNS = [
+    { key: "exemptionSubCategoryId", label: "Sub-Category ID", type: "text", placeholder: "Sub-Category ObjectId" },
+    { key: "typeOfProof", label: "Type of Proof", type: "text", placeholder: "Receipt, Statement, etc." },
+    { key: "amount", label: "Actual Amount", type: "number", placeholder: "0.00" },
+];
+
+export const employeeTaxExemptionProofSubmissionConfig = {
+    key: "employee-tax-exemption-proof-submission",
+    path: "/employee-tax-exemption-proof-submission",
+    section: "Payroll",
+    singular: "Tax Exemption Proof Submission",
+    plural: "Tax Exemption Proof Submissions",
+    description: "Substantiated tax exemption proof submitted by an employee for the final payroll period.",
+    api: {
+        search: searchEmployeeTaxExemptionProofSubmissions,
+        getById: getEmployeeTaxExemptionProofSubmissionById,
+        create: createEmployeeTaxExemptionProofSubmission,
+        update: updateEmployeeTaxExemptionProofSubmission,
+        remove: deleteEmployeeTaxExemptionProofSubmission,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        payrollPeriodId: () => getAllPayrollPeriods().then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: `${row.startDate?.slice?.(0, 10)} – ${row.endDate?.slice?.(0, 10)}` }))),
+    },
+    sections: [
+        { id: "details", title: "Proof Details" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "payrollPeriodId", label: "Payroll Period", section: "details", type: "select", optionsFrom: "payrollPeriodId", required: true, error: "Payroll Period is required" },
+        { name: "submissionDate", label: "Submission Date", section: "details", type: "date" },
+        { name: "currency", label: "Currency", section: "details", type: "text" },
+        { name: "totalActualAmount", label: "Total Actual Amount", section: "details", type: "number", disabled: () => true },
+        { name: "exemptionAmount", label: "Exemption Amount", section: "details", type: "number", disabled: () => true },
+        { name: "attachments", label: "Attachments", section: "details", type: "text" },
+        { name: "status", label: "Status", section: "status", type: "text", disabled: () => true },
+    ],
+    renderExtra: ({ mode, id, values, setValues }) => (
+        <>
+            <SimpleArrayField
+                title="Proof Details"
+                description="Substantiated tax exemption proof items."
+                fieldName="taxExemptionProofs"
+                columns={EXEMPTION_PROOF_COLUMNS}
+                values={values}
+                setValues={setValues}
+            />
+            {mode === "edit" && id && values.status === "draft" && (
+                <SimpleActionButton
+                    label="Submit"
+                    description="Submit tax exemption proof."
+                    onRun={() => submitEmployeeTaxExemptionProofSubmission(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+            {mode === "edit" && id && values.status === "submitted" && (
+                <SimpleActionButton
+                    label="Cancel"
+                    description="Cancel tax exemption proof."
+                    onRun={() => cancelEmployeeTaxExemptionProofSubmission(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+        </>
+    ),
+    columns: [
+        { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Submission Date", selector: (r) => String(r.submissionDate ?? "").slice(0, 10) || "—" },
+        { name: "Actual Amount", selector: (r) => r.totalActualAmount ?? 0 },
+        { name: "Exemption Amount", selector: (r) => r.exemptionAmount ?? 0 },
+        { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" },
+    ],
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "payrollPeriodId", label: "Payroll Period", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => `Proof Submission — ${r._id}`,
+    toForm: (data) => ({
+        ...data,
+        employeeId: refId(data.employeeId),
+        payrollPeriodId: refId(data.payrollPeriodId),
+        submissionDate: data.submissionDate?.slice(0, 10) || "",
+    }),
 };

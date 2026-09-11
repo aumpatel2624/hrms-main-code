@@ -23,6 +23,7 @@ import {
     createEmailSetup, deleteEmailSetup, getEmailSetupById, updateEmailSetup, searchEmailSetups,
 } from "../api/emails.api";
 import { createMenuGroup, deleteMenuGroup, getMenuGroupById, updateMenuGroup, searchMenuGroups } from "../api/menus.api";
+import { getAllSalaryStructures } from "../api/payroll.api";
 import { createSeoRedirect, deleteSeoRedirect, getSeoRedirectById, updateSeoRedirect, searchSeoRedirects } from "../api/seo.api";
 import { REDIRECT_STATUSES } from "@demo-panel/shared/seo";
 
@@ -280,12 +281,19 @@ export const employeeGradeConfig = {
         search: searchEmployeeGrades, getById: getEmployeeGradeById, create: createEmployeeGrade,
         update: updateEmployeeGrade, remove: deleteEmployeeGrade,
     },
+    // ADR-026 (Payroll — Structure & Assignment): these two fields exist now
+    // that SalaryStructure does — see EmployeeGrade.js's own comment on why
+    // they weren't modelled speculatively before this module.
+    lookups: { defaultSalaryStructureId: asOptions(getAllSalaryStructures, "currency") },
     sections: [
         { id: "details", title: "Employee grade details" },
+        { id: "defaults", title: "Payroll defaults" },
         { id: "status", title: "Status" },
     ],
     fields: [
         { name: "gradeName", icon: Tag01, label: "Grade Name", required: true, section: "details", error: "Grade Name is required!", placeholder: "Enter grade name" },
+        { name: "defaultSalaryStructureId", label: "Default Salary Structure", section: "defaults", type: "select", optionsFrom: "defaultSalaryStructureId", hint: "Not auto-fetched onto a new Salary Structure Assignment (MVP) — informational for now." },
+        { name: "defaultBasePay", label: "Default Base Pay", section: "defaults", type: "number", hint: "Pre-fills the Bulk Salary Structure Assignment tool's eligible-employees list." },
         ACTIVE,
     ],
     columns: [

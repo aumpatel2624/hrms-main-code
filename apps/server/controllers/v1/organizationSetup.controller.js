@@ -481,7 +481,7 @@ export const listEmploymentTypeByParams = async (req, res) => {
 
 export const createEmployeeGrade = async (req, res) => {
   try {
-    const { gradeName, isActive } = req.body;
+    const { gradeName, isActive, defaultSalaryStructureId, defaultBasePay } = req.body;
     if (!gradeName) {
       return res.status(400).json({ isOk: false, status: 400, message: "Grade name is required" });
     }
@@ -491,7 +491,7 @@ export const createEmployeeGrade = async (req, res) => {
       return res.status(400).json({ isOk: false, status: 400, message: "Employee grade already exists" });
     }
 
-    await EmployeeGrade.create({ gradeName, isActive });
+    await EmployeeGrade.create({ gradeName, isActive, defaultSalaryStructureId, defaultBasePay });
     return res.status(201).json({ isOk: true, status: 201, message: "Employee grade created successfully" });
   } catch (error) {
     console.log("Error in createEmployeeGrade", error);
@@ -502,15 +502,24 @@ export const createEmployeeGrade = async (req, res) => {
 export const updateEmployeeGrade = async (req, res) => {
   try {
     const { employeeGradeId } = req.params;
-    const { gradeName, isActive } = req.body;
+    // Merge only the fields the caller actually sent — the previous version
+    // unconditionally overwrote gradeName/isActive and silently dropped any
+    // other field (the same bug class already found and fixed in
+    // updateDesignation; here it would have meant defaultSalaryStructureId/
+    // defaultBasePay (ADR-026) could never actually be set from this
+    // endpoint). Fixed while adding those two fields, since it would have
+    // blocked them outright.
+    const { gradeName, isActive, defaultSalaryStructureId, defaultBasePay } = req.body;
 
     const grade = await EmployeeGrade.findById(employeeGradeId);
     if (!grade) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee grade not found" });
     }
 
-    grade.gradeName = gradeName;
-    grade.isActive = isActive;
+    if (gradeName !== undefined) grade.gradeName = gradeName;
+    if (isActive !== undefined) grade.isActive = isActive;
+    if (defaultSalaryStructureId !== undefined) grade.defaultSalaryStructureId = defaultSalaryStructureId;
+    if (defaultBasePay !== undefined) grade.defaultBasePay = defaultBasePay;
     await grade.save();
 
     return res.status(200).json({ isOk: true, status: 200, message: "Employee grade updated successfully" });

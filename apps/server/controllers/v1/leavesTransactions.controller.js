@@ -23,6 +23,7 @@ import { buildScopeFilter } from "../../utils/scope.js";
 import { countLeaveDays, sameCalendarDay } from "../../utils/leaveDayCalculation.js";
 import { getHolidayDatesInRange, isEntireRangeHolidays, isHolidayForEmployee } from "../../utils/holidayResolution.js";
 import { getBlockedDatesInRange } from "../../utils/leaveBlockList.js";
+import { getCurrentSalaryStructureAssignment } from "../../utils/payrollAssignment.js";
 import { SCOPES } from "@demo-panel/shared/scopes";
 import { ROLES } from "@demo-panel/shared/roles";
 
@@ -939,21 +940,37 @@ export const cancelLeaveApplication = async (req, res) => {
 };
 
 // ============================================================= LeaveEncashment --
-// No Payroll/Salary Structure module exists yet in this project — same
-// forward-dependency gap as Travel's expenseType (OPEN-QUESTIONS.md).
-// `perDayEncashmentAmount` is therefore a manually-entered field rather than
-// a Salary Structure Assignment lookup. No GL/Payment Entry — `/mark-paid`
-// is the same manual substitute Full & Final Statement established
-// (ADR-016/Q-3). Judgment call: the negative ledger entry is written at
-// CREATE (not at mark-paid) — source writes it in `on_submit`, and this
-// project's "create IS the action" fold (already used for LeaveAdjustment)
-// treats creation as the equivalent of submit for a doctype this simple.
+// Q-14 retrofitted (ADR-026, Payroll — Structure & Assignment): Payroll now
+// exists, so `perDayEncashmentAmount` is optional in the request — when
+// omitted, it resolves the employee's current SalaryStructureAssignment (as
+// of the encashment's own date) and defaults to its
+// `leaveEncashmentAmountPerDay`. Falls back to requiring the manual field
+// (same 400 as before ADR-026) only when no assignment resolves, or one
+// resolves but has no `leaveEncashmentAmountPerDay` set. No GL/Payment
+// Entry — `/mark-paid` is the same manual substitute Full & Final Statement
+// established (ADR-016/Q-3). Judgment call: the negative ledger entry is
+// written at CREATE (not at mark-paid) — source writes it in `on_submit`,
+// and this project's "create IS the action" fold (already used for
+// LeaveAdjustment) treats creation as the equivalent of submit for a
+// doctype this simple.
 
 export const createLeaveEncashment = async (req, res) => {
   try {
-    const { employeeId, leaveTypeId, perDayEncashmentAmount } = req.body;
-    if (!employeeId || !leaveTypeId || perDayEncashmentAmount === undefined || perDayEncashmentAmount === null) {
-      return res.status(400).json({ isOk: false, status: 400, message: "Employee, Leave Type and Per Day Encashment Amount are required" });
+    const { employeeId, leaveTypeId } = req.body;
+    if (!employeeId || !leaveTypeId) {
+      return res.status(400).json({ isOk: false, status: 400, message: "Employee and Leave Type are required" });
+    }
+
+    const encashmentDate = req.body.encashmentDate ? new Date(req.body.encashmentDate) : new Date();
+    let perDayEncashmentAmount = req.body.perDayEncashmentAmount;
+    if (perDayEncashmentAmount === undefined || perDayEncashmentAmount === null) {
+      const currentAssignment = await getCurrentSalaryStructureAssignment(employeeId, encashmentDate);
+      if (currentAssignment && currentAssignment.leaveEncashmentAmountPerDay !== null && currentAssignment.leaveEncashmentAmountPerDay !== undefined) {
+        perDayEncashmentAmount = currentAssignment.leaveEncashmentAmountPerDay;
+      }
+    }
+    if (perDayEncashmentAmount === undefined || perDayEncashmentAmount === null) {
+      return res.status(400).json({ isOk: false, status: 400, message: "Per Day Encashment Amount is required — no Salary Structure Assignment with a leave encashment rate resolves for this employee" });
     }
 
     const employee = await Employee.findById(employeeId).lean();
@@ -967,8 +984,6 @@ export const createLeaveEncashment = async (req, res) => {
     if (!leaveType.allowEncashment) {
       return res.status(400).json({ isOk: false, status: 400, message: `Leave Type ${leaveType.leaveTypeName} is not encashable` });
     }
-
-    const encashmentDate = req.body.encashmentDate ? new Date(req.body.encashmentDate) : new Date();
 
     let allocation = null;
     if (req.body.leaveAllocationId) {

@@ -2,6 +2,11 @@ import { createShiftType, getAllShiftTypes, getShiftTypeById, updateShiftType, d
     createShiftRequest, getShiftRequestById, updateShiftRequest, searchShiftRequests, approveShiftRequest, rejectShiftRequest,
     createAttendanceRequest, getAttendanceRequestById, updateAttendanceRequest, searchAttendanceRequests, cancelAttendanceRequest,
 } from "../api/shiftAttendance.api";
+import {
+    createSalaryComponent, getSalaryComponentById, updateSalaryComponent, deleteSalaryComponent, searchSalaryComponents, getAllSalaryComponents,
+    createSalaryStructure, getSalaryStructureById, updateSalaryStructure, deleteSalaryStructure, searchSalaryStructures, getAllSalaryStructures,
+    createSalaryStructureAssignment, getSalaryStructureAssignmentById, updateSalaryStructureAssignment, deleteSalaryStructureAssignment, searchSalaryStructureAssignments,
+} from "../api/payroll.api";
 import { GenerateShiftsPanel } from "../components/hrms/generate-shifts-panel";
 import { Building07, Hash02, Link01, Mail01, MarkerPin01, Phone, Shield01, Tag01, Type01, User01 } from "@untitledui/icons";
 import { isStrongPassword, isValidEmail, PASSWORD } from "@demo-panel/shared/validation";
@@ -3203,6 +3208,191 @@ export const attendanceRequestConfig = {
     toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["employeeId", "companyId", "fromDate", "toDate", "halfDay", "includeHolidays", "halfDayDate", "reason", "explanation"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
 };
 
+// ---------------------------------------------------------------------------
+// Payroll — Structure & Assignment (ADR-026). SalaryComponent is a plain
+// master; SalaryStructure's three component tables (earnings/deductions/
+// employerContributions) reuse SimpleArrayField the same way modules 4-6's
+// nested-row screens do (AGENTS.md #2). The row-level flag fields
+// (statisticalComponent, isTaxApplicable, ...) copied from the referenced
+// SalaryComponent at row-creation time (ADR-026: a one-time snapshot, not a
+// live join) are NOT exposed as editable checkboxes here — SimpleArrayField
+// defaults every checkbox column to false on a new row, which would silently
+// override a component's real default (e.g. statisticalComponent: true)
+// unless a user remembered to tick it — so this screen only edits the truly
+// author-facing fields per row (salaryComponentId, amount, formula,
+// condition, amountBasedOnFormula); the flags themselves remain ordinary
+// schema fields any direct API caller can still set explicitly.
+// totalEarning/totalDeduction/netPay (Structure) and annualGrossEarning/ctc
+// (Assignment) are server-computed and shown read-only via viewFields.
+// ---------------------------------------------------------------------------
+
+const SALARY_DETAIL_COLUMNS = [
+    { name: "salaryComponentId", label: "Salary Component id", type: "text" },
+    { name: "amount", label: "Amount", type: "number" },
+    { name: "amountBasedOnFormula", label: "Amount based on formula", type: "checkbox" },
+    { name: "formula", label: "Formula", type: "text" },
+    { name: "condition", label: "Condition", type: "text" },
+];
+
+export const salaryComponentConfig = {
+    key: "salary-component",
+    path: "/salary-component",
+    section: "Payroll",
+    singular: "Salary Component",
+    plural: "Salary Components",
+    description: "A reusable pay line item (Basic Salary, HRA, PF, TDS, ...) addable to any Salary Structure.",
+    api: { search: searchSalaryComponents, getById: getSalaryComponentById, create: createSalaryComponent, update: updateSalaryComponent, remove: deleteSalaryComponent },
+    lookups: { companyId: asOptions(getAllCompanies, "companyName") },
+    sections: [{ id: "details", title: "Component details" }, { id: "flags", title: "Flags" }, { id: "status", title: "Status" }],
+    fields: [
+        { name: "salaryComponentName", label: "Name", icon: Tag01, section: "details", type: "text", required: true, error: "Name is required" },
+        { name: "abbreviation", label: "Abbreviation", section: "details", type: "text", hint: "Leave blank to auto-derive from the name's initials (e.g. \"Basic Salary\" -> \"BS\"), de-duplicated within the company." },
+        { name: "type", label: "Type", section: "details", type: "select", options: ["Earning", "Deduction", "Employer Contribution"], required: true, error: "Type is required" },
+        { name: "companyId", label: "Company", section: "details", type: "select", optionsFrom: "companyId", required: true, error: "Company is required" },
+        { name: "isTaxApplicable", label: "Is tax applicable", section: "flags", type: "checkbox", default: false },
+        { name: "dependsOnPaymentDays", label: "Depends on payment days", section: "flags", type: "checkbox", default: false },
+        { name: "doNotIncludeInTotal", label: "Do not include in total", section: "flags", type: "checkbox", default: false },
+        { name: "statisticalComponent", label: "Statistical component", section: "flags", type: "checkbox", default: false, hint: "Value is referenceable by other components' formulas but never contributes to earnings/deductions totals." },
+        { name: "roundToNearestInteger", label: "Round to nearest integer", section: "flags", type: "checkbox", default: false },
+        { name: "exemptedFromIncomeTax", label: "Exempted from income tax", section: "flags", type: "checkbox", default: false },
+        { name: "removeIfZeroValued", label: "Remove if zero valued", section: "flags", type: "checkbox", default: false },
+        { name: "variableBasedOnTaxableSalary", label: "Variable based on taxable salary", section: "flags", type: "checkbox", default: false, hint: "Mutually exclusive with Arrear Component." },
+        { name: "arrearComponent", label: "Arrear component", section: "flags", type: "checkbox", default: false, hint: "Mutually exclusive with Variable Based On Taxable Salary." },
+        { name: "accrualComponent", label: "Accrual component", section: "flags", type: "checkbox", default: false, hint: "Only valid when Type is Earning." },
+        ACTIVE,
+    ],
+    filterFields: [
+        { name: "salaryComponentName", label: "Name", type: "string" },
+        { name: "abbreviation", label: "Abbreviation", type: "string" },
+        { name: "type", label: "Type", type: "string" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    columns: [
+        { name: "Name", selector: (row) => row.salaryComponentName, sortable: true, sortField: "salaryComponentName", minWidth: "200px" },
+        { name: "Abbreviation", selector: (row) => row.abbreviation, sortable: true, sortField: "abbreviation" },
+        { name: "Type", selector: (row) => row.type, sortable: true, sortField: "type" },
+        { name: "Status", selector: (row) => (row.isActive ? "Active" : "Inactive") },
+    ],
+    recordTitle: (r) => r.salaryComponentName,
+    toForm: (data) => ({ ...data, companyId: refId(data.companyId) }),
+};
+
+export const salaryStructureConfig = {
+    key: "salary-structure",
+    path: "/salary-structure",
+    section: "Payroll",
+    singular: "Salary Structure",
+    plural: "Salary Structures",
+    description: "A pay template — earnings, deductions and employer contributions — assignable to employees.",
+    api: { search: searchSalaryStructures, getById: getSalaryStructureById, create: createSalaryStructure, update: updateSalaryStructure, remove: deleteSalaryStructure },
+    lookups: { companyId: asOptions(getAllCompanies, "companyName") },
+    sections: [
+        { id: "details", title: "Structure details" },
+        { id: "earnings", title: "Earnings" },
+        { id: "deductions", title: "Deductions" },
+        { id: "employerContributions", title: "Employer Contributions" },
+        { id: "totals", title: "Totals (computed)" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "companyId", label: "Company", section: "details", type: "select", optionsFrom: "companyId", required: true, error: "Company is required" },
+        { name: "payrollFrequency", label: "Payroll frequency", section: "details", type: "select", options: ["Monthly", "Fortnightly", "Bimonthly", "Weekly", "Daily"], required: true, error: "Payroll frequency is required" },
+        { name: "currency", label: "Currency", section: "details", type: "text", required: true, error: "Currency is required", placeholder: "e.g. INR" },
+        { name: "leaveEncashmentAmountPerDay", label: "Leave encashment amount per day", section: "details", type: "number", hint: "Optional — carried onto every Salary Structure Assignment referencing this structure unless overridden there." },
+        ACTIVE,
+    ],
+    viewFields: [
+        { name: "companyId", label: "Company", section: "details", type: "select", optionsFrom: "companyId" },
+        { name: "payrollFrequency", label: "Payroll frequency", section: "details", type: "text" },
+        { name: "currency", label: "Currency", section: "details", type: "text" },
+        { name: "leaveEncashmentAmountPerDay", label: "Leave encashment amount per day", section: "details", type: "number" },
+        { name: "totalEarning", label: "Total earning", section: "totals", type: "number" },
+        { name: "totalDeduction", label: "Total deduction", section: "totals", type: "number" },
+        { name: "netPay", label: "Net pay", section: "totals", type: "number" },
+        ACTIVE,
+    ],
+    renderExtra: ({ values, setValues }) => (
+        <>
+            <SimpleArrayField title="Earnings" description="Paste a Salary Component's id into each row." fieldName="earnings" columns={SALARY_DETAIL_COLUMNS} values={values} setValues={setValues} />
+            <SimpleArrayField title="Deductions" description="Paste a Salary Component's id into each row." fieldName="deductions" columns={SALARY_DETAIL_COLUMNS} values={values} setValues={setValues} />
+            <SimpleArrayField title="Employer Contributions" description="Paste a Salary Component's id into each row." fieldName="employerContributions" columns={SALARY_DETAIL_COLUMNS} values={values} setValues={setValues} />
+        </>
+    ),
+    filterFields: [
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "payrollFrequency", label: "Payroll frequency", type: "string" },
+        { name: "isActive", label: "Active", type: "boolean" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    columns: [
+        { name: "Company", selector: (row) => row.companyIdLabel || "—", sortable: true, sortField: "companyId" },
+        { name: "Payroll frequency", selector: (row) => row.payrollFrequency, sortable: true, sortField: "payrollFrequency" },
+        { name: "Net pay", selector: (row) => row.netPay ?? "—" },
+        { name: "Status", selector: (row) => (row.isActive ? "Active" : "Inactive") },
+    ],
+    recordTitle: (r) => `Salary Structure — ${r.payrollFrequency || r._id}`,
+    toForm: (data) => ({
+        ...data,
+        companyId: refId(data.companyId),
+        earnings: (data.earnings || []).map((row) => ({ ...row, salaryComponentId: refId(row.salaryComponentId) })),
+        deductions: (data.deductions || []).map((row) => ({ ...row, salaryComponentId: refId(row.salaryComponentId) })),
+        employerContributions: (data.employerContributions || []).map((row) => ({ ...row, salaryComponentId: refId(row.salaryComponentId) })),
+    }),
+};
+
+export const salaryStructureAssignmentConfig = {
+    key: "salary-structure-assignment",
+    path: "/salary-structure-assignment",
+    section: "Payroll",
+    singular: "Salary Structure Assignment",
+    plural: "Salary Structure Assignments",
+    description: "Assigns a Salary Structure to one employee from a given date.",
+    api: {
+        search: searchSalaryStructureAssignments, getById: getSalaryStructureAssignmentById,
+        create: createSalaryStructureAssignment, update: updateSalaryStructureAssignment, remove: deleteSalaryStructureAssignment,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        salaryStructureId: asOptions(getAllSalaryStructures, "currency"),
+    },
+    sections: [{ id: "details", title: "Assignment details" }, { id: "computed", title: "Computed (read-only)" }],
+    fields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "salaryStructureId", label: "Salary Structure", section: "details", type: "select", optionsFrom: "salaryStructureId", required: true, error: "Salary Structure is required" },
+        { name: "fromDate", label: "From date", section: "details", type: "date", required: true, error: "From date is required" },
+        { name: "base", label: "Base", section: "details", type: "number", hint: "Used by any formula referencing \"base\"." },
+        { name: "variable", label: "Variable", section: "details", type: "number", hint: "Used by any formula referencing \"variable\"." },
+        { name: "leaveEncashmentAmountPerDay", label: "Leave encashment amount per day", section: "details", type: "number", hint: "Leave blank to use the Salary Structure's own rate." },
+    ],
+    viewFields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId" },
+        { name: "salaryStructureId", label: "Salary Structure", section: "details", type: "select", optionsFrom: "salaryStructureId" },
+        { name: "fromDate", label: "From date", section: "details", type: "date" },
+        { name: "base", label: "Base", section: "details", type: "number" },
+        { name: "variable", label: "Variable", section: "details", type: "number" },
+        { name: "currency", label: "Currency", section: "computed", type: "text" },
+        { name: "leaveEncashmentAmountPerDay", label: "Leave encashment amount per day", section: "computed", type: "number" },
+        { name: "annualGrossEarning", label: "Annual gross earning", section: "computed", type: "number" },
+        { name: "ctc", label: "CTC", section: "computed", type: "number" },
+    ],
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "salaryStructureId", label: "Salary Structure", type: "objectId" },
+        { name: "fromDate", label: "From date", type: "date" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "From date", selector: (row) => String(row.fromDate ?? "—"), sortable: true, sortField: "fromDate" },
+        { name: "CTC", selector: (row) => row.ctc ?? "—" },
+    ],
+    recordTitle: (r) => `Salary Structure Assignment — ${r._id}`,
+    toForm: (data) => ({ ...data, fromDate: data.fromDate?.slice(0, 10) || "", employeeId: refId(data.employeeId), salaryStructureId: refId(data.salaryStructureId) }),
+};
+
 export const ADVANCED_ENTITIES = [
     shiftTypeConfig, shiftLocationConfig, shiftAssignmentConfig, shiftScheduleConfig, shiftScheduleAssignmentConfig, employeeCheckinConfig,
     shiftRequestConfig, attendanceRequestConfig,
@@ -3223,4 +3413,5 @@ export const ADVANCED_ENTITIES = [
     leavePolicyConfig, leavePolicyAssignmentConfig, leaveAllocationConfig, attendanceConfig,
     leaveAdjustmentConfig, compensatoryLeaveRequestConfig, leaveApplicationConfig,
     leaveEncashmentConfig, leaveBlockListConfig,
+    salaryComponentConfig, salaryStructureConfig, salaryStructureAssignmentConfig,
 ];

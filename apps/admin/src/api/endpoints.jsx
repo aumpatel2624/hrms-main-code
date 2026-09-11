@@ -32,6 +32,14 @@ export const ENDPOINTS = {
         BULK_ASSIGN_SCHEDULE: `${V1}/shift-assignment-tool/bulk-assign-schedule`,
         PROCESS_REQUESTS: `${V1}/shift-assignment-tool/process-requests`,
     },
+    // ADR-026 (Payroll — Structure & Assignment).
+    SALARY_COMPONENTS: { BASE: `${V1}/salary-components`, SEARCH: `${V1}/salary-components/search`, BY_ID: (id) => `${V1}/salary-components/${id}` },
+    SALARY_STRUCTURES: { BASE: `${V1}/salary-structures`, SEARCH: `${V1}/salary-structures/search`, BY_ID: (id) => `${V1}/salary-structures/${id}` },
+    SALARY_STRUCTURE_ASSIGNMENTS: { BASE: `${V1}/salary-structure-assignments`, SEARCH: `${V1}/salary-structure-assignments/search`, BY_ID: (id) => `${V1}/salary-structure-assignments/${id}` },
+    BULK_SALARY_STRUCTURE_ASSIGNMENT: {
+        ELIGIBLE_EMPLOYEES: `${V1}/payroll/bulk-salary-structure-assignment/eligible-employees`,
+        ASSIGN: `${V1}/payroll/bulk-salary-structure-assignment/assign`,
+    },
     EMPLOYEE_ATTENDANCE_TOOL: {
         MARK: `${V1}/employee-attendance-tool/mark`,
         RESOLVE_HALF_DAY: `${V1}/employee-attendance-tool/resolve-half-day`,

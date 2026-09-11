@@ -260,6 +260,7 @@ import leavesRoutes from "./routes/v1/leaves.routes.js";
 import leavesTransactionsRoutes from "./routes/v1/leavesTransactions.routes.js";
 import shiftAttendanceRoutes from "./routes/v1/shiftAttendance.routes.js";
 import shiftAttendanceTransactionsRoutes from "./routes/v1/shiftAttendanceTransactions.routes.js";
+import payrollRoutes from "./routes/v1/payroll.routes.js";
 import attendanceRoutes from "./routes/v1/attendance.routes.js";
 import seoPublicRoutes from "./routes/v1/seoPublic.routes.js";
 import jobsPublicRoutes from "./routes/v1/jobsPublic.routes.js";
@@ -294,6 +295,7 @@ app.use("/api/v1", leavesTransactionsRoutes);
 app.use("/api/v1", attendanceRoutes);
 app.use("/api/v1", shiftAttendanceRoutes);
 app.use("/api/v1", shiftAttendanceTransactionsRoutes);
+app.use("/api/v1", payrollRoutes);
 app.use("/api/v1/otp", otpRoutes);
 
 // Unauthenticated on purpose — the public website has no session. See

@@ -288,6 +288,17 @@ const MENU_GROUPS = [
     ],
   },
   {
+    // ADR-026 (module 10). HR-configuration data only — no self-service
+    // screens, unlike Leaves/Shift & Attendance (see seedPayrollRoles below).
+    menuGroupName: "Payroll", sequence: 2.99, icon: "ri-money-dollar-circle-line",
+    menus: [
+      { menuName: "Salary Component", menuUrl: "/salary-component", icon: "ri-price-tag-3-line" },
+      { menuName: "Salary Structure", menuUrl: "/salary-structure", icon: "ri-file-list-3-line" },
+      { menuName: "Salary Structure Assignment", menuUrl: "/salary-structure-assignment", icon: "ri-file-user-line" },
+      { menuName: "Bulk Salary Structure Assignment", menuUrl: "/bulk-salary-structure-assignment", icon: "ri-tools-line" },
+    ],
+  },
+  {
     menuGroupName: "Master",
     sequence: 3,
     icon: "ri-database-2-line",
@@ -1763,6 +1774,59 @@ const seedShiftAttendanceTransactionsRoles = async () => {
   console.log(`✅ Shift & Attendance transactions roles: ${matrixRowsAdded} menu grant(s) added`);
 };
 
+/**
+ * Payroll roles (ADR-026, module 10). HR-configuration data only — no
+ * Employee-role grants at all, unlike Leaves/Shift & Attendance's
+ * self-service screens (payroll structure/assignment is not something an
+ * employee edits or even reads directly here). HR User and HR Manager both
+ * get full CRUD on the three collections plus edit (the only permission
+ * `checkPermission` gates the bulk-assign action on) on the bulk tool —
+ * same "both roles get full access to an admin tool" default as Leave
+ * Control Panel / Shift Assignment Tool.
+ */
+const seedPayrollRoles = async () => {
+  const full = { write: true, read: true, edit: true, delete: true, print: true, mail: true };
+
+  const GRANTS = {
+    "/salary-component": { "HR User": full, "HR Manager": full },
+    "/salary-structure": { "HR User": full, "HR Manager": full },
+    "/salary-structure-assignment": { "HR User": full, "HR Manager": full },
+    "/bulk-salary-structure-assignment": { "HR User": full, "HR Manager": full },
+  };
+
+  const allMenuUrls = Object.keys(GRANTS);
+  const menus = await MenuMaster.find({ menuUrl: { $in: allMenuUrls } }).lean();
+  if (menus.length !== allMenuUrls.length) {
+    console.log("⚠️  Payroll roles: not every menu row exists yet — run seedMenus first");
+    return;
+  }
+  const menuByUrl = Object.fromEntries(menus.map((m) => [m.menuUrl, m]));
+
+  const addRow = (userRoles, menu, permObj) => {
+    if (userRoles.roles.some((r) => String(r.menuId) === String(menu._id))) return false;
+    userRoles.roles.push({ menuId: menu._id, menuGroupId: menu.menuGroup, ...permObj });
+    return true;
+  };
+
+  let matrixRowsAdded = 0;
+  for (const roleName of ["HR User", "HR Manager"]) {
+    const role = await RoleMaster.findOne({ roleName });
+    if (!role) continue;
+    const userRoles = await UserRoles.findOne({ roleId: role._id });
+    if (!userRoles) continue;
+
+    let changed = false;
+    for (const [menuUrl, grantByRole] of Object.entries(GRANTS)) {
+      const permObj = grantByRole[roleName];
+      if (!permObj) continue;
+      if (addRow(userRoles, menuByUrl[menuUrl], permObj)) { matrixRowsAdded += 1; changed = true; }
+    }
+    if (changed) await userRoles.save();
+  }
+
+  console.log(`✅ Payroll roles: ${matrixRowsAdded} menu grant(s) added`);
+};
+
 const run = async () => {
   if (!process.env.DATABASE) {
     console.error("❌ DATABASE is not set in .env");
@@ -1804,6 +1868,7 @@ const run = async () => {
   await seedLeaveRoles();
   await seedShiftAttendanceRoles();
   await seedShiftAttendanceTransactionsRoles();
+  await seedPayrollRoles();
   await seedGeographyData();
 
   await mongoose.disconnect();

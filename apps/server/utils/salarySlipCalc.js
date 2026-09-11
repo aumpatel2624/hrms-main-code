@@ -21,6 +21,15 @@
 import { evaluateComponentTable } from "./payrollCtc.js";
 import { computePaymentDays } from "./payrollPaymentDays.js";
 import AdditionalSalary from "../models/AdditionalSalary.js";
+import IncomeTaxSlab from "../models/IncomeTaxSlab.js";
+import PayrollPeriod from "../models/PayrollPeriod.js";
+import SalarySlip from "../models/SalarySlip.js";
+import EmployeeOtherIncome from "../models/EmployeeOtherIncome.js";
+import EmployeeTaxExemptionDeclaration from "../models/EmployeeTaxExemptionDeclaration.js";
+import EmployeeTaxExemptionProofSubmission from "../models/EmployeeTaxExemptionProofSubmission.js";
+import EmployeeTaxExemptionCategory from "../models/EmployeeTaxExemptionCategory.js";
+import Employee from "../models/Employee.js";
+import { computeIncomeTaxBreakup } from "./incomeTaxCalc.js";
 
 const round2 = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
 
@@ -163,6 +172,7 @@ export const calculateSalarySlip = ({
   additionalSalaries = [],
   startDate,
   endDate,
+  taxBreakup,
 }) => {
   const { paymentDays = 0, totalWorkingDays = 0 } = paymentDaysResult || {};
   const context = {
@@ -211,7 +221,51 @@ export const calculateSalarySlip = ({
     netPay = merged.netPay;
   }
 
-  return { earnings, deductions, employerContributions, grossPay, totalDeduction, netPay };
+  // ADR-030 (Tax & Exemptions): Inject taxBreakup if provided
+  let annualTaxableEarning = 0;
+  let annualIncomeTax = 0;
+  let incomeTaxDeduction = 0;
+  let totalTaxDeductedTillDate = 0;
+  let totalExemptionAmount = 0;
+  let remainingSubPeriods = 0;
+
+  if (taxBreakup) {
+    annualTaxableEarning = round2(Number(taxBreakup.annualTaxableEarning) || 0);
+    annualIncomeTax = round2(Number(taxBreakup.annualIncomeTax) || 0);
+    incomeTaxDeduction = round2(Number(taxBreakup.incomeTaxDeduction) || 0);
+    totalTaxDeductedTillDate = round2(Number(taxBreakup.totalTaxDeductedTillDate) || 0);
+    totalExemptionAmount = round2(Number(taxBreakup.totalExemptionAmount) || 0);
+    remainingSubPeriods = Number(taxBreakup.remainingSubPeriods) || 0;
+
+    const taxRow = deductions.find((r) => r.variableBasedOnTaxableSalary || r.salaryComponentId?.variableBasedOnTaxableSalary);
+    if (taxRow) {
+      taxRow.amount = incomeTaxDeduction;
+      taxRow.defaultAmount = incomeTaxDeduction;
+      taxRow.dependsOnPaymentDays = false;
+      totalDeduction = round2(
+        deductions
+          .filter((r) => !r._skipped)
+          .reduce((sum, r) => sum + (r.defaultAmount ?? r.amount ?? 0), 0),
+      );
+      netPay = round2(grossPay - totalDeduction);
+      context.netPay = netPay;
+    }
+  }
+
+  return {
+    earnings,
+    deductions,
+    employerContributions,
+    grossPay,
+    totalDeduction,
+    netPay,
+    annualTaxableEarning,
+    annualIncomeTax,
+    incomeTaxDeduction,
+    totalTaxDeductedTillDate,
+    totalExemptionAmount,
+    remainingSubPeriods,
+  };
 };
 
 /**
@@ -227,6 +281,7 @@ export const calculateSalarySlipForEmployee = async ({
   structure,
   assignment,
   additionalSalaries: explicitAdditionalSalaries,
+  taxBreakup: explicitTaxBreakup,
 }) => {
   const paymentDaysResult = await computePaymentDays({ employeeId, startDate, endDate, settings });
 
@@ -246,6 +301,125 @@ export const calculateSalarySlipForEmployee = async ({
       .lean();
   }
 
+  let taxBreakup = explicitTaxBreakup;
+  if (!taxBreakup && assignment?.incomeTaxSlabId && (structure?.deductions || []).some((r) => r.variableBasedOnTaxableSalary || r.salaryComponentId?.variableBasedOnTaxableSalary)) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    const prelim = calculateSalarySlip({
+      structure,
+      assignment,
+      paymentDaysResult,
+      additionalSalaries,
+      startDate,
+      endDate,
+    });
+
+    const currentActualTaxableEarnings = Math.max(
+      0,
+      prelim.earnings
+        .filter((r) => !r._skipped && !r.statisticalComponent && !r.doNotIncludeInTotal && (r.isTaxApplicable || r.salaryComponentId?.isTaxApplicable))
+        .reduce((sum, r) => sum + (r.defaultAmount ?? r.amount ?? 0), 0) -
+      prelim.deductions
+        .filter((r) => !r._skipped && (r.exemptedFromIncomeTax || r.salaryComponentId?.exemptedFromIncomeTax))
+        .reduce((sum, r) => sum + (r.defaultAmount ?? r.amount ?? 0), 0),
+    );
+
+    const unproratedContext = {
+      base: Number(assignment?.base) || 0,
+      variable: Number(assignment?.variable) || 0,
+      paymentDays: 30,
+      totalWorkingDays: 30,
+      grossPay: 0,
+      netPay: 0,
+    };
+    const unscaledEarnings = scaleAndEvaluate(structure.earnings, unproratedContext, 30, 30);
+    const unscaledDeductions = scaleAndEvaluate(structure.deductions, unproratedContext, 30, 30);
+    const currentUnproratedTaxableEarnings = Math.max(
+      0,
+      unscaledEarnings
+        .filter((r) => !r._skipped && !r.statisticalComponent && !r.doNotIncludeInTotal && (r.isTaxApplicable || r.salaryComponentId?.isTaxApplicable))
+        .reduce((sum, r) => sum + (r.defaultAmount ?? r.amount ?? 0), 0) -
+      unscaledDeductions
+        .filter((r) => !r._skipped && (r.exemptedFromIncomeTax || r.salaryComponentId?.exemptedFromIncomeTax))
+        .reduce((sum, r) => sum + (r.defaultAmount ?? r.amount ?? 0), 0),
+    );
+
+    const [taxSlab, empDoc] = await Promise.all([
+      IncomeTaxSlab.findById(assignment.incomeTaxSlabId).lean(),
+      Employee.findById(employeeId).lean(),
+    ]);
+
+    const companyId = empDoc?.companyId || assignment?.companyId || structure?.companyId;
+
+    const payrollPeriod = await PayrollPeriod.findOne({
+      companyId,
+      startDate: { $lte: end },
+      endDate: { $gte: start },
+      isActive: true,
+    }).lean();
+
+    const [priorSubmittedSlips, employeeOtherIncomes, exemptionDeclaration, exemptionProofSubmission, categories] = await Promise.all([
+      payrollPeriod
+        ? SalarySlip.find({
+            employeeId,
+            status: "submitted",
+            startDate: { $gte: payrollPeriod.startDate },
+            endDate: { $lt: start },
+          }).lean()
+        : [],
+      payrollPeriod
+        ? EmployeeOtherIncome.find({
+            employeeId,
+            payrollPeriodId: payrollPeriod._id,
+            status: "submitted",
+          }).lean()
+        : [],
+      payrollPeriod
+        ? EmployeeTaxExemptionDeclaration.findOne({
+            employeeId,
+            payrollPeriodId: payrollPeriod._id,
+            status: "submitted",
+          }).lean()
+        : null,
+      payrollPeriod
+        ? EmployeeTaxExemptionProofSubmission.findOne({
+            employeeId,
+            payrollPeriodId: payrollPeriod._id,
+            status: "submitted",
+          }).lean()
+        : null,
+      EmployeeTaxExemptionCategory.find({ isActive: true }).lean(),
+    ]);
+
+    const categoryCeilings = {};
+    for (const cat of categories) {
+      categoryCeilings[String(cat._id)] = cat.maxAmount;
+    }
+
+    const age = empDoc?.dateOfBirth
+      ? Math.floor((end - new Date(empDoc.dateOfBirth)) / (365.25 * 24 * 3600 * 1000))
+      : 30;
+
+    taxBreakup = computeIncomeTaxBreakup({
+      payrollPeriod,
+      currentSlip: { startDate: start, endDate: end },
+      payrollFrequency: structure.payrollFrequency || "Monthly",
+      employee: empDoc || {},
+      assignment,
+      taxSlab,
+      priorSubmittedSlips,
+      currentActualTaxableEarnings,
+      currentUnproratedTaxableEarnings,
+      additionalSalaries,
+      employeeOtherIncomes,
+      exemptionDeclaration,
+      exemptionProofSubmission,
+      categoryCeilings,
+      evalContext: { age },
+    });
+  }
+
   const calc = calculateSalarySlip({
     structure,
     assignment,
@@ -253,6 +427,7 @@ export const calculateSalarySlipForEmployee = async ({
     additionalSalaries,
     startDate,
     endDate,
+    taxBreakup,
   });
 
   return { ...paymentDaysResult, ...calc };

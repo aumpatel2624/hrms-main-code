@@ -200,7 +200,7 @@ router.get("/salary-structure-assignments/:salaryStructureAssignmentId", authMid
  *     responses:
  *       200: { description: Successful operation }
  */
-router.put("/salary-structure-assignments/:salaryStructureAssignmentId", authMiddleware(ANY_ROLE), checkPermission("/salary-structure-assignment", "edit"), allowOnlyFields(["base", "variable"]), controller.updateSalaryStructureAssignment);
+router.put("/salary-structure-assignments/:salaryStructureAssignmentId", authMiddleware(ANY_ROLE), checkPermission("/salary-structure-assignment", "edit"), allowOnlyFields(["base", "variable", "leaveEncashmentAmountPerDay", "maxBenefits", "employeeBenefits", "incomeTaxSlabId", "taxDeductedTillDate", "taxableEarningsTillDate"]), controller.updateSalaryStructureAssignment);
 /**
  * @swagger
  * /salary-structure-assignments/{salaryStructureAssignmentId}:

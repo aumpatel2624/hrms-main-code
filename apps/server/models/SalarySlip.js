@@ -69,6 +69,14 @@ const SalarySlipSchema = new mongoose.Schema(
     // showLeaveBalancesInSalarySlip is on.
     leaves: { type: [LeaveSnapshotSchema], default: [] },
 
+    // Q-21 / ADR-030 (Tax & Exemptions). Snapshot fields from computeIncomeTaxBreakup.
+    annualTaxableEarning: { type: Number, default: 0 },
+    annualIncomeTax: { type: Number, default: 0 },
+    incomeTaxDeduction: { type: Number, default: 0 },
+    totalTaxDeductedTillDate: { type: Number, default: 0 },
+    totalExemptionAmount: { type: Number, default: 0 },
+    remainingSubPeriods: { type: Number, default: 0 },
+
     // Docstatus folds to this explicit enum (ADR-016 pattern, same as every
     // other submittable doctype in this port) — draft/submitted/withheld/
     // cancelled, matching source's real, additional state dimension.

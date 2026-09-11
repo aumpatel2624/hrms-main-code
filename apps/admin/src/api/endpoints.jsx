@@ -116,6 +116,36 @@ export const ENDPOINTS = {
         SUBMIT: (id) => `${V1}/payroll-corrections/${id}/submit`,
         CANCEL: (id) => `${V1}/payroll-corrections/${id}/cancel`,
     },
+    // ADR-030 (Payroll — Tax & Exemptions).
+    INCOME_TAX_SLABS: {
+        BASE: `${V1}/income-tax-slabs`,
+        SEARCH: `${V1}/income-tax-slabs/search`,
+        BY_ID: (id) => `${V1}/income-tax-slabs/${id}`,
+    },
+    EMPLOYEE_TAX_EXEMPTION_CATEGORIES: {
+        BASE: `${V1}/employee-tax-exemption-categories`,
+        SEARCH: `${V1}/employee-tax-exemption-categories/search`,
+        BY_ID: (id) => `${V1}/employee-tax-exemption-categories/${id}`,
+    },
+    EMPLOYEE_TAX_EXEMPTION_SUB_CATEGORIES: {
+        BASE: `${V1}/employee-tax-exemption-sub-categories`,
+        SEARCH: `${V1}/employee-tax-exemption-sub-categories/search`,
+        BY_ID: (id) => `${V1}/employee-tax-exemption-sub-categories/${id}`,
+    },
+    EMPLOYEE_TAX_EXEMPTION_DECLARATIONS: {
+        BASE: `${V1}/employee-tax-exemption-declarations`,
+        SEARCH: `${V1}/employee-tax-exemption-declarations/search`,
+        BY_ID: (id) => `${V1}/employee-tax-exemption-declarations/${id}`,
+        SUBMIT: (id) => `${V1}/employee-tax-exemption-declarations/${id}/submit`,
+        CANCEL: (id) => `${V1}/employee-tax-exemption-declarations/${id}/cancel`,
+    },
+    EMPLOYEE_TAX_EXEMPTION_PROOF_SUBMISSIONS: {
+        BASE: `${V1}/employee-tax-exemption-proof-submissions`,
+        SEARCH: `${V1}/employee-tax-exemption-proof-submissions/search`,
+        BY_ID: (id) => `${V1}/employee-tax-exemption-proof-submissions/${id}`,
+        SUBMIT: (id) => `${V1}/employee-tax-exemption-proof-submissions/${id}/submit`,
+        CANCEL: (id) => `${V1}/employee-tax-exemption-proof-submissions/${id}/cancel`,
+    },
     EMPLOYEE_ATTENDANCE_TOOL: {
         MARK: `${V1}/employee-attendance-tool/mark`,
         RESOLVE_HALF_DAY: `${V1}/employee-attendance-tool/resolve-half-day`,

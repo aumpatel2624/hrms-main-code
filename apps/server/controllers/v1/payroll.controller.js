@@ -18,6 +18,7 @@ import { getCurrentSalaryStructureAssignment } from "../../utils/payrollAssignme
 import SalaryComponent from "../../models/SalaryComponent.js";
 import SalaryStructure from "../../models/SalaryStructure.js";
 import SalaryStructureAssignment from "../../models/SalaryStructureAssignment.js";
+import IncomeTaxSlab from "../../models/IncomeTaxSlab.js";
 import Employee from "../../models/Employee.js";
 
 const failure = (res, error) => {
@@ -393,7 +394,7 @@ export const deleteSalaryStructure = async (req, res) => {
  */
 export const SALARYSTRUCTUREASSIGNMENT_FIELDS = [
   "employeeId", "salaryStructureId", "fromDate", "base", "variable", "leaveEncashmentAmountPerDay",
-  "maxBenefits", "employeeBenefits",
+  "maxBenefits", "employeeBenefits", "incomeTaxSlabId", "taxDeductedTillDate", "taxableEarningsTillDate",
 ];
 
 export const createSalaryStructureAssignmentCore = async ({
@@ -405,6 +406,9 @@ export const createSalaryStructureAssignmentCore = async ({
   leaveEncashmentAmountPerDay,
   maxBenefits,
   employeeBenefits,
+  incomeTaxSlabId,
+  taxDeductedTillDate,
+  taxableEarningsTillDate,
 }) => {
   if (!employeeId || !salaryStructureId || !fromDate) {
     throwError(400, "Employee, Salary Structure and From Date are required");
@@ -428,6 +432,20 @@ export const createSalaryStructureAssignmentCore = async ({
   if (!structure) throwError(404, "Salary Structure not found");
   if (String(structure.companyId) !== String(employee.companyId)) {
     throwError(400, "Salary Structure does not belong to the employee's company");
+  }
+
+  // ADR-030: If structure has tax deduction component, incomeTaxSlabId is required
+  const hasTaxComponent = (structure.deductions || []).some((d) => d.variableBasedOnTaxableSalary);
+  if (hasTaxComponent && !incomeTaxSlabId) {
+    throwError(400, "Income Tax Slab is required when the Salary Structure has a tax deduction component");
+  }
+
+  if (incomeTaxSlabId) {
+    const slab = await IncomeTaxSlab.findById(incomeTaxSlabId);
+    if (!slab) throwError(404, "Income Tax Slab not found");
+    if (String(slab.companyId) !== String(employee.companyId)) {
+      throwError(400, "Income Tax Slab does not belong to the employee's company");
+    }
   }
 
   // The ONLY uniqueness invariant (ADR-026) — exact-duplicate fromDate for
@@ -470,6 +488,9 @@ export const createSalaryStructureAssignmentCore = async ({
       salaryComponentId: r.salaryComponentId,
       amount: Number(r.amount) || 0,
     })),
+    incomeTaxSlabId: incomeTaxSlabId || null,
+    taxDeductedTillDate: Number(taxDeductedTillDate) || 0,
+    taxableEarningsTillDate: Number(taxableEarningsTillDate) || 0,
     annualGrossEarning,
     ctc,
   });
@@ -487,6 +508,9 @@ export const createSalaryStructureAssignment = async (req, res) => {
       leaveEncashmentAmountPerDay: req.body.leaveEncashmentAmountPerDay,
       maxBenefits: req.body.maxBenefits,
       employeeBenefits: req.body.employeeBenefits,
+      incomeTaxSlabId: req.body.incomeTaxSlabId,
+      taxDeductedTillDate: req.body.taxDeductedTillDate,
+      taxableEarningsTillDate: req.body.taxableEarningsTillDate,
     });
     return res.status(201).json({ isOk: true, status: 201, data: doc, message: "Salary Structure Assignment created successfully" });
   } catch (error) { return failure(res, error); }
@@ -502,6 +526,21 @@ export const updateSalaryStructureAssignment = async (req, res) => {
     if (req.body.leaveEncashmentAmountPerDay !== undefined) doc.leaveEncashmentAmountPerDay = req.body.leaveEncashmentAmountPerDay;
     if (req.body.maxBenefits !== undefined) doc.maxBenefits = req.body.maxBenefits;
 
+    if (req.body.incomeTaxSlabId !== undefined) {
+      if (req.body.incomeTaxSlabId) {
+        const slab = await IncomeTaxSlab.findById(req.body.incomeTaxSlabId);
+        if (!slab) return res.status(404).json({ isOk: false, status: 404, message: "Income Tax Slab not found" });
+        if (String(slab.companyId) !== String(doc.companyId)) {
+          return res.status(400).json({ isOk: false, status: 400, message: "Income Tax Slab does not belong to the employee's company" });
+        }
+        doc.incomeTaxSlabId = req.body.incomeTaxSlabId;
+      } else {
+        doc.incomeTaxSlabId = null;
+      }
+    }
+    if (req.body.taxDeductedTillDate !== undefined) doc.taxDeductedTillDate = Number(req.body.taxDeductedTillDate) || 0;
+    if (req.body.taxableEarningsTillDate !== undefined) doc.taxableEarningsTillDate = Number(req.body.taxableEarningsTillDate) || 0;
+
     if (req.body.employeeBenefits !== undefined) {
       await validateEmployeeBenefits(req.body.employeeBenefits, doc.maxBenefits, doc.companyId);
       doc.employeeBenefits = (req.body.employeeBenefits || []).map((r) => ({
@@ -514,6 +553,13 @@ export const updateSalaryStructureAssignment = async (req, res) => {
 
     const structure = await SalaryStructure.findById(doc.salaryStructureId);
     if (!structure) return res.status(400).json({ isOk: false, status: 400, message: "Salary Structure not found" });
+
+    // ADR-030: If structure has tax deduction component, incomeTaxSlabId is required
+    const hasTaxComponent = (structure.deductions || []).some((d) => d.variableBasedOnTaxableSalary);
+    if (hasTaxComponent && !doc.incomeTaxSlabId) {
+      return res.status(400).json({ isOk: false, status: 400, message: "Income Tax Slab is required when the Salary Structure has a tax deduction component" });
+    }
+
     const { annualGrossEarning, ctc } = computeCtcAndGross(structure, { base: doc.base, variable: doc.variable });
     doc.annualGrossEarning = annualGrossEarning;
     doc.ctc = ctc;
@@ -529,6 +575,7 @@ export const getSalaryStructureAssignmentById = async (req, res) => {
       .populate("employeeId", "employeeName employeeCode")
       .populate("salaryStructureId", "payrollFrequency currency")
       .populate("employeeBenefits.salaryComponentId", "salaryComponentName abbreviation maxBenefitAmount payoutMethod")
+      .populate("incomeTaxSlabId", "name effectiveFromDate allowTaxExemption")
       .populate("companyId", "companyName");
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Salary Structure Assignment not found" });
     return res.status(200).json({ isOk: true, status: 200, data: doc });
@@ -549,7 +596,8 @@ export const searchSalaryStructureAssignments = async (req, res) => {
       searchFields: [],
       filterable: {
         employeeId: "objectId", salaryStructureId: "objectId", fromDate: "date",
-        companyId: "objectId", maxBenefits: "number", createdAt: "date",
+        companyId: "objectId", maxBenefits: "number", incomeTaxSlabId: "objectId",
+        taxDeductedTillDate: "number", taxableEarningsTillDate: "number", createdAt: "date",
       },
       stages: [
         { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employeeId_joined" } },
@@ -558,6 +606,9 @@ export const searchSalaryStructureAssignments = async (req, res) => {
         { $lookup: { from: "companies", localField: "companyId", foreignField: "_id", as: "companyId_joined" } },
         { $addFields: { companyIdLabel: { $arrayElemAt: ["$companyId_joined.companyName", 0] } } },
         { $project: { companyId_joined: 0 } },
+        { $lookup: { from: "incometaxslabs", localField: "incomeTaxSlabId", foreignField: "_id", as: "incomeTaxSlabId_joined" } },
+        { $addFields: { incomeTaxSlabIdLabel: { $arrayElemAt: ["$incomeTaxSlabId_joined.name", 0] } } },
+        { $project: { incomeTaxSlabId_joined: 0 } },
       ],
     });
     return res.status(200).json({ isOk: true, status: 200, data });
@@ -598,11 +649,23 @@ export const eligibleEmployeesForBulkAssignment = async (req, res) => {
     const alreadyAssigned = await SalaryStructureAssignment.find({ fromDate: from }).distinct("employeeId");
     match._id = { $nin: alreadyAssigned };
 
-    const employees = await Employee.find(match).populate("gradeId", "defaultBasePay").lean();
+    const employees = await Employee.find(match)
+      .populate("companyId", "companyName")
+      .populate("departmentId", "departmentName")
+      .populate("designationId", "designationName")
+      .populate("gradeId", "gradeName defaultBasePay")
+      .populate("employmentTypeId", "employmentTypeName")
+      .lean();
+
     const data = employees.map((employee) => ({
       employeeId: employee._id,
       employeeName: employee.employeeName,
       employeeCode: employee.employeeCode,
+      companyId: employee.companyId?._id ?? null,
+      companyName: employee.companyId?.companyName ?? "",
+      departmentName: employee.departmentId?.departmentName ?? "",
+      designationName: employee.designationId?.designationName ?? "",
+      gradeName: employee.gradeId?.gradeName ?? "",
       gradeId: employee.gradeId?._id ?? null,
       base: employee.gradeId?.defaultBasePay ?? 0,
       variable: 0,
@@ -613,7 +676,7 @@ export const eligibleEmployeesForBulkAssignment = async (req, res) => {
 
 export const bulkAssignSalaryStructure = async (req, res) => {
   try {
-    const { employeeIds, salaryStructureId, fromDate, base, variable } = req.body;
+    const { employeeIds, salaryStructureId, fromDate, base, variable, incomeTaxSlabId } = req.body;
     if (!salaryStructureId || !fromDate || !Array.isArray(employeeIds) || employeeIds.length === 0) {
       return res.status(400).json({ isOk: false, status: 400, message: "Salary Structure, From Date and at least one employee are required" });
     }
@@ -621,7 +684,7 @@ export const bulkAssignSalaryStructure = async (req, res) => {
     const results = [];
     for (const employeeId of employeeIds) {
       try {
-        const doc = await createSalaryStructureAssignmentCore({ employeeId, salaryStructureId, fromDate, base, variable }); // eslint-disable-line no-await-in-loop
+        const doc = await createSalaryStructureAssignmentCore({ employeeId, salaryStructureId, fromDate, base, variable, incomeTaxSlabId }); // eslint-disable-line no-await-in-loop
         results.push({ employeeId, success: true, salaryStructureAssignmentId: doc._id });
       } catch (error) {
         results.push({ employeeId, success: false, error: error.message || "Could not create this assignment" });

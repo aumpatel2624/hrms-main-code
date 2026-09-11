@@ -3554,4 +3554,112 @@ Copy this block. Number sequentially.
   - `apps/server/config/widgetSources.js`: registered all 4 models for dashboard reporting.
   - `docs-src/manifest.js`: documentation manifest updated with all 4 screens.
 
+### ADR-030 — Payroll (Tax & Exemptions): old/new regime is just two `Income Tax Slab` rows, not a
+branching concept; slab is a plain CRUD master, not submittable; the "+1" bracket-width quirk is cut
+in favor of clean mathematical slicing; reuse `payrollFormula.js`'s `evaluateCondition` for
+`Taxable Salary Slab`; single-branch build
+
+- **Date**: 2026-09-11
+- **Status**: accepted
+- **Context**: `system-design` for HRMS module 14, following module 13 (Payroll — Benefits, ADR-029,
+  shipped). Read an `agy` research pass in full covering all 9 real per-doctype/child-table specs
+  under `docs/knowledge/input/hrms/HRMS-Port-Spec/01-Modules/Payroll/` (`Income Tax Slab` + `Income
+  Tax Slab Other Charges`, `Taxable Salary Slab`, the four `Employee Tax Exemption *` doctypes and
+  their two child tables), plus ADR-026/ADR-027 in full (the two precursor deferrals this module
+  closes), ADR-016 (no GL), and this project's current code (`SalaryStructureAssignment.js` —
+  confirmed no `incomeTaxSlabId` field exists at all; `SalarySlip.js`/`salarySlipCalc.js` — confirmed
+  zero tax-related fields anywhere in the current pipeline, matching ADR-027's own note that it
+  deferred this "identical in spirit to Q-19's own deferral"; `EmployeeOtherIncome.js` — confirmed a
+  real but currently unconsumed self-service doctype, Q-23's exact concern).
+- **Q-19 answered: `SalaryStructureAssignment.incomeTaxSlabId` is added as a real ref to `Income Tax
+  Slab`**, required whenever the assigned `SalaryStructure` carries a deduction component flagged
+  `variableBasedOnTaxableSalary` (the same flag `payrollFormula.js`'s existing evaluator context
+  already recognizes) — validated at assignment save time, not deferred to slip-time crash the way
+  source leaves it. `taxDeductedTillDate` and `taxableEarningsTillDate` are added alongside it as the
+  running per-employee-per-fiscal-year counters the annualization engine reads as its opening
+  balance for the first slip of a cycle.
+- **Q-21 answered: `SalarySlip` gains the real annualization/breakup pipeline, ported faithfully as a
+  new pure function, `computeIncomeTaxBreakup`, in `apps/server/utils/incomeTaxCalc.js`** — not a
+  second formula-evaluation engine. The algorithm (`remaining_sub_periods` → prior-period actuals
+  from submitted slips + assignment opening balances → current-period actual vs. unprorated
+  projected taxable earnings → recurring `AdditionalSalary` extrapolated across the year, one-off
+  `AdditionalSalary` either spread across remaining periods or taxed 100% incrementally per its
+  existing `deductFullTaxOnSelectedPayrollDate` flag → `EmployeeOtherIncome` summed in directly →
+  exemption resolved per the declaration/proof rule below → progressive marginal-slab tax on the net
+  annual taxable figure → liability apportioned across remaining sub-periods) is ported as described
+  by the research, called from `salarySlipCalc.js`'s existing `calculateSalarySlip` and injected into
+  whichever deduction row on the structure is flagged `variableBasedOnTaxableSalary`, the same
+  injection point every other computed deduction already uses. `SalarySlip` gains snapshot fields
+  `annualTaxableEarning`, `annualIncomeTax`, `incomeTaxDeduction`, `totalTaxDeductedTillDate`,
+  `totalExemptionAmount`, `remainingSubPeriods` — written once at slip calculation time, exactly the
+  same snapshot pattern every other computed slip total already follows.
+- **Old vs. new tax regime is not a branching concept anywhere in this codebase.** Confirmed by the
+  research: core Frappe HRMS has no regime field on `Employee` or `Company` at all. The distinction
+  is modeled purely as two independent `Income Tax Slab` records with different bracket tables and a
+  different `allowTaxExemption` flag — "which regime an employee is on" is simply "which `Income Tax
+  Slab` their `SalaryStructureAssignment.incomeTaxSlabId` points to." No regime field, no `if
+  (regime === "new")` branch anywhere in this module's code — the slab data alone carries the
+  difference.
+- **`Income Tax Slab` is built as a plain CRUD master, not a submittable doctype** — deviates from
+  source, which marks it submittable despite being a pure rate table with no transactional lifecycle
+  of its own (nothing "reverses" a slab; a new fiscal year gets a new record). Every other rate-table
+  master in this project (`SalaryComponent`, `HolidayList`, etc.) is plain CRUD; making this one
+  submittable would be the one exception with no functional justification. `effectiveFromDate` plus a
+  `companyId` scope (matching `SalaryStructure`'s own company-scoping) is enough to pick the right
+  slab for a given assignment's date. Real overlap validation is added at save time (**a deliberate
+  improvement over a flagged source gap** — the research confirmed source has no bracket-overlap
+  validation at all): a new slab's bracket ranges may not overlap an existing effective slab for the
+  same company.
+- **The "+1" bracket-width quirk is resolved in favor of clean mathematical slicing (Option B), not
+  literal source fidelity.** Source's bracket-boundary arithmetic (`to_amount` of one bracket plus 1
+  becomes `from_amount` of the next, an artifact of an inclusive/exclusive boundary mismatch in the
+  original implementation) is not preserved. Brackets are stored and evaluated as ordinary
+  half-open ranges (`[fromAmount, toAmount)`, with the final bracket's `toAmount` nullable meaning
+  "no upper bound") and the marginal-tax loop walks them without any off-by-one adjustment. This is a
+  correctness fix, not a stylistic preference — the "+1" pattern is a historical workaround for a
+  bug in how brackets were originally compared, not a deliberate design choice worth preserving.
+- **`Taxable Salary Slab.condition` reuses `payrollFormula.js`'s existing `evaluateCondition` directly
+  — no second condition-evaluation implementation.** Same reasoning as ADR-026/027's formula-context
+  growth: one hand-written, no-`eval()` grammar for every conditional expression in this codebase,
+  not a duplicate implementation with its own subtly different grammar.
+- **The exemption declaration/proof pipeline is ported as a real two-phase clawback, not a simple
+  sum.** `Employee Tax Exemption Declaration` (with its embedded per-category breakdown,
+  `Employee Tax Exemption Declaration Category`) provides *provisional* relief for every period before
+  the fiscal year's proof-submission deadline. `Employee Tax Exemption Proof Submission` (with its
+  embedded `Employee Tax Exemption Proof Submission Detail` rows) is what actually counts for the
+  **final** period of the fiscal year: a submitted proof amount **replaces** the declared amount for
+  that category entirely (never summed with it), and any category with no submitted proof at all
+  drops to zero exemption in that final period — an automatic tax clawback exactly as the research
+  described, not a soft warning. The dual-level clamping algorithm (`get_total_exemption_amount`) is
+  ported as `calculateTotalExemption(items, categoryCeilings)` in the same `incomeTaxCalc.js`: each
+  row is clamped to its own category's ceiling (`EmployeeTaxExemptionCategory.maxAmount`) **inside
+  the loop, before summing** — clamping the total afterward instead would silently let one
+  over-declared category absorb headroom that should have been rejected at that row.
+- **RBAC on `Employee Tax Exemption Declaration`/`Proof Submission` uses this project's established
+  `SCOPES.OWN` pattern** (matching `Leave Application`, `Employee Other Income`, etc.) — an employee
+  reads/writes their own declarations and proof submissions; HR User/Manager see all. Deviates from
+  source, whose permission model is permissive/unscoped by default (a flagged source gap, fixed as a
+  deliberate improvement, same category as the `Leave Application`/`AdditionalSalary` scoping already
+  established for every other employee-self-service doctype on this board).
+- **HRA (House Rent Allowance) is not ported as a dedicated field or calculation.** Confirmed by the
+  research to be genuinely dead code in core Frappe HRMS — the schema fields the regional HRA
+  calculation would read do not exist, and the calculation hook itself is a stub returning `{}`.
+  Modeled here as an ordinary `Employee Tax Exemption Sub Category` row like any other (rent receipts,
+  categorized under a "House Rent Allowance" sub-category with no special-cased math) — real automated
+  HRA computation (city-tier percentages, actual-rent-vs-basic-pay comparison) is out of scope unless
+  a future Regional module (module 17) is explicitly asked to add India-specific logic on top of this
+  generic exemption mechanism.
+- **No GL surface at all in this module** — confirmed by the research: all 9 doctypes are pure
+  computation/declaration, no docstatus-triggered Journal Entry, no account fields anywhere. Nothing
+  for ADR-016's "no GL" rule to cut here beyond the already-established no-docstatus/no-naming-series
+  defaults.
+- **Single branch (`feat/tax-exemptions`), not a two-branch split** — matching modules 12-13, not the
+  two-branch pattern used for Leaves/Shift & Attendance/Payroll Run. The research's own complexity
+  assessment: this module's real engine is comparable in scope to `salarySlipCalc.js`'s existing
+  payment-days pipeline, is pure arithmetic once the slab table and resolved exemptions are known (no
+  new formula-evaluation component needed beyond reusing `evaluateCondition`), and needs no bespoke UI
+  page — standard entity configs suffice for all 9 doctypes.
+- **Closes**: `OPEN-QUESTIONS.md` Q-19 (`SalaryStructureAssignment.incomeTaxSlabId`), Q-21
+  (`SalarySlip` tax annualization), Q-23 (`EmployeeOtherIncome` gains its first real consumer).
+
 

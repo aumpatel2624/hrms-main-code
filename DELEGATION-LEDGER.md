@@ -24,7 +24,7 @@ frozen `docs/knowledge/` schema.
 
 | Tool | Status | Tasks | Total tokens | Avg tokens/task |
 |---|---|---|---|---|
-| Claude sub-agents | **Paused — account spend limit hit** (resets 3am UTC) | 4 done | 1,567,579 | 391.9k |
+| Claude sub-agents | **Active again — spend limit reset as advertised (3am UTC), confirmed via a trivial probe fork** | 4 done, 1 probe | 1,567,579 (+43,954 probe) | 391.9k |
 | codex | **Paused — own usage limit hit** (resets ~8:43am, own account; still blocked when re-tested at 04:19) | 2 (1 done, 1 partial) | 296,863 | 148.4k |
 | agy | Idle — task complete | 1 done | not reported by this tool | n/a |
 

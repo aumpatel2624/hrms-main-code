@@ -1,4 +1,7 @@
-import { createShiftType, getAllShiftTypes, getShiftTypeById, updateShiftType, deleteShiftType, searchShiftTypes, createShiftLocation, getAllShiftLocations, getShiftLocationById, updateShiftLocation, deleteShiftLocation, searchShiftLocations, createShiftAssignment, getAllShiftAssignments, getShiftAssignmentById, updateShiftAssignment, deleteShiftAssignment, searchShiftAssignments, createShiftSchedule, getAllShiftSchedules, getShiftScheduleById, updateShiftSchedule, deleteShiftSchedule, searchShiftSchedules, createShiftScheduleAssignment, getAllShiftScheduleAssignments, getShiftScheduleAssignmentById, updateShiftScheduleAssignment, deleteShiftScheduleAssignment, searchShiftScheduleAssignments, createEmployeeCheckin, getAllEmployeeCheckins, getEmployeeCheckinById, updateEmployeeCheckin, deleteEmployeeCheckin, searchEmployeeCheckins } from "../api/shiftAttendance.api";
+import { createShiftType, getAllShiftTypes, getShiftTypeById, updateShiftType, deleteShiftType, searchShiftTypes, createShiftLocation, getAllShiftLocations, getShiftLocationById, updateShiftLocation, deleteShiftLocation, searchShiftLocations, createShiftAssignment, getAllShiftAssignments, getShiftAssignmentById, updateShiftAssignment, deleteShiftAssignment, searchShiftAssignments, createShiftSchedule, getAllShiftSchedules, getShiftScheduleById, updateShiftSchedule, deleteShiftSchedule, searchShiftSchedules, createShiftScheduleAssignment, getAllShiftScheduleAssignments, getShiftScheduleAssignmentById, updateShiftScheduleAssignment, deleteShiftScheduleAssignment, searchShiftScheduleAssignments, createEmployeeCheckin, getAllEmployeeCheckins, getEmployeeCheckinById, updateEmployeeCheckin, deleteEmployeeCheckin, searchEmployeeCheckins,
+    createShiftRequest, getShiftRequestById, updateShiftRequest, searchShiftRequests, approveShiftRequest, rejectShiftRequest,
+    createAttendanceRequest, getAttendanceRequestById, updateAttendanceRequest, searchAttendanceRequests, cancelAttendanceRequest,
+} from "../api/shiftAttendance.api";
 import { GenerateShiftsPanel } from "../components/hrms/generate-shifts-panel";
 import { Building07, Hash02, Link01, Mail01, MarkerPin01, Phone, Shield01, Tag01, Type01, User01 } from "@untitledui/icons";
 import { isStrongPassword, isValidEmail, PASSWORD } from "@demo-panel/shared/validation";
@@ -3095,8 +3098,114 @@ export const employeeCheckinConfig = {
     toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["employeeId", "time", "logType", "deviceId", "skipAutoAttendance", "latitude", "longitude", "companyId", "isActive"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
 };
 
+export const shiftRequestConfig = {
+    key: "shift-request", path: "/shift-request", section: "Shift & Attendance", singular: "Shift Request", plural: "Shift Requests",
+    description: "Request a shift change for a date range. The Shift Approver is resolved automatically (your own Shift Approver, else your Department's) unless you set one explicitly. Approving creates the real Shift Assignment; rejecting has no side effects.",
+    api: { search: searchShiftRequests, getById: getShiftRequestById, create: createShiftRequest, update: updateShiftRequest },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        shiftTypeId: asOptions(getAllShiftTypes, "shiftTypeName"),
+        approverId: asOptions(getAllUsers, "userName"),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "status", title: "Status" }],
+    fields: [
+        { name: "employeeId", icon: User01, label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "shiftTypeId", icon: Tag01, label: "Shift type", section: "details", type: "select", optionsFrom: "shiftTypeId", required: true, error: "Shift type is required" },
+        { name: "fromDate", label: "From date", section: "details", type: "date", required: true, error: "From date is required" },
+        { name: "toDate", label: "To date (leave blank for open-ended)", section: "details", type: "date" },
+        { name: "approverId", label: "Shift approver (leave blank to auto-resolve)", section: "details", type: "select", optionsFrom: "approverId" },
+        { name: "status", label: "Status", section: "status", type: "select", options: ["open", "approved", "rejected"], disabled: () => true, hint: "Set by the Approve/Reject actions below." },
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        mode === "edit" && id && values.status === "open" && (
+            <>
+                <SimpleActionButton
+                    label="Approve" description="Creates the real Shift Assignment for this employee, date range and shift type — through the same write-locked path as a manual assignment."
+                    onRun={() => approveShiftRequest(id)}
+                    onResult={() => window.location.reload()}
+                />
+                <SimpleActionButton
+                    label="Reject" description="No side effects."
+                    onRun={() => rejectShiftRequest(id)}
+                    onResult={() => window.location.reload()}
+                />
+            </>
+        )
+    ),
+    filterFields: [
+        { name: "employeeId", label: "Employee id", type: "objectId" },
+        { name: "shiftTypeId", label: "Shift type id", type: "objectId" },
+        { name: "companyId", label: "Company id", type: "objectId" },
+        { name: "approverId", label: "Approver id", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "fromDate", label: "From date", type: "date" },
+        { name: "toDate", label: "To date", type: "date" },
+        { name: "createdAt", label: "Created at", type: "date" },
+    ],
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Shift type", selector: (row) => row.shiftTypeIdLabel || "—", sortable: true, sortField: "shiftTypeId" },
+        { name: "From date", selector: (row) => String(row.fromDate ?? "—"), sortable: true, sortField: "fromDate" },
+        { name: "To date", selector: (row) => row.toDate ? String(row.toDate) : "open-ended", sortable: true, sortField: "toDate" },
+        { name: "Status", selector: (row) => String(row.status ?? "—"), sortable: true, sortField: "status" },
+    ],
+    recordTitle: (r) => `Shift Request — ${r._id}`,
+    toForm: (data) => ({ ...data, fromDate: data.fromDate?.slice(0, 10) || "", toDate: data.toDate?.slice(0, 10) || "", employeeId: refId(data.employeeId), shiftTypeId: refId(data.shiftTypeId), approverId: refId(data.approverId) }),
+    toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["shiftTypeId", "employeeId", "companyId", "approverId", "fromDate", "toDate"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
+};
+
+export const attendanceRequestConfig = {
+    key: "attendance-request", path: "/attendance-request", section: "Shift & Attendance", singular: "Attendance Request", plural: "Attendance Requests",
+    description: "Create is the action — saving writes or updates one Attendance record per day in the range (skipping holidays unless Include Holidays is checked, and skipping any day already covered by an approved leave). Cancel reverses exactly the Attendance rows this request created.",
+    api: { search: searchAttendanceRequests, getById: getAttendanceRequestById, create: createAttendanceRequest, update: updateAttendanceRequest },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+    },
+    sections: [{ id: "details", title: "Details" }, { id: "status", title: "Status" }],
+    fields: [
+        { name: "employeeId", icon: User01, label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "fromDate", label: "From date", section: "details", type: "date", required: true, error: "From date is required" },
+        { name: "toDate", label: "To date", section: "details", type: "date", required: true, error: "To date is required" },
+        { name: "reason", icon: Type01, label: "Reason", section: "details", type: "select", options: ["Work From Home", "On Duty"], required: true, error: "Reason is required" },
+        { name: "halfDay", label: "Half day", section: "details", type: "checkbox" },
+        { name: "halfDayDate", label: "Half day date", section: "details", type: "date", disabled: (values) => !values.halfDay },
+        { name: "includeHolidays", label: "Include holidays", section: "details", type: "checkbox", hint: "Select if any of the days in this request are holidays." },
+        { name: "explanation", label: "Explanation", section: "details", type: "textarea" },
+        { name: "status", label: "Status", section: "status", type: "select", options: ["active", "cancelled"], disabled: () => true, hint: "Set by the Cancel action below." },
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        mode === "edit" && id && values.status === "active" && (
+            <SimpleActionButton
+                label="Cancel" description="Soft-deletes the specific Attendance rows this request created."
+                onRun={() => cancelAttendanceRequest(id)}
+                onResult={() => window.location.reload()}
+            />
+        )
+    ),
+    filterFields: [
+        { name: "employeeId", label: "Employee id", type: "objectId" },
+        { name: "companyId", label: "Company id", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "reason", label: "Reason", type: "string" },
+        { name: "fromDate", label: "From date", type: "date" },
+        { name: "toDate", label: "To date", type: "date" },
+        { name: "createdAt", label: "Created at", type: "date" },
+    ],
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "From date", selector: (row) => String(row.fromDate ?? "—"), sortable: true, sortField: "fromDate" },
+        { name: "To date", selector: (row) => String(row.toDate ?? "—"), sortable: true, sortField: "toDate" },
+        { name: "Reason", selector: (row) => String(row.reason ?? "—"), sortable: true, sortField: "reason" },
+        { name: "Status", selector: (row) => String(row.status ?? "—"), sortable: true, sortField: "status" },
+    ],
+    recordTitle: (r) => `Attendance Request — ${r._id}`,
+    toForm: (data) => ({ ...data, fromDate: data.fromDate?.slice(0, 10) || "", toDate: data.toDate?.slice(0, 10) || "", halfDayDate: data.halfDayDate?.slice(0, 10) || "", employeeId: refId(data.employeeId) }),
+    toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["employeeId", "companyId", "fromDate", "toDate", "halfDay", "includeHolidays", "halfDayDate", "reason", "explanation"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
+};
+
 export const ADVANCED_ENTITIES = [
     shiftTypeConfig, shiftLocationConfig, shiftAssignmentConfig, shiftScheduleConfig, shiftScheduleAssignmentConfig, employeeCheckinConfig,
+    shiftRequestConfig, attendanceRequestConfig,
     adminUserConfig, userConfig, menuMasterConfig, emailTemplateConfig,
     departmentConfig, branchConfig, designationConfig, employeeConfig,
     jobApplicantSourceConfig, interviewTypeConfig, jobOfferTermTemplateConfig,

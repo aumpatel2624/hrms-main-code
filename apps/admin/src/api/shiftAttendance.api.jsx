@@ -37,3 +37,28 @@ export const updateEmployeeCheckin = async (id, data) => api.put(ENDPOINTS.EMPLO
 export const deleteEmployeeCheckin = async (id) => api.delete(ENDPOINTS.EMPLOYEE_CHECKINS.BY_ID(id));
 export const searchEmployeeCheckins = async (data) => api.post(ENDPOINTS.EMPLOYEE_CHECKINS.SEARCH, data);
 export const generateShiftAssignments = async (id, data) => api.post(`${ENDPOINTS.SHIFT_SCHEDULE_ASSIGNMENTS.BY_ID(id)}/generate`, data);
+
+// ADR-025 (module complete — second/transactional fork).
+export const createShiftRequest = async (data) => api.post(ENDPOINTS.SHIFT_REQUESTS.BASE, data);
+export const getAllShiftRequests = async () => api.get(ENDPOINTS.SHIFT_REQUESTS.BASE);
+export const getShiftRequestById = async (id) => api.get(ENDPOINTS.SHIFT_REQUESTS.BY_ID(id));
+export const updateShiftRequest = async (id, data) => api.put(ENDPOINTS.SHIFT_REQUESTS.BY_ID(id), data);
+export const searchShiftRequests = async (data) => api.post(ENDPOINTS.SHIFT_REQUESTS.SEARCH, data);
+export const approveShiftRequest = async (id) => api.post(ENDPOINTS.SHIFT_REQUESTS.APPROVE(id));
+export const rejectShiftRequest = async (id) => api.post(ENDPOINTS.SHIFT_REQUESTS.REJECT(id));
+
+export const createAttendanceRequest = async (data) => api.post(ENDPOINTS.ATTENDANCE_REQUESTS.BASE, data);
+export const getAttendanceRequestById = async (id) => api.get(ENDPOINTS.ATTENDANCE_REQUESTS.BY_ID(id));
+export const updateAttendanceRequest = async (id, data) => api.put(ENDPOINTS.ATTENDANCE_REQUESTS.BY_ID(id), data);
+export const searchAttendanceRequests = async (data) => api.post(ENDPOINTS.ATTENDANCE_REQUESTS.SEARCH, data);
+export const cancelAttendanceRequest = async (id) => api.post(ENDPOINTS.ATTENDANCE_REQUESTS.CANCEL(id));
+
+// Shift Assignment Tool / Employee Attendance Tool — stateless bulk-action
+// tools, no stored model (same shape as leaves.api.jsx's Leave Control Panel
+// functions).
+export const bulkAssignShifts = async (items) => api.post(ENDPOINTS.SHIFT_ASSIGNMENT_TOOL.BULK_ASSIGN, { items });
+export const bulkAssignShiftSchedules = async (items) => api.post(ENDPOINTS.SHIFT_ASSIGNMENT_TOOL.BULK_ASSIGN_SCHEDULE, { items });
+export const bulkProcessShiftRequests = async (items) => api.post(ENDPOINTS.SHIFT_ASSIGNMENT_TOOL.PROCESS_REQUESTS, { items });
+
+export const bulkMarkAttendance = async (data) => api.post(ENDPOINTS.EMPLOYEE_ATTENDANCE_TOOL.MARK, data);
+export const resolveHalfDayAttendance = async (data) => api.post(ENDPOINTS.EMPLOYEE_ATTENDANCE_TOOL.RESOLVE_HALF_DAY, data);

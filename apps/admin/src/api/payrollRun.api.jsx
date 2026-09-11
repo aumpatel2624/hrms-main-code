@@ -24,3 +24,20 @@ export const deleteSalarySlip = async (id) => api.delete(ENDPOINTS.SALARY_SLIPS.
 export const searchSalarySlips = async (data) => api.post(ENDPOINTS.SALARY_SLIPS.SEARCH, data);
 export const submitSalarySlip = async (id) => api.post(ENDPOINTS.SALARY_SLIPS.SUBMIT(id));
 export const cancelSalarySlip = async (id) => api.post(ENDPOINTS.SALARY_SLIPS.CANCEL(id));
+
+export const createPayrollEntry = data => api.post(ENDPOINTS.PAYROLL_ENTRIES.BASE, data);
+export const searchPayrollEntries = data => api.post(ENDPOINTS.PAYROLL_ENTRIES.SEARCH, data);
+export const getPayrollEntry = id => api.get(ENDPOINTS.PAYROLL_ENTRIES.BY_ID(id));
+export const createPayrollSlips = id => api.post(ENDPOINTS.PAYROLL_ENTRIES.CREATE_SLIPS(id), {});
+export const submitPayrollSlips = id => api.post(ENDPOINTS.PAYROLL_ENTRIES.SUBMIT_SLIPS(id), {});
+export const cancelPayrollEntry = id => api.post(ENDPOINTS.PAYROLL_ENTRIES.CANCEL(id), {});
+export const createSalaryWithholding = data => api.post(ENDPOINTS.SALARY_WITHHOLDINGS.BASE, data);
+export const searchSalaryWithholdings = data => api.post(ENDPOINTS.SALARY_WITHHOLDINGS.SEARCH, data);
+export const getSalaryWithholding = id => api.get(ENDPOINTS.SALARY_WITHHOLDINGS.BY_ID(id));
+export const releaseWithholdingCycle = (id, data) => api.post(ENDPOINTS.SALARY_WITHHOLDINGS.RELEASE_CYCLE(id), data);
+export const releaseAllWithholdingCycles = (id, data = {}) => api.post(ENDPOINTS.SALARY_WITHHOLDINGS.RELEASE_ALL(id), data);
+export const cancelSalaryWithholding = id => api.post(ENDPOINTS.SALARY_WITHHOLDINGS.CANCEL(id), {});
+
+export const updateSalaryWithholding = (id, data) => api.put(ENDPOINTS.SALARY_WITHHOLDINGS.BY_ID(id), data);
+export const deleteSalaryWithholding = id => api.delete(ENDPOINTS.SALARY_WITHHOLDINGS.BY_ID(id));
+export const deletePayrollEntry = id => api.delete(ENDPOINTS.PAYROLL_ENTRIES.BY_ID(id));

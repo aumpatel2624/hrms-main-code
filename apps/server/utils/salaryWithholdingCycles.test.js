@@ -1,0 +1,15 @@
+import assert from "node:assert/strict";
+import { generateWithholdingCycles as generate, deriveWithholdingStatus } from "./salaryWithholdingCycles.js";
+const dates = (frequency, count, fromDate = "2026-01-01") => generate({ fromDate, numberOfWithholdingCycles: count, payrollFrequency: frequency }).map(c => [c.fromDate.toISOString().slice(0, 10), c.toDate.toISOString().slice(0, 10)]);
+assert.deepEqual(dates("Monthly", 3), [["2026-01-01", "2026-01-31"], ["2026-02-01", "2026-02-28"], ["2026-03-01", "2026-03-31"]]);
+assert.deepEqual(dates("Weekly", 4), [["2026-01-01", "2026-01-07"], ["2026-01-08", "2026-01-14"], ["2026-01-15", "2026-01-21"], ["2026-01-22", "2026-01-28"]]);
+assert.deepEqual(dates("Fortnightly", 2), [["2026-01-01", "2026-01-14"], ["2026-01-15", "2026-01-28"]]);
+assert.deepEqual(dates("Daily", 1), [["2026-01-01", "2026-01-01"]]);
+assert.deepEqual(dates("Monthly", 3, "2026-01-31"), [["2026-01-31", "2026-02-27"], ["2026-02-28", "2026-03-27"], ["2026-03-28", "2026-04-29"]]);
+assert.deepEqual(dates("Bimonthly", 1), [["2026-01-01", "2026-02-28"]]);
+assert.equal(deriveWithholdingStatus([]), "released");
+assert.equal(deriveWithholdingStatus([{ isReleased: false }]), "withheld");
+assert.equal(deriveWithholdingStatus([{ isReleased: true }]), "released");
+assert.equal(deriveWithholdingStatus([], "cancelled"), "cancelled");
+assert.throws(() => dates("Weekly", 0));
+console.log("salaryWithholdingCycles: passed");

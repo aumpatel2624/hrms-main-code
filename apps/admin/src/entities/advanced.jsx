@@ -1,3 +1,4 @@
+import { searchPayrollEntries, searchSalaryWithholdings, createSalaryWithholding, getSalaryWithholding, releaseWithholdingCycle, releaseAllWithholdingCycles, cancelSalaryWithholding, updateSalaryWithholding, deleteSalaryWithholding, deletePayrollEntry } from "../api/payrollRun.api";
 import { createShiftType, getAllShiftTypes, getShiftTypeById, updateShiftType, deleteShiftType, searchShiftTypes, createShiftLocation, getAllShiftLocations, getShiftLocationById, updateShiftLocation, deleteShiftLocation, searchShiftLocations, createShiftAssignment, getAllShiftAssignments, getShiftAssignmentById, updateShiftAssignment, deleteShiftAssignment, searchShiftAssignments, createShiftSchedule, getAllShiftSchedules, getShiftScheduleById, updateShiftSchedule, deleteShiftSchedule, searchShiftSchedules, createShiftScheduleAssignment, getAllShiftScheduleAssignments, getShiftScheduleAssignmentById, updateShiftScheduleAssignment, deleteShiftScheduleAssignment, searchShiftScheduleAssignments, createEmployeeCheckin, getAllEmployeeCheckins, getEmployeeCheckinById, updateEmployeeCheckin, deleteEmployeeCheckin, searchEmployeeCheckins,
     createShiftRequest, getShiftRequestById, updateShiftRequest, searchShiftRequests, approveShiftRequest, rejectShiftRequest,
     createAttendanceRequest, getAttendanceRequestById, updateAttendanceRequest, searchAttendanceRequests, cancelAttendanceRequest,
@@ -3521,7 +3522,7 @@ export const salarySlipConfig = {
         { name: "grossPay", label: "Gross pay", section: "totals", type: "number" },
         { name: "totalDeduction", label: "Total deduction", section: "totals", type: "number" },
         { name: "netPay", label: "Net pay", section: "totals", type: "number" },
-        { name: "status", label: "Status", section: "status", type: "text" },
+        { name: "displayStatus", label: "Status", section: "status", type: "text" },
     ],
     renderExtra: ({ mode, id, values }) => (
         <>
@@ -3571,7 +3572,7 @@ export const salarySlipConfig = {
         { name: "Start date", selector: (row) => String(row.startDate ?? "—").slice(0, 10), sortable: true, sortField: "startDate" },
         { name: "End date", selector: (row) => String(row.endDate ?? "—").slice(0, 10), sortable: true, sortField: "endDate" },
         { name: "Net pay", selector: (row) => row.netPay ?? "—" },
-        { name: "Status", selector: (row) => row.status, sortable: true, sortField: "status" },
+        { name: "Status", selector: (row) => row.displayStatus || row.status, sortable: true, sortField: "status" },
     ],
     recordTitle: (r) => `Salary Slip — ${String(r.startDate ?? "").slice(0, 10)} to ${String(r.endDate ?? "").slice(0, 10)}`,
     toForm: (data) => ({
@@ -3584,6 +3585,71 @@ export const salarySlipConfig = {
     toPayload: (values, mode) => (mode === "edit"
         ? {} // read-only snapshot — no field can actually change through Save
         : Object.fromEntries(Object.entries(values).filter(([key]) => ["employeeId", "startDate", "endDate", "salaryStructureAssignmentId"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value]))),
+};
+
+export const payrollEntryConfig = {
+    key: "payroll-entry", path: "/payroll-entry", section: "Payroll", singular: "Payroll Entry", plural: "Payroll Entries",
+    description: "Stored payroll batches with an outcome for every employee.",
+    api: { search: searchPayrollEntries, remove: deletePayrollEntry },
+    columns: [
+        { name: "Company", selector: row => row.recordLabel },
+        { name: "Start date", selector: row => row.startDate?.slice(0, 10), sortable: true, sortField: "startDate" },
+        { name: "End date", selector: row => row.endDate?.slice(0, 10) },
+        { name: "Frequency", selector: row => row.payrollFrequency },
+        { name: "Status", selector: row => row.status },
+    ],
+    filterFields: [
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "startDate", label: "Start date", type: "date" },
+        { name: "endDate", label: "End date", type: "date" },
+        { name: "payrollFrequency", label: "Frequency", type: "string" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    filterLookups: { companyId: asOptions(getAllCompanies, "companyName") },
+};
+
+export const salaryWithholdingConfig = {
+    key: "salary-withholding", path: "/salary-withholding", section: "Payroll", singular: "Salary Withholding", plural: "Salary Withholdings",
+    description: "Withhold salary for frequency-sized cycles, then manually record each release.",
+    api: { search: searchSalaryWithholdings, create: createSalaryWithholding, getById: getSalaryWithholding, update: updateSalaryWithholding, remove: deleteSalaryWithholding },
+    lookups: { employeeId: asOptions(getAllEmployees, "employeeName") },
+    sections: [{ id: "details", title: "Withholding details" }],
+    fields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, hideIn: ["edit"] },
+        { name: "fromDate", label: "From date", section: "details", type: "date", required: true, hideIn: ["edit"] },
+        { name: "numberOfWithholdingCycles", label: "Number of cycles", section: "details", type: "number", required: true, min: 1, hideIn: ["edit"] },
+    ],
+    viewFields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId" },
+        { name: "fromDate", label: "From date", section: "details", type: "date" },
+        { name: "payrollFrequency", label: "Frequency", section: "details" },
+        { name: "numberOfWithholdingCycles", label: "Cycles", section: "details", type: "number" },
+        { name: "status", label: "Status", section: "details" },
+    ],
+    columns: [{ name: "Employee", selector: row => row.recordLabel }, { name: "From date", selector: row => row.fromDate?.slice(0, 10), sortable: true, sortField: "fromDate" }, { name: "Cycles", selector: row => row.numberOfWithholdingCycles }, { name: "Status", selector: row => row.status }],
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" }, { name: "companyId", label: "Company", type: "objectId" },
+        { name: "fromDate", label: "From date", type: "date" }, { name: "payrollFrequency", label: "Frequency", type: "string" },
+        { name: "numberOfWithholdingCycles", label: "Cycles", type: "number" },
+        { name: "status", label: "Status", type: "string" }, { name: "createdAt", label: "Created", type: "date" },
+    ],
+    filterLookups: { employeeId: asOptions(getAllEmployees, "employeeName"), companyId: asOptions(getAllCompanies, "companyName") },
+    recordTitle: row => `Salary Withholding — ${row.fromDate?.slice(0, 10)}`,
+    toForm: data => ({ ...data, employeeId: refId(data.employeeId), fromDate: data.fromDate?.slice(0, 10) }),
+    toPayload: (values, mode) => mode === "edit" ? {} : { employeeId: values.employeeId, fromDate: values.fromDate, numberOfWithholdingCycles: Number(values.numberOfWithholdingCycles) },
+    renderExtra: ({ mode, id, values }) => mode !== "add" && <>
+        <ReadOnlyRows title={`Cycles — ${values.status}`} rows={values.cycles} columns={[
+            { label: "From", value: row => row.fromDate?.slice(0, 10) }, { label: "To", value: row => row.toDate?.slice(0, 10) },
+            { label: "Released", value: row => row.isReleased ? "Yes" : "No" }, { label: "Released at", value: row => row.releasedAt?.slice(0, 10) || "—" },
+            { label: "Reference", value: row => row.releaseReference || "—" },
+        ]} />
+        {mode === "edit" && values.status === "withheld" && <>
+            {(values.cycles || []).filter(row => !row.isReleased).map(row => <SimpleActionButton key={row._id} label={`Release ${row.fromDate.slice(0, 10)} to ${row.toDate.slice(0, 10)}`} description="Manually record this salary release." onRun={() => releaseWithholdingCycle(id, { cycleId: row._id })} onResult={() => window.location.reload()} />)}
+            <SimpleActionButton label="Release all cycles" description="Manually release every remaining cycle." onRun={() => releaseAllWithholdingCycles(id)} onResult={() => window.location.reload()} />
+        </>}
+        {mode === "edit" && values.status !== "cancelled" && <SimpleActionButton label="Cancel withholding" onRun={() => cancelSalaryWithholding(id)} onResult={() => window.location.reload()} />}
+    </>,
 };
 
 export const ADVANCED_ENTITIES = [
@@ -3607,5 +3673,5 @@ export const ADVANCED_ENTITIES = [
     leaveAdjustmentConfig, compensatoryLeaveRequestConfig, leaveApplicationConfig,
     leaveEncashmentConfig, leaveBlockListConfig,
     salaryComponentConfig, salaryStructureConfig, salaryStructureAssignmentConfig,
-    payrollPeriodConfig, salarySlipConfig,
+    payrollPeriodConfig, salarySlipConfig, salaryWithholdingConfig,
 ];

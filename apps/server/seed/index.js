@@ -300,6 +300,8 @@ const MENU_GROUPS = [
       // Employee-role self-service grants (see seedPayrollRoles below).
       { menuName: "Payroll Period", menuUrl: "/payroll-period", icon: "ri-calendar-2-line" },
       { menuName: "Payroll Settings", menuUrl: "/payroll-settings", icon: "ri-settings-3-line" },
+      { menuName: "Payroll Entry", menuUrl: "/payroll-entry", icon: "ri-play-list-line" },
+      { menuName: "Salary Withholding", menuUrl: "/salary-withholding", icon: "ri-pause-circle-line" },
       { menuName: "Salary Slip", menuUrl: "/salary-slip", icon: "ri-file-paper-2-line" },
     ],
   },
@@ -1804,6 +1806,8 @@ const seedPayrollRoles = async () => {
     "/payroll-period": { "HR User": full, "HR Manager": full },
     "/payroll-settings": { "HR User": full, "HR Manager": full },
     "/salary-slip": { "HR User": full, "HR Manager": full },
+    "/payroll-entry": { "HR User": full, "HR Manager": full },
+    "/salary-withholding": { "HR User": full, "HR Manager": full },
   };
 
   const allMenuUrls = Object.keys(GRANTS);

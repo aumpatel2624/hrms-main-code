@@ -1066,6 +1066,15 @@ export const CONFIG_SCREENS = [
         roles: "HR User and HR Manager manage records within their company.",
     },
     {
+        key: "salary-withholding",
+        config: "salaryWithholdingConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A schedule of withheld salary cycles based on the employee's current payroll frequency.",
+        when: "Create a schedule when HR needs to hold salary and manually record its later release.",
+        tips: ["Use Edit to release one cycle or all remaining cycles. Released cycles keep their release date and optional reference.", "Overlapping schedules for the same employee are rejected. Cancel a schedule before deleting it."],
+        roles: "HR User and HR Manager manage records within their company.",
+    },
+    {
         key: "salary-slip",
         config: "salarySlipConfig",
         source: "apps/admin/src/entities/advanced.jsx",
@@ -1276,6 +1285,16 @@ export const CUSTOM_SCREENS = [
                     "followed by your site name. Set it once here rather than repeating the site name on " +
                     "every page.",
             },
+        ],
+    },
+    {
+        key: "payroll-entry", title: "Payroll Entry", path: "/payroll-entry",
+        source: "apps/admin/src/pages/Payroll/PayrollEntry.jsx",
+        intro: "Create and process a company payroll batch with a separate outcome for each employee.",
+        body: [
+            { heading: "Select employees", text: "Choose company, frequency and dates. Active employees with matching assignments and no slip for those exact dates are selected. Attendance validation excludes employees with missing non-holiday attendance." },
+            { heading: "Process the batch", text: "Create slips, inspect each result, then submit. One employee's failure does not stop the others. Negative net pay fails submission. Failed rows are final for that entry." },
+            { heading: "Cancel", text: "Cancel the entry to cancel its linked slips. A submitted batch means every eligible row was attempted; inspect failed rows separately." },
         ],
     },
     {

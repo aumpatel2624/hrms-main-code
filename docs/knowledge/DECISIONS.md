@@ -3210,4 +3210,73 @@ Copy this block. Number sequentially.
     yet still `cancel` cleanly; a valid slip confirmed to `submit` (200), reject a second submit (400),
     then `cancel` from Submitted. All throwaway fixtures cleaned up; employee count back to baseline
     195; all six touched collections back to 0.
+- **As built (module complete — `feat/payroll-run-orchestration`)**: the second stacked branch
+  shipped the remaining orchestration half of Module 11 on top of the already-merged foundation half:
+  bulk payroll run processing (`PayrollEntry` + embedded `employeeDetails[]`), frequency-aligned
+  withheld salary schedules (`SalaryWithholding` + embedded `cycles[]`), dynamic status layering,
+  admin UI, widget sources, and live end-to-end integration tests. Handed off from `codex` (which hit
+  its usage limit mid-task) to `agy`, who verified design fidelity, resolved environment issues,
+  completed verification, and closed GitHub issue #17.
+  - **Deliberate design improvements & cross-checks confirmed against ADR-027**:
+    - **Per-item try/catch isolation on BOTH `create-slips` and `submit-slips`**: confirmed present
+      and verified live. Unlike source's un-isolated `createSalarySlips` batch failure, every employee's
+      creation and submission is wrapped individually in `try ... catch`. A failure for one employee
+      (e.g. duplicate slip creation or negative net pay on submit) records `status: "failed"` with a
+      clear `failureReason` on that employee's subdocument and persists immediately, allowing the
+      rest of the batch to succeed.
+    - **Frequency-aligned cycle generation (`salaryWithholdingCycles.js`)**: confirmed strictly
+      iterating one frequency-period at a time (`addPayrollPeriods`) with month-end clamping (e.g.
+      Monthly 3 cycles from Jan 31 gives Jan 31–Feb 27, Feb 28–Mar 27, Mar 28–Apr 29; Weekly 4 cycles
+      gives exactly 7-day increments). Never performs naive equal-span division.
+    - **Vacuous `released` status edge case**: derived dynamically from cycle states
+      (`(cycles || []).every(c => c.isReleased)`). When `cycles` is empty `[]`, `Array.prototype.every`
+      returns `true`, reproducing source's edge case where an empty cycle array derives status
+      `"released"`.
+    - **Zero General Ledger postings**: manual release action records timestamp and optional reference
+      string (`releaseReference`) without creating any Journal Entries, matching ADR-016/ADR-027.
+  - **Judgment calls (codex & agy)**:
+    - **Dynamic `SalarySlip.status: "withheld"` overlay (`withWithholdingDisplay`)**: rather than
+      mutating the stored workflow status (`draft` / `submitted` / `cancelled`) in MongoDB when a
+      withholding is active, `SalarySlip` controllers wrap returned documents with
+      `withWithholdingDisplay`. When an active unreleased withholding covers the slip's period,
+      `isSalaryWithheld: true` and `displayStatus: "withheld"` are populated dynamically; cancellation
+      always wins (`row.status !== "cancelled"`). When withholding cycles are released or cancelled,
+      the slip automatically resumes showing its real underlying workflow status (`submitted` or
+      `draft`). This cleanly reproduces Frappe's status layering without risking permanent database
+      status corruption upon cycle release.
+    - **Single-entry action serialization**: an in-memory `running` Set in `payrollOrchestration.controller.js`
+      serializes bulk operations on the same `PayrollEntry` within this synchronous single-server deployment.
+    - **Batch state lifecycle**: `PayrollEntry.status` transitions `draft` -> `submitted` once all
+      creations and submissions are attempted. `cancel` flips the entry to `cancelled` and cascades
+      cancellation to all non-cancelled linked `SalarySlip`s.
+    - **Reporting registry parity**: `widgetSources.js` updated for `payroll-entries` and `salary-withholdings`
+      with complete groupable lookups (`companyId`, `employeeId` referencing their respective collections)
+      and full filterable allowlists matching `runListQuery` search parameters (including `payrollFrequency`).
+  - **Bugs found and fixed**:
+    - **GitHub issue #17 closed**: `createSalarySlipForEmployee` (`payrollRun.controller.js`) accepted an
+      explicit `salaryStructureAssignmentId` without checking employee ownership or effective date. Fixed
+      by adding guards: `String(assignment.employeeId) !== String(employeeId) || assignment.fromDate > end`
+      throws HTTP 400. Both rejection paths verified via HTTP integration tests.
+    - **Stray `Attendance=1` resolution**: investigation revealed an un-deleted test record
+      (`_id: 6aa33c80f553d150a635c82b`) created during earlier session testing. Deleted via the application's
+      own endpoint (`DELETE /api/v1/attendances/:id`), restoring active Attendance document count to 0.
+    - **`ECONNREFUSED` and test runner investigation**: the error in `/tmp/payroll-http.log` stemmed from
+      running the verify script before the dev server finished binding to port 7002. In addition, the Vite
+      dev server is configured on port 3000 (not 5173), and the headless environment lacked `libasound.so.2`
+      for Playwright's bundled chromium. `scripts/verify-payroll-orchestration.mjs` was updated to target port
+      3000, supply dual-domain cookies (`localhost` and `127.0.0.1`), construct throwaway users with all
+      required schema fields directly (avoiding reliance on soft-deleted prototypes), and gracefully fall back
+      from headless chromium to HTTP API execution when audio libraries are absent.
+  - **Verified live**:
+    - `npm test`: 24 test suites green (including `salaryWithholdingCycles.test.js`).
+    - `npm run seed`: idempotent and clean (15 menu groups, 91 menus, 195 employees).
+    - `npm run build`: built clean in 5.65s (`out/admin`).
+    - `scripts/verify-payroll-run.mjs`: 32 HTTP assertions passing cleanly.
+    - `scripts/verify-payroll-orchestration.mjs`: 52 HTTP assertions passing cleanly, testing full
+      `PayrollEntry` eligibility, attendance validation, mixed-batch create and submit isolation,
+      negative net-pay submit rejection, cancellation cascade, `SalaryWithholding` Monthly-3 and Weekly-4
+      cycle boundaries, manual release actions, empty cycles status derivation, live withholding overlay,
+      HR User company confinement, Employee role 403 enforcement, and issue #17 regression tests.
+    - All throwaway fixtures cleaned up; employee count at baseline 195; all touched collections at 0.
+
 

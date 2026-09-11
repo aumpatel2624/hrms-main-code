@@ -5,6 +5,11 @@ import { checkPermission } from "../../middlewares/checkPermission.js";
 import { allowOnlyFields } from "../../middlewares/inputValidator.js";
 import * as controller from "../../controllers/v1/payrollRun.controller.js";
 
+import * as orchestration from "../../controllers/v1/payrollOrchestration.controller.js";
+import { body, param } from "express-validator";
+import { handleValidationErrors, searchValidation } from "../../middlewares/inputValidator.js";
+import { PAYROLL_FREQUENCIES } from "../../utils/salaryWithholdingCycles.js";
+
 const router = express.Router();
 
 // ------------------------------------------------------------- PayrollPeriod --
@@ -192,5 +197,198 @@ router.post("/salary-slips/:salarySlipId/submit", authMiddleware(ANY_ROLE), chec
  *       200: { description: Successful operation }
  */
 router.post("/salary-slips/:salarySlipId/cancel", authMiddleware(ANY_ROLE), checkPermission("/salary-slip", "edit"), controller.cancelSalarySlip);
+
+/**
+ * @swagger
+ * /payroll-entries:
+ *   post:
+ *     summary: createPayrollEntry
+ *     tags: [Payroll]
+ *     responses:
+ *       200: { description: Successful operation }
+ *       400: { description: Invalid input or transition }
+ *       403: { description: Permission denied }
+ */
+router.post("/payroll-entries", authMiddleware(ANY_ROLE), checkPermission("/payroll-entry", "write"), allowOnlyFields(["companyId", "startDate", "endDate", "payrollPeriodId", "payrollFrequency", "validateAttendance"]), body("companyId").isMongoId(), body("payrollFrequency").isIn(PAYROLL_FREQUENCIES), body("payrollPeriodId").optional().isMongoId(), body("startDate").optional().isISO8601(), body("endDate").optional().isISO8601(), body("validateAttendance").optional().isBoolean(), handleValidationErrors, orchestration.createPayrollEntry);
+
+/**
+ * @swagger
+ * /payroll-entries/search:
+ *   post:
+ *     summary: searchPayrollEntries
+ *     tags: [Payroll]
+ *     responses:
+ *       200: { description: Successful operation }
+ *       400: { description: Invalid input or transition }
+ *       403: { description: Permission denied }
+ */
+router.post("/payroll-entries/search", authMiddleware(ANY_ROLE), checkPermission("/payroll-entry", "read"), searchValidation, orchestration.searchPayrollEntries);
+
+/**
+ * @swagger
+ * /payroll-entries/{id}:
+ *   get:
+ *     summary: getPayrollEntry
+ *     tags: [Payroll]
+ *     responses:
+ *       200: { description: Successful operation }
+ *       400: { description: Invalid input or transition }
+ *       403: { description: Permission denied }
+ */
+router.get("/payroll-entries/:id", authMiddleware(ANY_ROLE), checkPermission("/payroll-entry", "read"), param("id").isMongoId(), handleValidationErrors, orchestration.getPayrollEntry);
+
+/**
+ * @swagger
+ * /payroll-entries/{id}/create-slips:
+ *   post:
+ *     summary: createPayrollSlips
+ *     tags: [Payroll]
+ *     responses:
+ *       200: { description: Successful operation }
+ *       400: { description: Invalid input or transition }
+ *       403: { description: Permission denied }
+ */
+router.post("/payroll-entries/:id/create-slips", authMiddleware(ANY_ROLE), checkPermission("/payroll-entry", "edit"), allowOnlyFields([]), param("id").isMongoId(), handleValidationErrors, orchestration.createPayrollSlips);
+
+/**
+ * @swagger
+ * /payroll-entries/{id}/submit-slips:
+ *   post:
+ *     summary: submitPayrollSlips
+ *     tags: [Payroll]
+ *     responses:
+ *       200: { description: Successful operation }
+ *       400: { description: Invalid input or transition }
+ *       403: { description: Permission denied }
+ */
+router.post("/payroll-entries/:id/submit-slips", authMiddleware(ANY_ROLE), checkPermission("/payroll-entry", "edit"), allowOnlyFields([]), param("id").isMongoId(), handleValidationErrors, orchestration.submitPayrollSlips);
+
+/**
+ * @swagger
+ * /payroll-entries/{id}/cancel:
+ *   post:
+ *     summary: cancelPayrollEntry
+ *     tags: [Payroll]
+ *     responses:
+ *       200: { description: Successful operation }
+ *       400: { description: Invalid input or transition }
+ *       403: { description: Permission denied }
+ */
+router.post("/payroll-entries/:id/cancel", authMiddleware(ANY_ROLE), checkPermission("/payroll-entry", "edit"), allowOnlyFields([]), param("id").isMongoId(), handleValidationErrors, orchestration.cancelPayrollEntry);
+
+/**
+ * @swagger
+ * /salary-withholdings:
+ *   post:
+ *     summary: createSalaryWithholding
+ *     tags: [Payroll]
+ *     responses:
+ *       200: { description: Successful operation }
+ *       400: { description: Invalid input or transition }
+ *       403: { description: Permission denied }
+ */
+router.post("/salary-withholdings", authMiddleware(ANY_ROLE), checkPermission("/salary-withholding", "write"), allowOnlyFields(["employeeId", "fromDate", "numberOfWithholdingCycles"]), body("employeeId").isMongoId(), body("fromDate").isISO8601(), body("numberOfWithholdingCycles").isInt({ min: 1, max: 1200 }).toInt(), handleValidationErrors, orchestration.createSalaryWithholding);
+
+/**
+ * @swagger
+ * /salary-withholdings/search:
+ *   post:
+ *     summary: searchSalaryWithholdings
+ *     tags: [Payroll]
+ *     responses:
+ *       200: { description: Successful operation }
+ *       400: { description: Invalid input or transition }
+ *       403: { description: Permission denied }
+ */
+router.post("/salary-withholdings/search", authMiddleware(ANY_ROLE), checkPermission("/salary-withholding", "read"), searchValidation, orchestration.searchSalaryWithholdings);
+
+/**
+ * @swagger
+ * /salary-withholdings/{id}:
+ *   get:
+ *     summary: getSalaryWithholding
+ *     tags: [Payroll]
+ *     responses:
+ *       200: { description: Successful operation }
+ *       400: { description: Invalid input or transition }
+ *       403: { description: Permission denied }
+ */
+router.get("/salary-withholdings/:id", authMiddleware(ANY_ROLE), checkPermission("/salary-withholding", "read"), param("id").isMongoId(), handleValidationErrors, orchestration.getSalaryWithholding);
+
+/**
+ * @swagger
+ * /salary-withholdings/{id}/release-cycle:
+ *   post:
+ *     summary: releaseWithholdingCycle
+ *     tags: [Payroll]
+ *     responses:
+ *       200: { description: Successful operation }
+ *       400: { description: Invalid input or transition }
+ *       403: { description: Permission denied }
+ */
+router.post("/salary-withholdings/:id/release-cycle", authMiddleware(ANY_ROLE), checkPermission("/salary-withholding", "edit"), allowOnlyFields(["cycleId", "releaseReference"]), param("id").isMongoId(), body("cycleId").isMongoId(), body("releaseReference").optional().isString().isLength({ max: 500 }), handleValidationErrors, orchestration.releaseWithholdingCycle);
+
+/**
+ * @swagger
+ * /salary-withholdings/{id}/release-all:
+ *   post:
+ *     summary: releaseAllWithholdingCycles
+ *     tags: [Payroll]
+ *     responses:
+ *       200: { description: Successful operation }
+ *       400: { description: Invalid input or transition }
+ *       403: { description: Permission denied }
+ */
+router.post("/salary-withholdings/:id/release-all", authMiddleware(ANY_ROLE), checkPermission("/salary-withholding", "edit"), allowOnlyFields(["releaseReference"]), param("id").isMongoId(), body("releaseReference").optional().isString().isLength({ max: 500 }), handleValidationErrors, orchestration.releaseAllWithholdingCycles);
+
+/**
+ * @swagger
+ * /salary-withholdings/{id}/cancel:
+ *   post:
+ *     summary: cancelSalaryWithholding
+ *     tags: [Payroll]
+ *     responses:
+ *       200: { description: Successful operation }
+ *       400: { description: Invalid input or transition }
+ *       403: { description: Permission denied }
+ */
+router.post("/salary-withholdings/:id/cancel", authMiddleware(ANY_ROLE), checkPermission("/salary-withholding", "edit"), allowOnlyFields([]), param("id").isMongoId(), handleValidationErrors, orchestration.cancelSalaryWithholding);
+
+/**
+ * @swagger
+ * /salary-withholdings/{id}:
+ *   put:
+ *     summary: updateSalaryWithholding
+ *     tags: [Payroll]
+ *     responses:
+ *       200: { description: Successful operation }
+ *       400: { description: Cancel before deleting; snapshots cannot be edited }
+ *       409: { description: Referenced record }
+ */
+router.put("/salary-withholdings/:id", authMiddleware(ANY_ROLE), checkPermission("/salary-withholding", "edit"), allowOnlyFields([]), param("id").isMongoId(), handleValidationErrors, orchestration.updateSalaryWithholding);
+/**
+ * @swagger
+ * /salary-withholdings/{id}:
+ *   delete:
+ *     summary: deleteSalaryWithholding
+ *     tags: [Payroll]
+ *     responses:
+ *       200: { description: Successful operation }
+ *       400: { description: Cancel before deleting; snapshots cannot be edited }
+ *       409: { description: Referenced record }
+ */
+router.delete("/salary-withholdings/:id", authMiddleware(ANY_ROLE), checkPermission("/salary-withholding", "delete"), allowOnlyFields([]), param("id").isMongoId(), handleValidationErrors, orchestration.deleteSalaryWithholding);
+/**
+ * @swagger
+ * /payroll-entries/{id}:
+ *   delete:
+ *     summary: deletePayrollEntry
+ *     tags: [Payroll]
+ *     responses:
+ *       200: { description: Successful operation }
+ *       400: { description: Cancel before deleting; snapshots cannot be edited }
+ *       409: { description: Referenced record }
+ */
+router.delete("/payroll-entries/:id", authMiddleware(ANY_ROLE), checkPermission("/payroll-entry", "delete"), allowOnlyFields([]), param("id").isMongoId(), handleValidationErrors, orchestration.deletePayrollEntry);
 
 export default router;

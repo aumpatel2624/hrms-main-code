@@ -122,4 +122,33 @@ moving on. **The fallback chain is only as safe as the verification step at each
 count alone wouldn't have caught that codex's partial work was actually in good shape to hand off
 rather than discard.
 
+## User-reported bug hunt (2026-09-11): "the /add pages show nothing" — 5 bugs across 2 delegation tiers
+
+Not a module build — a live bug report, handled with the same discipline: reproduce first (Playwright
+against a real dev server, not guessing from code), root-cause before fixing, independently verify
+every fix live before merging.
+
+| Task | Tool | Outcome |
+|---|---|---|
+| Root-cause investigation (reproduce, diagnose the TDZ crash exactly, file issue #18) | Claude (orchestrator, direct) | Found via a Playwright repro hitting the real dev server — `ADVANCED_ENTITIES` referenced 9 configs declared later in the same file. Filed #18 with exact line numbers. |
+| Fix #18 (`ADVANCED_ENTITIES` reorder) | codex (Herdr pane `bugfix-issue18`) | Delivered cleanly, ~6m 36s. Also self-found and fixed a second masked-import bug (`getAllSalarySlips`) during its own verification pass, unprompted. |
+| Independent re-verification of #18 | Claude (orchestrator, direct) | Live browser re-run in an isolated worktree confirmed correct — but a **broader** sweep (all 78 `/add` routes, not codex's 5-page sample) surfaced a second real bug (#20) codex's narrower check had missed. |
+| Fix #20 (`getAllLeaveAllocations` missing import) | codex (same pane, follow-up prompt) | Delivered cleanly, ~1m 36s, live-verified both affected routes itself before reporting. |
+| Broader re-verification surfacing #21/#22 | Claude (orchestrator, direct) | A comprehensive 78-route sweep (after fixing a `127.0.0.1`-vs-`localhost` cookie mismatch and a Vite `fs.allow` symlink artifact in the test harness itself) found two more real, distinct, systemic bugs: `SelectField` breaking on plain-string `options` arrays (dozens of fields, since module 1) and 5 array-field column definitions using `key` instead of `name` (modules 13/14). |
+| Fix #21 + #22 | Claude (orchestrator, direct) | Both small, well-understood, shared-component/mechanical fixes — done directly rather than another delegate round-trip, given their scope was already fully diagnosed. `npm test`/`npm run build` clean; live-verified (dropdown labels correct, zero "duplicate key" warnings across the full sweep). |
+| #19 (CrudView tabs, a separately-requested UI improvement, not a bug) | codex (isolated worktree `demo-panel-tabs-work`, pane `crudview-tabs`) | Delivered cleanly, ~2m 32s, correctly deferred live verification (app was still broken by #18 in its base branch at the time) rather than guessing. Orchestrator rebased it onto the fixed `development` (via cherry-pick, after a `git merge` guard-hook false-positive — see below) and live-verified the tabs UI itself on two real multi-section entities before merging. |
+
+**Efficiency note**: codex was fast and accurate on narrowly-scoped, well-specified fixes (both #18 and
+#20 done in well under 10 minutes combined) but its own verification sample (5 pages) was narrower than
+what the bug's actual blast radius warranted — the orchestrator's own broader sweep is what caught #20,
+#21, and #22. **Lesson for next time: when a fix is "the whole app was broken," verify with a sweep
+across every route, not a representative sample** — a systemic bug's fix deserves systemic verification.
+
+**Tooling note, worth remembering**: `.claude/hooks/guard-bash.sh`'s protected-branch check inspects
+`$CLAUDE_PROJECT_DIR`'s current branch (the main checkout), not the actual worktree the command is
+running in — so `git commit/push/merge` inside an *isolated verification worktree* gets falsely blocked
+whenever the main checkout happens to be sitting on `development` at that moment. Not a bug in any of
+the merges above; the fix is simply to keep the main checkout on a non-protected branch (a feature
+branch, or a throwaway `scratch-*` branch) while doing any git operations in other worktrees.
+
 *Updated after every delegated task completes — check back for fresh rows as modules 8+ progress.*

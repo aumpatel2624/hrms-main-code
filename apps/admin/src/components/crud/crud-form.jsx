@@ -210,7 +210,25 @@ const CrudForm = ({ config, mode = "add" }) => {
         }
     };
 
-    const sections = config.sections ?? [{ id: "default", title: `${config.singular} details` }];
+    // A config's own `sections` (when present) is trusted as-is, in order.
+    // But a field can name a `section` id that isn't declared there (or no
+    // `sections` array exists at all while fields still set `section:
+    // "details"`/`"status"`/etc) — without this, that field silently has
+    // nowhere to render: `(f.section ?? "default") === section.id` never
+    // matches, `if (!fields.length) return null` drops the whole section,
+    // and the form/view shows nothing at all (issue #27). Any field-section
+    // id not already covered gets its own auto-titled section appended, so
+    // every field always has somewhere to land.
+    const declaredSections = config.sections ?? [];
+    const declaredSectionIds = new Set(declaredSections.map((s) => s.id));
+    const usedSectionIds = [...new Set(config.fields.map((f) => f.section ?? "default"))];
+    const autoSections = usedSectionIds
+        .filter((id) => !declaredSectionIds.has(id))
+        .map((id) => ({
+            id,
+            title: id === "default" ? `${config.singular} details` : id.charAt(0).toUpperCase() + id.slice(1),
+        }));
+    const sections = [...declaredSections, ...autoSections];
     const visible = config.fields.filter((f) => !f.hideIn?.includes(mode));
 
     document.title = `${isEdit ? "Edit" : "Add"} ${config.singular} | Demo Panel`;

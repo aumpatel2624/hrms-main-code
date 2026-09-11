@@ -14,6 +14,13 @@ import {
     createSalarySlip, getSalarySlipById, updateSalarySlip, deleteSalarySlip, searchSalarySlips,
     submitSalarySlip, cancelSalarySlip,
 } from "../api/payrollRun.api";
+import {
+    createAdditionalSalary, getAdditionalSalaryById, cancelAdditionalSalary, deleteAdditionalSalary, searchAdditionalSalaries,
+    createArrear, getArrearById, updateArrear, deleteArrear, searchArrears, submitArrear, cancelArrear,
+    createRetentionBonus, getRetentionBonusById, updateRetentionBonus, deleteRetentionBonus, searchRetentionBonuses, submitRetentionBonus, cancelRetentionBonus,
+    createEmployeeIncentive, getEmployeeIncentiveById, updateEmployeeIncentive, deleteEmployeeIncentive, searchEmployeeIncentives, submitEmployeeIncentive, cancelEmployeeIncentive,
+    createEmployeeOtherIncome, getEmployeeOtherIncomeById, updateEmployeeOtherIncome, deleteEmployeeOtherIncome, searchEmployeeOtherIncomes, submitEmployeeOtherIncome, cancelEmployeeOtherIncome,
+} from "../api/payrollAdjustments.api";
 import { GenerateShiftsPanel } from "../components/hrms/generate-shifts-panel";
 import { Building07, Hash02, Link01, Mail01, MarkerPin01, Phone, Shield01, Tag01, Type01, User01 } from "@untitledui/icons";
 import { isStrongPassword, isValidEmail, PASSWORD } from "@demo-panel/shared/validation";
@@ -3652,6 +3659,433 @@ export const salaryWithholdingConfig = {
     </>,
 };
 
+// ============================================================================
+// ADR-028 (Payroll — Adjustments & Incentives)
+// ============================================================================
+
+export const additionalSalaryConfig = {
+    key: "additional-salary",
+    path: "/additional-salary",
+    section: "Payroll",
+    singular: "Additional Salary",
+    plural: "Additional Salaries",
+    description: "Ad-hoc or recurring earnings/deductions that sit outside an employee's base Salary Structure Assignment.",
+    api: {
+        search: searchAdditionalSalaries,
+        getById: getAdditionalSalaryById,
+        create: createAdditionalSalary,
+        remove: deleteAdditionalSalary,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        salaryComponentId: asOptions(getAllSalaryComponents, "salaryComponentName"),
+    },
+    sections: [
+        { id: "details", title: "Adjustment details" },
+        { id: "dates", title: "Schedule / Dates" },
+        { id: "settings", title: "Settings & Status" },
+    ],
+    fields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "salaryComponentId", label: "Salary Component", section: "details", type: "select", optionsFrom: "salaryComponentId", required: true, error: "Salary Component is required" },
+        { name: "amount", label: "Amount", section: "details", type: "number", required: true, error: "Amount is required" },
+        { name: "isRecurring", label: "Is Recurring", section: "dates", type: "checkbox", default: false },
+        { name: "payrollDate", label: "Payroll Date (one-off)", section: "dates", type: "date" },
+        { name: "fromDate", label: "From Date (recurring)", section: "dates", type: "date" },
+        { name: "toDate", label: "To Date (recurring)", section: "dates", type: "date" },
+        { name: "overwriteSalaryStructureAmount", label: "Overwrite Salary Structure Amount", section: "settings", type: "checkbox", default: false },
+        { name: "deductFullTaxOnSelectedPayrollDate", label: "Deduct Full Tax on Selected Payroll Date", section: "settings", type: "checkbox", default: false },
+    ],
+    columns: [
+        { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Component", selector: (r) => r.salaryComponentId?.salaryComponentName || r.salaryComponentIdLabel || "—" },
+        { name: "Type", selector: (r) => r.type || "—" },
+        { name: "Amount", selector: (r) => r.amount ?? "—" },
+        { name: "Recurring", selector: (r) => (r.isRecurring ? "Yes" : "No") },
+        { name: "Date", selector: (r) => (r.isRecurring ? `${String(r.fromDate ?? "").slice(0, 10)} to ${String(r.toDate ?? "").slice(0, 10)}` : String(r.payrollDate ?? "").slice(0, 10)) },
+        { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" },
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        <>
+            {mode === "edit" && id && values.status === "active" && (
+                <SimpleActionButton
+                    label="Cancel"
+                    description="Cancels this additional salary adjustment so it will no longer be included in salary slips."
+                    onRun={() => cancelAdditionalSalary(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+        </>
+    ),
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "salaryComponentId", label: "Salary Component", type: "objectId" },
+        { name: "type", label: "Type", type: "string" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "payrollDate", label: "Payroll date", type: "date" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => `Additional Salary — ${r.amount ?? ""}`,
+    toForm: (data) => ({
+        ...data,
+        employeeId: refId(data.employeeId),
+        salaryComponentId: refId(data.salaryComponentId),
+        payrollDate: data.payrollDate?.slice(0, 10) || "",
+        fromDate: data.fromDate?.slice(0, 10) || "",
+        toDate: data.toDate?.slice(0, 10) || "",
+    }),
+    toPayload: (values, mode) => (mode === "edit"
+        ? {}
+        : {
+            employeeId: values.employeeId,
+            salaryComponentId: values.salaryComponentId,
+            amount: Number(values.amount),
+            isRecurring: Boolean(values.isRecurring),
+            payrollDate: values.isRecurring ? null : (values.payrollDate || null),
+            fromDate: values.isRecurring ? (values.fromDate || null) : null,
+            toDate: values.isRecurring ? (values.toDate || null) : null,
+            overwriteSalaryStructureAmount: Boolean(values.overwriteSalaryStructureAmount),
+            deductFullTaxOnSelectedPayrollDate: Boolean(values.deductFullTaxOnSelectedPayrollDate),
+        }),
+};
+
+export const arrearConfig = {
+    key: "arrear",
+    path: "/arrear",
+    section: "Payroll",
+    singular: "Arrear",
+    plural: "Arrears",
+    description: "Calculates retroactive salary differential pay when a Salary Structure Assignment is backdated over historical slips.",
+    api: {
+        search: searchArrears,
+        getById: getArrearById,
+        create: createArrear,
+        update: updateArrear,
+        remove: deleteArrear,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+    },
+    sections: [
+        { id: "details", title: "Arrear Window" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "startDate", label: "Start Date (Retroactive)", section: "details", type: "date", required: true, error: "Start date is required" },
+        { name: "endDate", label: "End Date (Retroactive)", section: "details", type: "date", required: true, error: "End date is required" },
+        { name: "payrollDate", label: "Payroll Date (Payout)", section: "details", type: "date", required: true, error: "Payroll date is required" },
+    ],
+    columns: [
+        { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Period", selector: (r) => `${String(r.startDate ?? "").slice(0, 10)} to ${String(r.endDate ?? "").slice(0, 10)}` },
+        { name: "Payroll Date", selector: (r) => String(r.payrollDate ?? "").slice(0, 10), sortable: true, sortField: "payrollDate" },
+        { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" },
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        <>
+            {mode !== "add" && (
+                <>
+                    <ReadOnlyRows
+                        title="Earning Arrears"
+                        rows={values.earningArrears}
+                        columns={[
+                            { label: "Component", value: (row) => row.salaryComponentId?.salaryComponentName || row.salaryComponentId?.abbreviation || row.salaryComponentId || "—" },
+                            { label: "Amount", value: (row) => row.amount ?? 0 },
+                        ]}
+                    />
+                    <ReadOnlyRows
+                        title="Deduction Arrears"
+                        rows={values.deductionArrears}
+                        columns={[
+                            { label: "Component", value: (row) => row.salaryComponentId?.salaryComponentName || row.salaryComponentId?.abbreviation || row.salaryComponentId || "—" },
+                            { label: "Amount", value: (row) => row.amount ?? 0 },
+                        ]}
+                    />
+                </>
+            )}
+            {mode === "edit" && id && values.status === "draft" && (
+                <SimpleActionButton
+                    label="Submit"
+                    description="Generates active Additional Salary records for each arrear item and marks Arrear as submitted."
+                    onRun={() => submitArrear(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+            {mode === "edit" && id && values.status === "submitted" && (
+                <SimpleActionButton
+                    label="Cancel"
+                    description="Cancels this Arrear and all generated Additional Salary records."
+                    onRun={() => cancelArrear(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+        </>
+    ),
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "payrollDate", label: "Payroll date", type: "date" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => `Arrear — ${String(r.startDate ?? "").slice(0, 10)} to ${String(r.endDate ?? "").slice(0, 10)}`,
+    toForm: (data) => ({
+        ...data,
+        employeeId: refId(data.employeeId),
+        startDate: data.startDate?.slice(0, 10) || "",
+        endDate: data.endDate?.slice(0, 10) || "",
+        payrollDate: data.payrollDate?.slice(0, 10) || "",
+    }),
+    toPayload: (values, mode) => (mode === "edit"
+        ? { payrollDate: values.payrollDate }
+        : {
+            employeeId: values.employeeId,
+            startDate: values.startDate,
+            endDate: values.endDate,
+            payrollDate: values.payrollDate,
+        }),
+};
+
+export const retentionBonusConfig = {
+    key: "retention-bonus",
+    path: "/retention-bonus",
+    section: "Payroll",
+    singular: "Retention Bonus",
+    plural: "Retention Bonuses",
+    description: "Tracks retention bonus agreements payable to an active employee on a future payment date.",
+    api: {
+        search: searchRetentionBonuses,
+        getById: getRetentionBonusById,
+        create: createRetentionBonus,
+        update: updateRetentionBonus,
+        remove: deleteRetentionBonus,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        salaryComponentId: asOptions(getAllSalaryComponents, "salaryComponentName"),
+    },
+    sections: [
+        { id: "details", title: "Bonus details" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "salaryComponentId", label: "Salary Component (Earning)", section: "details", type: "select", optionsFrom: "salaryComponentId", required: true, error: "Salary Component is required" },
+        { name: "bonusAmount", label: "Bonus Amount", section: "details", type: "number", required: true, error: "Bonus Amount is required" },
+        { name: "bonusPaymentDate", label: "Bonus Payment Date", section: "details", type: "date", required: true, error: "Payment Date is required" },
+    ],
+    columns: [
+        { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Component", selector: (r) => r.salaryComponentId?.salaryComponentName || r.salaryComponentIdLabel || "—" },
+        { name: "Amount", selector: (r) => r.bonusAmount ?? "—" },
+        { name: "Payment Date", selector: (r) => String(r.bonusPaymentDate ?? "").slice(0, 10), sortable: true, sortField: "bonusPaymentDate" },
+        { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" },
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        <>
+            {mode === "edit" && id && values.status === "draft" && (
+                <SimpleActionButton
+                    label="Submit"
+                    description="Generates an active Additional Salary record and marks Retention Bonus submitted."
+                    onRun={() => submitRetentionBonus(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+            {mode === "edit" && id && values.status === "submitted" && (
+                <SimpleActionButton
+                    label="Cancel"
+                    description="Cancels the Retention Bonus and its linked Additional Salary."
+                    onRun={() => cancelRetentionBonus(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+        </>
+    ),
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "salaryComponentId", label: "Salary Component", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "bonusPaymentDate", label: "Payment date", type: "date" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => `Retention Bonus — ${r.bonusAmount ?? ""}`,
+    toForm: (data) => ({
+        ...data,
+        employeeId: refId(data.employeeId),
+        salaryComponentId: refId(data.salaryComponentId),
+        bonusPaymentDate: data.bonusPaymentDate?.slice(0, 10) || "",
+    }),
+    toPayload: (values, mode) => (mode === "edit"
+        ? { bonusAmount: Number(values.bonusAmount), bonusPaymentDate: values.bonusPaymentDate, salaryComponentId: values.salaryComponentId }
+        : {
+            employeeId: values.employeeId,
+            salaryComponentId: values.salaryComponentId,
+            bonusAmount: Number(values.bonusAmount),
+            bonusPaymentDate: values.bonusPaymentDate,
+        }),
+};
+
+export const employeeIncentiveConfig = {
+    key: "employee-incentive",
+    path: "/employee-incentive",
+    section: "Payroll",
+    singular: "Employee Incentive",
+    plural: "Employee Incentives",
+    description: "Tracks one-time performance bonuses or sales incentives.",
+    api: {
+        search: searchEmployeeIncentives,
+        getById: getEmployeeIncentiveById,
+        create: createEmployeeIncentive,
+        update: updateEmployeeIncentive,
+        remove: deleteEmployeeIncentive,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        salaryComponentId: asOptions(getAllSalaryComponents, "salaryComponentName"),
+    },
+    sections: [
+        { id: "details", title: "Incentive details" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "salaryComponentId", label: "Salary Component (Earning)", section: "details", type: "select", optionsFrom: "salaryComponentId", required: true, error: "Salary Component is required" },
+        { name: "incentiveAmount", label: "Incentive Amount", section: "details", type: "number", required: true, error: "Incentive Amount is required" },
+        { name: "incentiveDate", label: "Incentive Date", section: "details", type: "date", required: true, error: "Incentive Date is required" },
+    ],
+    columns: [
+        { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Component", selector: (r) => r.salaryComponentId?.salaryComponentName || r.salaryComponentIdLabel || "—" },
+        { name: "Amount", selector: (r) => r.incentiveAmount ?? "—" },
+        { name: "Incentive Date", selector: (r) => String(r.incentiveDate ?? "").slice(0, 10), sortable: true, sortField: "incentiveDate" },
+        { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" },
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        <>
+            {mode === "edit" && id && values.status === "draft" && (
+                <SimpleActionButton
+                    label="Submit"
+                    description="Generates an active Additional Salary record and marks Incentive submitted."
+                    onRun={() => submitEmployeeIncentive(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+            {mode === "edit" && id && values.status === "submitted" && (
+                <SimpleActionButton
+                    label="Cancel"
+                    description="Cancels the Incentive and its linked Additional Salary."
+                    onRun={() => cancelEmployeeIncentive(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+        </>
+    ),
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "salaryComponentId", label: "Salary Component", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "incentiveDate", label: "Incentive date", type: "date" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => `Employee Incentive — ${r.incentiveAmount ?? ""}`,
+    toForm: (data) => ({
+        ...data,
+        employeeId: refId(data.employeeId),
+        salaryComponentId: refId(data.salaryComponentId),
+        incentiveDate: data.incentiveDate?.slice(0, 10) || "",
+    }),
+    toPayload: (values, mode) => (mode === "edit"
+        ? { incentiveAmount: Number(values.incentiveAmount), incentiveDate: values.incentiveDate, salaryComponentId: values.salaryComponentId }
+        : {
+            employeeId: values.employeeId,
+            salaryComponentId: values.salaryComponentId,
+            incentiveAmount: Number(values.incentiveAmount),
+            incentiveDate: values.incentiveDate,
+        }),
+};
+
+export const employeeOtherIncomeConfig = {
+    key: "employee-other-income",
+    path: "/employee-other-income",
+    section: "Payroll",
+    singular: "Employee Other Income",
+    plural: "Employee Other Incomes",
+    description: "Captures externally-declared income sources (rental income, bank interest, freelance, or housing loan loss) for tax computation.",
+    api: {
+        search: searchEmployeeOtherIncomes,
+        getById: getEmployeeOtherIncomeById,
+        create: createEmployeeOtherIncome,
+        update: updateEmployeeOtherIncome,
+        remove: deleteEmployeeOtherIncome,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        payrollPeriodId: asOptions(getAllPayrollPeriods, "startDate"),
+    },
+    sections: [
+        { id: "details", title: "External Income Details" },
+        { id: "status", title: "Status" },
+    ],
+    fields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "payrollPeriodId", label: "Payroll Period", section: "details", type: "select", optionsFrom: "payrollPeriodId", required: true, error: "Payroll Period is required" },
+        { name: "source", label: "Source", section: "details", type: "text", required: true, error: "Source is required", placeholder: "e.g. Income from House Property, Interest Income, Other Income" },
+        { name: "amount", label: "Amount (can be negative for loss)", section: "details", type: "number", required: true, error: "Amount is required" },
+        { name: "date", label: "Date", section: "details", type: "date" },
+    ],
+    columns: [
+        { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Source", selector: (r) => r.source || "—" },
+        { name: "Amount", selector: (r) => r.amount ?? "—" },
+        { name: "Date", selector: (r) => String(r.date ?? "").slice(0, 10), sortable: true, sortField: "date" },
+        { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" },
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        <>
+            {mode === "edit" && id && values.status === "draft" && (
+                <SimpleActionButton
+                    label="Submit"
+                    description="Submits this income declaration."
+                    onRun={() => submitEmployeeOtherIncome(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+            {mode === "edit" && id && values.status === "submitted" && (
+                <SimpleActionButton
+                    label="Cancel"
+                    description="Cancels this income declaration."
+                    onRun={() => cancelEmployeeOtherIncome(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+        </>
+    ),
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "payrollPeriodId", label: "Payroll Period", type: "objectId" },
+        { name: "source", label: "Source", type: "string" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "date", label: "Date", type: "date" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => `Employee Other Income — ${r.source ?? ""}: ${r.amount ?? ""}`,
+    toForm: (data) => ({
+        ...data,
+        employeeId: refId(data.employeeId),
+        payrollPeriodId: refId(data.payrollPeriodId),
+        date: data.date?.slice(0, 10) || "",
+    }),
+    toPayload: (values, mode) => (mode === "edit"
+        ? { amount: Number(values.amount), source: values.source, date: values.date, payrollPeriodId: values.payrollPeriodId }
+        : {
+            employeeId: values.employeeId,
+            payrollPeriodId: values.payrollPeriodId,
+            source: values.source,
+            amount: Number(values.amount),
+            date: values.date || new Date().toISOString().slice(0, 10),
+        }),
+};
+
 export const ADVANCED_ENTITIES = [
     shiftTypeConfig, shiftLocationConfig, shiftAssignmentConfig, shiftScheduleConfig, shiftScheduleAssignmentConfig, employeeCheckinConfig,
     shiftRequestConfig, attendanceRequestConfig,
@@ -3674,4 +4108,6 @@ export const ADVANCED_ENTITIES = [
     leaveEncashmentConfig, leaveBlockListConfig,
     salaryComponentConfig, salaryStructureConfig, salaryStructureAssignmentConfig,
     payrollPeriodConfig, salarySlipConfig, salaryWithholdingConfig,
+    additionalSalaryConfig, arrearConfig, retentionBonusConfig,
+    employeeIncentiveConfig, employeeOtherIncomeConfig,
 ];

@@ -51,6 +51,42 @@ export const ENDPOINTS = {
         BASE: `${V1}/salary-slips`, SEARCH: `${V1}/salary-slips/search`, BY_ID: (id) => `${V1}/salary-slips/${id}`,
         SUBMIT: (id) => `${V1}/salary-slips/${id}/submit`, CANCEL: (id) => `${V1}/salary-slips/${id}/cancel`,
     },
+    // ADR-028 (Payroll — Adjustments & Incentives).
+    ADDITIONAL_SALARIES: {
+        BASE: `${V1}/additional-salaries`,
+        SEARCH: `${V1}/additional-salaries/search`,
+        BY_ID: (id) => `${V1}/additional-salaries/${id}`,
+        CANCEL: (id) => `${V1}/additional-salaries/${id}/cancel`,
+    },
+    ARREARS: {
+        BASE: `${V1}/arrears`,
+        SEARCH: `${V1}/arrears/search`,
+        BY_ID: (id) => `${V1}/arrears/${id}`,
+        CALCULATE: `${V1}/arrears/calculate`,
+        SUBMIT: (id) => `${V1}/arrears/${id}/submit`,
+        CANCEL: (id) => `${V1}/arrears/${id}/cancel`,
+    },
+    RETENTION_BONUSES: {
+        BASE: `${V1}/retention-bonuses`,
+        SEARCH: `${V1}/retention-bonuses/search`,
+        BY_ID: (id) => `${V1}/retention-bonuses/${id}`,
+        SUBMIT: (id) => `${V1}/retention-bonuses/${id}/submit`,
+        CANCEL: (id) => `${V1}/retention-bonuses/${id}/cancel`,
+    },
+    EMPLOYEE_INCENTIVES: {
+        BASE: `${V1}/employee-incentives`,
+        SEARCH: `${V1}/employee-incentives/search`,
+        BY_ID: (id) => `${V1}/employee-incentives/${id}`,
+        SUBMIT: (id) => `${V1}/employee-incentives/${id}/submit`,
+        CANCEL: (id) => `${V1}/employee-incentives/${id}/cancel`,
+    },
+    EMPLOYEE_OTHER_INCOMES: {
+        BASE: `${V1}/employee-other-incomes`,
+        SEARCH: `${V1}/employee-other-incomes/search`,
+        BY_ID: (id) => `${V1}/employee-other-incomes/${id}`,
+        SUBMIT: (id) => `${V1}/employee-other-incomes/${id}/submit`,
+        CANCEL: (id) => `${V1}/employee-other-incomes/${id}/cancel`,
+    },
     EMPLOYEE_ATTENDANCE_TOOL: {
         MARK: `${V1}/employee-attendance-tool/mark`,
         RESOLVE_HALF_DAY: `${V1}/employee-attendance-tool/resolve-half-day`,

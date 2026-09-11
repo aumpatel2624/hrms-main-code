@@ -683,6 +683,20 @@ The foundation half of Module 9 delivers core shift definitions, location geofen
 
 No Employee-role self-service access on any of the five screens (`OPEN-QUESTIONS.md` Q-22 — a real product question, not a foregone decision). Loans, Timesheets, Overtime Slips, and Payroll Correction are out of scope / deferred.
 
+### Payroll — Adjustments & Incentives (module 12 complete, ADR-028)
+
+`AdditionalSalary` — one-off or recurring adjustment to an employee's salary component: `employeeId`, `companyId`, `salaryComponentId` (non-statistical only, type Earning or Deduction), `type`, `amount` (> 0), `isRecurring` + `fromDate`/`toDate` XOR `payrollDate`, `overwriteSalaryStructureAmount` (boolean), `deductFullTaxOnSelectedPayrollDate`, `currency`, `status` (`active`/`cancelled`), and polymorphic back-reference (`refDoctype`/`refDocnameId`). Save-time overwrite uniqueness validation rejects overlapping active rows with `overwriteSalaryStructureAmount: true` for the same employee and component.
+
+`Arrear` — retroactive salary delta calculation: `employeeId`, `companyId`, `startDate`, `endDate`, `payrollDate`, embedded `earningArrears[]` and `deductionArrears[]`, `status` (`draft`/`submitted`/`cancelled`). Evaluates historical submitted `SalarySlip` rows against revised `SalaryStructureAssignment` components; only positive deltas are included (negative deltas excluded). Submit generates active `AdditionalSalary` rows for positive deltas; cancel cascades to cancel all linked `AdditionalSalary` rows.
+
+`RetentionBonus` — retention reward: `employeeId`, `companyId`, `salaryComponentId` (must be type Earning), `bonusAmount` (> 0), `bonusPaymentDate` (validated against employee's relieving date), `additionalSalaryId`, `status` (`draft`/`submitted`/`cancelled`). Submit creates active `AdditionalSalary` record; cancel cascades to cancel it.
+
+`EmployeeIncentive` — performance reward or project bonus: `employeeId`, `companyId`, `salaryComponentId` (must be type Earning), `incentiveAmount` (> 0), `incentiveDate`, `additionalSalaryId`, `status` (`draft`/`submitted`/`cancelled`). Submit creates active `AdditionalSalary` record; cancel cascades to cancel it (deliberate bug fix over source orphan gap).
+
+`EmployeeOtherIncome` — self-service declared other income/loss: `employeeId`, `companyId`, `payrollPeriodId`, `source` (e.g. "Other Income", "Freelance", "Loss"), `amount` (can be negative for deductions/loss), `date`, `status` (`draft`/`submitted`/`cancelled`). Confined to `SCOPES.OWN` self-service for `Employee` role (no delete); HR User/HR Manager have full access. Inert with respect to payslips pending Tax & Exemptions module.
+
+`SalarySlip` retrofit — `calculateSalarySlip` / `calculateSalarySlipForEmployee` merges active `AdditionalSalary` rows covering the slip period. Overwrite rows replace base component amounts; additive rows sum; components not in structure are appended. All adjustment rows hardcode `dependsOnPaymentDays: false` (flat amounts, never scaled).
+
 ## Not modelled
 
 <!-- Things the client talks about that deliberately have no collection, and why. -->

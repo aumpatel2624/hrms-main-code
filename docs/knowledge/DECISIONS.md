@@ -3412,4 +3412,117 @@ Copy this block. Number sequentially.
   - All 25 unit test suites passing (`npm test`).
   - Integration suite `scripts/verify-payroll-adjustments.mjs` executed 44 real HTTP requests against live server validating: component validations (statistical/employer contribution reject 400), date mutual exclusion, overwrite uniqueness overlap reject 400, additive co-existence, `RetentionBonus` submit/cancel cascade, `EmployeeIncentive` submit/cancel cascade, `Arrear` positive-only calculation and submit/cancel cascade, `EmployeeOtherIncome` self-service scoping with negative amounts, and live `SalarySlip` overwrite/additive calculation matching exact hand-calculated figures. Teardown restored employee count exactly to baseline 195.
 
+---
+
+### ADR-029 — Payroll (Benefits): Employee Benefit Claim is a fourth Additional Salary producer, Employee Benefit Ledger is a domain ledger not a GL, Payroll Correction finally built now that both blockers are gone
+
+- **Date**: 2026-09-11
+- **Status**: accepted
+- **Context**: `system-design` for HRMS module 13, following Payroll — Adjustments & Incentives
+  (module 12, ADR-028, shipped). Read an `agy` research pass in full: all 5 real per-doctype specs
+  in scope (`Employee Benefit Application`+`Detail`, `Employee Benefit Claim`, `Employee Benefit
+  Detail` (shared child on `SalaryStructure`/`SalaryStructureAssignment`), `Employee Benefit
+  Ledger`), plus ADR-026/027/028 in full and this project's current `SalaryComponent.js`/
+  `SalaryStructure.js`/`SalaryStructureAssignment.js`/`AdditionalSalary.js`/`salarySlipCalc.js`. This
+  module closes the remaining half of `OPEN-QUESTIONS.md` Q-18 (`employeeBenefits`/`maxBenefits`,
+  deferred in ADR-026) and settles Q-20 (`Payroll Correction`, deferred in ADR-027/028).
+- **`Employee Benefit Claim` is a fourth producer routing through `AdditionalSalary`, cementing
+  module 12's architecture rather than inventing a parallel mechanism.** On submit, a claim creates
+  one `AdditionalSalary` (`type: "Earning"`, `overwriteSalaryStructureAmount: false` — additive,
+  never replacing base pay, `refDoctype: "EmployeeBenefitClaim"`) exactly the way `RetentionBonus`/
+  `EmployeeIncentive`/`Arrear` already do — `AdditionalSalary.refDoctype`'s enum grows to include it
+  (and `"PayrollCorrection"`, below). **Per ADR-028's uniform cancellation-cascade pattern, extended
+  here**: cancelling a claim cancels its linked `AdditionalSalary` too — source's own claim-
+  cancellation is the same orphan gap already fixed for the other three producers, closed the same
+  way, not reproduced a fourth time.
+- **`Employee Benefit Ledger` is a domain ledger, architecturally identical to `LeaveLedgerEntry`
+  (ADR-024) — not a GL, and not written to directly by any client.** It records `Accrual`/`Payout`
+  events (`employeeId`, `salaryComponentId`, `payrollPeriodId`, `amount`, `salarySlipId`,
+  polymorphic `refDoctype`/`refDocnameId`) purely to answer "how much of this flexible-benefit pool
+  has this employee accrued vs. been paid so far" — no chart-of-accounts, no debit/credit, no
+  `Account` reference anywhere. Per the research's own explicit audit, this is the one place in this
+  module where a naive read of "ledger" could be mistaken for GL surface to drop — it is not; the
+  distinction (`operational running balance` vs. `financial books`) is the same one that already
+  justified `LeaveLedgerEntry` staying in scope. **Exposed read-only** (`GET` list/detail only, no
+  public `POST`/`PUT`/`DELETE` route at all) — writes happen exclusively through an internal service
+  function (`createBenefitLedgerEntry`) called from `SalarySlip`'s own submit/cancel lifecycle, never
+  from a client request. This is a real, deliberate improvement over source's own access-control gap
+  (source relies on server code running as an implicit Administrator to bypass permission checks —
+  not a pattern this project's permission model has, or should adopt).
+- **`SalarySlip`'s submit/cancel actions are extended, not replaced, to write/unwrite ledger rows.**
+  On submit: post one `Accrual` row for every earnings-table row flagged `accrualComponent: true`
+  (structural accrual components and flexible-benefit accrual components alike — the same flag ADR-
+  026 already put on `SalaryComponent`/`SalaryDetail`), and one `Payout` row for every benefit
+  component actually paid on this slip (via an `AdditionalSalary` linked to an `EmployeeBenefitClaim`,
+  or a final-cycle automatic payout — see the payout-method table below). On cancel: delete every
+  ledger row matching `salarySlipId: this._id` (a real, bounded cascade — this doesn't touch any
+  other slip's rows) so a later balance recomputation is correct again. Both are additions to the
+  existing submit/cancel handlers built in ADR-027/028, not new endpoints.
+- **Three real payout methods on a flexible `SalaryComponent`, reproduced exactly** (`payoutMethod`
+  enum): *"Accrue and payout at end of payroll period"* (pro-rata accrual every cycle, automatic
+  payout in the period's final cycle, never individually claimable); *"Accrue per cycle, pay only on
+  claim"* (pro-rata accrual every cycle sits in the ledger until an `EmployeeBenefitClaim` draws it
+  down; `finalCycleAccrualPayout` optionally auto-disburses any unclaimed remainder in the final
+  cycle); *"Allow claim for full benefit amount"* (no periodic accrual tracking at all — the entire
+  annual allocation is claimable from day one, capped by `yearlyBenefit - paidToDate`). Reject an
+  unrecognized `payoutMethod` with a real validation error (source silently returns 0 eligible —
+  named as a flagged gap, fixed as a deliberate improvement, not reproduced).
+- **A claim's eligibility math genuinely needs a "what would this slip look like right now" preview,
+  without writing a real `SalarySlip`.** For the *"Accrue per cycle, pay only on claim"* method, a
+  mid-cycle claim is evaluated before the current period's own slip has been submitted, so the
+  current month's accrual isn't in the ledger yet. Add `previewCurrentCycleBenefitAccrual` to
+  `apps/server/utils/salarySlipCalc.js` — reuses the existing `calculateSalarySlip` pure function
+  (unchanged) purely to compute the not-yet-posted accrual figure, discarding the rest of the
+  calculation. This is the same "reuse the existing engine, don't build a second one" discipline
+  ADR-027 already established for the payment-days context — not a new kind of component.
+- **`Employee Benefit Application` resolves against `Employee Benefit Detail` with a real fallback
+  chain, gated by a new `PayrollSettings.mandatoryBenefitApplication` toggle**: if the employee has a
+  submitted `Application` for the current `PayrollPeriod`, it governs; otherwise, when
+  `mandatoryBenefitApplication` is `false` (the sensible default — most companies don't force an
+  annual election form), fall back directly to the `SalaryStructureAssignment`'s own
+  `employeeBenefits[]`; when `true`, no flexible benefits are claimable without one. `Employee Benefit
+  Application`'s own `totalAmount`/`remainingBenefit` move from source's client-JS-only computation to
+  a real server-side calculation (the same "close a flagged client-only gap" pattern ADR-027 already
+  applied to `SalarySlip`'s own totals) — enforced server-side before save, not just displayed.
+- **Naming: plain ObjectId everywhere, not the auto-slug scheme the research surfaced.** The research
+  described source's `BEN-APP-YYYY-MM-XXXXX`-style naming series for `Employee Benefit Application`/
+  `Claim` — this project dropped naming series project-wide starting with ADR-016 and has never
+  reintroduced one; these two doctypes get the same plain ObjectId identity as every other model in
+  this build. Named explicitly here since it's the one place this session's own research recommended
+  something the project's own settled conventions already rule out.
+- **`Payroll Correction` (Q-20) is built in this module, not deferred a third time.** The research
+  traced the two things ADR-027/028 flagged as blocking it and found both are gone: its output targets
+  (`AdditionalSalary` for earning/deduction arrears, `Employee Benefit Ledger` for accrual arrears) now
+  both exist, and the "circular dependency with `Arrear`" ADR-028 worried about turns out to have never
+  been circular — source's `Arrear` reads prior `Payroll Correction` records, but `Payroll Correction`
+  itself never reads `Arrear` at all. Given it's now genuinely unblocked, bounded in scope (reads one
+  submitted `SalarySlip`'s LWP/payment-days figures, reproduces the same docstatus-folding and
+  cancellation-cascade patterns already built twice this module), and reuses established machinery end
+  to end, building it now closes a question that has been open since module 11 rather than deferring
+  it a third time for no remaining technical reason — the alternative (Option B in the research: keep
+  this module Benefits-only, treat `Payroll Correction` as yet another follow-up) would just be
+  deferral for its own sake once the real blockers are gone. `Payroll Correction`'s output: creates
+  `AdditionalSalary` rows for earning/deduction arrears exactly like `Arrear` already does, and
+  `Employee Benefit Ledger` `Accrual` rows for reversed benefit accrual — validated against the target
+  slip's own `lwpDays` (the sum of `daysToReverse` across all corrections on one slip cannot exceed
+  it). Same uniform cancellation-cascade as everything else in this module.
+- **Retrofits to precursor models, closing Q-18's remaining half**: `SalaryComponent` gains
+  `isFlexibleBenefit`/`maxBenefitAmount`/`payoutMethod`/`finalCycleAccrualPayout` (validated:
+  `payoutMethod` required when `isFlexibleBenefit`, and any accrual-shaped `payoutMethod` requires
+  `accrualComponent: true` and `type: "Earning"`); `SalaryStructure` and `SalaryStructureAssignment`
+  both gain `maxBenefits`+`employeeBenefits[]` (the shared `Employee Benefit Detail` shape:
+  `salaryComponentId`+`amount`, validated against per-component and total ceilings); `PayrollSettings`
+  gains `mandatoryBenefitApplication`.
+- **Decision — models**: `EmployeeBenefitApplication` (+ embedded `employeeBenefits[]`);
+  `EmployeeBenefitClaim` (+`additionalSalaryId`); `EmployeeBenefitLedger` (read-only API, internal-
+  write-only); `PayrollCorrection` (+ embedded `earningArrears[]`/`deductionArrears[]`/
+  `accrualArrears[]`, reusing `Arrear`'s established shapes). `Employee Benefit Detail` stays an
+  embedded child schema (shared by `SalaryStructure`/`SalaryStructureAssignment`), not its own
+  collection, matching every other doctype-shaped-as-a-child-table folding pattern in this build.
+- **Consequences**: `OPEN-QUESTIONS.md` Q-18 closes in full (both halves now answered). Q-20 closes —
+  `Payroll Correction` is built, not deferred again.
+- **Deviates from convention**: none beyond what's named above (the uniform cancellation-cascade
+  extended to a fourth producer and the read-only-ledger access model are both the same "deliberate
+  improvement" category already established repeatedly this session).
+
 

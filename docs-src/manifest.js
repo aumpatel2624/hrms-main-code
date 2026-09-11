@@ -1051,6 +1051,34 @@ export const CONFIG_SCREENS = [
         ],
         roles: "HR User and HR Manager manage records within their company.",
     },
+    // ADR-027 (Payroll — Run, foundation half). Still HR-configuration/
+    // transactional screens only — no Employee self-service.
+    {
+        key: "payroll-period",
+        config: "payrollPeriodConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A company-scoped date range payroll runs against — also used to work out which dates are holidays for a Salary Slip.",
+        when: "Set one up for each payroll run's date range before creating Salary Slips against it.",
+        gotchas: [
+            "Start Date cannot be after End Date.",
+            "Two periods for the SAME company cannot overlap. Different companies may freely overlap — a period is company-specific.",
+        ],
+        roles: "HR User and HR Manager manage records within their company.",
+    },
+    {
+        key: "salary-slip",
+        config: "salarySlipConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "One payslip for one employee for one period — computed from their current Salary Structure Assignment plus their actual attendance/leave for that period.",
+        when: "Create one once a period's attendance and leave are finalized. Everything on it — payment days, every earning/deduction row, the totals — is computed once at that moment and does not change afterward, even if attendance is corrected later.",
+        gotchas: [
+            "Payment Days can be less than the period's Working Days — an unpaid leave day, an unmarked day (depending on Payroll Settings), a half day, or joining/leaving mid-period all reduce it.",
+            "A Draft slip may show a negative Net Pay — that's a warning sign to check the Salary Structure, not a blocked state. Submitting is what enforces Net Pay >= 0.",
+            "Submit and Cancel are the two actions — there is no edit-in-place; get the period/structure right before creating it, since a slip is a point-in-time snapshot.",
+            "Only one Salary Slip per employee per exact (Start Date, End Date) pair is allowed.",
+        ],
+        roles: "HR User and HR Manager manage records within their company.",
+    },
 ];
 
 /**
@@ -1247,6 +1275,37 @@ export const CUSTOM_SCREENS = [
                     "The title template controls how page titles are assembled — typically the page name " +
                     "followed by your site name. Set it once here rather than repeating the site name on " +
                     "every page.",
+            },
+        ],
+    },
+    {
+        key: "payroll-settings",
+        title: "Payroll Settings",
+        path: "/payroll-settings",
+        source: "apps/admin/src/pages/Payroll/PayrollSettings.jsx",
+        intro:
+            "One shared set of rules every Salary Slip's payment-days calculation reads — how attendance is " +
+            "sourced, how an unmarked day counts, and how a half day is weighted.",
+        body: [
+            {
+                heading: "One row for the whole company",
+                text:
+                    "There is only one Payroll Settings record — it applies to every Salary Slip created " +
+                    "afterward, not per-company. The first time this page is opened it is created automatically " +
+                    "with sensible defaults.",
+            },
+            {
+                heading: "Payroll Based On",
+                text:
+                    "Choose whether unpaid leave is read from Attendance records or from Leave Applications " +
+                    "directly. Attendance is the more complete signal (it also knows about unmarked days and half " +
+                    "days); Leave Application is simpler if attendance isn't tracked day-by-day.",
+            },
+            {
+                heading: "Changes only affect new Salary Slips",
+                text:
+                    "A Salary Slip is a snapshot taken at creation time — changing a setting here never rewrites " +
+                    "one already created.",
             },
         ],
     },

@@ -2984,3 +2984,230 @@ Copy this block. Number sequentially.
     neither resolves). All throwaway fixtures cleaned up; employee count and all three new
     collections' counts back to baseline/0.
 
+---
+
+### ADR-027 — Payroll (Run): the formula evaluator's context grows, not a second engine; Loans/Timesheets/Overtime Slips are permanently out of scope, not deferred; per-item isolation added to slip creation as a deliberate improvement over source
+
+- **Date**: 2026-09-11
+- **Status**: accepted
+- **Context**: `system-design` for HRMS module 11 — the actual payroll-processing engine, following
+  module 10 (Payroll — Structure & Assignment, ADR-026, shipped). Read a Claude fork's research pass
+  in full: all 12 real per-doctype/child-table specs in scope (`Salary Slip`+3 children, `Payroll
+  Entry`+1 child, `Payroll Period`+1 child, `Payroll Settings`, `Payroll Correction`+1 child, `Salary
+  Withholding`+1 child), plus ADR-026 in full (`utils/payrollFormula.js`/`payrollCtc.js`'s exact
+  current shape), ADR-016 (no GL), ADR-024 (Leaves — `getLeaveBalance`, `LeaveLedgerEntry`, `LeaveType.
+  isLwp`), ADR-025 (Shift & Attendance — `Attendance`'s exact fields), and `OPEN-QUESTIONS.md` Q-17/
+  Q-19 (the two questions this module directly answers).
+- **Q-17 answered: the existing formula evaluator's *context* grows — it is not replaced by a second
+  engine.** `evaluateComponentTable`/`evaluateFormula`/`evaluateCondition` (ADR-026) are unchanged as
+  code; what changes is the object passed in as `context`. Module 10's preview only ever had `base`/
+  `variable` plus resolved-component-abbreviations. This module adds `paymentDays`/`totalWorkingDays`/
+  a running `grossPay`/`netPay` to that same context, and — the actual mechanism connecting LWP/
+  absence/mid-period-joining to reduced pay — **every row's `amount` is `defaultAmount × (paymentDays
+  / totalWorkingDays)`** before formula evaluation runs, not a separate proration step bolted on
+  after. This is additive, confirmed correct by the research, and keeps one evaluator rather than two
+  diverging implementations of the same grammar.
+- **`Loans` (`Salary Slip Loan`), `Timesheets` (`Salary Slip Timesheet`), and `Overtime Slip`
+  (referenced by `Payroll Entry`) are permanently out of scope, not a forward-dependency deferral.**
+  Every other deferred field on this board (`Overtime Type`, `Income Tax Slab`, `Additional Salary`,
+  `Employee Benefit Detail`) points at a real, named module still on this project's 17-module board —
+  the research confirmed these three do not: `Salary Slip Loan` depends on an entirely separate
+  "Lending" Frappe app this project has never had reason to port, `Salary Slip Timesheet` needs a
+  `Timesheet` doctype that appears nowhere on this board, and `Overtime Slip` likewise. Named
+  explicitly, distinctly from the Q-13/14/15/18/19-style "not yet" rows, so nobody mistakes silence
+  for an oversight: these come back only if the client explicitly asks for loan/timesheet-based pay,
+  which is a business decision, not an engineering one.
+- **The GL surface dropped here is larger than ADR-026's, and just as clean a cut**: `Payroll Entry`'s
+  `payrollPayableAccount`/`costCenter`/`bankAccount`/`paymentAccount` and its accrual/bank Journal
+  Entry generation; `Salary Slip.journalEntry`/`modeOfPayment`; `Salary Withholding`'s
+  release-via-Journal-Entry-submission (substituted with the same manual-release-action pattern as
+  Leave Encashment's `/mark-paid`, Q-3 — no GL, no bank entry, just a status flip with an optional
+  reference). Nothing else in this module's actually-buildable scope depends on any of it.
+- **Income tax annualization (`Salary Slip`'s slab-based tax breakup) is deferred, not built** — it
+  hard-depends on `Income Tax Slab` (Q-19, "Tax & Exemptions," not yet built) for the marginal-rate
+  table and on `Payroll Period` resolving correctly for the annualization window. `SalarySlip` carries
+  no tax-breakup fields at all this round; the field comes back once Tax & Exemptions exists,
+  identical in spirit to Q-19's own deferral on `SalaryStructureAssignment`.
+- **`Payroll Correction` is deferred in its entirety, not stubbed** — its whole output in source is
+  `Additional Salary` records (a doctype belonging to "Payroll — Adjustments & Incentives," a later
+  module on this board) plus `Employee Benefit Ledger` entries (Benefits, also later). There is
+  nothing to write it into yet; building the doctype now with nowhere for its output to go would be
+  exactly the "orphaned infrastructure" ADR-018 already named and rejected once before (Employee
+  Property History/ID Document Type/Department Approver, module 2). Comes back once its real
+  destination modules exist.
+- **`Payroll Period Date` is a confirmed-dead field in source itself** (hidden section, no controller
+  ever populates it) — omitted entirely, not ported as inert schema. `Payroll Period` itself is kept,
+  but its role shrinks to what's actually load-bearing without tax annualization: company-scoped
+  date-range bookkeeping and holiday-calc scoping context — a simple standalone model, company-scoped
+  overlap rejection (two different companies' periods may freely overlap, matching source).
+- **`Payroll Settings` is built now, as a true global singleton** — same shape as this project's
+  existing `SeoSettings.js` precedent (a constant `key` field carrying the uniqueness, not a
+  convention enforced only in the controller — "there is only one row" enforced by a unique index
+  survives a concurrent double-save the way a controller-only convention doesn't). Fields limited to
+  what this module's own calculation genuinely reads: `payrollBasedOn` (`Attendance`/`Leave
+  Application`), `considerUnmarkedAttendanceAs` (`Present`/`Absent`), `includeHolidaysInTotalWorking
+  Days`, `considerMarkedAttendanceOnHolidays`, `dailyWagesFractionForHalfDay` (default 0.5),
+  `disableRoundedTotal`, `showLeaveBalancesInSalarySlip`. Everything else source's `Payroll Settings`
+  holds (email/PDF passwords, GL posting mode, timesheet-hours cap, overtime-slip gating,
+  mandatory-benefit-application) is out of scope for reasons already named elsewhere in this ADR — no
+  email infrastructure decision exists for this project, no GL, no Timesheet, no Overtime Slip, no
+  Employee Benefit Application module. This is a distinct singleton from the still-deferred `HR
+  Settings` (ADR-017) — different real consumer, built now because this module genuinely needs it,
+  not a step toward building `HR Settings` itself.
+- **The real payment-days pipeline, reproduced from the research exactly**: `workingDays =
+  dateDiff(endDate, startDate) + 1`, minus holiday dates unless `includeHolidaysInTotalWorkingDays`.
+  LWP/absence computed one of two ways per `PayrollSettings.payrollBasedOn`: **Attendance-based**
+  (query `Attendance` rows for the period with `status` Absent/Half Day/On Leave, using each row's
+  `leaveTypeId` — via the already-built `LeaveType.isLwp` flag, ADR-024 — to decide LWP-ness) or
+  **Leave-Application-based** (query approved `LeaveApplication`s overlapping the period whose Leave
+  Type is LWP, walking covered calendar days). Both data sources already exist in this project
+  (`Attendance` module 9, `LeaveApplication`/`LeaveType.isLwp` module 8) — this is directly buildable,
+  confirmed by the research, not a forward dependency despite touching two other modules' data.
+  Mid-period joining/leaving clamps `actualStartDate`/`actualEndDate` to `dateOfJoining`/
+  `relievingDate`, feeding the *same* pipeline rather than a separate mechanism. `paymentDays =
+  workingDays - lwpDays - absentDays - unmarkedDaysIfConfiguredAsAbsent - (halfDayDays ×
+  dailyWagesFractionForHalfDay)`.
+- **`SalarySlip`'s docstatus folds to a `status` enum carrying source's real, additional states — not
+  a simplification of them**: `draft`/`submitted`/`withheld`/`cancelled`. Source layers `Withheld`
+  (whenever a linked `SalaryWithholding` covers the slip) and `Cancelled` (always wins over
+  `Withheld`) *on top of* docstatus, not instead of it — the research confirms this is a real,
+  additional status dimension worth keeping explicit, the same "fold docstatus into an explicit
+  status + action" pattern already used throughout this build, applied here without inventing
+  anything new. `netPay >= 0` is required only to submit (matching source exactly) — a draft may be
+  negative, useful for spotting a misconfigured structure before committing to it.
+- **`Payroll Entry`'s slip-creation step gets per-item try/catch isolation — a deliberate improvement
+  over source's literal behavior, not a copy of it.** Source's `createSalarySlips` has *no* per-
+  employee isolation on creation (one employee's failure aborts the whole batch, unlike
+  `submitSalarySlips`'s own per-slip isolation right next to it in the same doctype) — the research
+  flags this explicitly as "a real design choice to make, not copy blindly." Every bulk tool this
+  project has built so far (Leave Control Panel, Shift Assignment Tool, Bulk Salary Structure
+  Assignment) uses per-item isolation throughout; reproducing source's inconsistency here — isolated
+  on submit but not on create, in the same feature — would be copying a source gap forward for no
+  reason, not preserving a deliberate design. Isolation added to both `create-slips` and
+  `submit-slips`, named here as a deviation for consistency, same category ADR-021's Employee
+  Separation duplicate-guard and ADR-023's Travel Request access-opening already established.
+- **`Payroll Entry` has no Fiscal Year concept to anchor month boundaries on** (this project has none,
+  and never will unless a client need surfaces one) — `getStartEndDates(payrollFrequency, referenceDate)`
+  substitutes calendar-month boundaries directly for Monthly/Bimonthly (source resolves these via a
+  Fiscal Year's month list); Weekly/Fortnightly/Daily are pure date-offset math, unaffected. Built as
+  its own small tested pure function, reused by both `PayrollEntry` (resolving its own run window) and
+  anywhere else a frequency needs a concrete date range.
+- **`Salary Withholding`'s cycle-generation algorithm is reproduced exactly, per the research's own
+  explicit warning not to simplify it**: given `fromDate` + `numberOfWithholdingCycles`, scale the
+  total window by N cycles matching the employee's payroll frequency, then walk it one frequency-
+  period at a time — not a single division of the total span by N, which would silently misplace
+  cycle boundaries against real period lengths (e.g. a Monthly frequency's cycles must land on real
+  month-ish boundaries, not N equal fractions of an arbitrary total span). `status` derives from
+  docstatus plus whether *all* cycles are released — vacuously "Released" when the cycle list is
+  empty, a real source edge case reproduced rather than patched away. Release is a manual per-cycle
+  action (Q-3 pattern, no GL).
+- **Decision — split into two stacked branches**, same reasoning as Leaves/Shift & Attendance:
+  `feat/payroll-run` (foundation — `PayrollPeriod`, `PayrollSettings`, the real payment-days/LWP
+  pipeline, the extended formula-evaluation context, `SalarySlip` itself with submit/cancel actions —
+  the hard, single-slip calculation core) then a second stacked branch (`PayrollEntry` — bulk
+  orchestration reusing the foundation's slip-creation logic — and `SalaryWithholding`+cycle, both of
+  which depend on `SalarySlip` existing first).
+- **Decision — models**: `PayrollPeriod` (`companyId`, `startDate`, `endDate`, company-scoped overlap
+  rejection); `PayrollSettings` (global singleton, `SeoSettings.js`-style constant-key unique index);
+  `SalarySlip` (`employeeId`, `salaryStructureAssignmentId`, `startDate`/`endDate`, `workingDays`/
+  `paymentDays`/`totalWorkingDays`/`lwpDays`/`absentDays`/`halfDayDays`, embedded `earnings[]`/
+  `deductions[]`/`employerContributions[]` (same `SalaryDetail` shape as `SalaryStructure`, scaled per
+  the ratio above), server-computed `grossPay`/`totalDeduction`/`netPay`, embedded read-only `leaves[]`
+  snapshot (allocated/used/available per leave type as of `endDate`, sourced via a thin wrapper over
+  the existing `getLeaveBalance`), `status` enum as above); `PayrollEntry` (`companyId`, `startDate`/
+  `endDate` — resolved via `getStartEndDates` when only a reference date + frequency is supplied,
+  `payrollFrequency`, `validateAttendance` toggle, embedded `employeeDetails[]` — the `Payroll
+  Employee Detail` shape, `employeeId`+denormalized name/department/designation+`isSalaryWithheld`,
+  `status` draft/submitted/cancelled — no `Queued`/`Failed` async states, this project runs
+  synchronously); `SalaryWithholding` (`employeeId`, `fromDate`, `numberOfWithholdingCycles`, embedded
+  `cycles[]` — `fromDate`/`toDate`/`isReleased` — derived `status`).
+- **Consequences**: `OPEN-QUESTIONS.md` Q-17 closes, pointing here. New rows for the income-tax-
+  annualization deferral (parallel to Q-19) and the `Payroll Correction` full deferral. Loans/
+  Timesheets/Overtime Slips get their own row too, explicitly marked "permanently out of scope
+  pending a client decision," distinct in kind from the forward-dependency rows.
+- **Deviates from convention**: none beyond what's named above (per-item isolation added to slip
+  creation is a deliberate improvement, not a deviation from an existing decision).
+- **As built (foundation half only — `feat/payroll-run`)**: everything named above for
+  `PayrollPeriod`/`PayrollSettings`/`SalarySlip` shipped, built directly against this design — no
+  re-litigation. `SalaryStructure.js`'s internal `SalaryDetailSchema` is now a named export, reused
+  unchanged for `SalarySlip`'s own three component tables (AGENTS.md #2). The real payment-days
+  pipeline is `utils/payrollPaymentDays.js`, split into a pure `calculatePaymentDays` (no DB — this
+  is what `payrollPaymentDays.test.js` exercises directly) and a thin DB-fetching `computePaymentDays`
+  wrapper the controller calls — the only way this logic can run inside `npm test` without a live
+  Mongo connection, matching this project's existing "pure-logic tests are wired into `npm test`;
+  DB-backed tests (`leaveBalance.test.js`) are not" convention. `utils/salarySlipCalc.js`
+  (`calculateSalarySlip`) reuses `evaluateComponentTable`/`evaluateFormula`/`evaluateCondition`
+  completely unmodified (confirmed by reading both files unchanged) — the richer context is
+  `{ base, variable, paymentDays, totalWorkingDays, grossPay, netPay }`, with `grossPay` updated in
+  the context after earnings resolve and before deductions evaluate (so a deduction's `condition` can
+  reference the real `grossPay`, matching source's real ordering).
+  - **Judgment call — the `dependsOnPaymentDays` scaling question, settled from the real spec**
+    (`Salary Slip.md` section I, `get_amount_based_on_payment_days`, read in full): **only a row
+    flagged `dependsOnPaymentDays` is scaled** by `paymentDays / totalWorkingDays` — not every row.
+    This project applies that scaling to a row's flat `amount` field *before* `evaluateComponentTable`
+    runs (rather than post-hoc rescaling the evaluated `defaultAmount`), so a later formula
+    referencing an earlier *flat* row's abbreviation automatically sees the already-scaled value —
+    exactly the cascading-proration behavior the real spec calls out ("SA = BS * 0.5 inherits BS's
+    own proration automatically"). The one narrow gap this leaves, named rather than hidden: a
+    *formula-based* row that is itself flagged `dependsOnPaymentDays` is not separately re-scaled
+    after its own formula evaluates (pre-scaling its unused `amount` field has no effect on a formula
+    path) — proration reaches such a row only through its inputs already being scaled. Every
+    component in this project's structures that genuinely depends on payment days is a flat row
+    (Basic Salary), so this is a real but narrow limitation, not a live bug — flagged here so the
+    next session sees it as a decision, not an oversight, if a formula-based `dependsOnPaymentDays`
+    row is ever authored.
+  - **Judgment call — `totalWorkingDays` vs. `workingDays`, confirmed rather than assumed**: source
+    states plainly `self.total_working_days = working_days` — the two are the same number.
+    This project computes both from the already mid-period-clamped `[actualStartDate, actualEndDate]`
+    range, not source's own nominal-vs-actual split (source computes `total_working_days` from the
+    *nominal* `[startDate, endDate]` and only the payment-days numerator from the clamped range). The
+    practical effect is identical for a full-period employee and differs only for a mid-period
+    joiner/leaver, where this simpler model prorates the denominator too, not just the numerator —
+    recorded here as a deliberate simplification, not a bug, since both the source and this project
+    agree the two figures are equal to each other, just computed over a slightly different range.
+  - **Judgment call — the exact `leaves[]` field set**: a scoped-down 3-field snapshot
+    (`leaveTypeId`/`allocated`/`used`/`available`), not source's 5-field `Salary Slip Leave`
+    (`total_allocated_leaves`/`expired_leaves`/`used_leaves`/`pending_leaves`/`available_leaves`).
+    `expired_leaves`/`pending_leaves` need infrastructure this project hasn't built (expiry-aware
+    allocation walking, a pending-approval leave-days sum) — `allocated` sums active
+    `LeaveAllocation.newLeavesAllocated` covering the slip's `endDate`, `available` reuses the
+    existing `getLeaveBalance` unchanged, `used = allocated - available` (floored at 0). Populated
+    only when `PayrollSettings.showLeaveBalancesInSalarySlip` is on, fully rebuilt (never merged) on
+    creation — a snapshot, matching source's own "delete all rows, reinsert" semantics for this table.
+  - **Judgment call — `workingDays`/`paymentDays` formulas simplified from source's two-step
+    conditional**: source's `payment_days = payment_days - lwp [- absent - unmarkedAbsent - halfDay*
+    fraction]` is gated by `IF payment_days > lwp` (forcing `0` otherwise); this project uses a single
+    subtraction floored at `0` (`Math.max(0, workingDays - lwpDays - absentDays - halfDayDays *
+    fraction)`) — functionally equivalent for every realistic case (the sum of reductions rarely
+    exceeds `workingDays`) and safer against a negative result. `paymentDays` stays fractional
+    throughout (never rounded to a whole number), matching source exactly.
+  - **`SalarySlip`'s admin screen has no real edit-in-place** — every field is a snapshot computed
+    once at creation; `updateSalarySlip`/`PUT /salary-slips/:id` exists purely so the admin's generic
+    edit route has something to call (`allowOnlyFields([])` on the route, `toPayload` always sends
+    `{}` for edit mode) — Submit/Cancel (`SimpleActionButton`, the same pattern Shift Request/Leave
+    Encashment use) are the only two real actions.
+  - **Product question worth flagging, not decided here**: this rebuild gives `SalarySlip`/
+    `PayrollPeriod`/`PayrollSettings` zero Employee-role self-service access, matching module 10's own
+    "HR-configuration/transactional data, not self-service" precedent — but payslips are exactly the
+    kind of document a real client's employees usually expect to see their own copy of. Worth asking
+    Apidel directly rather than assuming either way; not built without being asked, recorded in
+    `OPEN-QUESTIONS.md`.
+  - **Bugs found**: none pre-existing this session — no GitHub issue filed.
+  - **Verified live**: `npm test` green (23 suites — `payrollPaymentDays.test.js`/`salarySlipCalc.test.js`
+    both new and pure/DB-free, covering full-attendance/one-LWP-day/unmarked-day-both-settings/
+    half-day/mid-period-joiner/holiday-included-vs-excluded/Leave-Application-based for the former and
+    dependsOnPaymentDays-gating/cascading-scaling/statistical-exclusion/condition-gated-skip-seeing-
+    updated-`grossPay`/zero-`totalWorkingDays`-guard for the latter, all hand-computed), `npm run seed`
+    run twice (idempotent — 6 new Payroll menu grants first run, 0 second run, 195 employees both
+    times), `npm run build` clean. Full HTTP walk via `scripts/verify-payroll-run.mjs` (32 real
+    assertions): `PayrollSettings` first-ever-GET-creates-the-default-row confirmed live, GET/PUT
+    round-trip confirmed, settings restored after; `PayrollPeriod` CRUD plus the company-scoped
+    overlap guard confirmed both directions; `SalarySlip` full-attendance case hand-checked (grossPay
+    42000, netPay 41000), an LWP-plus-unmarked-day case hand-checked against the server's own returned
+    `workingDays` (immune to real holiday-calendar interference) — ratio 0.8, netPay 32600, confirmed
+    the stored Basic row itself carries the scaled amount; exact-duplicate-`(employeeId,startDate,
+    endDate)` 400 confirmed; a deliberately negative-net-pay slip confirmed to reject `submit` (400)
+    yet still `cancel` cleanly; a valid slip confirmed to `submit` (200), reject a second submit (400),
+    then `cancel` from Submitted. All throwaway fixtures cleaned up; employee count back to baseline
+    195; all six touched collections back to 0.
+

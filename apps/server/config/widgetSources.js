@@ -1129,4 +1129,46 @@ export const WIDGET_SOURCES = Object.freeze({
     companyConfined: true,
     employeeOwned: false,
   },
+
+  // ADR-027 (Payroll — Run, foundation half). Same company-confined,
+  // no-self-service shape as module 10's three sources above.
+  "payroll-periods": {
+    label: "Payroll Period",
+    model: "PayrollPeriod",
+    menuUrl: "/payroll-period",
+    aggregatable: {},
+    groupable: {
+      companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
+      isActive: { label: "Is active" },
+    },
+    dateFields: { startDate: "Start date", endDate: "End date", createdAt: "Created" },
+    filterable: {
+      companyId: "objectId", startDate: "date", endDate: "date", isActive: "boolean", createdAt: "date",
+    },
+    scopeable: {},
+    companyConfined: true,
+    employeeOwned: false,
+  },
+  "salary-slips": {
+    label: "Salary Slip",
+    model: "SalarySlip",
+    menuUrl: "/salary-slip",
+    aggregatable: {
+      grossPay: "Gross pay", totalDeduction: "Total deduction", netPay: "Net pay",
+      paymentDays: "Payment days", lwpDays: "LWP days", absentDays: "Absent days",
+    },
+    groupable: {
+      status: { label: "Status" },
+      companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
+      employeeId: { label: "Employee", lookup: { from: "employees", labelField: "employeeName" } },
+    },
+    dateFields: { startDate: "Start date", endDate: "End date", createdAt: "Created" },
+    filterable: {
+      employeeId: "objectId", companyId: "objectId", startDate: "date", endDate: "date",
+      status: "string", createdAt: "date",
+    },
+    scopeable: {},
+    companyConfined: true,
+    employeeOwned: false,
+  },
 });

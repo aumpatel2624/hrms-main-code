@@ -296,6 +296,11 @@ const MENU_GROUPS = [
       { menuName: "Salary Structure", menuUrl: "/salary-structure", icon: "ri-file-list-3-line" },
       { menuName: "Salary Structure Assignment", menuUrl: "/salary-structure-assignment", icon: "ri-file-user-line" },
       { menuName: "Bulk Salary Structure Assignment", menuUrl: "/bulk-salary-structure-assignment", icon: "ri-tools-line" },
+      // ADR-027 (module 11, foundation half — feat/payroll-run). Still no
+      // Employee-role self-service grants (see seedPayrollRoles below).
+      { menuName: "Payroll Period", menuUrl: "/payroll-period", icon: "ri-calendar-2-line" },
+      { menuName: "Payroll Settings", menuUrl: "/payroll-settings", icon: "ri-settings-3-line" },
+      { menuName: "Salary Slip", menuUrl: "/salary-slip", icon: "ri-file-paper-2-line" },
     ],
   },
   {
@@ -1792,6 +1797,13 @@ const seedPayrollRoles = async () => {
     "/salary-structure": { "HR User": full, "HR Manager": full },
     "/salary-structure-assignment": { "HR User": full, "HR Manager": full },
     "/bulk-salary-structure-assignment": { "HR User": full, "HR Manager": full },
+    // ADR-027 (module 11, foundation half). Same "HR-configuration/
+    // transactional data, no self-service" shape — payslips are not
+    // employee-visible in this rebuild's scope (flagged as a real product
+    // question worth asking the client, see DECISIONS.md ADR-027 "As built").
+    "/payroll-period": { "HR User": full, "HR Manager": full },
+    "/payroll-settings": { "HR User": full, "HR Manager": full },
+    "/salary-slip": { "HR User": full, "HR Manager": full },
   };
 
   const allMenuUrls = Object.keys(GRANTS);

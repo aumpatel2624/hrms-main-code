@@ -8,7 +8,13 @@ import mongoose from "mongoose";
 // by a schema default/hook, since "creation time" for a row added on a later
 // update is that update, not the document's own createdAt. Each row's copy
 // stays independently editable afterward.
-const SalaryDetailSchema = new mongoose.Schema(
+// Exported (ADR-027, Payroll — Run) so `SalarySlip` can reuse the exact same
+// row shape for its own earnings[]/deductions[]/employerContributions[]
+// tables — same "one-time denormalized copy" reasoning as here, just copied
+// from the resolved SalaryStructureAssignment's structure at slip-creation
+// time instead of at structure-authoring time (AGENTS.md #2: reuse before
+// you write).
+export const SalaryDetailSchema = new mongoose.Schema(
   {
     salaryComponentId: { type: mongoose.Schema.Types.ObjectId, ref: "SalaryComponent", required: true },
     abbreviation: { type: String, trim: true },

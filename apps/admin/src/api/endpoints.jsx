@@ -40,6 +40,13 @@ export const ENDPOINTS = {
         ELIGIBLE_EMPLOYEES: `${V1}/payroll/bulk-salary-structure-assignment/eligible-employees`,
         ASSIGN: `${V1}/payroll/bulk-salary-structure-assignment/assign`,
     },
+    // ADR-027 (Payroll — Run, foundation half).
+    PAYROLL_PERIODS: { BASE: `${V1}/payroll-periods`, SEARCH: `${V1}/payroll-periods/search`, BY_ID: (id) => `${V1}/payroll-periods/${id}` },
+    PAYROLL_SETTINGS: { BASE: `${V1}/payroll-settings` },
+    SALARY_SLIPS: {
+        BASE: `${V1}/salary-slips`, SEARCH: `${V1}/salary-slips/search`, BY_ID: (id) => `${V1}/salary-slips/${id}`,
+        SUBMIT: (id) => `${V1}/salary-slips/${id}/submit`, CANCEL: (id) => `${V1}/salary-slips/${id}/cancel`,
+    },
     EMPLOYEE_ATTENDANCE_TOOL: {
         MARK: `${V1}/employee-attendance-tool/mark`,
         RESOLVE_HALF_DAY: `${V1}/employee-attendance-tool/resolve-half-day`,

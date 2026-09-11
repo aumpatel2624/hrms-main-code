@@ -336,7 +336,8 @@ export const deleteAdditionalSalary = async (req, res) => {
   try {
     const doc = await AdditionalSalary.findById(req.params.id);
     if (!doc) throwError(404, "Additional Salary not found");
-    await doc.softDelete();
+    doc.isDeleted = true;
+    await doc.save();
     return res.json({ isOk: true, status: 200, message: "Additional Salary deleted" });
   } catch (error) {
     return failure(res, error);
@@ -609,7 +610,8 @@ export const deleteArrear = async (req, res) => {
     if (doc.status === "submitted") {
       throwError(400, "Submitted Arrear documents must be cancelled before deletion");
     }
-    await doc.softDelete();
+    doc.isDeleted = true;
+    await doc.save();
     return res.json({ isOk: true, status: 200, message: "Arrear deleted" });
   } catch (error) {
     return failure(res, error);
@@ -815,7 +817,8 @@ export const deleteRetentionBonus = async (req, res) => {
     const doc = await RetentionBonus.findById(req.params.id);
     if (!doc) throwError(404, "Retention Bonus not found");
     if (doc.status === "submitted") throwError(400, "Submitted documents must be cancelled before deletion");
-    await doc.softDelete();
+    doc.isDeleted = true;
+    await doc.save();
     return res.json({ isOk: true, status: 200, message: "Retention Bonus deleted" });
   } catch (error) {
     return failure(res, error);
@@ -1012,7 +1015,8 @@ export const deleteEmployeeIncentive = async (req, res) => {
     const doc = await EmployeeIncentive.findById(req.params.id);
     if (!doc) throwError(404, "Employee Incentive not found");
     if (doc.status === "submitted") throwError(400, "Submitted documents must be cancelled before deletion");
-    await doc.softDelete();
+    doc.isDeleted = true;
+    await doc.save();
     return res.json({ isOk: true, status: 200, message: "Employee Incentive deleted" });
   } catch (error) {
     return failure(res, error);
@@ -1216,7 +1220,8 @@ export const deleteEmployeeOtherIncome = async (req, res) => {
       throwError(403, "Employees cannot delete Other Income records");
     }
 
-    await doc.softDelete();
+    doc.isDeleted = true;
+    await doc.save();
     return res.json({ isOk: true, status: 200, message: "Employee Other Income deleted" });
   } catch (error) {
     return failure(res, error);

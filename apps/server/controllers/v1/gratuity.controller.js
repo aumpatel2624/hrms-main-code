@@ -512,7 +512,8 @@ export const deleteGratuity = async (req, res) => {
     const doc = await Gratuity.findById(req.params.id);
     if (!doc) throwError(404, "Gratuity not found");
     if (doc.status === "submitted") throwError(400, "Submitted documents must be cancelled before deletion");
-    await doc.softDelete();
+    doc.isDeleted = true;
+    await doc.save();
     return res.json({ isOk: true, status: 200, message: "Gratuity deleted" });
   } catch (error) {
     return failure(res, error);

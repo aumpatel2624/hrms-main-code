@@ -2486,3 +2486,146 @@ Copy this block. Number sequentially.
     that block IS the working reference guard) and remain as real, harmless historical test
     transactions, same as any real HR action would leave behind.
 
+---
+
+### ADR-025 — Shift & Attendance: auto-attendance is the third named background job, geofencing without GeoJSON, no multi-shift-per-day, schedule generation becomes an explicit action not an invented cron job
+
+- **Date**: 2026-09-11
+- **Status**: accepted
+- **Context**: `system-design` for HRMS module 9. This session's Claude account hit its monthly spend
+  limit mid-research (resets 3am UTC) — the user's own tiered-fallback instruction from earlier this
+  session ("once you are at 60% of usage limit invoke codex... once you use all the codex limit then
+  only use agy") applied for the first time: the research pass for this module was re-run on `codex
+  exec` instead of a Claude fork, in read-only mode, and returned a dense, well-grounded report. Read
+  all 11 real per-doctype spec files under `HRMS-Port-Spec/01-Modules/Shift-Attendance/` (via that
+  report) plus this project's own current `Attendance` model/controller (built as a minimal seed by
+  module 8's foundation, ADR-024), the Q-5 scheduler infra (`jobs/leaveScheduler.js`), the Q-4 scoping
+  mechanism, and `resolveApprovers`/`getEmployeesApprovedBy` (`utils/approvers.js`) that this module
+  can reuse for `Shift Request` approval.
+- **This is the second-largest module yet**, comparable to Leaves — 11 doctypes, several with real
+  algorithmic complexity (shift-occurrence resolution across overnight/buffered windows, four
+  configurable working-hours calculation modes, geofencing, hourly-cadence source automation this
+  project's day-granularity scheduler cannot literally reproduce). Same split-into-two-stacked-forks
+  approach as Leaves, for the same reason: `feat/shift-attendance` (foundation — masters, `Shift
+  Assignment`, `Shift Schedule`(+`Assignment`), `Employee Checkin`+geofencing, the extended
+  `Attendance` model, the shift-occurrence and working-hours utilities) then a second stacked branch
+  (`Shift Request`, `Attendance Request`, the two bulk-action tools, and the auto-attendance
+  background job — all of which need the foundation's models/utilities to exist first).
+- **Auto-attendance is the third of ADR-016's three named background jobs** — Leaves already built
+  the other two categories ("leave accrual/expiry" as `processExpiredAllocations`+
+  `allocateEarnedLeaves`, "leave encashment" as `generateLeaveEncashments`). This module builds
+  exactly that one remaining job, `processAutoAttendance` — **not** a literal port of source's three
+  separate hourly jobs (`update_last_sync_of_checkin` → `process_auto_attendance_for_all_shifts` →
+  `process_auto_shift_creation`). Source's hourly cadence cannot be reproduced by this project's
+  Q-5 scheduler (ADR-024: day-granularity, single-process, no dependency added) — folded to one daily
+  job in its own file (`jobs/attendanceScheduler.js`, its own `runDueJobs`-equivalent, reusing
+  `SchedulerRunLog` the same way `leaveScheduler.js` does, wired into `server.js` alongside it rather
+  than merged into the same file/array — the two runners are independent, not sequentially coupled
+  the way Leaves' three jobs are). **`process_auto_shift_creation` (source's hourly schedule-generation
+  sweep) is deliberately NOT built as a background job at all** — ADR-016 names three job
+  *categories* to keep, and schedule generation isn't one of them; inventing a fourth recurring job
+  for it would be scope creep this ADR explicitly declines. Instead, `Shift Schedule Assignment`
+  generation becomes an explicit `POST .../generate` action an HR user (or the Shift Assignment
+  Tool's bulk action) triggers on demand — same "explicit action over invented automation" instinct
+  ADR-024 already applied to `LeavePolicyAssignment.grant-allocations`.
+- **No multi-shift-per-employee-per-day** — source's schema allows it (Attendance has no unique
+  employee+date constraint, only employee+date+shift in spirit), and this project's existing minimal
+  `Attendance` (module 8) already has a hard unique `(employeeId, attendanceDate)` index. Codex's
+  research flagged this as a real conflict to resolve, not silently ignore. Decision: **keep the
+  existing one-row-per-employee-per-day invariant** — nothing in the real Apidel org-chart data
+  suggests multi-shift roles, and supporting it would cascade through every piece of this module's
+  design (Checkin's shift resolution, the auto-attendance grouping, Attendance Request's target
+  selection). A deliberate scope-narrowing, not an oversight — recorded here so it reads as a decision
+  if someone later needs multi-shift support.
+- **Geofencing without GeoJSON**: source generates and stores a `Point` GeoJSON `FeatureCollection` on
+  `Shift Location`, gated by a `HR Settings.allow_geolocation_tracking` toggle this project doesn't
+  have (HR Settings is deferred, ADR-017). Neither piece is needed for what this module actually does
+  with the data — `Shift Location` stores plain `latitude`/`longitude`/`checkinRadius` (meters), and
+  `Employee Checkin`'s geofencing check computes haversine distance directly against those two
+  numbers when both are present on the resolved Shift Assignment's location and both coordinates are
+  supplied on the checkin. No global toggle: enforcement is inherently per-Shift-Location (a location
+  with no coordinates or `checkinRadius <= 0` just never enforces, matching source's own "no match
+  means no radius enforcement" and "radius ≤0 disables enforcement" behavior) — a global switch would
+  be redundant with data that's already opt-in per row.
+- **Shift-occurrence resolution is deliberately simplified from source's general algorithm.** Source
+  resolves an arbitrary timestamp to a shift occurrence via a genuinely general algorithm: overnight
+  windows, buffered check-in/out windows, assignment-boundary widening across adjacent days, and a
+  previous/next search bounded to 366 days. This project builds a narrower version — for a given
+  employee and timestamp, find the active `Shift Assignment` covering that calendar date (or the
+  adjoining date for an overnight shift crossing midnight), apply the `Shift Type`'s buffer minutes,
+  and match. It handles the common cases (including overnight shifts) but does not attempt source's
+  exhaustive adjacent-day/366-day bounded search for edge cases like a shift assignment starting
+  exactly at a boundary with unusual buffer configurations. Named here, and as an `OPEN-QUESTIONS.md`
+  row, as a real fidelity gap to revisit if real usage surfaces an edge case this doesn't handle —
+  not silently invented as if it were the full algorithm.
+- **Working hours calculation keeps all four of source's real combinations** (alternating-log-types
+  vs. strict-IN/OUT, × first/last-timestamp vs. every-valid-pair) as four independently testable pure
+  functions (`utils/workingHours.js`) — this is well-specified, unambiguous business logic (not the
+  kind of thing to simplify away), matching this project's established pattern of pure, tested
+  calculation utilities (`leaveProration.js`, `leaveDayCalculation.js`).
+- **Auto-attendance drops the leave-backed pending-half-day resolution corner case.** Source's
+  auto-attendance processing can resolve a pre-existing pending `Half Day` (created by an approved
+  half-day `Leave Application`) into a matched Present/Absent for its other half. This project's
+  `LeaveApplication.approve` (ADR-024) already writes a definite `Half Day` `Attendance` row directly
+  — there's no "pending" intermediate state to resolve. Auto-attendance here simply **skips any date
+  that already has an `Attendance` row carrying a `leaveApplicationId`** rather than trying to merge
+  into it — simpler, and correct for how this project's Leave Application already behaves (it never
+  leaves a half-resolved row the way source's own two-stage process can).
+- **Auto-attendance's absence sweep runs once per day, for yesterday only** — not source's bounded
+  lookback from last-processed watermark to previous eligible occurrence. Since this project's
+  scheduler already runs once daily, sweeping exactly "yesterday" for every currently-active
+  auto-attendance-enabled `Shift Assignment` (skipping holidays and already-marked dates) needs no
+  separate watermark bookkeeping of its own and naturally catches up if the server was stopped,
+  because every daily run covers its own yesterday. A stopped-for-a-week server would silently skip
+  the days in between rather than backfilling them — named as a limitation, matching this project's
+  general "single process assumed" posture rather than building backfill machinery ADR-016 never
+  asked for.
+- **A real pre-existing gap found by this research, not this module's own new code**: module 8's
+  minimal `Attendance` controller (built by the foundation fork) has no company confinement at all —
+  `runListQuery` is called without a `scopeFilter`, and detail/update/delete don't filter by company
+  either, a direct gap against ADR-016's "company confinement by default" rule. This module's
+  foundation fork fixes it as part of extending the model (not filed as a separate GitHub issue,
+  since it was never exercised/shipped-facing in module 8 — Attendance had no dedicated screen with
+  real users yet, unlike issues #10-13 which were live, reachable bugs).
+- **`Shift Request` reuses `resolveApprovers`/`getEmployeesApprovedBy` (ADR-024) as-is, not source's
+  literal rule.** Source validates a Shift Request's approver against "immediate-department approvers
+  plus the employee's own approver field" — a narrower, single-level check than `resolveApprovers`'s
+  established direct-field-wins-else-whole-ancestor-chain-union semantics. Reusing the existing,
+  tested mechanism (AGENTS.md non-negotiable #2: reuse before you write) rather than building a
+  second, subtly different approver-resolution rule for one doctype. `Employee.shiftRequestApproverId`
+  and `Department.shiftRequestApprovers[]` already exist (ADR-024) for exactly this.
+- **`Overtime Type`** (referenced by `Shift Type.overtimeType` and `Shift Assignment.overtimeType`) is
+  a forward dependency on Payroll (module 10+), which doesn't exist yet — same shape as Travel's
+  `expenseType` (ADR-023) and Interview Type's `expectedSkillSet` before module 6. Omitted from both
+  models for now (not even a free-text placeholder, since `allowOvertime`/overtime tracking isn't core
+  to what this module needs to ship), with an `OPEN-QUESTIONS.md` row for the eventual retrofit.
+- **Docstatus folding (ADR-016)**: `Shift Assignment`/`Shift Schedule Assignment` — plain `status`
+  (`active`/`inactive`/`cancelled`); "effectively active" (accounting for a past `endDate`) is
+  **computed at query/validation time, not mutated by a job** — avoids inventing yet another daily
+  sweep ADR-016 didn't name, and is simpler than source's own daily-expiry job for the same result.
+  `Shift Schedule` — no custom status at all (source itself has none beyond the generic docstatus
+  this project already drops) — a plain `isActive` master. `Shift Request` — `status`
+  (`open`/`approved`/`rejected`) + `approve`/`reject` actions, same shape as `LeaveApplication`:
+  approve creates a `Shift Assignment`, reject does nothing further. `Attendance Request` — create
+  *is* the action (writes/updates `Attendance` rows directly, matching source's own submit-does-
+  everything, no-separate-approval shape) + a `cancel` action that soft-deletes the specific
+  `Attendance` rows it created (reusing `LeaveApplication.cancel`'s soft-delete-reversal pattern,
+  ADR-024).
+- **Decision — models**: `ShiftType`, `ShiftLocation`, `ShiftAssignment`, `ShiftSchedule`,
+  `ShiftScheduleAssignment`(+`generate` action), `ShiftRequest`(+`approve`/`reject`),
+  `AttendanceRequest`(+`cancel`), `EmployeeCheckin` — 8 new collections; `Attendance` (module 8)
+  extended with `departmentId`, `shiftId`, `attendanceRequestId`, `workingHours`/
+  `standardWorkingHours`/`actualOvertimeDuration`, `lateEntry`/`earlyExit`, `inTime`/`outTime`,
+  `halfDayStatus`, plus the company-confinement fix above. `Shift Assignment Tool` and `Employee
+  Attendance Tool` fold to bulk-action endpoints (no stored model), matching `Leave Control Panel`'s
+  precedent exactly — both are stateless scratchpad forms in source too, not stored entities.
+- **Split into two stacked branches**: `feat/shift-attendance` (foundation — masters, `Shift
+  Assignment`, `Shift Schedule`+`Assignment`, `Employee Checkin`+geofencing, extended `Attendance`,
+  shift-occurrence/working-hours utilities) then a second branch (`Shift Request`, `Attendance
+  Request`, both bulk-action tools, `processAutoAttendance`) — same reasoning and pattern as Leaves.
+- **Consequences**: `OPEN-QUESTIONS.md` gets new rows for the `Overtime Type` retrofit and the
+  simplified shift-occurrence resolver's edge-case gap.
+- **Deviates from convention**: none beyond what's named above (a second, independent scheduler
+  runner file rather than one shared array — reasoned above; the daily-not-hourly job cadence, an
+  unavoidable consequence of Q-5's already-accepted dependency-free single-process scheduler).
+

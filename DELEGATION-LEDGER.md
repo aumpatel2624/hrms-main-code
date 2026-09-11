@@ -20,12 +20,12 @@ frozen `docs/knowledge/` schema.
 - Tracking starts at **module 8 (Leaves)** — modules 1-7's per-fork token counts weren't captured
   at the time and aren't reconstructed here.
 
-## Summary (as of 2026-09-10, module 8 complete — both halves merged into development)
+## Summary (as of 2026-09-11, module 8 complete; module 9 designed, foundation routed to codex)
 
 | Tool | Status | Tasks | Total tokens | Avg tokens/task |
 |---|---|---|---|---|
-| Claude sub-agents | Active — tier 1 | 4 done | 1,567,579 | 391.9k |
-| codex | Not yet used | 0 | — | — |
+| Claude sub-agents | **Paused — account spend limit hit** (resets 3am UTC) | 4 done | 1,567,579 | 391.9k |
+| codex | Active — tier 2 | 1 done | 108,937 | 108.9k |
 | agy | Not yet used | 0 | — | — |
 
 ## Task log
@@ -36,6 +36,8 @@ frozen `docs/knowledge/` schema.
 | Leaves module research (17 specs + scoping code) — pass 2 | Claude fork | Module 8, design research | 288,302 | 31 | 2m 31s | Delivered — grounded ADR-024's Q-4/Q-5 decisions |
 | Leaves foundation — scoping, scheduler, approvers, 9 models/screens | Claude fork | Module 8, schema+API+UI+verify | 556,438 | 304 | 37m 8s | Delivered — verified independently (tests/seed/build rerun, logic spot-checked against ADR-024); one real bug found in its own new code and fixed pre-ship, one pre-existing bug found and fixed as issue #10 |
 | Leaves transactional half — LeaveAdjustment/CompensatoryLeaveRequest/LeaveApplication/LeaveEncashment/LeaveBlockList/Control Panel, Q-4 wired live, generateLeaveEncashments | Claude fork | Module 8, schema+API+UI+verify (module complete) | 607,867 | 363 | 41m 50s | Delivered — verified independently (tests/seed/build rerun, ledger-split/self-approval/soft-delete-reversal logic spot-checked against ADR-024); 5 new models, sibling controller/routes file, 5 entity-config screens + 1 custom page; two real pre-existing bugs found and fixed (#12 `buildScopeFilter` APPROVER branch ignoring `approverIds`, #13 `getLeaveAllocationById`/`getLeaveApplicationById` 500ing on a populated sub-document) plus one UI permission gap (#11, `CrudForm`'s edit route unguarded) |
+| Shift & Attendance module research — pass 1 (a Claude fork, before it was retried on codex) | Claude fork | Module 9, design research | — | — | — | **Failed** — account monthly spend limit hit mid-task (HTTP 429, resets 3am UTC); this is the event that activated tier 2 |
+| Shift & Attendance module research (11 specs + Attendance/scheduler/scoping code) | codex (`codex exec -s read-only`, piped prompt via stdin, `-o` output capture) | Module 9, design research | 108,937 | n/a (codex doesn't report a per-call count the way a Claude fork does — one `codex exec` invocation, read-only sandbox) | ~3m 24s | Delivered in one pass, no re-send needed — grounded ADR-025 directly; terser prose than the Claude fork's equivalent report but same factual density |
 
 ## Reading it so far
 
@@ -73,9 +75,20 @@ seconds with 4 tool calls, which was the tell before the token count even matter
   re-verification (rerunning tests/seed/build, reading the riskiest ~5 files in full each time) cost
   a small fraction of the build tokens both times and caught nothing wrong either time — a good
   sign the forks' own verify passes are trustworthy, not a reason to skip the re-check next time.
-  No codex/agy comparison yet on the same task shape — module 9 is the one to route there
-  deliberately for a real comparison.
-- **codex**: no data yet.
+  The first real cross-tool comparison lands with module 9's research task (below) — codex vs. the
+  Leaves research pass, same task shape (read N spec files + existing code, report structured
+  facts, no code written).
+- **codex**: first real data point, and a favorable one on this task shape. The module 9 research
+  task (11 spec files + 6 code files/dirs, comparable scope to Leaves' 17-file pass) cost **108.9k
+  tokens in ~3m 24s, delivered correctly in one pass** — well under half of Claude's 288.3k-token
+  successful Leaves research pass (and nowhere near the 403k combined cost of Claude's wasted
+  first attempt + real second attempt on that same module). Caveat before reading too much into
+  one data point: different task sizes (11 vs. 17 files), different report length (codex's report
+  is noticeably terser — dense declarative sentences, minimal restated context — which is itself
+  probably a meaningful chunk of the token difference, not just model efficiency), and this was
+  read-only research, not a build task with real correctness risk. The real test is a build-phase
+  task (schema+API+UI+verify) — routing `feat/shift-attendance`'s foundation build to codex next
+  specifically to get that comparison, since Claude's tier is paused on the spend limit anyway.
 - **agy**: no data yet.
 
 *Updated after every delegated task completes — check back for fresh rows as modules 8+ progress.*

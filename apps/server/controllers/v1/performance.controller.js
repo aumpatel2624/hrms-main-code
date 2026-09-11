@@ -669,10 +669,12 @@ export const completeAppraisalCycle = async (req, res) => {
 // 5. Appraisal
 // ============================================================================
 
-export const APPRAISAL_FIELDS = [
-  "employeeId", "appraisalCycleId", "appraisalTemplateId",
-  "remarks", "reflections", "appraisalKra", "goals", "selfRatings",
-];
+// employeeId/appraisalCycleId/appraisalTemplateId are create-only — set once
+// at creation and never client-editable afterward (appraisalTemplateId is
+// resolved from the cycle/Designation, and rateGoalsManually derives from
+// it), so the update route gets its own, narrower allowlist.
+export const APPRAISAL_CREATE_FIELDS = ["employeeId", "appraisalCycleId", "appraisalTemplateId"];
+export const APPRAISAL_UPDATE_FIELDS = ["remarks", "reflections", "appraisalKra", "goals", "selfRatings"];
 
 export const APPRAISAL_FILTERABLE = {
   employeeId: "objectId",

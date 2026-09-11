@@ -38,6 +38,14 @@ import {
     createGratuityRule, getGratuityRuleById, updateGratuityRule, deleteGratuityRule, searchGratuityRules, getAllGratuityRules,
     createGratuity, getGratuityById, updateGratuity, deleteGratuity, searchGratuities, submitGratuity, cancelGratuity,
 } from "../api/gratuity.api";
+import {
+    createKRA, getKRAById, updateKRA, deleteKRA, searchKRAs, getAllKRAs,
+    createEmployeeFeedbackCriteria, getEmployeeFeedbackCriteriaById, updateEmployeeFeedbackCriteria, deleteEmployeeFeedbackCriteria, searchEmployeeFeedbackCriteria, getAllEmployeeFeedbackCriteria,
+    createAppraisalTemplate, getAppraisalTemplateById, updateAppraisalTemplate, deleteAppraisalTemplate, searchAppraisalTemplates, getAllAppraisalTemplates,
+    createAppraisalCycle, getAppraisalCycleById, updateAppraisalCycle, deleteAppraisalCycle, searchAppraisalCycles,
+    getEligibleEmployeesForCycle, createAppraisalsForCycle, completeAppraisalCycle,
+    createAppraisal, getAppraisalById, updateAppraisal, deleteAppraisal, searchAppraisals, submitAppraisal, cancelAppraisal,
+} from "../api/performance.api";
 import { GenerateShiftsPanel } from "../components/hrms/generate-shifts-panel";
 import { Building07, Hash02, Link01, Mail01, MarkerPin01, Phone, Shield01, Tag01, Type01, User01 } from "@untitledui/icons";
 import { isStrongPassword, isValidEmail, PASSWORD } from "@demo-panel/shared/validation";
@@ -151,6 +159,7 @@ import PasswordResetSection from "@/components/crud/password-reset-section";
 import EmailTemplateMergeFields from "@/components/crud/email-template-merge-fields";
 import SimpleArrayField from "@/components/crud/simple-array-field";
 import SimpleActionButton from "@/components/crud/simple-action-button";
+import { FormSection, FullWidth } from "@/components/ui/form";
 import AdjustAllocationPanel from "@/components/crud/adjust-allocation-panel";
 import MarkEncashmentPaidPanel from "@/components/crud/mark-encashment-paid-panel";
 
@@ -623,7 +632,13 @@ export const designationConfig = {
     plural: "Designations",
     description: "Job titles assignable to an employee.",
     api: { search: searchDesignations, getById: getDesignationById, create: createDesignation, update: updateDesignation, remove: deleteDesignation },
-    lookups: { companyId: asOptions(getAllCompanies, "companyName") },
+    lookups: {
+        companyId: asOptions(getAllCompanies, "companyName"),
+        // ADR-032 (Performance, module 16) retrofit — the default Appraisal
+        // Template an Appraisal Cycle's "get eligible employees" action
+        // resolves for an employee of this Designation.
+        appraisalTemplateId: asOptions(getAllAppraisalTemplates, "templateTitle"),
+    },
     sections: [
         { id: "details", title: "Designation details" },
         { id: "status", title: "Status" },
@@ -631,6 +646,7 @@ export const designationConfig = {
     fields: [
         { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "details", error: "Company is required!", optionsFrom: "companyId" },
         { name: "designationName", icon: User01, label: "Designation Name", required: true, section: "details", error: "Designation Name is required!", placeholder: "Enter designation name" },
+        { name: "appraisalTemplateId", label: "Default Appraisal Template", section: "details", type: "select", optionsFrom: "appraisalTemplateId" },
         ACTIVE,
     ],
     columns: [
@@ -638,7 +654,7 @@ export const designationConfig = {
         { name: "Status", selector: (row) => (row.isActive ? "Active" : "Inactive"), minWidth: "130px" },
     ],
     recordTitle: (r) => r.designationName,
-    toForm: (data) => ({ ...data, companyId: refId(data.companyId) }),
+    toForm: (data) => ({ ...data, companyId: refId(data.companyId), appraisalTemplateId: refId(data.appraisalTemplateId) }),
 };
 
 // Reports-to needs a combined "code — name" label, unlike asOptions' single
@@ -4307,6 +4323,418 @@ export const gratuityConfig = {
         }),
 };
 
+// ============================================================================
+// Performance (ADR-032, module 16, foundation half). Goal and Employee
+// Performance Feedback are the deliberately separate second branch — not
+// built here.
+// ============================================================================
+
+export const kraConfig = {
+    key: "kra",
+    path: "/kra",
+    section: "Performance",
+    singular: "KRA",
+    plural: "KRAs",
+    description: "Key Result Area master list — referenced by Appraisal Template goals and automated-mode Appraisal scoring.",
+    api: { search: searchKRAs, getById: getKRAById, create: createKRA, update: updateKRA, remove: deleteKRA },
+    sections: [{ id: "details", title: "KRA Details" }],
+    fields: [
+        { name: "name", label: "Name", section: "details", type: "text", required: true, error: "Name is required" },
+    ],
+    columns: [
+        { name: "Name", selector: (r) => r.name, sortable: true, sortField: "name" },
+    ],
+    filterFields: [
+        { name: "name", label: "Name", type: "string" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => r.name,
+};
+
+export const employeeFeedbackCriteriaConfig = {
+    key: "employee-feedback-criteria",
+    path: "/employee-feedback-criteria",
+    section: "Performance",
+    singular: "Employee Feedback Criteria",
+    plural: "Employee Feedback Criteria",
+    description: "Named rating criteria (e.g. Communication, Teamwork) referenced by Appraisal Template rating criteria and self-ratings.",
+    api: {
+        search: searchEmployeeFeedbackCriteria,
+        getById: getEmployeeFeedbackCriteriaById,
+        create: createEmployeeFeedbackCriteria,
+        update: updateEmployeeFeedbackCriteria,
+        remove: deleteEmployeeFeedbackCriteria,
+    },
+    sections: [{ id: "details", title: "Criteria Details" }],
+    fields: [
+        { name: "criteria", label: "Criteria", section: "details", type: "text", required: true, error: "Criteria is required" },
+    ],
+    columns: [
+        { name: "Criteria", selector: (r) => r.criteria, sortable: true, sortField: "criteria" },
+    ],
+    filterFields: [
+        { name: "criteria", label: "Criteria", type: "string" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => r.criteria,
+};
+
+const APPRAISAL_TEMPLATE_GOAL_COLUMNS = [
+    { name: "kraId", label: "KRA ID", type: "text", placeholder: "KRA ObjectId" },
+    { name: "weightage", label: "Weightage (%)", type: "number", placeholder: "e.g. 40" },
+];
+const APPRAISAL_TEMPLATE_RATING_CRITERIA_COLUMNS = [
+    { name: "criteriaId", label: "Criteria ID", type: "text", placeholder: "Employee Feedback Criteria ObjectId" },
+    { name: "weightage", label: "Weightage (%)", type: "number", placeholder: "e.g. 50" },
+];
+
+export const appraisalTemplateConfig = {
+    key: "appraisal-template",
+    path: "/appraisal-template",
+    section: "Performance",
+    singular: "Appraisal Template",
+    plural: "Appraisal Templates",
+    description: "Reusable blueprint of KRAs and rating criteria (each with weightages), assignable per-Designation or per-appraisee and copied into each Appraisal at creation time.",
+    api: {
+        search: searchAppraisalTemplates,
+        getById: getAppraisalTemplateById,
+        create: createAppraisalTemplate,
+        update: updateAppraisalTemplate,
+        remove: deleteAppraisalTemplate,
+    },
+    sections: [{ id: "details", title: "Template Details" }],
+    fields: [
+        { name: "templateTitle", label: "Template Title", section: "details", type: "text", required: true, error: "Template Title is required" },
+        { name: "description", label: "Description", section: "details", type: "text" },
+    ],
+    renderExtra: ({ values, setValues }) => (
+        <>
+            <SimpleArrayField
+                title="Goals (KRAs)"
+                description="Look up the KRA's ObjectId from the KRA screen. Weightages must sum to exactly 100."
+                fieldName="goals"
+                columns={APPRAISAL_TEMPLATE_GOAL_COLUMNS}
+                values={values}
+                setValues={setValues}
+            />
+            <SimpleArrayField
+                title="Rating Criteria"
+                description="Look up the criteria's ObjectId from the Employee Feedback Criteria screen. Weightages must sum to exactly 100."
+                fieldName="ratingCriteria"
+                columns={APPRAISAL_TEMPLATE_RATING_CRITERIA_COLUMNS}
+                values={values}
+                setValues={setValues}
+            />
+        </>
+    ),
+    columns: [
+        { name: "Template Title", selector: (r) => r.templateTitle, sortable: true, sortField: "templateTitle" },
+        { name: "Goals", selector: (r) => (r.goals || []).length },
+        { name: "Rating Criteria", selector: (r) => (r.ratingCriteria || []).length },
+    ],
+    filterFields: [
+        { name: "templateTitle", label: "Template Title", type: "string" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => r.templateTitle,
+    toForm: (data) => ({
+        ...data,
+        goals: (data.goals || []).map((row) => ({ ...row, kraId: refId(row.kraId) })),
+        ratingCriteria: (data.ratingCriteria || []).map((row) => ({ ...row, criteriaId: refId(row.criteriaId) })),
+    }),
+    toPayload: (values) => ({
+        templateTitle: values.templateTitle,
+        description: values.description,
+        goals: (values.goals || []).map((row) => ({ kraId: refId(row.kraId), weightage: Number(row.weightage) || 0 })),
+        ratingCriteria: (values.ratingCriteria || []).map((row) => ({ criteriaId: refId(row.criteriaId), weightage: Number(row.weightage) || 0 })),
+    }),
+};
+
+export const appraisalCycleConfig = {
+    key: "appraisal-cycle",
+    path: "/appraisal-cycle",
+    section: "Performance",
+    singular: "Appraisal Cycle",
+    plural: "Appraisal Cycles",
+    description: "A named, time-boxed cycle that generates and tracks Appraisals for a filtered population of employees.",
+    api: {
+        search: searchAppraisalCycles,
+        getById: getAppraisalCycleById,
+        create: createAppraisalCycle,
+        update: updateAppraisalCycle,
+        remove: deleteAppraisalCycle,
+    },
+    lookups: {
+        companyId: asOptions(getAllCompanies, "companyName"),
+        branchId: asOptions(getAllBranches, "branchName"),
+        departmentId: asOptions(getAllDepartments, "departmentName"),
+        designationId: asOptions(getAllDesignations, "designationName"),
+    },
+    sections: [
+        { id: "details", title: "Cycle Details" },
+        { id: "settings", title: "Scoring Settings" },
+        { id: "filters", title: "Applicable For" },
+    ],
+    fields: [
+        { name: "cycleName", label: "Cycle Name", section: "details", type: "text", required: true, error: "Cycle Name is required" },
+        { name: "companyId", label: "Company", section: "details", type: "select", optionsFrom: "companyId", required: true, error: "Company is required" },
+        { name: "startDate", label: "Start Date", section: "details", type: "date", required: true, error: "Start Date is required" },
+        { name: "endDate", label: "End Date", section: "details", type: "date", required: true, error: "End Date is required" },
+        { name: "description", label: "Description", section: "details", type: "text" },
+        {
+            name: "status", label: "Status", section: "details", type: "select",
+            options: [
+                { value: "Not Started", label: "Not Started" },
+                { value: "In Progress", label: "In Progress" },
+            ],
+        },
+        {
+            name: "kraEvaluationMethod", label: "KRA Evaluation Method", section: "settings", type: "select",
+            options: [
+                { value: "Automated Based on Goal Progress", label: "Automated Based on Goal Progress" },
+                { value: "Manual Rating", label: "Manual Rating" },
+            ],
+        },
+        { name: "calculateFinalScoreBasedOnFormula", label: "Calculate Final Score based on Formula", section: "settings", type: "checkbox" },
+        { name: "finalScoreFormula", label: "Final Score Formula (required if enabled above)", section: "settings", type: "text", placeholder: "e.g. (goalScore + selfScore) / 2" },
+        { name: "branchId", label: "Branch (optional filter)", section: "filters", type: "select", optionsFrom: "branchId" },
+        { name: "departmentId", label: "Department (optional filter)", section: "filters", type: "select", optionsFrom: "departmentId" },
+        { name: "designationId", label: "Designation (optional filter)", section: "filters", type: "select", optionsFrom: "designationId" },
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        <>
+            {mode === "edit" && id && (
+                <>
+                    <SimpleActionButton
+                        label="Get Eligible Employees"
+                        description="Loads Active employees matching this cycle's Company/Branch/Department/Designation filters, defaulting each one's Appraisal Template from their Designation."
+                        onRun={() => getEligibleEmployeesForCycle(id)}
+                        onResult={() => window.location.reload()}
+                    />
+                    {values.status !== "Completed" && (
+                        <SimpleActionButton
+                            label="Create Appraisals"
+                            description="Creates one Appraisal per eligible employee loaded above. Skips any employee who already has one for this cycle."
+                            onRun={() => createAppraisalsForCycle(id, {})}
+                            onResult={() => window.location.reload()}
+                        />
+                    )}
+                    {values.status === "In Progress" && (
+                        <SimpleActionButton
+                            label="Complete Cycle"
+                            description="Marks this cycle Completed. Blocked while any linked Appraisal is still a draft."
+                            onRun={() => completeAppraisalCycle(id)}
+                            onResult={() => window.location.reload()}
+                        />
+                    )}
+                    {Array.isArray(values.appraisees) && values.appraisees.length > 0 && (
+                        <FormSection title="Eligible Employees" description={`${values.appraisees.length} employee(s) loaded by "Get Eligible Employees".`}>
+                            <FullWidth>
+                                <ul className="list-disc space-y-1 pl-5 text-sm text-secondary">
+                                    {values.appraisees.map((row) => (
+                                        <li key={row._id || row.employeeId}>
+                                            {row.employeeId?.employeeName || row.employeeId}
+                                            {" — template: "}
+                                            {row.appraisalTemplateId?.templateTitle || row.appraisalTemplateId || "missing"}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </FullWidth>
+                        </FormSection>
+                    )}
+                </>
+            )}
+        </>
+    ),
+    columns: [
+        { name: "Cycle Name", selector: (r) => r.cycleName, sortable: true, sortField: "cycleName" },
+        { name: "Company", selector: (r) => r.companyId?.companyName || r.companyIdLabel || "—" },
+        { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" },
+        { name: "Evaluation Method", selector: (r) => r.kraEvaluationMethod },
+        { name: "Start Date", selector: (r) => String(r.startDate ?? "").slice(0, 10), sortable: true, sortField: "startDate" },
+        { name: "End Date", selector: (r) => String(r.endDate ?? "").slice(0, 10), sortable: true, sortField: "endDate" },
+    ],
+    filterFields: [
+        { name: "cycleName", label: "Cycle Name", type: "string" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "kraEvaluationMethod", label: "Evaluation Method", type: "string" },
+        { name: "startDate", label: "Start Date", type: "date" },
+        { name: "endDate", label: "End Date", type: "date" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => r.cycleName,
+    toForm: (data) => ({
+        ...data,
+        companyId: refId(data.companyId),
+        branchId: refId(data.branchId),
+        departmentId: refId(data.departmentId),
+        designationId: refId(data.designationId),
+        startDate: data.startDate?.slice(0, 10) || "",
+        endDate: data.endDate?.slice(0, 10) || "",
+    }),
+    toPayload: (values) => ({
+        cycleName: values.cycleName,
+        companyId: values.companyId,
+        startDate: values.startDate,
+        endDate: values.endDate,
+        description: values.description,
+        status: values.status,
+        kraEvaluationMethod: values.kraEvaluationMethod,
+        calculateFinalScoreBasedOnFormula: Boolean(values.calculateFinalScoreBasedOnFormula),
+        finalScoreFormula: values.finalScoreFormula,
+        branchId: values.branchId || undefined,
+        departmentId: values.departmentId || undefined,
+        designationId: values.designationId || undefined,
+    }),
+};
+
+const APPRAISAL_KRA_COLUMNS = [
+    { name: "kraId", label: "KRA ID", type: "text", placeholder: "KRA ObjectId" },
+    { name: "weightage", label: "Weightage (%)", type: "number", placeholder: "e.g. 40" },
+];
+const APPRAISAL_GOAL_COLUMNS = [
+    { name: "label", label: "Goal", type: "text", placeholder: "Free-text goal description" },
+    { name: "weightage", label: "Weightage (%)", type: "number", placeholder: "e.g. 40" },
+    { name: "score", label: "Score (0-5)", type: "number", placeholder: "0-5" },
+];
+const APPRAISAL_SELF_RATING_COLUMNS = [
+    { name: "criteriaId", label: "Criteria ID", type: "text", placeholder: "Employee Feedback Criteria ObjectId" },
+    { name: "weightage", label: "Weightage (%)", type: "number", placeholder: "e.g. 50" },
+    { name: "rating", label: "Rating (0-1 fraction)", type: "number", placeholder: "e.g. 0.8" },
+];
+
+export const appraisalConfig = {
+    key: "appraisal",
+    path: "/appraisal",
+    section: "Performance",
+    singular: "Appraisal",
+    plural: "Appraisals",
+    description: "The per-employee, per-cycle record aggregating KRA/goal scores, self-appraisal score and a computed final score.",
+    api: {
+        search: searchAppraisals,
+        getById: getAppraisalById,
+        create: createAppraisal,
+        update: updateAppraisal,
+        remove: deleteAppraisal,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        appraisalCycleId: asOptions(getAllAppraisalCycles, "cycleName"),
+        appraisalTemplateId: asOptions(getAllAppraisalTemplates, "templateTitle"),
+    },
+    sections: [
+        { id: "details", title: "Appraisal Details" },
+        { id: "notes", title: "Remarks & Reflections" },
+    ],
+    fields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "appraisalCycleId", label: "Appraisal Cycle", section: "details", type: "select", optionsFrom: "appraisalCycleId", required: true, error: "Appraisal Cycle is required" },
+        { name: "appraisalTemplateId", label: "Appraisal Template (optional override)", section: "details", type: "select", optionsFrom: "appraisalTemplateId" },
+        { name: "remarks", label: "Remarks", section: "notes", type: "text" },
+        { name: "reflections", label: "Reflections", section: "notes", type: "text" },
+    ],
+    viewFields: [
+        { name: "status", label: "Status", section: "details", type: "text" },
+        { name: "totalScore", label: "Goal Score", section: "details", type: "number" },
+        { name: "selfScore", label: "Self Score", section: "details", type: "number" },
+        { name: "avgFeedbackScore", label: "Average Feedback Score", section: "details", type: "number" },
+        { name: "finalScore", label: "Final Score", section: "details", type: "number" },
+    ],
+    renderExtra: ({ mode, id, values, setValues }) => (
+        <>
+            {values.rateGoalsManually ? (
+                <SimpleArrayField
+                    title="Goals (Manual Rating mode)"
+                    description="Score is capped at 5. Weightages must sum to exactly 100."
+                    fieldName="goals"
+                    columns={APPRAISAL_GOAL_COLUMNS}
+                    values={values}
+                    setValues={setValues}
+                />
+            ) : (
+                <SimpleArrayField
+                    title="KRAs (Automated mode)"
+                    description="Goal Completion / Goal Score are server-computed at submit time from linked Goals and are not directly editable here. Weightages must sum to exactly 100."
+                    fieldName="appraisalKra"
+                    columns={APPRAISAL_KRA_COLUMNS}
+                    values={values}
+                    setValues={setValues}
+                />
+            )}
+            <SimpleArrayField
+                title="Self Ratings"
+                description="The employee's own self-appraisal against each rating criterion. Rating is a 0-1 fraction (e.g. 0.8 = 4 out of 5 stars). Weightages must sum to exactly 100."
+                fieldName="selfRatings"
+                columns={APPRAISAL_SELF_RATING_COLUMNS}
+                values={values}
+                setValues={setValues}
+            />
+            {mode === "edit" && id && values.status === "draft" && (
+                <SimpleActionButton
+                    label="Submit"
+                    description="Recomputes Goal Score, Self Score and Final Score, then marks this Appraisal submitted."
+                    onRun={() => submitAppraisal(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+            {mode === "edit" && id && values.status === "submitted" && (
+                <SimpleActionButton
+                    label="Cancel"
+                    description="Cancels this Appraisal."
+                    onRun={() => cancelAppraisal(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+        </>
+    ),
+    columns: [
+        { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Appraisal Cycle", selector: (r) => r.appraisalCycleId?.cycleName || r.appraisalCycleIdLabel || "—" },
+        { name: "Mode", selector: (r) => (r.rateGoalsManually ? "Manual" : "Automated") },
+        { name: "Final Score", selector: (r) => r.finalScore ?? "—" },
+        { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" },
+    ],
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "appraisalCycleId", label: "Appraisal Cycle", type: "objectId" },
+        { name: "appraisalTemplateId", label: "Appraisal Template", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "startDate", label: "Start Date", type: "date" },
+        { name: "endDate", label: "End Date", type: "date" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => `Appraisal — ${r.employeeId?.employeeName || r.employeeIdLabel || ""}`,
+    toForm: (data) => ({
+        ...data,
+        employeeId: refId(data.employeeId),
+        appraisalCycleId: refId(data.appraisalCycleId),
+        appraisalTemplateId: refId(data.appraisalTemplateId),
+        appraisalKra: (data.appraisalKra || []).map((row) => ({ ...row, kraId: refId(row.kraId) })),
+        selfRatings: (data.selfRatings || []).map((row) => ({ ...row, criteriaId: refId(row.criteriaId) })),
+    }),
+    toPayload: (values, mode) => (mode === "edit"
+        ? {
+            remarks: values.remarks,
+            reflections: values.reflections,
+            appraisalKra: values.rateGoalsManually ? undefined : (values.appraisalKra || []).map((row) => ({
+                kraId: refId(row.kraId), weightage: Number(row.weightage) || 0,
+            })),
+            goals: values.rateGoalsManually ? (values.goals || []).map((row) => ({
+                label: row.label, weightage: Number(row.weightage) || 0, score: Number(row.score) || 0,
+            })) : undefined,
+            selfRatings: (values.selfRatings || []).map((row) => ({
+                criteriaId: refId(row.criteriaId), weightage: Number(row.weightage) || 0, rating: Number(row.rating) || 0,
+            })),
+        }
+        : {
+            employeeId: values.employeeId,
+            appraisalCycleId: values.appraisalCycleId,
+            appraisalTemplateId: values.appraisalTemplateId || undefined,
+        }),
+};
+
 const EMPLOYEE_BENEFIT_DETAIL_COLUMNS = [
     { name: "salaryComponentId", label: "Salary Component ID", type: "text", placeholder: "Component ObjectId" },
     { name: "amount", label: "Amount", type: "number", placeholder: "0.00" },
@@ -4990,4 +5418,5 @@ export const ADVANCED_ENTITIES = [
     employeeTaxExemptionSubCategoryConfig, employeeTaxExemptionDeclarationConfig,
     employeeTaxExemptionProofSubmissionConfig,
     gratuityRuleConfig, gratuityConfig,
+    kraConfig, employeeFeedbackCriteriaConfig, appraisalTemplateConfig, appraisalCycleConfig, appraisalConfig,
 ];

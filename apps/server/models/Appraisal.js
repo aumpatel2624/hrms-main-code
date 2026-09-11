@@ -98,7 +98,10 @@ AppraisalSchema.index({ createdAt: -1 });
 // layer too, not just in the controller's pre-check.
 AppraisalSchema.index(
   { employeeId: 1, appraisalCycleId: 1 },
-  { unique: true, partialFilterExpression: { status: { $ne: "cancelled" } } },
+  // Mongo's partial-index filters don't support $ne (compiles to $not,
+  // which is disallowed here) — expressed as the two non-cancelled values
+  // instead of "status != cancelled".
+  { unique: true, partialFilterExpression: { status: { $in: ["draft", "submitted"] } } },
 );
 
 export default mongoose.model("Appraisal", AppraisalSchema);

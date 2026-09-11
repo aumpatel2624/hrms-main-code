@@ -1278,6 +1278,66 @@ export const CONFIG_SCREENS = [
         ],
         roles: "HR User and HR Manager manage records within their company.",
     },
+    {
+        key: "kra",
+        config: "kraConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Key Result Area master list, referenced by Appraisal Template goals and used in automated KRA scoring.",
+        when: "Setting up Appraisal Templates before an Appraisal Cycle starts.",
+        gotchas: [
+            "A KRA already referenced by an Appraisal Template or an existing Appraisal cannot be deleted.",
+        ],
+        roles: "HR User and HR Manager manage records.",
+    },
+    {
+        key: "employee-feedback-criteria",
+        config: "employeeFeedbackCriteriaConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Named rating criteria (e.g. Communication, Teamwork) referenced by Appraisal Template rating criteria and an Appraisal's self-ratings.",
+        when: "Setting up Appraisal Templates before an Appraisal Cycle starts.",
+        gotchas: [
+            "A criteria already referenced by an Appraisal Template or an existing Appraisal cannot be deleted.",
+        ],
+        roles: "HR User and HR Manager manage records.",
+    },
+    {
+        key: "appraisal-template",
+        config: "appraisalTemplateConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "Reusable blueprint of KRAs and rating criteria, each with weightages, copied into every Appraisal created against it.",
+        when: "Before running an Appraisal Cycle — set up the KRAs/rating criteria employees will be scored against, and optionally set one as a Designation's default.",
+        gotchas: [
+            "Both the KRA weightages and the rating criteria weightages must each sum to exactly 100.",
+            "Editing a template after Appraisals already copied its rows does not change those existing Appraisals.",
+        ],
+        roles: "HR User and HR Manager manage records.",
+    },
+    {
+        key: "appraisal-cycle",
+        config: "appraisalCycleConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "A named, time-boxed cycle (e.g. \"H1 2026\") that generates and tracks Appraisals for a filtered population of employees.",
+        when: "Starting a new performance review period.",
+        gotchas: [
+            "\"Get Eligible Employees\" must be run before \"Create Appraisals\" — it loads the candidate list and each one's default Appraisal Template from their Designation.",
+            "The KRA Evaluation Method (Automated vs. Manual Rating) cannot be changed once any Appraisal exists under the cycle.",
+            "Completing a cycle is blocked while any linked Appraisal is still a draft.",
+        ],
+        roles: "HR User and HR Manager manage records within their company.",
+    },
+    {
+        key: "appraisal",
+        config: "appraisalConfig",
+        source: "apps/admin/src/entities/advanced.jsx",
+        intro: "The per-employee, per-cycle record aggregating KRA/goal scores, self-appraisal score, average peer feedback score, and a computed final score.",
+        when: "Created automatically by an Appraisal Cycle's \"Create Appraisals\" action (or manually for a single employee); submitted once the employee's self-rating and goal scoring are complete.",
+        gotchas: [
+            "Which of the KRA table or the free-text Goals table is active is fixed at creation from the cycle's evaluation method, and cannot be changed afterward.",
+            "Submitting recomputes Goal Score, Self Score and Final Score from scratch — the server never trusts whatever the client last displayed.",
+            "Average Feedback Score stays 0 in this release; peer feedback scoring is a separate, not-yet-built module.",
+        ],
+        roles: "HR User and HR Manager manage records within their company.",
+    },
 ];
 
 /**

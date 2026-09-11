@@ -326,6 +326,19 @@ const MENU_GROUPS = [
     ],
   },
   {
+    // ADR-032 (module 16, foundation half, feat/performance). HR-configuration
+    // data only, matching Payroll's own "no self-service" precedent — Goal is
+    // the self-service (SCOPES.OWN) doctype, second branch, not built here.
+    menuGroupName: "Performance", sequence: 2.995, icon: "ri-medal-2-line",
+    menus: [
+      { menuName: "KRA", menuUrl: "/kra", icon: "ri-flag-2-line" },
+      { menuName: "Employee Feedback Criteria", menuUrl: "/employee-feedback-criteria", icon: "ri-chat-poll-line" },
+      { menuName: "Appraisal Template", menuUrl: "/appraisal-template", icon: "ri-file-copy-2-line" },
+      { menuName: "Appraisal Cycle", menuUrl: "/appraisal-cycle", icon: "ri-calendar-check-line" },
+      { menuName: "Appraisal", menuUrl: "/appraisal", icon: "ri-user-star-line" },
+    ],
+  },
+  {
     menuGroupName: "Master",
     sequence: 3,
     icon: "ri-database-2-line",
@@ -1914,6 +1927,56 @@ const seedPayrollRoles = async () => {
   console.log(`✅ Payroll roles: ${matrixRowsAdded} menu grant(s) added`);
 };
 
+/**
+ * Performance roles (ADR-032, module 16, foundation half). HR-configuration
+ * data only, matching Payroll's own precedent — no Employee-role grants at
+ * all in this half. Goal (second branch, not built here) is the doctype
+ * that gets real Employee self-service (SCOPES.OWN, per ADR-032).
+ */
+const seedPerformanceRoles = async () => {
+  const full = { write: true, read: true, edit: true, delete: true, print: true, mail: true };
+
+  const GRANTS = {
+    "/kra": { "HR User": full, "HR Manager": full },
+    "/employee-feedback-criteria": { "HR User": full, "HR Manager": full },
+    "/appraisal-template": { "HR User": full, "HR Manager": full },
+    "/appraisal-cycle": { "HR User": full, "HR Manager": full },
+    "/appraisal": { "HR User": full, "HR Manager": full },
+  };
+
+  const allMenuUrls = Object.keys(GRANTS);
+  const menus = await MenuMaster.find({ menuUrl: { $in: allMenuUrls } }).lean();
+  if (menus.length !== allMenuUrls.length) {
+    console.log("⚠️  Performance roles: not every menu row exists yet — run seedMenus first");
+    return;
+  }
+  const menuByUrl = Object.fromEntries(menus.map((m) => [m.menuUrl, m]));
+
+  const addRow = (userRoles, menu, permObj) => {
+    if (userRoles.roles.some((r) => String(r.menuId) === String(menu._id))) return false;
+    userRoles.roles.push({ menuId: menu._id, menuGroupId: menu.menuGroup, ...permObj });
+    return true;
+  };
+
+  let matrixRowsAdded = 0;
+  for (const roleName of ["HR User", "HR Manager", "Employee"]) {
+    const role = await RoleMaster.findOne({ roleName });
+    if (!role) continue;
+    const userRoles = await UserRoles.findOne({ roleId: role._id });
+    if (!userRoles) continue;
+
+    let changed = false;
+    for (const [menuUrl, grantByRole] of Object.entries(GRANTS)) {
+      const permObj = grantByRole[roleName];
+      if (!permObj) continue;
+      if (addRow(userRoles, menuByUrl[menuUrl], permObj)) { matrixRowsAdded += 1; changed = true; }
+    }
+    if (changed) await userRoles.save();
+  }
+
+  console.log(`✅ Performance roles: ${matrixRowsAdded} menu grant(s) added`);
+};
+
 const run = async () => {
   if (!process.env.DATABASE) {
     console.error("❌ DATABASE is not set in .env");
@@ -1956,6 +2019,7 @@ const run = async () => {
   await seedShiftAttendanceRoles();
   await seedShiftAttendanceTransactionsRoles();
   await seedPayrollRoles();
+  await seedPerformanceRoles();
   await seedGeographyData();
 
   await mongoose.disconnect();

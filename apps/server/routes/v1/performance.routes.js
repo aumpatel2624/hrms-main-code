@@ -420,7 +420,7 @@ router.post(
   "/appraisals",
   authMiddleware(ANY_ROLE),
   checkPermission("/appraisal", "write"),
-  allowOnlyFields(["employeeId", "appraisalCycleId", "appraisalTemplateId"]),
+  allowOnlyFields(controller.APPRAISAL_CREATE_FIELDS),
   controller.createAppraisal,
 );
 
@@ -466,7 +466,7 @@ router.put(
   "/appraisals/:id",
   authMiddleware(ANY_ROLE),
   checkPermission("/appraisal", "edit"),
-  allowOnlyFields(controller.APPRAISAL_FIELDS),
+  allowOnlyFields(controller.APPRAISAL_UPDATE_FIELDS),
   controller.updateAppraisal,
 );
 

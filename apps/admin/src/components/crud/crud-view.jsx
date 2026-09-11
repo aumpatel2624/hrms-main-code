@@ -5,6 +5,7 @@ import { ArrowLeft, Edit01 } from "@untitledui/icons";
 import { MenuContext } from "../../context/MenuContext";
 import { Card, PageHeader } from "@/components/ui/page";
 import { FormSection, FullWidth } from "@/components/ui/form";
+import Tabs from "@/components/ui/tabs";
 import { Button } from "@/components/base/buttons/button";
 import { Badge } from "@/components/base/badges/badges";
 import { LoadingIndicator } from "@/components/application/loading-indicator/loading-indicator";
@@ -109,10 +110,12 @@ const CrudView = ({ config }) => {
     const [record, setRecord] = useState(null);
     const [lookups, setLookups] = useState({});
     const [loading, setLoading] = useState(true);
+    const [activeSectionId, setActiveSectionId] = useState(null);
 
     useEffect(() => {
         if (!id) return;
         setLoading(true);
+        setActiveSectionId(null);
         config.api
             .getById(id)
             .then((res) => setRecord(res.data?.data ?? null))
@@ -144,6 +147,13 @@ const CrudView = ({ config }) => {
         (f) => f.type !== "password" && !f.hideIn?.includes("view"),
     );
     const sections = config.sections ?? [{ id: "default", title: `${config.singular} details` }];
+    const visibleSections = sections
+        .map((section) => ({
+            ...section,
+            fields: fields.filter((field) => (field.section ?? "default") === section.id),
+        }))
+        .filter((section) => section.fields.length);
+    const activeSection = visibleSections.find((section) => section.id === activeSectionId) ?? visibleSections[0];
 
     const title = record ? (config.recordTitle?.(record) ?? config.singular) : config.singular;
     const status = record && "isActive" in record ? record.isActive : undefined;
@@ -188,30 +198,33 @@ const CrudView = ({ config }) => {
                     </p>
                 ) : (
                     <>
-                        {sections.map((section) => {
-                            const inSection = fields.filter((f) => (f.section ?? "default") === section.id);
-                            if (!inSection.length) return null;
-                            return (
-                                <FormSection
-                                    key={section.id}
-                                    title={section.title}
-                                    description={section.description}
-                                    columns={section.columns}
-                                >
-                                    {inSection.map((field) => {
-                                        const node = (
-                                            <Detail
-                                                key={field.name}
-                                                label={field.label}
-                                                value={renderValue(field, values[field.name], lookups)}
-                                            />
-                                        );
-                                        const spans = field.full || ["textarea", "richtext", "icon"].includes(field.type);
-                                        return spans ? <FullWidth key={field.name}>{node}</FullWidth> : node;
-                                    })}
-                                </FormSection>
-                            );
-                        })}
+                        {visibleSections.length > 1 && (
+                            <Tabs
+                                tabs={visibleSections.map(({ id: sectionId, title }) => ({ id: sectionId, label: title }))}
+                                activeId={activeSection?.id}
+                                onChange={setActiveSectionId}
+                            />
+                        )}
+
+                        {activeSection && (
+                            <FormSection
+                                title={activeSection.title}
+                                description={activeSection.description}
+                                columns={activeSection.columns}
+                            >
+                                {activeSection.fields.map((field) => {
+                                    const node = (
+                                        <Detail
+                                            key={field.name}
+                                            label={field.label}
+                                            value={renderValue(field, values[field.name], lookups)}
+                                        />
+                                    );
+                                    const spans = field.full || ["textarea", "richtext", "icon"].includes(field.type);
+                                    return spans ? <FullWidth key={field.name}>{node}</FullWidth> : node;
+                                })}
+                            </FormSection>
+                        )}
 
                         {(record.createdAt || record.updatedAt) && (
                             <div className="flex flex-wrap gap-x-6 gap-y-1 border-t border-secondary py-4 text-xs text-tertiary">

@@ -4108,8 +4108,8 @@ export const employeeOtherIncomeConfig = {
 };
 
 const EMPLOYEE_BENEFIT_DETAIL_COLUMNS = [
-    { key: "salaryComponentId", label: "Salary Component ID", type: "text", placeholder: "Component ObjectId" },
-    { key: "amount", label: "Amount", type: "number", placeholder: "0.00" },
+    { name: "salaryComponentId", label: "Salary Component ID", type: "text", placeholder: "Component ObjectId" },
+    { name: "amount", label: "Amount", type: "number", placeholder: "0.00" },
 ];
 
 export const employeeBenefitApplicationConfig = {
@@ -4415,17 +4415,17 @@ export const payrollCorrectionConfig = {
 // ============================================================================
 
 const TAXABLE_SALARY_SLAB_COLUMNS = [
-    { key: "fromAmount", label: "From Amount", type: "number", placeholder: "0" },
-    { key: "toAmount", label: "To Amount (blank for open-ended)", type: "number", placeholder: "Optional" },
-    { key: "percentDeduction", label: "Percent Deduction (%)", type: "number", placeholder: "0-100" },
-    { key: "condition", label: "Condition", type: "text", placeholder: "e.g. age < 60" },
+    { name: "fromAmount", label: "From Amount", type: "number", placeholder: "0" },
+    { name: "toAmount", label: "To Amount (blank for open-ended)", type: "number", placeholder: "Optional" },
+    { name: "percentDeduction", label: "Percent Deduction (%)", type: "number", placeholder: "0-100" },
+    { name: "condition", label: "Condition", type: "text", placeholder: "e.g. age < 60" },
 ];
 
 const OTHER_TAXES_AND_CHARGES_COLUMNS = [
-    { key: "description", label: "Description", type: "text", placeholder: "e.g. Surcharge, Cess" },
-    { key: "percent", label: "Percent (%)", type: "number", placeholder: "0" },
-    { key: "minTaxableIncome", label: "Min Taxable Income", type: "number", placeholder: "0" },
-    { key: "maxTaxableIncome", label: "Max Taxable Income", type: "number", placeholder: "Optional" },
+    { name: "description", label: "Description", type: "text", placeholder: "e.g. Surcharge, Cess" },
+    { name: "percent", label: "Percent (%)", type: "number", placeholder: "0" },
+    { name: "minTaxableIncome", label: "Min Taxable Income", type: "number", placeholder: "0" },
+    { name: "maxTaxableIncome", label: "Max Taxable Income", type: "number", placeholder: "Optional" },
 ];
 
 export const incomeTaxSlabConfig = {
@@ -4587,8 +4587,8 @@ export const employeeTaxExemptionSubCategoryConfig = {
 };
 
 const EXEMPTION_DECLARATION_COLUMNS = [
-    { key: "exemptionSubCategoryId", label: "Sub-Category ID", type: "text", placeholder: "Sub-Category ObjectId" },
-    { key: "amount", label: "Declared Amount", type: "number", placeholder: "0.00" },
+    { name: "exemptionSubCategoryId", label: "Sub-Category ID", type: "text", placeholder: "Sub-Category ObjectId" },
+    { name: "amount", label: "Declared Amount", type: "number", placeholder: "0.00" },
 ];
 
 export const employeeTaxExemptionDeclarationConfig = {
@@ -4672,9 +4672,9 @@ export const employeeTaxExemptionDeclarationConfig = {
 };
 
 const EXEMPTION_PROOF_COLUMNS = [
-    { key: "exemptionSubCategoryId", label: "Sub-Category ID", type: "text", placeholder: "Sub-Category ObjectId" },
-    { key: "typeOfProof", label: "Type of Proof", type: "text", placeholder: "Receipt, Statement, etc." },
-    { key: "amount", label: "Actual Amount", type: "number", placeholder: "0.00" },
+    { name: "exemptionSubCategoryId", label: "Sub-Category ID", type: "text", placeholder: "Sub-Category ObjectId" },
+    { name: "typeOfProof", label: "Type of Proof", type: "text", placeholder: "Receipt, Statement, etc." },
+    { name: "amount", label: "Actual Amount", type: "number", placeholder: "0.00" },
 ];
 
 export const employeeTaxExemptionProofSubmissionConfig = {

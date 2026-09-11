@@ -39,6 +39,42 @@ const throwError = (status, message) => {
   throw error;
 };
 
+const ADDITIONAL_SALARY_STAGES = [
+  { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employeeId_joined" } },
+  { $addFields: { employeeIdLabel: { $arrayElemAt: ["$employeeId_joined.employeeName", 0] } } },
+  { $project: { employeeId_joined: 0 } },
+  { $lookup: { from: "companies", localField: "companyId", foreignField: "_id", as: "companyId_joined" } },
+  { $addFields: { companyIdLabel: { $arrayElemAt: ["$companyId_joined.companyName", 0] } } },
+  { $project: { companyId_joined: 0 } },
+  { $lookup: { from: "salarycomponents", localField: "salaryComponentId", foreignField: "_id", as: "salaryComponentId_joined" } },
+  { $addFields: { salaryComponentIdLabel: { $arrayElemAt: ["$salaryComponentId_joined.salaryComponentName", 0] } } },
+  { $project: { salaryComponentId_joined: 0 } },
+];
+
+const ARREAR_STAGES = [
+  { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employeeId_joined" } },
+  { $addFields: { employeeIdLabel: { $arrayElemAt: ["$employeeId_joined.employeeName", 0] } } },
+  { $project: { employeeId_joined: 0 } },
+  { $lookup: { from: "companies", localField: "companyId", foreignField: "_id", as: "companyId_joined" } },
+  { $addFields: { companyIdLabel: { $arrayElemAt: ["$companyId_joined.companyName", 0] } } },
+  { $project: { companyId_joined: 0 } },
+];
+
+const RETENTION_BONUS_STAGES = ADDITIONAL_SALARY_STAGES;
+const EMPLOYEE_INCENTIVE_STAGES = ADDITIONAL_SALARY_STAGES;
+
+const EMPLOYEE_OTHER_INCOME_STAGES = [
+  { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employeeId_joined" } },
+  { $addFields: { employeeIdLabel: { $arrayElemAt: ["$employeeId_joined.employeeName", 0] } } },
+  { $project: { employeeId_joined: 0 } },
+  { $lookup: { from: "companies", localField: "companyId", foreignField: "_id", as: "companyId_joined" } },
+  { $addFields: { companyIdLabel: { $arrayElemAt: ["$companyId_joined.companyName", 0] } } },
+  { $project: { companyId_joined: 0 } },
+  { $lookup: { from: "payrollperiods", localField: "payrollPeriodId", foreignField: "_id", as: "payrollPeriodId_joined" } },
+  { $addFields: { payrollPeriodIdLabel: { $concat: [{ $substr: [{ $arrayElemAt: ["$payrollPeriodId_joined.startDate", 0] }, 0, 10] }, " to ", { $substr: [{ $arrayElemAt: ["$payrollPeriodId_joined.endDate", 0] }, 0, 10] }] } } },
+  { $project: { payrollPeriodId_joined: 0 } },
+];
+
 // ============================================================================
 // 1. Additional Salary
 // ============================================================================
@@ -243,14 +279,12 @@ export const createAdditionalSalary = async (req, res) => {
 export const listAdditionalSalaries = async (req, res) => {
   try {
     const scope = await attendanceScope(req, false);
-    const result = await runListQuery({
-      model: AdditionalSalary,
-      query: req.query,
-      filter: scope,
+    const result = await runListQuery(AdditionalSalary, req.query, {
+      scopeFilter: scope,
       filterable: ADDITIONAL_SALARY_FILTERABLE,
-      populate: ["employeeId", "salaryComponentId", "companyId"],
+      stages: ADDITIONAL_SALARY_STAGES,
     });
-    return res.json({ isOk: true, status: 200, ...result });
+    return res.json({ isOk: true, status: 200, data: result });
   } catch (error) {
     return failure(res, error);
   }
@@ -259,14 +293,12 @@ export const listAdditionalSalaries = async (req, res) => {
 export const searchAdditionalSalaries = async (req, res) => {
   try {
     const scope = await attendanceScope(req, false);
-    const result = await runListQuery({
-      model: AdditionalSalary,
-      query: req.body,
-      filter: scope,
+    const result = await runListQuery(AdditionalSalary, req.body, {
+      scopeFilter: scope,
       filterable: ADDITIONAL_SALARY_FILTERABLE,
-      populate: ["employeeId", "salaryComponentId", "companyId"],
+      stages: ADDITIONAL_SALARY_STAGES,
     });
-    return res.json({ isOk: true, status: 200, ...result });
+    return res.json({ isOk: true, status: 200, data: result });
   } catch (error) {
     return failure(res, error);
   }
@@ -432,14 +464,12 @@ export const calculateArrearPreview = async (req, res) => {
 export const listArrears = async (req, res) => {
   try {
     const scope = await attendanceScope(req, false);
-    const result = await runListQuery({
-      model: Arrear,
-      query: req.query,
-      filter: scope,
+    const result = await runListQuery(Arrear, req.query, {
+      scopeFilter: scope,
       filterable: ARREAR_FILTERABLE,
-      populate: ["employeeId", "companyId", "earningArrears.salaryComponentId", "deductionArrears.salaryComponentId"],
+      stages: ARREAR_STAGES,
     });
-    return res.json({ isOk: true, status: 200, ...result });
+    return res.json({ isOk: true, status: 200, data: result });
   } catch (error) {
     return failure(res, error);
   }
@@ -448,14 +478,12 @@ export const listArrears = async (req, res) => {
 export const searchArrears = async (req, res) => {
   try {
     const scope = await attendanceScope(req, false);
-    const result = await runListQuery({
-      model: Arrear,
-      query: req.body,
-      filter: scope,
+    const result = await runListQuery(Arrear, req.body, {
+      scopeFilter: scope,
       filterable: ARREAR_FILTERABLE,
-      populate: ["employeeId", "companyId", "earningArrears.salaryComponentId", "deductionArrears.salaryComponentId"],
+      stages: ARREAR_STAGES,
     });
-    return res.json({ isOk: true, status: 200, ...result });
+    return res.json({ isOk: true, status: 200, data: result });
   } catch (error) {
     return failure(res, error);
   }
@@ -655,14 +683,12 @@ export const createRetentionBonus = async (req, res) => {
 export const listRetentionBonuses = async (req, res) => {
   try {
     const scope = await attendanceScope(req, false);
-    const result = await runListQuery({
-      model: RetentionBonus,
-      query: req.query,
-      filter: scope,
+    const result = await runListQuery(RetentionBonus, req.query, {
+      scopeFilter: scope,
       filterable: RETENTION_BONUS_FILTERABLE,
-      populate: ["employeeId", "salaryComponentId", "companyId"],
+      stages: RETENTION_BONUS_STAGES,
     });
-    return res.json({ isOk: true, status: 200, ...result });
+    return res.json({ isOk: true, status: 200, data: result });
   } catch (error) {
     return failure(res, error);
   }
@@ -671,14 +697,12 @@ export const listRetentionBonuses = async (req, res) => {
 export const searchRetentionBonuses = async (req, res) => {
   try {
     const scope = await attendanceScope(req, false);
-    const result = await runListQuery({
-      model: RetentionBonus,
-      query: req.body,
-      filter: scope,
+    const result = await runListQuery(RetentionBonus, req.body, {
+      scopeFilter: scope,
       filterable: RETENTION_BONUS_FILTERABLE,
-      populate: ["employeeId", "salaryComponentId", "companyId"],
+      stages: RETENTION_BONUS_STAGES,
     });
-    return res.json({ isOk: true, status: 200, ...result });
+    return res.json({ isOk: true, status: 200, data: result });
   } catch (error) {
     return failure(res, error);
   }
@@ -860,14 +884,12 @@ export const createEmployeeIncentive = async (req, res) => {
 export const listEmployeeIncentives = async (req, res) => {
   try {
     const scope = await attendanceScope(req, false);
-    const result = await runListQuery({
-      model: EmployeeIncentive,
-      query: req.query,
-      filter: scope,
+    const result = await runListQuery(EmployeeIncentive, req.query, {
+      scopeFilter: scope,
       filterable: EMPLOYEE_INCENTIVE_FILTERABLE,
-      populate: ["employeeId", "salaryComponentId", "companyId"],
+      stages: EMPLOYEE_INCENTIVE_STAGES,
     });
-    return res.json({ isOk: true, status: 200, ...result });
+    return res.json({ isOk: true, status: 200, data: result });
   } catch (error) {
     return failure(res, error);
   }
@@ -876,14 +898,12 @@ export const listEmployeeIncentives = async (req, res) => {
 export const searchEmployeeIncentives = async (req, res) => {
   try {
     const scope = await attendanceScope(req, false);
-    const result = await runListQuery({
-      model: EmployeeIncentive,
-      query: req.body,
-      filter: scope,
+    const result = await runListQuery(EmployeeIncentive, req.body, {
+      scopeFilter: scope,
       filterable: EMPLOYEE_INCENTIVE_FILTERABLE,
-      populate: ["employeeId", "salaryComponentId", "companyId"],
+      stages: EMPLOYEE_INCENTIVE_STAGES,
     });
-    return res.json({ isOk: true, status: 200, ...result });
+    return res.json({ isOk: true, status: 200, data: result });
   } catch (error) {
     return failure(res, error);
   }
@@ -1068,14 +1088,12 @@ export const createEmployeeOtherIncome = async (req, res) => {
 export const listEmployeeOtherIncomes = async (req, res) => {
   try {
     const scope = await attendanceScope(req, true); // employeeOwned: true for self-service
-    const result = await runListQuery({
-      model: EmployeeOtherIncome,
-      query: req.query,
-      filter: scope,
+    const result = await runListQuery(EmployeeOtherIncome, req.query, {
+      scopeFilter: scope,
       filterable: EMPLOYEE_OTHER_INCOME_FILTERABLE,
-      populate: ["employeeId", "payrollPeriodId", "companyId"],
+      stages: EMPLOYEE_OTHER_INCOME_STAGES,
     });
-    return res.json({ isOk: true, status: 200, ...result });
+    return res.json({ isOk: true, status: 200, data: result });
   } catch (error) {
     return failure(res, error);
   }
@@ -1084,14 +1102,12 @@ export const listEmployeeOtherIncomes = async (req, res) => {
 export const searchEmployeeOtherIncomes = async (req, res) => {
   try {
     const scope = await attendanceScope(req, true); // employeeOwned: true for self-service
-    const result = await runListQuery({
-      model: EmployeeOtherIncome,
-      query: req.body,
-      filter: scope,
+    const result = await runListQuery(EmployeeOtherIncome, req.body, {
+      scopeFilter: scope,
       filterable: EMPLOYEE_OTHER_INCOME_FILTERABLE,
-      populate: ["employeeId", "payrollPeriodId", "companyId"],
+      stages: EMPLOYEE_OTHER_INCOME_STAGES,
     });
-    return res.json({ isOk: true, status: 200, ...result });
+    return res.json({ isOk: true, status: 200, data: result });
   } catch (error) {
     return failure(res, error);
   }

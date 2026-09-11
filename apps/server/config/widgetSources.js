@@ -267,6 +267,87 @@ export const WIDGET_SOURCES = Object.freeze({
   "companyConfined": true,
   "employeeOwned": true
 },
+  "shift-requests": {
+  "label": "Shift Request",
+  "model": "ShiftRequest",
+  menuUrl: "/shift-request",
+  "aggregatable": {},
+  "groupable": {
+    "status": {
+      "label": "Status"
+    },
+    "shiftTypeId": {
+      "label": "Shift type",
+      "lookup": {
+        "from": "shifttypes",
+        "labelField": "shiftTypeName"
+      }
+    },
+    "companyId": {
+      "label": "Company",
+      "lookup": {
+        "from": "companies",
+        "labelField": "companyName"
+      }
+    }
+  },
+  "dateFields": {
+    "fromDate": "fromDate",
+    "toDate": "toDate",
+    "createdAt": "createdAt"
+  },
+  "filterable": {
+    "employeeId": "objectId",
+    "shiftTypeId": "objectId",
+    "companyId": "objectId",
+    "approverId": "objectId",
+    "status": "string",
+    "fromDate": "date",
+    "toDate": "date",
+    "createdAt": "date"
+  },
+  "scopeable": {
+    "owner": "employeeId"
+  }
+},
+  "attendance-requests": {
+  "label": "Attendance Request",
+  "model": "AttendanceRequest",
+  menuUrl: "/attendance-request",
+  "aggregatable": {},
+  "groupable": {
+    "status": {
+      "label": "Status"
+    },
+    "reason": {
+      "label": "Reason"
+    },
+    "companyId": {
+      "label": "Company",
+      "lookup": {
+        "from": "companies",
+        "labelField": "companyName"
+      }
+    }
+  },
+  "dateFields": {
+    "fromDate": "fromDate",
+    "toDate": "toDate",
+    "createdAt": "createdAt"
+  },
+  "filterable": {
+    "employeeId": "objectId",
+    "companyId": "objectId",
+    "status": "string",
+    "reason": "string",
+    "fromDate": "date",
+    "toDate": "date",
+    "createdAt": "date"
+  },
+  "scopeable": {
+    "owner": "employeeId"
+  }
+},
 
   users: {
     label: "Users",

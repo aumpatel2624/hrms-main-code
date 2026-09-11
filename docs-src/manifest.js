@@ -152,6 +152,33 @@ export const CONFIG_SCREENS = [
     "roles": "HR User and HR Manager manage records within their company. Employees can read shift types and their own assignments, and create/read their own checkins."
 },
     {
+    "key": "shift-request",
+    "config": "shiftRequestConfig",
+    "source": "apps/admin/src/entities/advanced.jsx",
+    "path": "/shift-request",
+    "intro": "Request a shift change for yourself over a date range.",
+    "when": "Use this screen when you need a different shift than the one you already have, for a period you specify.",
+    "gotchas": [
+        "The Shift Approver is resolved automatically — your own Shift Approver if you have one, otherwise your Department's — unless you set one yourself.",
+        "Approving creates the real Shift Assignment. Rejecting has no further effect.",
+    ],
+    "roles": "Employees can create and read their own Shift Requests. HR User and HR Manager can read, edit, approve and reject every request.",
+},
+    {
+    "key": "attendance-request",
+    "config": "attendanceRequestConfig",
+    "source": "apps/admin/src/entities/advanced.jsx",
+    "path": "/attendance-request",
+    "intro": "Ask for Attendance to be recorded for a date range — for working from home, being on duty elsewhere, or another reason attendance was not captured automatically.",
+    "when": "Use this screen instead of Employee Checkin when you were not able to check in/out for a shift but still worked.",
+    "gotchas": [
+        "Saving is the action — it immediately creates or updates one Attendance record per day in the range.",
+        "A day that is a holiday is skipped unless Include Holidays is checked. A day already covered by an approved leave is always skipped.",
+        "Cancel reverses exactly the Attendance rows this request created — it does not touch any other Attendance record.",
+    ],
+    "roles": "Employees can create and read their own Attendance Requests and cancel them. HR User and HR Manager can read, edit and cancel every request.",
+},
+    {
         key: "department",
         config: "departmentConfig",
         source: "apps/admin/src/entities/advanced.jsx",
@@ -1267,6 +1294,69 @@ export const CUSTOM_SCREENS = [
                     "This page holds no records of its own — it is a form that dispatches individual " +
                     "Leave Policy Assignment (and, on the fuller path, Leave Allocation) records per " +
                     "employee. Refreshing the page clears your selection.",
+            },
+        ],
+    },
+    {
+        key: "shift-assignment-tool",
+        title: "Shift Assignment Tool",
+        path: "/shift-assignment-tool",
+        source: "apps/admin/src/pages/ShiftAttendance/ShiftAssignmentTool.jsx",
+        intro:
+            "Assign a shift, or a repeating shift schedule, to many employees at once — or bulk-approve/reject " +
+            "open Shift Requests.",
+        body: [
+            {
+                heading: "Three actions, one page",
+                text:
+                    "Pick an action at the top: \"Assign Shift\" gives every selected employee the same Shift Type " +
+                    "over the same date range. \"Assign Shift Schedule\" does the same for a repeating Shift " +
+                    "Schedule, and immediately generates the first batch of Shift Assignments from it — the same " +
+                    "generation a Shift Schedule Assignment's own Generate button runs. \"Process Shift Requests\" " +
+                    "applies one decision (Approve or Reject) to every open request you select.",
+            },
+            {
+                heading: "One failure doesn't stop the rest",
+                text:
+                    "Each employee (or request) is processed on its own. If one already has an overlapping shift, " +
+                    "or something else about them is wrong, only that row shows Failed — everyone else still goes " +
+                    "through. The results table after a run shows exactly who succeeded and who didn't, and why.",
+            },
+            {
+                heading: "Nothing is saved here",
+                text:
+                    "This page holds no records of its own — it dispatches individual Shift Assignment, Shift " +
+                    "Schedule Assignment, or Shift Request approve/reject actions per employee or request. " +
+                    "Refreshing the page clears your selection.",
+            },
+        ],
+    },
+    {
+        key: "employee-attendance-tool",
+        title: "Employee Attendance Tool",
+        path: "/employee-attendance-tool",
+        source: "apps/admin/src/pages/ShiftAttendance/EmployeeAttendanceTool.jsx",
+        intro:
+            "Bulk-mark Attendance for many employees on one date, and resolve a pending Half Day record's status " +
+            "for the other half of the day.",
+        body: [
+            {
+                heading: "Mark Attendance",
+                text:
+                    "Choose a date, a status, and the employees to mark — each gets its own Attendance record for " +
+                    "that date. One employee's failure never blocks the rest.",
+            },
+            {
+                heading: "Resolve Half Day",
+                text:
+                    "Pick a date to see every Half Day Attendance record still pending a decision for its other " +
+                    "half, choose one, and set whether that half counts as Present or Absent. This updates the " +
+                    "record directly rather than going through Attendance's own save — the same shortcut this " +
+                    "screen's real-world counterpart uses.",
+            },
+            {
+                heading: "HR Manager only",
+                text: "Unlike most Shift & Attendance screens, this one is restricted to the HR Manager role.",
             },
         ],
     },

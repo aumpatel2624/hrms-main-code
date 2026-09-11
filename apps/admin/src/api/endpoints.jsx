@@ -7,12 +7,35 @@
 const V1 = "/api/v1";
 
 export const ENDPOINTS = {
-    SHIFT_TYPES: { BASE: "/shift-types", SEARCH: "/shift-types/search", BY_ID: (id) => `/shift-types/${id}` },
-    SHIFT_LOCATIONS: { BASE: "/shift-locations", SEARCH: "/shift-locations/search", BY_ID: (id) => `/shift-locations/${id}` },
-    SHIFT_ASSIGNMENTS: { BASE: "/shift-assignments", SEARCH: "/shift-assignments/search", BY_ID: (id) => `/shift-assignments/${id}` },
-    SHIFT_SCHEDULES: { BASE: "/shift-schedules", SEARCH: "/shift-schedules/search", BY_ID: (id) => `/shift-schedules/${id}` },
-    SHIFT_SCHEDULE_ASSIGNMENTS: { BASE: "/shift-schedule-assignments", SEARCH: "/shift-schedule-assignments/search", BY_ID: (id) => `/shift-schedule-assignments/${id}` },
-    EMPLOYEE_CHECKINS: { BASE: "/employee-checkins", SEARCH: "/employee-checkins/search", BY_ID: (id) => `/employee-checkins/${id}` },
+    // Bug fix (found during module 9's second/transactional fork verify):
+    // these six were missing the `${V1}` prefix every other endpoint group
+    // uses, and the admin axios client's baseURL is the bare host (no
+    // `/api/v1` of its own) — every foundation Shift & Attendance screen was
+    // therefore calling a 404 (e.g. `/shift-types` instead of
+    // `/api/v1/shift-types`). Filed as a GitHub issue and fixed here.
+    SHIFT_TYPES: { BASE: `${V1}/shift-types`, SEARCH: `${V1}/shift-types/search`, BY_ID: (id) => `${V1}/shift-types/${id}` },
+    SHIFT_LOCATIONS: { BASE: `${V1}/shift-locations`, SEARCH: `${V1}/shift-locations/search`, BY_ID: (id) => `${V1}/shift-locations/${id}` },
+    SHIFT_ASSIGNMENTS: { BASE: `${V1}/shift-assignments`, SEARCH: `${V1}/shift-assignments/search`, BY_ID: (id) => `${V1}/shift-assignments/${id}` },
+    SHIFT_SCHEDULES: { BASE: `${V1}/shift-schedules`, SEARCH: `${V1}/shift-schedules/search`, BY_ID: (id) => `${V1}/shift-schedules/${id}` },
+    SHIFT_SCHEDULE_ASSIGNMENTS: { BASE: `${V1}/shift-schedule-assignments`, SEARCH: `${V1}/shift-schedule-assignments/search`, BY_ID: (id) => `${V1}/shift-schedule-assignments/${id}` },
+    EMPLOYEE_CHECKINS: { BASE: `${V1}/employee-checkins`, SEARCH: `${V1}/employee-checkins/search`, BY_ID: (id) => `${V1}/employee-checkins/${id}` },
+    SHIFT_REQUESTS: {
+        BASE: `${V1}/shift-requests`, SEARCH: `${V1}/shift-requests/search`, BY_ID: (id) => `${V1}/shift-requests/${id}`,
+        APPROVE: (id) => `${V1}/shift-requests/${id}/approve`, REJECT: (id) => `${V1}/shift-requests/${id}/reject`,
+    },
+    ATTENDANCE_REQUESTS: {
+        BASE: `${V1}/attendance-requests`, SEARCH: `${V1}/attendance-requests/search`, BY_ID: (id) => `${V1}/attendance-requests/${id}`,
+        CANCEL: (id) => `${V1}/attendance-requests/${id}/cancel`,
+    },
+    SHIFT_ASSIGNMENT_TOOL: {
+        BULK_ASSIGN: `${V1}/shift-assignment-tool/bulk-assign`,
+        BULK_ASSIGN_SCHEDULE: `${V1}/shift-assignment-tool/bulk-assign-schedule`,
+        PROCESS_REQUESTS: `${V1}/shift-assignment-tool/process-requests`,
+    },
+    EMPLOYEE_ATTENDANCE_TOOL: {
+        MARK: `${V1}/employee-attendance-tool/mark`,
+        RESOLVE_HALF_DAY: `${V1}/employee-attendance-tool/resolve-half-day`,
+    },
 
     // Auth endpoints
     AUTH: {

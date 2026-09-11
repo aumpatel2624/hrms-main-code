@@ -2674,4 +2674,108 @@ Copy this block. Number sequentially.
     verified against actual punches; company confinement confirmed for HR User and own-scope confirmed for
     Employee; live dashboard widget preview and run execution verified; and clean teardown confirming employee
     count returns to baseline 195.
+- **As built (module complete)** — `ShiftRequest` (+`approve`/`reject`), `AttendanceRequest` (+`cancel`), the
+  Shift Assignment Tool and Employee Attendance Tool bulk-action endpoints, and `processAutoAttendance` all
+  built on `feat/shift-attendance-transactions`. Model, controller/routes (grouped in a sibling
+  `shiftAttendanceTransactions.controller.js`/`.routes.js` rather than growing the foundation's
+  `shiftAttendance.controller.js` further — same "large module, own file" precedent as `travel.controller.js`/
+  `leavesTransactions.controller.js`), swagger, admin API client additions to the existing
+  `shiftAttendance.api.jsx`, two entity-config screens (`shiftRequestConfig`/`attendanceRequestConfig` in
+  `advanced.jsx`) plus two custom bulk-tool pages (`pages/ShiftAttendance/ShiftAssignmentTool.jsx`/
+  `EmployeeAttendanceTool.jsx`), `widgetSources.js` entries and `docs-src/manifest.js` entries for every one of
+  the four new screens/pages. This closes the module — `STATE.md`'s Shift & Attendance row moves to `done`
+  across every phase except Shipped.
+  - **`ShiftRequest` reuses `resolveApprovers`/ADR-024's approver mechanism verbatim** — confirmed live both
+    ways: auto-resolution to an Employee's direct `shiftRequestApproverId`, and an explicitly-supplied approver
+    validated against that same resolved set (rejected if the set is non-empty and doesn't contain the
+    supplied id). No second, narrower approver rule was built for this one doctype, per ADR-025's own explicit
+    instruction.
+  - **The overlap-validation judgment call**: the task brief called for rejecting a `ShiftRequest` whose range
+    overlaps "the same employee's actual shift timing", not just another `ShiftRequest`. Source's real rule is
+    a start/end-time overlap test between two `Shift Type`s (`has_overlapping_timings`) — but that test only
+    matters once multiple concurrent shifts are allowed, and ADR-025's foundation half already decided against
+    that (no-multi-shift-per-employee-per-day, keeping the existing unique `(employeeId, attendanceDate)`
+    index). Given that decision, "an existing active `ShiftAssignment` overlapping the requested date range"
+    is the correct simplified stand-in — any two overlapping-date shifts conflict regardless of their specific
+    timing, since only one may exist per day anyway. Implemented and named as a deliberate simplification, not
+    a silently narrower port.
+  - **`AttendanceRequest`'s target-status mapping was read from the real spec file**, not guessed: `half_day`
+    on the configured `halfDayDate` wins, then `reason == "Work From Home"`, else `Present` — meaning `"On
+    Duty"` (this project's other `reason` value, since no Payroll/On-Duty-tracking module exists yet to give it
+    its own status) maps to `Present`, matching `get_attendance_status()` in `Attendance Request.md` exactly.
+  - **The leave-backed-row skip is implemented literally as instructed** (check `Attendance.leaveApplicationId`
+    directly), not by re-deriving "is this employee on approved leave" from `LeaveApplication` itself — simpler,
+    and correct for how `LeaveApplication.approve` (ADR-024) already behaves: it always writes a definite
+    `On Leave`/`Half Day` `Attendance` row with `leaveApplicationId` set, so there is no intermediate
+    "pending" state to resolve, unlike source's own two-stage half-day mechanism (deliberately dropped, per
+    ADR-025's own design note).
+  - **The `EmployeeCheckin.shiftId` grouping judgment call for `processAutoAttendance`**: rather than
+    re-resolving each checkin's shift occurrence from scratch (a second query per checkin against
+    `ShiftAssignment`, with the risk of resolving to a *different* shift than the one the checkin was actually
+    created under, if an assignment changed in between), the job groups directly off the `shiftId` the
+    foundation half already populated at checkin-creation time (`shiftValidation.js`'s call into
+    `resolveShiftOccurrence`), and derives only the *occurrence date* for each checkin using the exact same
+    `shiftWindow`/`dayStart` math `matchShiftOccurrence` already uses, applied directly against the known
+    `ShiftType`. Simpler, and consistent with what actually created the checkin in the first place.
+  - **No watermark bookkeeping beyond `processAttendanceAfter`, extended from the absence sweep to
+    checkin-grouping too**: ADR-025's own design named "yesterday-only, no watermark" for the absence sweep;
+    this implementation applies the identical reasoning to the checkin-grouping half — a shift occurrence is
+    only ever processed once it's dated strictly before "today" (so a shift still in progress is never marked
+    from partial punches), and every daily run naturally catches up on whatever is still unlinked. Named
+    explicitly (matching the absence sweep's own named limitation): a server stopped for several days does not
+    backfill the gap, it only ever looks at "yesterday" on whichever day it next runs.
+  - **The Shift Assignment Tool/Employee Attendance Tool request-shape judgment call**: both bulk tools take an
+    explicit employee-id (or shift-request-id) list per item, built by an HR user multi-selecting from the
+    full employee/request list in the admin page — the real tools' Branch/Department/Designation/Grade/
+    Employment-Type quick-filter selection is a documented nice-to-have per the task brief, not built, to keep
+    each endpoint's request surface small and controlled. Both bulk-assign endpoints and both Employee
+    Attendance Tool endpoints were built (not just one action per tool) with per-item try/catch isolation.
+  - **`bulk-assign-schedule` reuses the real generation logic, not a copy of it**: `shiftAttendance.
+    controller.js`'s `generate` action was refactored from a single Express handler into a plain, reusable
+    `generateShiftsForScheduleAssignment(shiftScheduleAssignmentId, req, endDate)` function plus a thin HTTP
+    wrapper — the exact same split `leaves.controller.js` already established for
+    `grantAllocationsForAssignment`/`grantLeavePolicyAssignmentAllocations` (AGENTS.md #2: reuse before you
+    write). The bulk tool calls that function directly per employee, so "assign a schedule via the tool" and
+    "generate via the schedule assignment's own button" can never drift apart into two implementations of the
+    same algorithm.
+  - **A real pre-existing bug found and fixed, filed as GitHub issue #15**: the foundation half's own
+    `SHIFT_TYPES`/`SHIFT_LOCATIONS`/`SHIFT_ASSIGNMENTS`/`SHIFT_SCHEDULES`/`SHIFT_SCHEDULE_ASSIGNMENTS`/
+    `EMPLOYEE_CHECKINS` entries in `apps/admin/src/api/endpoints.jsx` were bare paths (`/shift-types`), missing
+    the `${V1}` (`/api/v1`) prefix every other endpoint group in that file uses — and the admin axios client's
+    `baseURL` is the bare host with no `/api/v1` of its own (`server.js` mounts `shiftAttendance.routes.js`
+    under `/api/v1`). Every one of the six foundation Shift & Attendance admin screens was therefore 404ing on
+    every list/create/edit/delete call — a completely non-functional foundation UI that had never been
+    exercised against a real running server before now. Found while extending the same file for this fork's
+    own new endpoints (`SHIFT_REQUESTS`/`ATTENDANCE_REQUESTS`/the two tools), fixed by adding the prefix to all
+    six pre-existing entries in the same commit.
+  - **Verified live**: `npm test` green (18 suites, including new `attendanceAutoStatus.test.js` covering
+    `selectWorkingHoursFn`'s four-combination selection, `decideAttendanceStatus`'s strict-`<`
+    Absent-then-Half-Day threshold order including the "both thresholds at their schema default of 0" no-op
+    case, and `computeLateEarlyFlags`'s grace-period math including the "marking disabled returns `null`, not
+    `false`" distinction), `npm run seed` run twice (idempotent — 9 new menu grants the first run, 0 the
+    second, 195 employees both times), `npm run build` clean. Full live HTTP walk via
+    `scripts/verify-shift-attendance-transactions.mjs` against a running server (38 real HTTP assertions plus
+    direct model/job assertions covering everything an HTTP round-trip can't observe): `ShiftRequest` create
+    with both overlap rejections (another open Shift Request, an existing active Shift Assignment), approver
+    auto-resolve and explicit-supplied-and-validated both confirmed against a real throwaway approver `User`
+    (this seed data has no active Employee with its own linked User account, so a real one had to be created),
+    `approve` confirmed to create the right `ShiftAssignment` through the write-locked path (not a bypass, and
+    itself still subject to `ShiftAssignment`'s own overlap rule), `reject` confirmed to have zero side
+    effects; `AttendanceRequest` create confirmed to create the right `Attendance` rows with holiday-skip and
+    leave-backed-row-skip both confirmed against constructed fixtures (a real `HolidayList`+
+    `HolidayListAssignment`, and a pre-existing `Attendance` row carrying a synthetic `leaveApplicationId`),
+    `includeHolidays` confirmed, `cancel` confirmed to soft-delete exactly its own request's rows without
+    touching a sibling request's, the immutability guard (`PUT` always 400s) confirmed; both bulk-action tools
+    confirmed with mixed batches (2 succeed, 1 deliberately fails — an overlapping assignment, an
+    already-rejected request, a non-existent employee id) proving per-item isolation on every one of the four
+    endpoints, `bulk-assign-schedule` confirmed to actually invoke real shift generation (not a stub);
+    `processAutoAttendance` manually invoked directly (bypassing the day-granularity scheduler gate) against
+    constructed `EmployeeCheckin`/`ShiftAssignment` fixtures covering a normal Present day (8.0h, worked-hours
+    value asserted exactly), an Absent-by-threshold day (0.5h), a Half-Day-by-threshold day (5.0h),
+    late-entry+early-exit flagging together on one day (30-minute lateness/earliness against a 10-minute
+    grace), the leave-backed-row skip (confirmed the pre-existing row's `status` AND its checkins'
+    `attendanceId` were both left completely untouched), and the yesterday-only absence sweep for an employee
+    with an active assignment and zero checkins — confirmed idempotent on an immediate second run (zero new
+    checkin-group rows created, no duplicate absence row). Every throwaway fixture cleaned up via tracked
+    deletion in a `finally` block; employee count confirmed back to baseline 195 both before and after.
 

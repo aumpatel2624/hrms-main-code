@@ -280,6 +280,11 @@ const MENU_GROUPS = [
       { menuName: "Shift Schedule Assignment", menuUrl: "/shift-schedule-assignment", icon: "ri-time-line" },
       { menuName: "Employee Checkin", menuUrl: "/employee-checkin", icon: "ri-time-line" },
       { menuName: "Attendance", menuUrl: "/attendance", icon: "ri-user-follow-line" },
+      // ADR-025 (module complete — second/transactional fork).
+      { menuName: "Shift Request", menuUrl: "/shift-request", icon: "ri-file-list-3-line" },
+      { menuName: "Attendance Request", menuUrl: "/attendance-request", icon: "ri-calendar-todo-line" },
+      { menuName: "Shift Assignment Tool", menuUrl: "/shift-assignment-tool", icon: "ri-tools-line" },
+      { menuName: "Employee Attendance Tool", menuUrl: "/employee-attendance-tool", icon: "ri-tools-line" },
     ],
   },
   {
@@ -1698,6 +1703,66 @@ const seedShiftAttendanceRoles = async () => {
   console.log(`✅ Shift & Attendance roles: ${changes} menu grant/group change(s)`);
 };
 
+/**
+ * Shift & Attendance transactions roles (ADR-025, module complete — second
+ * fork). GRANTS-map style matching seedLeaveRoles — the per-role shape here
+ * (HR User gets everything except the HR-Manager-only Employee Attendance
+ * Tool; Employee is own-scoped read+write with no edit/delete, since
+ * approve/reject/cancel all require `edit`, which Employee never gets on
+ * these two rows) doesn't fit seedShiftAttendanceRoles' simpler uniform
+ * full-vs-read shape above.
+ */
+const seedShiftAttendanceTransactionsRoles = async () => {
+  const perm = (write, edit, del) =>
+    Object.fromEntries(PERMISSION_KEYS.map((key) => [key, key === "read" || (key === "write" && write) || (key === "edit" && edit) || (key === "delete" && del)]));
+  const full = perm(true, true, true);
+  const ownReadWrite = { ...perm(true, false, false), dataScope: SCOPES.OWN };
+
+  const GRANTS = {
+    "/shift-request": { Employee: ownReadWrite, "HR User": full, "HR Manager": full },
+    "/attendance-request": { Employee: ownReadWrite, "HR User": full, "HR Manager": full },
+    // Source's own permissions table names HR User as the sole role with
+    // access (Shift Assignment Tool.md) — this project also grants HR
+    // Manager, matching every other admin-tool screen's "HR User and HR
+    // Manager both get full access" convention (e.g. Leave Control Panel).
+    "/shift-assignment-tool": { "HR User": full, "HR Manager": full },
+    // HR-Manager-only per ADR-025/source (Employee Attendance Tool.md).
+    "/employee-attendance-tool": { "HR Manager": full },
+  };
+
+  const allMenuUrls = Object.keys(GRANTS);
+  const menus = await MenuMaster.find({ menuUrl: { $in: allMenuUrls } }).lean();
+  if (menus.length !== allMenuUrls.length) {
+    console.log("⚠️  Shift & Attendance transactions roles: not every menu row exists yet — run seedMenus first");
+    return;
+  }
+  const menuByUrl = Object.fromEntries(menus.map((m) => [m.menuUrl, m]));
+
+  const addRow = (userRoles, menu, permObj) => {
+    if (userRoles.roles.some((r) => String(r.menuId) === String(menu._id))) return false;
+    userRoles.roles.push({ menuId: menu._id, menuGroupId: menu.menuGroup, ...permObj });
+    return true;
+  };
+
+  let matrixRowsAdded = 0;
+  for (const roleName of ["Employee", "HR User", "HR Manager"]) {
+    const role = await RoleMaster.findOne({ roleName });
+    if (!role) continue;
+    const userRoles = await UserRoles.findOne({ roleId: role._id });
+    if (!userRoles) continue;
+
+    let changed = false;
+    for (const [menuUrl, grantByRole] of Object.entries(GRANTS)) {
+      const permObj = grantByRole[roleName];
+      if (!permObj) continue;
+      if (addRow(userRoles, menuByUrl[menuUrl], permObj)) { matrixRowsAdded += 1; changed = true; }
+    }
+    if (changed) await userRoles.save();
+  }
+
+  console.log(`✅ Shift & Attendance transactions roles: ${matrixRowsAdded} menu grant(s) added`);
+};
+
 const run = async () => {
   if (!process.env.DATABASE) {
     console.error("❌ DATABASE is not set in .env");
@@ -1738,6 +1803,7 @@ const run = async () => {
   await seedLeaveMasters();
   await seedLeaveRoles();
   await seedShiftAttendanceRoles();
+  await seedShiftAttendanceTransactionsRoles();
   await seedGeographyData();
 
   await mongoose.disconnect();

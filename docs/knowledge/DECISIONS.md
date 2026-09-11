@@ -3127,4 +3127,87 @@ Copy this block. Number sequentially.
   pending a client decision," distinct in kind from the forward-dependency rows.
 - **Deviates from convention**: none beyond what's named above (per-item isolation added to slip
   creation is a deliberate improvement, not a deviation from an existing decision).
+- **As built (foundation half only — `feat/payroll-run`)**: everything named above for
+  `PayrollPeriod`/`PayrollSettings`/`SalarySlip` shipped, built directly against this design — no
+  re-litigation. `SalaryStructure.js`'s internal `SalaryDetailSchema` is now a named export, reused
+  unchanged for `SalarySlip`'s own three component tables (AGENTS.md #2). The real payment-days
+  pipeline is `utils/payrollPaymentDays.js`, split into a pure `calculatePaymentDays` (no DB — this
+  is what `payrollPaymentDays.test.js` exercises directly) and a thin DB-fetching `computePaymentDays`
+  wrapper the controller calls — the only way this logic can run inside `npm test` without a live
+  Mongo connection, matching this project's existing "pure-logic tests are wired into `npm test`;
+  DB-backed tests (`leaveBalance.test.js`) are not" convention. `utils/salarySlipCalc.js`
+  (`calculateSalarySlip`) reuses `evaluateComponentTable`/`evaluateFormula`/`evaluateCondition`
+  completely unmodified (confirmed by reading both files unchanged) — the richer context is
+  `{ base, variable, paymentDays, totalWorkingDays, grossPay, netPay }`, with `grossPay` updated in
+  the context after earnings resolve and before deductions evaluate (so a deduction's `condition` can
+  reference the real `grossPay`, matching source's real ordering).
+  - **Judgment call — the `dependsOnPaymentDays` scaling question, settled from the real spec**
+    (`Salary Slip.md` section I, `get_amount_based_on_payment_days`, read in full): **only a row
+    flagged `dependsOnPaymentDays` is scaled** by `paymentDays / totalWorkingDays` — not every row.
+    This project applies that scaling to a row's flat `amount` field *before* `evaluateComponentTable`
+    runs (rather than post-hoc rescaling the evaluated `defaultAmount`), so a later formula
+    referencing an earlier *flat* row's abbreviation automatically sees the already-scaled value —
+    exactly the cascading-proration behavior the real spec calls out ("SA = BS * 0.5 inherits BS's
+    own proration automatically"). The one narrow gap this leaves, named rather than hidden: a
+    *formula-based* row that is itself flagged `dependsOnPaymentDays` is not separately re-scaled
+    after its own formula evaluates (pre-scaling its unused `amount` field has no effect on a formula
+    path) — proration reaches such a row only through its inputs already being scaled. Every
+    component in this project's structures that genuinely depends on payment days is a flat row
+    (Basic Salary), so this is a real but narrow limitation, not a live bug — flagged here so the
+    next session sees it as a decision, not an oversight, if a formula-based `dependsOnPaymentDays`
+    row is ever authored.
+  - **Judgment call — `totalWorkingDays` vs. `workingDays`, confirmed rather than assumed**: source
+    states plainly `self.total_working_days = working_days` — the two are the same number.
+    This project computes both from the already mid-period-clamped `[actualStartDate, actualEndDate]`
+    range, not source's own nominal-vs-actual split (source computes `total_working_days` from the
+    *nominal* `[startDate, endDate]` and only the payment-days numerator from the clamped range). The
+    practical effect is identical for a full-period employee and differs only for a mid-period
+    joiner/leaver, where this simpler model prorates the denominator too, not just the numerator —
+    recorded here as a deliberate simplification, not a bug, since both the source and this project
+    agree the two figures are equal to each other, just computed over a slightly different range.
+  - **Judgment call — the exact `leaves[]` field set**: a scoped-down 3-field snapshot
+    (`leaveTypeId`/`allocated`/`used`/`available`), not source's 5-field `Salary Slip Leave`
+    (`total_allocated_leaves`/`expired_leaves`/`used_leaves`/`pending_leaves`/`available_leaves`).
+    `expired_leaves`/`pending_leaves` need infrastructure this project hasn't built (expiry-aware
+    allocation walking, a pending-approval leave-days sum) — `allocated` sums active
+    `LeaveAllocation.newLeavesAllocated` covering the slip's `endDate`, `available` reuses the
+    existing `getLeaveBalance` unchanged, `used = allocated - available` (floored at 0). Populated
+    only when `PayrollSettings.showLeaveBalancesInSalarySlip` is on, fully rebuilt (never merged) on
+    creation — a snapshot, matching source's own "delete all rows, reinsert" semantics for this table.
+  - **Judgment call — `workingDays`/`paymentDays` formulas simplified from source's two-step
+    conditional**: source's `payment_days = payment_days - lwp [- absent - unmarkedAbsent - halfDay*
+    fraction]` is gated by `IF payment_days > lwp` (forcing `0` otherwise); this project uses a single
+    subtraction floored at `0` (`Math.max(0, workingDays - lwpDays - absentDays - halfDayDays *
+    fraction)`) — functionally equivalent for every realistic case (the sum of reductions rarely
+    exceeds `workingDays`) and safer against a negative result. `paymentDays` stays fractional
+    throughout (never rounded to a whole number), matching source exactly.
+  - **`SalarySlip`'s admin screen has no real edit-in-place** — every field is a snapshot computed
+    once at creation; `updateSalarySlip`/`PUT /salary-slips/:id` exists purely so the admin's generic
+    edit route has something to call (`allowOnlyFields([])` on the route, `toPayload` always sends
+    `{}` for edit mode) — Submit/Cancel (`SimpleActionButton`, the same pattern Shift Request/Leave
+    Encashment use) are the only two real actions.
+  - **Product question worth flagging, not decided here**: this rebuild gives `SalarySlip`/
+    `PayrollPeriod`/`PayrollSettings` zero Employee-role self-service access, matching module 10's own
+    "HR-configuration/transactional data, not self-service" precedent — but payslips are exactly the
+    kind of document a real client's employees usually expect to see their own copy of. Worth asking
+    Apidel directly rather than assuming either way; not built without being asked, recorded in
+    `OPEN-QUESTIONS.md`.
+  - **Bugs found**: none pre-existing this session — no GitHub issue filed.
+  - **Verified live**: `npm test` green (23 suites — `payrollPaymentDays.test.js`/`salarySlipCalc.test.js`
+    both new and pure/DB-free, covering full-attendance/one-LWP-day/unmarked-day-both-settings/
+    half-day/mid-period-joiner/holiday-included-vs-excluded/Leave-Application-based for the former and
+    dependsOnPaymentDays-gating/cascading-scaling/statistical-exclusion/condition-gated-skip-seeing-
+    updated-`grossPay`/zero-`totalWorkingDays`-guard for the latter, all hand-computed), `npm run seed`
+    run twice (idempotent — 6 new Payroll menu grants first run, 0 second run, 195 employees both
+    times), `npm run build` clean. Full HTTP walk via `scripts/verify-payroll-run.mjs` (32 real
+    assertions): `PayrollSettings` first-ever-GET-creates-the-default-row confirmed live, GET/PUT
+    round-trip confirmed, settings restored after; `PayrollPeriod` CRUD plus the company-scoped
+    overlap guard confirmed both directions; `SalarySlip` full-attendance case hand-checked (grossPay
+    42000, netPay 41000), an LWP-plus-unmarked-day case hand-checked against the server's own returned
+    `workingDays` (immune to real holiday-calendar interference) — ratio 0.8, netPay 32600, confirmed
+    the stored Basic row itself carries the scaled amount; exact-duplicate-`(employeeId,startDate,
+    endDate)` 400 confirmed; a deliberately negative-net-pay slip confirmed to reject `submit` (400)
+    yet still `cancel` cleanly; a valid slip confirmed to `submit` (200), reject a second submit (400),
+    then `cancel` from Submitted. All throwaway fixtures cleaned up; employee count back to baseline
+    195; all six touched collections back to 0.
 

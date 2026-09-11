@@ -336,6 +336,9 @@ const MENU_GROUPS = [
       { menuName: "Appraisal Template", menuUrl: "/appraisal-template", icon: "ri-file-copy-2-line" },
       { menuName: "Appraisal Cycle", menuUrl: "/appraisal-cycle", icon: "ri-calendar-check-line" },
       { menuName: "Appraisal", menuUrl: "/appraisal", icon: "ri-user-star-line" },
+      // ADR-032 (module 16, transactional half, feat/performance-goals).
+      { menuName: "Goal", menuUrl: "/goal", icon: "ri-flag-line" },
+      { menuName: "Employee Performance Feedback", menuUrl: "/employee-performance-feedback", icon: "ri-feedback-line" },
     ],
   },
   {
@@ -1928,13 +1931,23 @@ const seedPayrollRoles = async () => {
 };
 
 /**
- * Performance roles (ADR-032, module 16, foundation half). HR-configuration
- * data only, matching Payroll's own precedent — no Employee-role grants at
- * all in this half. Goal (second branch, not built here) is the doctype
- * that gets real Employee self-service (SCOPES.OWN, per ADR-032).
+ * Performance roles (ADR-032, module 16). The foundation half's HR-
+ * configuration screens stay HR User/HR Manager only, matching Payroll's own
+ * precedent. The transactional half (feat/performance-goals) adds real
+ * Employee self-service: `/goal` gets `dataScope: SCOPES.OWN` (an Employee
+ * reads/writes only their own goal tree — the real per-action pattern this
+ * matches is `EmployeeTaxExemptionDeclaration`'s `fullNoDelete`, ADR-030).
+ * `/employee-performance-feedback` is NOT SCOPES.OWN — `Employee Performance
+ * Feedback.md`'s own permission table grants Employee/HR Manager broad
+ * create/read/write/submit/cancel (no `if_owner` row-level restriction) and
+ * HR User read-only; ported faithfully rather than inventing a scoping rule
+ * ADR-032 never asked for on this doctype.
  */
 const seedPerformanceRoles = async () => {
   const full = { write: true, read: true, edit: true, delete: true, print: true, mail: true };
+  const fullNoDelete = { write: true, read: true, edit: true, delete: false, print: true, mail: true };
+  const ownFullNoDelete = { ...fullNoDelete, dataScope: SCOPES.OWN };
+  const readOnly = { write: false, read: true, edit: false, delete: false, print: true, mail: false };
 
   const GRANTS = {
     "/kra": { "HR User": full, "HR Manager": full },
@@ -1942,6 +1955,9 @@ const seedPerformanceRoles = async () => {
     "/appraisal-template": { "HR User": full, "HR Manager": full },
     "/appraisal-cycle": { "HR User": full, "HR Manager": full },
     "/appraisal": { "HR User": full, "HR Manager": full },
+    // ADR-032 (transactional half, feat/performance-goals).
+    "/goal": { "HR User": full, "HR Manager": full, "Employee": ownFullNoDelete },
+    "/employee-performance-feedback": { "HR User": readOnly, "HR Manager": fullNoDelete, "Employee": fullNoDelete },
   };
 
   const allMenuUrls = Object.keys(GRANTS);

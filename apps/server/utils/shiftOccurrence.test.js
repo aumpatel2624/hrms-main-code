@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import { matchShiftOccurrence, isAssignmentCurrentlyActive } from "./shiftOccurrence.js";
+const day = { status: "active", startDate: "2026-09-14", endDate: "2026-09-14", shiftTypeId: { startTime: "09:00", endTime: "17:00", beginCheckInBeforeShiftStartTime: 60, allowCheckOutAfterShiftEndTime: 60 } };
+assert.equal(matchShiftOccurrence([day], "2026-09-14T09:10:00Z").occurrenceDate.toISOString(), "2026-09-14T00:00:00.000Z");
+assert.ok(matchShiftOccurrence([day], "2026-09-14T08:00:00Z"));
+assert.ok(matchShiftOccurrence([day], "2026-09-14T18:00:00Z"));
+assert.equal(matchShiftOccurrence([day], "2026-09-14T07:59:59Z"), null);
+assert.equal(matchShiftOccurrence([day], "2026-09-14T18:00:01Z"), null);
+const night = { ...day, shiftTypeId: { ...day.shiftTypeId, startTime: "22:00", endTime: "06:00" } };
+assert.equal(matchShiftOccurrence([night], "2026-09-15T00:10:00Z").occurrenceDate.toISOString(), "2026-09-14T00:00:00.000Z");
+assert.ok(matchShiftOccurrence([night], "2026-09-15T07:00:00Z"));
+assert.equal(matchShiftOccurrence([{ ...night, status: "inactive" }], "2026-09-15T00:10:00Z"), null);
+assert.equal(isAssignmentCurrentlyActive(day, "2026-09-15"), false);
+assert.equal(isAssignmentCurrentlyActive(day, "2026-09-14"), true);
+assert.equal(matchShiftOccurrence([day], "2026-09-13T09:10:00Z"), null);
+console.log("shiftOccurrence: day, overnight, expiry, offshift and inclusive boundaries passed");

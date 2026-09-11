@@ -19,6 +19,13 @@ import "../models/auditPlugin.js";
 import fs from "fs";
 import path from "path";
 import mongoose from "mongoose";
+import "../models/ShiftType.js";
+import "../models/ShiftLocation.js";
+import "../models/ShiftAssignment.js";
+import "../models/ShiftSchedule.js";
+import "../models/ShiftScheduleAssignment.js";
+import "../models/EmployeeCheckin.js";
+
 import bcrypt from "bcrypt";
 import dotenv from "dotenv";
 
@@ -261,6 +268,17 @@ const MENU_GROUPS = [
       { menuName: "Leave Encashment", menuUrl: "/leave-encashment", icon: "ri-money-dollar-circle-line" },
       { menuName: "Leave Block List", menuUrl: "/leave-block-list", icon: "ri-forbid-2-line" },
       { menuName: "Leave Control Panel", menuUrl: "/leave-control-panel", icon: "ri-tools-line" },
+    ],
+  },
+  {
+    menuGroupName: "Shift & Attendance", sequence: 2.98, icon: "ri-time-line",
+    menus: [
+      { menuName: "Shift Type", menuUrl: "/shift-type", icon: "ri-time-line" },
+      { menuName: "Shift Location", menuUrl: "/shift-location", icon: "ri-time-line" },
+      { menuName: "Shift Assignment", menuUrl: "/shift-assignment", icon: "ri-time-line" },
+      { menuName: "Shift Schedule", menuUrl: "/shift-schedule", icon: "ri-time-line" },
+      { menuName: "Shift Schedule Assignment", menuUrl: "/shift-schedule-assignment", icon: "ri-time-line" },
+      { menuName: "Employee Checkin", menuUrl: "/employee-checkin", icon: "ri-time-line" },
       { menuName: "Attendance", menuUrl: "/attendance", icon: "ri-user-follow-line" },
     ],
   },
@@ -1656,6 +1674,30 @@ const seedLeaveRoles = async () => {
   console.log(`✅ Leaves roles: ${matrixRowsAdded} menu grant(s) added`);
 };
 
+const seedShiftAttendanceRoles = async () => {
+  const full = { write: true, read: true, edit: true, delete: true, print: true, mail: true };
+  const read = { ...full, write: false, edit: false, delete: false, mail: false };
+  let changes = 0;
+  for (const roleName of ["HR User", "HR Manager", "Employee"]) {
+    const role = await RoleMaster.findOne({ roleName });
+    const matrix = role && await UserRoles.findOne({ roleId: role._id });
+    if (!matrix) continue;
+    let changed = false;
+    for (const menu of await MenuMaster.find({ menuUrl: { $in: ["/shift-type", "/shift-location", "/shift-assignment", "/shift-schedule", "/shift-schedule-assignment", "/employee-checkin", "/attendance"] } })) {
+      let permissions = full;
+      if (roleName === "Employee") {
+        if (!["/shift-type", "/shift-assignment", "/employee-checkin"].includes(menu.menuUrl)) continue;
+        permissions = { ...read, ...(menu.menuUrl === "/shift-type" ? {} : { dataScope: SCOPES.OWN }), write: menu.menuUrl === "/employee-checkin" };
+      }
+      const existing = matrix.roles.find(row => String(row.menuId) === String(menu._id));
+      if (!existing) { matrix.roles.push({ menuId: menu._id, menuGroupId: menu.menuGroup, ...permissions }); changes++; changed = true; }
+      else if (String(existing.menuGroupId) !== String(menu.menuGroup)) { existing.menuGroupId = menu.menuGroup; changed = true; changes++; }
+    }
+    if (changed) await matrix.save();
+  }
+  console.log(`✅ Shift & Attendance roles: ${changes} menu grant/group change(s)`);
+};
+
 const run = async () => {
   if (!process.env.DATABASE) {
     console.error("❌ DATABASE is not set in .env");
@@ -1695,6 +1737,7 @@ const run = async () => {
   await seedTravelRoles();
   await seedLeaveMasters();
   await seedLeaveRoles();
+  await seedShiftAttendanceRoles();
   await seedGeographyData();
 
   await mongoose.disconnect();

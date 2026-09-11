@@ -1,0 +1,17 @@
+import assert from "node:assert/strict";
+import { alternatingFirstAndLast, alternatingEveryValidPair, strictFirstAndLast, strictEveryValidPair } from "./workingHours.js";
+const punch = (time, logType) => ({ time: `2026-09-14T${time}:00Z`, logType });
+const logs = [punch("09:00", "IN"), punch("12:00", "OUT"), punch("13:00", "IN"), punch("17:30", "OUT")];
+assert.equal(alternatingFirstAndLast(logs), 8.5);
+assert.equal(alternatingFirstAndLast([]), 0);
+assert.equal(alternatingFirstAndLast([logs[0]]), 0);
+assert.equal(alternatingEveryValidPair(logs), 7.5);
+assert.equal(alternatingEveryValidPair([...logs, punch("18:00", "IN")]), 7.5);
+assert.equal(strictFirstAndLast(logs), 8.5);
+assert.equal(strictFirstAndLast([punch("09:00", "IN")]), 0);
+assert.equal(strictFirstAndLast([punch("09:00", "OUT")]), 0);
+assert.equal(strictFirstAndLast([punch("09:00", "OUT"), punch("10:00", "IN")]), 0);
+assert.equal(strictEveryValidPair(logs), 7.5);
+assert.equal(strictEveryValidPair([punch("08:00", "OUT"), punch("09:00", "IN"), punch("10:00", "IN"), punch("12:00", "OUT"), punch("13:00", "OUT"), punch("14:00", "IN"), punch("17:00", "OUT"), punch("18:00", "IN")]), 6);
+assert.equal(alternatingFirstAndLast([punch("09:00"), punch("09:20")]), 0.33);
+console.log("workingHours: all four modes and edge cases passed");

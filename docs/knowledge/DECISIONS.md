@@ -2628,4 +2628,50 @@ Copy this block. Number sequentially.
 - **Deviates from convention**: none beyond what's named above (a second, independent scheduler
   runner file rather than one shared array — reasoned above; the daily-not-hourly job cadence, an
   unavoidable consequence of Q-5's already-accepted dependency-free single-process scheduler).
+- **As built (foundation half only — `feat/shift-attendance`)** — `ShiftType`, `ShiftLocation`,
+  `ShiftAssignment`, `ShiftSchedule`, `ShiftScheduleAssignment` (+`generate` action), `EmployeeCheckin`,
+  and extended `Attendance` (with `departmentId`, `shiftId`, `attendanceRequestId`, `workingHours`,
+  `standardWorkingHours`, `actualOvertimeDuration`, `lateEntry`, `earlyExit`, `inTime`, `outTime`,
+  `halfDayStatus`). Built the 4 pure calculation/occurrence utilities (`shiftOccurrence.js`, `geofence.js`,
+  `workingHours.js`, `shiftSchedule.js`), write lock (`shiftAssignmentWrite.js`), and company/role scoping
+  adapter (`attendanceScope.js`). Controllers, routes, swagger annotations, admin API clients, entity
+  configs in `advanced.jsx` + `GenerateShiftsPanel` component, `widgetSources.js` entries for all 6 new
+  sources + extended `attendances`, menu rows in a new "Shift & Attendance" menu group, and role permissions
+  seeded (HR User/HR Manager full access, Employee read-only unscoped on `/shift-type`, read-only own-scoped
+  on `/shift-assignment`, and read+write own-scoped on `/employee-checkin`).
+  - **Judgment calls made**:
+    - **Concurrency serialization on writes**: `withShiftWriteLock` serializes `ShiftAssignment` writes
+      per employee (`employee:${employeeId}`) and `generate` executions per schedule assignment
+      (`schedule:${id}`), ensuring concurrent manual or generated writes cannot pass overlap checks
+      simultaneously under this project's single-process model.
+    - **Effectively active is computed, not stored**: `isAssignmentCurrentlyActive` checks `status === "active"`
+      and `(!endDate || dayStart(endDate) >= dayStart(asOfDate))` dynamically at validation and query time,
+      avoiding any daily expiry sweep job.
+    - **Immutability of linked checkins**: once `EmployeeCheckin.attendanceId` is linked, `time`, `employeeId`,
+      and `logType` cannot be altered, preserving attendance integrity.
+    - **Issue #14 fixed**: `listAttendanceByParams` in `attendance.controller.js` previously omitted `$lookup`
+      for `Employee`, causing the list UI to fall back to raw ObjectIds. Added aggregation stages to join
+      `Employee` and project both `employeeName` and `employeeIdLabel`, added `searchFields: ["employeeName", "status"]`,
+      and added `shiftId` and `departmentId` population in `getAttendanceById`.
+    - **Company confinement on Attendance and Dashboard Widgets**: `attendanceScope` enforces company boundary
+      across all CRUD endpoints for `Attendance` and the new Shift & Attendance collections. In
+      `dashboard.controller.js`, fixed `executeWidget` for `source.companyConfined` by ensuring
+      `checkPermission` is properly imported and invoked, and applying `attendanceScope(req, source.employeeOwned)`
+      to keep role dashboards confined.
+    - **Docs-capture side effect & Issue #8 resolved**: Codex added `--screens=<comma-list>` to
+      `scripts/docs-capture.js` and regenerated documentation pages for HRMS modules 1-8. Verified all
+      generated pages are clean, accurate, and non-destructive. Committed in a separate commit and closed
+      GitHub issue #8.
+  - **Verified live**: `npm test` green (all 17 test suites, including `workingHours.test.js`,
+    `geofence.test.js`, `shiftOccurrence.test.js`, `shiftSchedule.test.js`), `npm run seed` idempotent
+    (0 new menu grants / 195 employees), `npm run build` clean. Full live HTTP walk executed via
+    `scripts/verify-shift-attendance.mjs` against a running server (91 real HTTP assertions): CRUD for
+    `ShiftType`, `ShiftLocation`, `ShiftSchedule`; active assignment overlap rejection and inactive
+    allowance; `ShiftScheduleAssignment.generate` action advancing `createShiftsAfter` watermark;
+    `EmployeeCheckin` creating punches with proper shift occurrence resolution (normal day shift, overnight
+    shift crossing midnight, offshift detection), geofence acceptance and rejection (haversine radius check),
+    duplicate punch guard, and time/link immutability once linked to Attendance; all 4 working hours modes
+    verified against actual punches; company confinement confirmed for HR User and own-scope confirmed for
+    Employee; live dashboard widget preview and run execution verified; and clean teardown confirming employee
+    count returns to baseline 195.
 

@@ -1,3 +1,5 @@
+import { createShiftType, getAllShiftTypes, getShiftTypeById, updateShiftType, deleteShiftType, searchShiftTypes, createShiftLocation, getAllShiftLocations, getShiftLocationById, updateShiftLocation, deleteShiftLocation, searchShiftLocations, createShiftAssignment, getAllShiftAssignments, getShiftAssignmentById, updateShiftAssignment, deleteShiftAssignment, searchShiftAssignments, createShiftSchedule, getAllShiftSchedules, getShiftScheduleById, updateShiftSchedule, deleteShiftSchedule, searchShiftSchedules, createShiftScheduleAssignment, getAllShiftScheduleAssignments, getShiftScheduleAssignmentById, updateShiftScheduleAssignment, deleteShiftScheduleAssignment, searchShiftScheduleAssignments, createEmployeeCheckin, getAllEmployeeCheckins, getEmployeeCheckinById, updateEmployeeCheckin, deleteEmployeeCheckin, searchEmployeeCheckins } from "../api/shiftAttendance.api";
+import { GenerateShiftsPanel } from "../components/hrms/generate-shifts-panel";
 import { Building07, Hash02, Link01, Mail01, MarkerPin01, Phone, Shield01, Tag01, Type01, User01 } from "@untitledui/icons";
 import { isStrongPassword, isValidEmail, PASSWORD } from "@demo-panel/shared/validation";
 import api from "../api/index";
@@ -2459,6 +2461,17 @@ export const leaveAllocationConfig = {
 
 export const attendanceConfig = {
     filterFields: [
+        { name: "departmentId", label: "Department id", type: "objectId" },
+        { name: "shiftId", label: "Shift id", type: "objectId" },
+        { name: "workingHours", label: "Working hours", type: "number" },
+        { name: "standardWorkingHours", label: "Standard working hours", type: "number" },
+        { name: "actualOvertimeDuration", label: "Actual overtime duration", type: "number" },
+        { name: "lateEntry", label: "Late entry", type: "boolean" },
+        { name: "earlyExit", label: "Early exit", type: "boolean" },
+        { name: "inTime", label: "In time", type: "date" },
+        { name: "outTime", label: "Out time", type: "date" },
+        { name: "halfDayStatus", label: "Half day status", type: "string" },
+
         { name: "employeeId", label: "Employee", type: "objectId" },
         { name: "companyId", label: "Company", type: "objectId" },
         { name: "status", label: "Status", type: "string" },
@@ -2468,15 +2481,17 @@ export const attendanceConfig = {
     ],
     key: "attendance",
     path: "/attendance",
-    section: "Leaves",
+    section: "Shift & Attendance",
     singular: "Attendance",
     plural: "Attendance",
-    description: "One row per employee per day. Minimal shape for now — module 9 (Shift & Attendance) extends this with shift assignment, check-in/out and geolocation.",
+    description: "One row per employee per day, including shift hours, punches and overtime.",
     api: { search: searchAttendances, getById: getAttendanceById, create: createAttendance, update: updateAttendance, remove: deleteAttendance },
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
         companyId: asOptions(getAllCompanies, "companyName"),
         leaveTypeId: asOptions(getAllLeaveTypes, "leaveTypeName"),
+        shiftId: asOptions(getAllShiftTypes, "shiftTypeName"),
+        departmentId: asOptions(getAllDepartments, "departmentName"),
     },
     fields: [
         { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
@@ -2484,16 +2499,30 @@ export const attendanceConfig = {
         { name: "attendanceDate", label: "Attendance Date", type: "date", required: true, section: "details", error: "Attendance Date is required!" },
         { name: "status", label: "Status", type: "select", required: true, section: "details", error: "Status is required!", options: ["Present", "Absent", "On Leave", "Half Day", "Work From Home"] },
         { name: "leaveTypeId", label: "Leave Type", type: "select", section: "details", optionsFrom: "leaveTypeId" },
+        {"name": "departmentId", "label": "Department", "type": "select", "section": "details", "optionsFrom": "departmentId" },
+        {"name": "shiftId", "label": "Shift", "type": "select", "section": "details", "optionsFrom": "shiftId" },
+        {"name": "workingHours", "label": "Working hours", "type": "number", "section": "details" },
+        {"name": "standardWorkingHours", "label": "Standard working hours", "type": "number", "section": "details" },
+        {"name": "actualOvertimeDuration", "label": "Overtime hours", "type": "number", "section": "details" },
+        {"name": "lateEntry", "label": "Late entry", "type": "checkbox", "section": "details" },
+        {"name": "earlyExit", "label": "Early exit", "type": "checkbox", "section": "details" },
+        {"name": "inTime", "label": "In time (UTC)", "type": "datetime-local", "section": "details" },
+        {"name": "outTime", "label": "Out time (UTC)", "type": "datetime-local", "section": "details" },
+        {"name": "halfDayStatus", "label": "Other half status", "type": "select", "section": "details", "options": ["", "Present", "Absent"]},
         ACTIVE,
     ],
     columns: [
-        { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "200px" },
+        { name: "Employee", selector: (row) => row.employeeName || row.employeeIdLabel || "—", minWidth: "200px" },
         { name: "Date", selector: (row) => row.attendanceDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
         { name: "Status", selector: (row) => row.status, minWidth: "130px" },
     ],
     recordTitle: (r) => `Attendance — ${r._id}`,
+    toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["employeeId", "companyId", "attendanceDate", "status", "leaveTypeId", "isActive", "departmentId", "shiftId", "workingHours", "standardWorkingHours", "actualOvertimeDuration", "lateEntry", "earlyExit", "inTime", "outTime", "halfDayStatus"].includes(key)).map(([key, value]) => [key, value === "" ? null : value])),
     toForm: (data) => ({
         ...data,
+        shiftId: refId(data.shiftId),
+        departmentId: refId(data.departmentId),
+        inTime: data.inTime?.slice(0, 16) || "", outTime: data.outTime?.slice(0, 16) || "",
         employeeId: refId(data.employeeId),
         companyId: refId(data.companyId),
         leaveTypeId: refId(data.leaveTypeId),
@@ -2808,7 +2837,266 @@ export const leaveBlockListConfig = {
     toForm: (data) => ({ ...data, companyId: refId(data.companyId), departmentId: refId(data.departmentId), leaveTypeId: refId(data.leaveTypeId) }),
 };
 
+
+export const shiftTypeConfig = {
+    key: "shift-type", path: "/shift-type", section: "Shift & Attendance", singular: "Shift Type", plural: "Shift Types",
+    description: "Set shift hours, buffers and attendance calculation rules.",
+    api: { search: searchShiftTypes, getById: getShiftTypeById, create: createShiftType, update: updateShiftType, remove: deleteShiftType },
+    lookups: {
+        holidayListId: asOptions(getAllHolidayLists, "holidayListName"),
+        companyId: asOptions(getAllCompanies, "companyName"),
+    },
+    sections: [{ id: "details", title: "Details" }],
+    fields: [
+        { name: "shiftTypeName", label: "Shift type name", section: "details", type: "text", required: true, error: "Shift type name is required" },
+        { name: "startTime", label: "Start time", section: "details", type: "text", required: true, error: "Start time is required", hint: "24-hour time, HH:mm (UTC)." },
+        { name: "endTime", label: "End time", section: "details", type: "text", required: true, error: "End time is required", hint: "24-hour time, HH:mm (UTC)." },
+        { name: "holidayListId", label: "Holiday list", section: "details", type: "select", optionsFrom: "holidayListId" },
+        { name: "determineCheckInAndCheckOut", label: "Determine check in and check out", section: "details", type: "select", options: ["alternating-entries", "strict-in-out"], default: "alternating-entries" },
+        { name: "workingHoursCalculationBasis", label: "Working hours calculation basis", section: "details", type: "select", options: ["first-and-last", "every-valid-pair"], default: "first-and-last" },
+        { name: "color", label: "Color", section: "details", type: "select", options: ["Blue", "Cyan", "Fuchsia", "Green", "Lime", "Orange", "Pink", "Red", "Violet", "Yellow"], default: "Blue" },
+        { name: "processAttendanceAfter", label: "Process attendance after", section: "details", type: "date" },
+        { name: "lastSyncOfCheckin", label: "Last sync of checkin", section: "details", type: "datetime-local" },
+        { name: "workingHoursThresholdForHalfDay", label: "Working hours threshold for half day", section: "details", type: "number", default: 0},
+        { name: "workingHoursThresholdForAbsent", label: "Working hours threshold for absent", section: "details", type: "number", default: 0},
+        { name: "beginCheckInBeforeShiftStartTime", label: "Begin check in before shift start time", section: "details", type: "number", default: 60},
+        { name: "allowCheckOutAfterShiftEndTime", label: "Allow check out after shift end time", section: "details", type: "number", default: 60},
+        { name: "lateEntryGracePeriod", label: "Late entry grace period", section: "details", type: "number", default: 0},
+        { name: "earlyExitGracePeriod", label: "Early exit grace period", section: "details", type: "number", default: 0},
+        { name: "enableAutoAttendance", label: "Enable auto attendance", section: "details", type: "checkbox", default: false },
+        { name: "markAutoAttendanceOnHolidays", label: "Mark auto attendance on holidays", section: "details", type: "checkbox", default: false },
+        { name: "enableLateEntryMarking", label: "Enable late entry marking", section: "details", type: "checkbox", default: false },
+        { name: "enableEarlyExitMarking", label: "Enable early exit marking", section: "details", type: "checkbox", default: false },
+        { name: "autoUpdateLastSync", label: "Auto update last sync", section: "details", type: "checkbox", default: false },
+        { name: "allowOvertime", label: "Allow overtime", section: "details", type: "checkbox", default: false },
+        { name: "companyId", label: "Company", section: "details", type: "select", optionsFrom: "companyId", required: true, error: "Company is required" },
+        { name: "isActive", label: "Is active", section: "details", type: "checkbox", default: true, required: true, error: "Is active is required" },
+    ],
+    filterFields: [
+        { name: "shiftTypeName", label: "Shift type name", type: "string" },
+        { name: "holidayListId", label: "Holiday list id", type: "objectId" },
+        { name: "enableAutoAttendance", label: "Enable auto attendance", type: "boolean" },
+        { name: "companyId", label: "Company id", type: "objectId" },
+        { name: "isActive", label: "Is active", type: "boolean" },
+        { name: "createdAt", label: "Created at", type: "date" },
+    ],
+    columns: [
+        { name: "Shift type name", selector: (row) => String(row.shiftTypeName ?? "—"), sortable: true, sortField: "shiftTypeName" },
+    ],
+    recordTitle: (r) => r.shiftTypeName || r.locationName || "Shift Type",
+    toForm: (data) => ({ ...data, processAttendanceAfter: data.processAttendanceAfter?.slice(0, 10) || "", lastSyncOfCheckin: data.lastSyncOfCheckin?.slice(0, 16) || "",  holidayListId: refId(data.holidayListId), companyId: refId(data.companyId) }),
+    toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["shiftTypeName", "startTime", "endTime", "holidayListId", "determineCheckInAndCheckOut", "workingHoursCalculationBasis", "color", "processAttendanceAfter", "lastSyncOfCheckin", "workingHoursThresholdForHalfDay", "workingHoursThresholdForAbsent", "beginCheckInBeforeShiftStartTime", "allowCheckOutAfterShiftEndTime", "lateEntryGracePeriod", "earlyExitGracePeriod", "enableAutoAttendance", "markAutoAttendanceOnHolidays", "enableLateEntryMarking", "enableEarlyExitMarking", "autoUpdateLastSync", "allowOvertime", "companyId", "isActive"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
+};
+
+export const shiftLocationConfig = {
+    key: "shift-location", path: "/shift-location", section: "Shift & Attendance", singular: "Shift Location", plural: "Shift Locations",
+    description: "Set an optional checkin radius in meters. A zero radius disables enforcement.",
+    api: { search: searchShiftLocations, getById: getShiftLocationById, create: createShiftLocation, update: updateShiftLocation, remove: deleteShiftLocation },
+    lookups: {
+        companyId: asOptions(getAllCompanies, "companyName"),
+    },
+    sections: [{ id: "details", title: "Details" }],
+    fields: [
+        { name: "locationName", label: "Location name", section: "details", type: "text", required: true, error: "Location name is required" },
+        { name: "checkinRadius", label: "Checkin radius", section: "details", type: "number", default: 0},
+        { name: "latitude", label: "Latitude", section: "details", type: "number" },
+        { name: "longitude", label: "Longitude", section: "details", type: "number" },
+        { name: "companyId", label: "Company", section: "details", type: "select", optionsFrom: "companyId", required: true, error: "Company is required" },
+        { name: "isActive", label: "Is active", section: "details", type: "checkbox", default: true, required: true, error: "Is active is required" },
+    ],
+    filterFields: [
+        { name: "locationName", label: "Location name", type: "string" },
+        { name: "companyId", label: "Company id", type: "objectId" },
+        { name: "isActive", label: "Is active", type: "boolean" },
+        { name: "createdAt", label: "Created at", type: "date" },
+    ],
+    columns: [
+        { name: "Location name", selector: (row) => String(row.locationName ?? "—"), sortable: true, sortField: "locationName" },
+    ],
+    recordTitle: (r) => r.shiftTypeName || r.locationName || "Shift Location",
+    toForm: (data) => ({ ...data,  companyId: refId(data.companyId) }),
+    toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["locationName", "checkinRadius", "latitude", "longitude", "companyId", "isActive"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
+};
+
+export const shiftAssignmentConfig = {
+    key: "shift-assignment", path: "/shift-assignment", section: "Shift & Attendance", singular: "Shift Assignment", plural: "Shift Assignments",
+    description: "Assign one employee to a shift over a date range. Active ranges cannot overlap.",
+    api: { search: searchShiftAssignments, getById: getShiftAssignmentById, create: createShiftAssignment, update: updateShiftAssignment, remove: deleteShiftAssignment },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        shiftTypeId: asOptions(getAllShiftTypes, "shiftTypeName"),
+        shiftLocationId: asOptions(getAllShiftLocations, "locationName"),
+        companyId: asOptions(getAllCompanies, "companyName"),
+    },
+    sections: [{ id: "details", title: "Details" }],
+    fields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "shiftTypeId", label: "Shift type", section: "details", type: "select", optionsFrom: "shiftTypeId", required: true, error: "Shift type is required" },
+        { name: "shiftLocationId", label: "Shift location", section: "details", type: "select", optionsFrom: "shiftLocationId" },
+        { name: "startDate", label: "Start date", section: "details", type: "date", required: true, error: "Start date is required" },
+        { name: "endDate", label: "End date", section: "details", type: "date" },
+        { name: "status", label: "Status", section: "details", type: "select", options: ["active", "inactive", "cancelled"], default: "active" },
+        { name: "companyId", label: "Company", section: "details", type: "select", optionsFrom: "companyId" },
+        { name: "isActive", label: "Is active", section: "details", type: "checkbox", default: true, required: true, error: "Is active is required" },
+    ],
+    filterFields: [
+        { name: "employeeId", label: "Employee id", type: "objectId" },
+        { name: "shiftTypeId", label: "Shift type id", type: "objectId" },
+        { name: "shiftLocationId", label: "Shift location id", type: "objectId" },
+        { name: "shiftScheduleAssignmentId", label: "Shift schedule assignment id", type: "objectId" },
+        { name: "startDate", label: "Start date", type: "date" },
+        { name: "endDate", label: "End date", type: "date" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "companyId", label: "Company id", type: "objectId" },
+        { name: "isActive", label: "Is active", type: "boolean" },
+        { name: "createdAt", label: "Created at", type: "date" },
+    ],
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Shift type", selector: (row) => row.shiftTypeIdLabel || "—", sortable: true, sortField: "shiftTypeId" },
+        { name: "Start date", selector: (row) => String(row.startDate ?? "—"), sortable: true, sortField: "startDate" },
+        { name: "End date", selector: (row) => String(row.endDate ?? "—"), sortable: true, sortField: "endDate" },
+        { name: "Status", selector: (row) => String(row.status ?? "—"), sortable: true, sortField: "status" },
+    ],
+    recordTitle: (r) => r.shiftTypeName || r.locationName || "Shift Assignment",
+    toForm: (data) => ({ ...data, startDate: data.startDate?.slice(0, 10) || "", endDate: data.endDate?.slice(0, 10) || "",  employeeId: refId(data.employeeId), shiftTypeId: refId(data.shiftTypeId), shiftLocationId: refId(data.shiftLocationId), companyId: refId(data.companyId) }),
+    toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["employeeId", "shiftTypeId", "shiftLocationId", "startDate", "endDate", "status", "companyId", "isActive"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
+};
+
+export const shiftScheduleConfig = {
+    key: "shift-schedule", path: "/shift-schedule", section: "Shift & Attendance", singular: "Shift Schedule", plural: "Shift Schedules",
+    description: "Choose weekdays and how often their weekly pattern repeats.",
+    api: { search: searchShiftSchedules, getById: getShiftScheduleById, create: createShiftSchedule, update: updateShiftSchedule, remove: deleteShiftSchedule },
+    lookups: {
+        shiftTypeId: asOptions(getAllShiftTypes, "shiftTypeName"),
+        companyId: asOptions(getAllCompanies, "companyName"),
+    },
+    sections: [{ id: "details", title: "Details" }],
+    fields: [
+        { name: "frequency", label: "Frequency", section: "details", type: "select", options: ["every-1-week", "every-2-weeks", "every-3-weeks", "every-4-weeks"], default: "every-1-week" },
+        { name: "shiftTypeId", label: "Shift type", section: "details", type: "select", optionsFrom: "shiftTypeId", required: true, error: "Shift type is required" },
+        { name: "companyId", label: "Company", section: "details", type: "select", optionsFrom: "companyId", required: true, error: "Company is required" },
+        { name: "isActive", label: "Is active", section: "details", type: "checkbox", default: true, required: true, error: "Is active is required" },
+    ],
+    filterFields: [
+        { name: "frequency", label: "Frequency", type: "string" },
+        { name: "shiftTypeId", label: "Shift type id", type: "objectId" },
+        { name: "companyId", label: "Company id", type: "objectId" },
+        { name: "isActive", label: "Is active", type: "boolean" },
+        { name: "createdAt", label: "Created at", type: "date" },
+    ],
+    renderExtra: ({ values, setValues }) => (
+        <fieldset className="rounded-xl border border-secondary p-4 text-primary">
+            <legend>Repeat on days</legend>
+            {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map(day => (
+                <label key={day} className="mr-4 inline-flex gap-2"><input type="checkbox" checked={(values.repeatOnDays || []).includes(day)}
+                    onChange={event => setValues(previous => ({ ...previous, repeatOnDays: event.target.checked ? [...(previous.repeatOnDays || []), day] : (previous.repeatOnDays || []).filter(value => value !== day) }))} />{day}</label>
+            ))}
+        </fieldset>
+    ),
+    columns: [
+        { name: "Frequency", selector: (row) => String(row.frequency ?? "—"), sortable: true, sortField: "frequency" },
+        { name: "Shift type", selector: (row) => row.shiftTypeIdLabel || "—", sortable: true, sortField: "shiftTypeId" },
+    ],
+    toView: (data) => ({ ...data, repeatOnDaysText: (data.repeatOnDays || []).join(", ") }),
+    viewFields: [{ section: "details", name: "frequency", label: "Frequency" }, { section: "details", name: "shiftTypeId", label: "Shift", type: "select", optionsFrom: "shiftTypeId" }, { section: "details", name: "companyId", label: "Company", type: "select", optionsFrom: "companyId" }, { section: "details", name: "repeatOnDaysText", label: "Repeat on days" }, { section: "details", name: "isActive", label: "Active", type: "checkbox" }],
+    recordTitle: (r) => r.shiftTypeName || r.locationName || "Shift Schedule",
+    toForm: (data) => ({ ...data,  repeatOnDays: data.repeatOnDays || [], shiftTypeId: refId(data.shiftTypeId), companyId: refId(data.companyId) }),
+    toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["frequency", "repeatOnDays", "shiftTypeId", "companyId", "isActive"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
+};
+
+export const shiftScheduleAssignmentConfig = {
+    key: "shift-schedule-assignment", path: "/shift-schedule-assignment", section: "Shift & Attendance", singular: "Shift Schedule Assignment", plural: "Shift Schedule Assignments",
+    description: "Generate shift assignments from a recurring schedule. The next generation date advances after successful ranges.",
+    api: { search: searchShiftScheduleAssignments, getById: getShiftScheduleAssignmentById, create: createShiftScheduleAssignment, update: updateShiftScheduleAssignment, remove: deleteShiftScheduleAssignment },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        shiftScheduleId: asOptions(getAllShiftSchedules, "frequency"),
+        shiftLocationId: asOptions(getAllShiftLocations, "locationName"),
+        companyId: asOptions(getAllCompanies, "companyName"),
+    },
+    sections: [{ id: "details", title: "Details" }],
+    fields: [
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "shiftScheduleId", label: "Shift schedule", section: "details", type: "select", optionsFrom: "shiftScheduleId", required: true, error: "Shift schedule is required" },
+        { name: "shiftLocationId", label: "Shift location", section: "details", type: "select", optionsFrom: "shiftLocationId" },
+        { name: "enabled", label: "Enabled", section: "details", type: "checkbox", default: true },
+        { name: "createShiftsAfter", label: "Create shifts after", section: "details", type: "date" },
+        { name: "status", label: "Status", section: "details", type: "select", options: ["active", "inactive"], default: "active" },
+        { name: "companyId", label: "Company", section: "details", type: "select", optionsFrom: "companyId" },
+        { name: "isActive", label: "Is active", section: "details", type: "checkbox", default: true, required: true, error: "Is active is required" },
+    ],
+    filterFields: [
+        { name: "employeeId", label: "Employee id", type: "objectId" },
+        { name: "shiftScheduleId", label: "Shift schedule id", type: "objectId" },
+        { name: "shiftLocationId", label: "Shift location id", type: "objectId" },
+        { name: "enabled", label: "Enabled", type: "boolean" },
+        { name: "createShiftsAfter", label: "Create shifts after", type: "date" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "companyId", label: "Company id", type: "objectId" },
+        { name: "isActive", label: "Is active", type: "boolean" },
+        { name: "createdAt", label: "Created at", type: "date" },
+    ],
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Enabled", selector: (row) => String(row.enabled ?? "—"), sortable: true, sortField: "enabled" },
+        { name: "Status", selector: (row) => String(row.status ?? "—"), sortable: true, sortField: "status" },
+    ],
+    recordTitle: (r) => r.shiftTypeName || r.locationName || "Shift Schedule Assignment",
+    toForm: (data) => ({ ...data, createShiftsAfter: data.createShiftsAfter?.slice(0, 10) || "",  employeeId: refId(data.employeeId), shiftScheduleId: refId(data.shiftScheduleId), shiftLocationId: refId(data.shiftLocationId), companyId: refId(data.companyId) }),
+    toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["employeeId", "shiftScheduleId", "shiftLocationId", "enabled", "createShiftsAfter", "status", "companyId", "isActive"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
+    renderExtra: ({ mode, id }) => mode === "edit" && id ? <GenerateShiftsPanel id={id} /> : null,
+};
+
+export const employeeCheckinConfig = {
+    key: "employee-checkin", path: "/employee-checkin", section: "Shift & Attendance", singular: "Employee Checkin", plural: "Employee Checkins",
+    description: "Record an employee punch. The assigned shift and optional location determine whether it counts.",
+    api: { search: searchEmployeeCheckins, getById: getEmployeeCheckinById, create: createEmployeeCheckin, update: updateEmployeeCheckin, remove: deleteEmployeeCheckin },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        companyId: asOptions(getAllCompanies, "companyName"),
+    },
+    sections: [{ id: "details", title: "Details" }],
+    fields: [
+        { name: "shiftId", label: "Resolved shift", type: "select", optionsFrom: "shiftId", section: "details", hideIn: ["add", "edit"] },
+        { name: "offshift", label: "Off shift", type: "checkbox", section: "details", hideIn: ["add", "edit"] },
+        { name: "attendanceLinked", label: "Linked to attendance", type: "checkbox", section: "details", hideIn: ["add", "edit"] },
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "time", label: "Time", section: "details", type: "datetime-local", disabled: (values) => Boolean(values.attendanceId), hint: "UTC timestamp. Leave blank to use the current time." },
+        { name: "logType", label: "Log type", section: "details", type: "select", options: ["IN", "OUT", null]},
+        { name: "skipAutoAttendance", label: "Skip auto attendance", section: "details", type: "checkbox", default: false },
+        { name: "latitude", label: "Latitude", section: "details", type: "number" },
+        { name: "longitude", label: "Longitude", section: "details", type: "number" },
+        { name: "companyId", label: "Company", section: "details", type: "select", optionsFrom: "companyId" },
+        { name: "isActive", label: "Is active", section: "details", type: "checkbox", default: true, required: true, error: "Is active is required" },
+    ],
+    filterFields: [
+        { name: "employeeId", label: "Employee id", type: "objectId" },
+        { name: "shiftId", label: "Shift id", type: "objectId" },
+        { name: "attendanceId", label: "Attendance id", type: "objectId" },
+        { name: "time", label: "Time", type: "date" },
+        { name: "logType", label: "Log type", type: "string" },
+        { name: "deviceId", label: "Device id", type: "objectId" },
+        { name: "skipAutoAttendance", label: "Skip auto attendance", type: "boolean" },
+        { name: "offshift", label: "Offshift", type: "boolean" },
+        { name: "companyId", label: "Company id", type: "objectId" },
+        { name: "isActive", label: "Is active", type: "boolean" },
+        { name: "createdAt", label: "Created at", type: "date" },
+    ],
+    columns: [
+        { name: "Employee", selector: (row) => row.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Shift", selector: (row) => row.shiftIdLabel || "—", sortable: true, sortField: "shiftId" },
+        { name: "Time", selector: (row) => String(row.time ?? "—"), sortable: true, sortField: "time" },
+        { name: "Offshift", selector: (row) => String(row.offshift ?? "—"), sortable: true, sortField: "offshift" },
+    ],
+    toView: (data) => ({ ...data, attendanceLinked: Boolean(data.attendanceId) }),
+    recordTitle: (r) => r.shiftTypeName || r.locationName || "Employee Checkin",
+    toForm: (data) => ({ ...data, time: data.time?.slice(0, 16) || "",  employeeId: refId(data.employeeId), shiftId: refId(data.shiftId), companyId: refId(data.companyId) }),
+    toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["employeeId", "time", "logType", "deviceId", "skipAutoAttendance", "latitude", "longitude", "companyId", "isActive"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
+};
+
 export const ADVANCED_ENTITIES = [
+    shiftTypeConfig, shiftLocationConfig, shiftAssignmentConfig, shiftScheduleConfig, shiftScheduleAssignmentConfig, employeeCheckinConfig,
     adminUserConfig, userConfig, menuMasterConfig, emailTemplateConfig,
     departmentConfig, branchConfig, designationConfig, employeeConfig,
     jobApplicantSourceConfig, interviewTypeConfig, jobOfferTermTemplateConfig,

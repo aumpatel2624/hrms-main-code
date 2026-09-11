@@ -1,16 +1,19 @@
 import mongoose from "mongoose";
 
-/**
- * ADR-024. Minimal shape now — module 9 (Shift & Attendance) extends this
- * with shift assignment, check-in/out and geolocation; it does not rebuild
- * it. Built now because Leave Application's real on-submit behavior
- * creates/checks Attendance rows and Compensatory Leave Request's
- * validation checks against them, and both are module-8-second-fork work
- * that needs the collection to exist. Same precedent as module 2 adding
- * Employee's three approver fields early for modules that needed them later.
- */
+// ADR-025: one attendance row per employee/day, including shift work.
 const AttendanceSchema = new mongoose.Schema(
   {
+    departmentId: { type: mongoose.Schema.Types.ObjectId, ref: "Department", index: true, default: null },
+    shiftId: { type: mongoose.Schema.Types.ObjectId, ref: "ShiftType", index: true, default: null },
+    attendanceRequestId: { type: mongoose.Schema.Types.ObjectId, ref: "AttendanceRequest", index: true, default: null },
+    workingHours: { type: Number, min: 0 },
+    standardWorkingHours: { type: Number, min: 0 },
+    actualOvertimeDuration: { type: Number, min: 0 },
+    lateEntry: { type: Boolean },
+    earlyExit: { type: Boolean },
+    inTime: { type: Date },
+    outTime: { type: Date },
+    halfDayStatus: { type: String, enum: ["", "Present", "Absent"] },
     employeeId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",
@@ -61,5 +64,14 @@ AttendanceSchema.index({ status: 1 });
 AttendanceSchema.index({ attendanceDate: 1 });
 AttendanceSchema.index({ isActive: 1, createdAt: -1 });
 AttendanceSchema.index({ createdAt: -1 });
+
+AttendanceSchema.index({ workingHours: 1 });
+AttendanceSchema.index({ standardWorkingHours: 1 });
+AttendanceSchema.index({ actualOvertimeDuration: 1 });
+AttendanceSchema.index({ lateEntry: 1 });
+AttendanceSchema.index({ earlyExit: 1 });
+AttendanceSchema.index({ inTime: 1 });
+AttendanceSchema.index({ outTime: 1 });
+AttendanceSchema.index({ halfDayStatus: 1 });
 
 export default mongoose.model("Attendance", AttendanceSchema);

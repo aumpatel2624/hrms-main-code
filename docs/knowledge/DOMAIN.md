@@ -625,6 +625,24 @@ reads `LeaveAllocation` rows `processExpiredAllocations` just expired in the sam
 `pending` `LeaveEncashment` per eligible allocation (idempotent via a `leaveAllocationId`-exists
 check) — left for HR to fill in the real per-day rate and confirm before marking paid.
 
+### Shift & Attendance (module 9, foundation half built 2026-09-11 — ADR-025)
+
+The foundation half of Module 9 delivers core shift definitions, location geofencing, assignments, recurring schedules, punches/checkins, and the extended attendance tracking model.
+
+`ShiftType` — defines a recurring shift's time boundaries (`startTime`, `endTime`, string "HH:mm:ss"), buffer windows (`beginCheckInBeforeShiftStartTime`, `allowCheckOutAfterShiftEndTime`), working hours thresholds (`workingHoursThresholdForHalfDay`, `workingHoursThresholdForAbsent`), calculation mode (`workingHoursCalculationBasedOn`: "First Check-in and Last Check-out" vs. "Every Valid Check-in and Check-out Pair"), auto-attendance flags (`enableAutoAttendance`, `determineCheckInCheckOut`), and process loss / late mark thresholds (`processLossAfterTime`, `lateMarkAfterTime`).
+
+`ShiftLocation` — defines an operational checkin location (`locationName`, `companyId`, `latitude`, `longitude`, `checkinRadius` in meters). When coordinates and radius > 0 are configured, employee checkins at this location enforce proximity via haversine distance.
+
+`ShiftAssignment` — links an `Employee` to a `ShiftType` starting at `startDate` through optional `endDate` (`companyId`, `shiftLocationId`, `status`: "active"/"inactive"/"cancelled"). An employee may have at most one active assignment at any point in time. "Effectively active" is computed dynamically at query/validation time rather than updated by a daily expiry cron. Writes are serialized per-employee using an in-memory promise mutex.
+
+`ShiftSchedule` — defines a reusable multi-shift template (`scheduleName`, `companyId`, `frequency`: "weekly", `repeatEvery`, `scheduleShifts[]` specifying day of week 1-7, shiftTypeId, and optional shiftLocationId).
+
+`ShiftScheduleAssignment` — assigns an employee to a `ShiftSchedule` from `startDate` through optional `endDate`, maintaining a `createShiftsAfter` watermark date. The `POST /shift-schedule-assignments/:id/generate` action generates non-overlapping concrete `ShiftAssignment` records sequentially up to `min(effectiveEndDate, today + generateDaysAhead)` and monotonically advances `createShiftsAfter`.
+
+`EmployeeCheckin` — records a timestamped punch (`employeeId`, `time`, `logType`: "IN"/"OUT", `deviceInfo`, `shiftLocationId`, `latitude`, `longitude`, `skipAutoAttendance`, `attendanceId`). Validates geofence proximity against the assigned shift location if coordinates are configured. Resolves the active `ShiftAssignment` and shift occurrence window (including overnight shifts crossing midnight). Once linked to an `Attendance` record (`attendanceId`), its core fields (`time`, `employeeId`, `logType`) become immutable.
+
+`Attendance` (extended from Module 8) — tracks daily presence per employee with a strict `(employeeId, attendanceDate)` unique compound index. Extended with `departmentId`, `shiftId`, `attendanceRequestId`, `workingHours`, `standardWorkingHours`, `actualOvertimeDuration`, `lateEntry`, `earlyExit`, `inTime`, `outTime`, and `halfDayStatus`. Scoped by company confinement across all endpoints; joins `Employee` on searches to present employee name and code.
+
 ## Not modelled
 
 <!-- Things the client talks about that deliberately have no collection, and why. -->

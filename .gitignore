@@ -1,6 +1,7 @@
 node_modules/
 apps/server/out/
 apps/server/log/
+log/
 apps/server/uploads/
 apps/server/.env
 apps/admin/.env

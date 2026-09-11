@@ -4,6 +4,12 @@ How to use this panel, screen by screen. Pick a screen from the list to read abo
 
 ## Screens
 
+- [Shift Types](shift-type)
+- [Shift Locations](shift-location)
+- [Shift Assignments](shift-assignment)
+- [Shift Schedules](shift-schedule)
+- [Shift Schedule Assignments](shift-schedule-assignment)
+- [Employee Checkins](employee-checkin)
 - [Departments](department)
 - [Companies](company)
 - [Branches](branch)

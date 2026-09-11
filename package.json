@@ -18,7 +18,7 @@
     "seed": "npm run seed -w @demo-panel/server",
     "docs": "node scripts/docs-capture.js",
     "serve": "npm run build && npm start",
-    "test": "node scripts/docs-fingerprint.test.js && node packages/shared/test.js && node packages/shared/seoResolve.test.js && node apps/server/utils/auditDiff.test.js && node apps/server/utils/listQuery.test.js && node apps/server/utils/scope.test.js && node apps/server/utils/widgetQuery.test.js && node apps/server/utils/sendTriggeredEmail.test.js && node apps/server/utils/leaveProration.test.js && node apps/server/utils/leaveDayCalculation.test.js && node apps/server/utils/leaveBlockList.test.js && node apps/server/models/softDelete.test.js && node apps/admin/src/components/ui/dashboard-canvas.test.js",
+    "test": "node scripts/docs-fingerprint.test.js && node packages/shared/test.js && node packages/shared/seoResolve.test.js && node apps/server/utils/auditDiff.test.js && node apps/server/utils/listQuery.test.js && node apps/server/utils/scope.test.js && node apps/server/utils/widgetQuery.test.js && node apps/server/utils/sendTriggeredEmail.test.js && node apps/server/utils/leaveProration.test.js && node apps/server/utils/leaveDayCalculation.test.js && node apps/server/utils/leaveBlockList.test.js && node apps/server/models/softDelete.test.js && node apps/admin/src/components/ui/dashboard-canvas.test.js && node apps/server/utils/workingHours.test.js && node apps/server/utils/geofence.test.js && node apps/server/utils/shiftOccurrence.test.js && node apps/server/utils/shiftSchedule.test.js",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/server/out",
     "reinstall": "npm run clean && npm install"
   },

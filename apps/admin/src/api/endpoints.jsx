@@ -194,6 +194,24 @@ export const ENDPOINTS = {
         SUBMIT: (id) => `${V1}/appraisals/${id}/submit`,
         CANCEL: (id) => `${V1}/appraisals/${id}/cancel`,
     },
+    // ADR-032 (Performance, module 16, transactional half, feat/performance-goals).
+    GOALS: {
+        BASE: `${V1}/goals`,
+        SEARCH: `${V1}/goals/search`,
+        BY_ID: (id) => `${V1}/goals/${id}`,
+        BULK_STATUS: `${V1}/goals/bulk-status`,
+        ARCHIVE: (id) => `${V1}/goals/${id}/archive`,
+        UNARCHIVE: (id) => `${V1}/goals/${id}/unarchive`,
+        CLOSE: (id) => `${V1}/goals/${id}/close`,
+        REOPEN: (id) => `${V1}/goals/${id}/reopen`,
+    },
+    EMPLOYEE_PERFORMANCE_FEEDBACKS: {
+        BASE: `${V1}/employee-performance-feedbacks`,
+        SEARCH: `${V1}/employee-performance-feedbacks/search`,
+        BY_ID: (id) => `${V1}/employee-performance-feedbacks/${id}`,
+        SUBMIT: (id) => `${V1}/employee-performance-feedbacks/${id}/submit`,
+        CANCEL: (id) => `${V1}/employee-performance-feedbacks/${id}/cancel`,
+    },
 
     // Auth endpoints
     AUTH: {

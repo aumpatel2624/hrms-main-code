@@ -44,7 +44,12 @@ import {
     createAppraisalTemplate, getAppraisalTemplateById, updateAppraisalTemplate, deleteAppraisalTemplate, searchAppraisalTemplates, getAllAppraisalTemplates,
     createAppraisalCycle, getAppraisalCycleById, updateAppraisalCycle, deleteAppraisalCycle, searchAppraisalCycles, getAllAppraisalCycles,
     getEligibleEmployeesForCycle, createAppraisalsForCycle, completeAppraisalCycle,
-    createAppraisal, getAppraisalById, updateAppraisal, deleteAppraisal, searchAppraisals, submitAppraisal, cancelAppraisal,
+    createAppraisal, getAppraisalById, updateAppraisal, deleteAppraisal, searchAppraisals, submitAppraisal, cancelAppraisal, getAllAppraisals,
+    createGoal, getGoalById, updateGoal, deleteGoal, searchGoals, getAllGoals,
+    archiveGoal, unarchiveGoal, closeGoal, reopenGoal,
+    createEmployeePerformanceFeedback, getEmployeePerformanceFeedbackById, updateEmployeePerformanceFeedback,
+    deleteEmployeePerformanceFeedback, searchEmployeePerformanceFeedbacks,
+    submitEmployeePerformanceFeedback, cancelEmployeePerformanceFeedback,
 } from "../api/performance.api";
 import { GenerateShiftsPanel } from "../components/hrms/generate-shifts-panel";
 import { Building07, Hash02, Link01, Mail01, MarkerPin01, Phone, Shield01, Tag01, Type01, User01 } from "@untitledui/icons";
@@ -164,8 +169,28 @@ import AdjustAllocationPanel from "@/components/crud/adjust-allocation-panel";
 import MarkEncashmentPaidPanel from "@/components/crud/mark-encashment-paid-panel";
 
 const ACTIVE = { name: "isActive", label: "Is Active", type: "checkbox", section: "status", default: false };
+
+/**
+ * A "getAll"-style loader's rows, however its list controller shaped them.
+ *
+ * Most `listX` controllers behind a plain GET (no query) return a flat
+ * array. But some (anything whose list handler runs requests through
+ * `runListQuery`, e.g. Appraisal Cycle, Appraisal, Goal) return
+ * `runListQuery`'s own `$facet` wrapper even with no query params — a
+ * single-element `[{ count, data: [...] }]`, not a flat array. Unwrapping
+ * that here (rather than in every affected `lookups` entry) fixes every
+ * dropdown fed by such a loader at once — including `appraisalCycleId` on
+ * the existing Appraisal Cycle screen, which silently showed one garbage
+ * `{value: undefined, label: undefined}` option before this fix, found
+ * while live-testing Goal's own `parentGoalId`/`appraisalCycleId` dropdowns.
+ */
+const unwrapListRows = (data) => {
+    const rows = data ?? [];
+    if (rows.length === 1 && rows[0] && Array.isArray(rows[0].data)) return rows[0].data;
+    return rows;
+};
 const asOptions = (loader, labelKey) => () =>
-    loader().then((res) => (res.data?.data ?? []).map((x) => ({ value: x._id, label: x[labelKey] })));
+    loader().then((res) => unwrapListRows(res.data?.data).map((x) => ({ value: x._id, label: x[labelKey] })));
 
 /**
  * The id of a relation, however it arrived.
@@ -4740,6 +4765,271 @@ export const appraisalConfig = {
         }),
 };
 
+// ============================================================================
+// Goal / Employee Performance Feedback (ADR-032, transactional half,
+// feat/performance-goals). Goal is tree-shaped (self-referencing
+// `parentGoalId`) but this admin panel has no dedicated tree-view component
+// anywhere in its 16 modules so far — it stays a plain list/form CRUD screen
+// like every other entity here ("a CRUD screen is a config object"), with
+// `parentGoalId` as an ordinary select. `Goal` is SCOPES.OWN: the server
+// resolves/validates `employeeId` from the logged-in user when their role's
+// dataScope is "own" and overrides whatever this form sends, exactly like
+// `employeeTaxExemptionDeclarationConfig` above — the field stays in the
+// form for HR roles, who must supply it explicitly.
+// ============================================================================
+
+export const goalConfig = {
+    key: "goal",
+    path: "/goal",
+    section: "Performance",
+    singular: "Goal",
+    plural: "Goals",
+    description: "An employee's individual goal, optionally nested under a parent group goal, optionally tagged to an Appraisal Cycle + KRA to feed automated KRA scoring in Appraisal.",
+    api: {
+        search: searchGoals,
+        getById: getGoalById,
+        create: createGoal,
+        update: updateGoal,
+        remove: deleteGoal,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        parentGoalId: asOptions(getAllGoals, "goalName"),
+        appraisalCycleId: asOptions(getAllAppraisalCycles, "cycleName"),
+        kraId: asOptions(getAllKRAs, "name"),
+    },
+    sections: [{ id: "details", title: "Goal Details" }],
+    fields: [
+        { name: "goalName", label: "Goal Name", section: "details", type: "text", required: true, error: "Goal Name is required" },
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "isGroup", label: "Is Group (a container for child goals)", section: "details", type: "checkbox" },
+        { name: "parentGoalId", label: "Parent Goal", section: "details", type: "select", optionsFrom: "parentGoalId" },
+        { name: "appraisalCycleId", label: "Appraisal Cycle (locked once saved / once a parent is chosen)", section: "details", type: "select", optionsFrom: "appraisalCycleId" },
+        { name: "kraId", label: "KRA (required for a top-level goal tagged to a cycle; locked once a parent is chosen)", section: "details", type: "select", optionsFrom: "kraId" },
+        { name: "startDate", label: "Start Date", section: "details", type: "date", required: true, error: "Start Date is required" },
+        { name: "endDate", label: "End Date", section: "details", type: "date" },
+        {
+            name: "progress", label: "Progress (%)", section: "details", type: "number",
+            disabled: (values) => Boolean(values.isGroup) || values.status === "Closed",
+        },
+        { name: "description", label: "Description", section: "details", type: "text" },
+    ],
+    viewFields: [
+        { name: "goalName", label: "Goal Name", section: "details", type: "text" },
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId" },
+        { name: "status", label: "Status", section: "details", type: "text" },
+        { name: "progress", label: "Progress (%)", section: "details", type: "number" },
+        { name: "isGroup", label: "Is Group", section: "details", type: "checkbox" },
+        { name: "parentGoalId", label: "Parent Goal", section: "details", type: "select", optionsFrom: "parentGoalId" },
+        { name: "appraisalCycleId", label: "Appraisal Cycle", section: "details", type: "select", optionsFrom: "appraisalCycleId" },
+        { name: "kraId", label: "KRA", section: "details", type: "select", optionsFrom: "kraId" },
+        { name: "startDate", label: "Start Date", section: "details", type: "date" },
+        { name: "endDate", label: "End Date", section: "details", type: "date" },
+        { name: "description", label: "Description", section: "details", type: "text" },
+    ],
+    renderExtra: ({ mode, id, values }) => (
+        <>
+            {mode === "edit" && id && !["Archived", "Closed"].includes(values.status) && (
+                <SimpleActionButton
+                    label="Archive"
+                    description="Archives this Goal. Excludes it from its parent's progress rollup."
+                    onRun={() => archiveGoal(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+            {mode === "edit" && id && values.status === "Archived" && (
+                <SimpleActionButton
+                    label="Unarchive"
+                    description="Restores this Goal to an open state, recomputed from its current progress."
+                    onRun={() => unarchiveGoal(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+            {mode === "edit" && id && values.status !== "Closed" && (
+                <SimpleActionButton
+                    label="Close"
+                    description="Closes this Goal. Progress becomes read-only until reopened."
+                    onRun={() => closeGoal(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+            {mode === "edit" && id && values.status === "Closed" && (
+                <SimpleActionButton
+                    label="Reopen"
+                    description="Reopens this Goal, recomputed from its current progress."
+                    onRun={() => reopenGoal(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+        </>
+    ),
+    columns: [
+        { name: "Goal Name", selector: (r) => r.goalName, sortable: true, sortField: "goalName" },
+        { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—" },
+        { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" },
+        { name: "Progress", selector: (r) => `${r.progress ?? 0}%` },
+        { name: "Parent Goal", selector: (r) => r.parentGoalId?.goalName || r.parentGoalIdLabel || "—" },
+    ],
+    filterFields: [
+        { name: "goalName", label: "Goal Name", type: "string" },
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "parentGoalId", label: "Parent Goal", type: "objectId" },
+        { name: "appraisalCycleId", label: "Appraisal Cycle", type: "objectId" },
+        { name: "kraId", label: "KRA", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "isGroup", label: "Is Group", type: "boolean" },
+        { name: "startDate", label: "Start Date", type: "date" },
+        { name: "endDate", label: "End Date", type: "date" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => r.goalName,
+    toForm: (data) => ({
+        ...data,
+        employeeId: refId(data.employeeId),
+        parentGoalId: refId(data.parentGoalId),
+        appraisalCycleId: refId(data.appraisalCycleId),
+        kraId: refId(data.kraId),
+        startDate: data.startDate?.slice?.(0, 10) || "",
+        endDate: data.endDate?.slice?.(0, 10) || "",
+    }),
+    toPayload: (values, mode) => (mode === "edit"
+        ? {
+            goalName: values.goalName,
+            parentGoalId: values.parentGoalId || undefined,
+            progress: values.progress !== undefined ? Number(values.progress) || 0 : undefined,
+            startDate: values.startDate,
+            endDate: values.endDate || undefined,
+            kraId: values.kraId || undefined,
+            description: values.description,
+        }
+        : {
+            goalName: values.goalName,
+            isGroup: Boolean(values.isGroup),
+            employeeId: values.employeeId,
+            parentGoalId: values.parentGoalId || undefined,
+            progress: Number(values.progress) || 0,
+            startDate: values.startDate,
+            endDate: values.endDate || undefined,
+            appraisalCycleId: values.appraisalCycleId || undefined,
+            kraId: values.kraId || undefined,
+            description: values.description,
+        }),
+};
+
+const EMPLOYEE_PERFORMANCE_FEEDBACK_RATING_COLUMNS = [
+    { name: "criteriaId", label: "Criteria ID", type: "text", placeholder: "Employee Feedback Criteria ObjectId" },
+    { name: "weightage", label: "Weightage (%)", type: "number", placeholder: "e.g. 50" },
+    { name: "rating", label: "Rating (0-1 fraction)", type: "number", placeholder: "e.g. 0.8" },
+];
+
+export const employeePerformanceFeedbackConfig = {
+    key: "employee-performance-feedback",
+    path: "/employee-performance-feedback",
+    section: "Performance",
+    singular: "Employee Performance Feedback",
+    plural: "Employee Performance Feedback",
+    description: "A single reviewer's feedback on an employee for a specific Appraisal, rated against the Appraisal's template criteria. Submitting one contributes to the target Appraisal's average feedback score.",
+    api: {
+        search: searchEmployeePerformanceFeedbacks,
+        getById: getEmployeePerformanceFeedbackById,
+        create: createEmployeePerformanceFeedback,
+        update: updateEmployeePerformanceFeedback,
+        remove: deleteEmployeePerformanceFeedback,
+    },
+    lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        reviewerId: asOptions(getAllEmployees, "employeeName"),
+        appraisalId: () => getAllAppraisals().then((res) => unwrapListRows(res.data?.data).map((row) => ({ value: row._id, label: `Appraisal — ${row.employeeIdLabel || row.employeeId?.employeeName || row.employeeId} (${row.status})` }))),
+    },
+    sections: [
+        { id: "details", title: "Feedback Details" },
+        { id: "text", title: "Feedback" },
+    ],
+    fields: [
+        { name: "employeeId", label: "For Employee (reviewee)", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
+        { name: "reviewerId", label: "Reviewer", section: "details", type: "select", optionsFrom: "reviewerId", required: true, error: "Reviewer is required" },
+        { name: "appraisalId", label: "Appraisal", section: "details", type: "select", optionsFrom: "appraisalId", required: true, error: "Appraisal is required" },
+        { name: "feedback", label: "Feedback", section: "text", type: "text", required: true, error: "Feedback is required" },
+    ],
+    viewFields: [
+        { name: "employeeId", label: "For Employee", section: "details", type: "select", optionsFrom: "employeeId" },
+        { name: "reviewerId", label: "Reviewer", section: "details", type: "select", optionsFrom: "reviewerId" },
+        { name: "appraisalId", label: "Appraisal", section: "details", type: "select", optionsFrom: "appraisalId" },
+        { name: "status", label: "Status", section: "details", type: "text" },
+        { name: "totalScore", label: "Total Score", section: "details", type: "number" },
+        { name: "feedback", label: "Feedback", section: "text", type: "text" },
+    ],
+    renderExtra: ({ mode, id, values, setValues }) => (
+        <>
+            <SimpleArrayField
+                title="Feedback Ratings"
+                description="Rating is a 0-1 fraction (e.g. 0.8 = 4 out of 5 stars). Weightages must sum to exactly 100."
+                fieldName="feedbackRatings"
+                columns={EMPLOYEE_PERFORMANCE_FEEDBACK_RATING_COLUMNS}
+                values={values}
+                setValues={setValues}
+            />
+            {mode === "edit" && id && values.status === "draft" && (
+                <SimpleActionButton
+                    label="Submit"
+                    description="Submits this feedback and recomputes the target Appraisal's average feedback score and final score."
+                    onRun={() => submitEmployeePerformanceFeedback(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+            {mode === "edit" && id && values.status === "submitted" && (
+                <SimpleActionButton
+                    label="Cancel"
+                    description="Cancels this feedback and recomputes the target Appraisal's average feedback score and final score, excluding this row."
+                    onRun={() => cancelEmployeePerformanceFeedback(id)}
+                    onResult={() => window.location.reload()}
+                />
+            )}
+        </>
+    ),
+    columns: [
+        { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
+        { name: "Reviewer", selector: (r) => r.reviewerId?.employeeName || r.reviewerIdLabel || "—" },
+        { name: "Total Score", selector: (r) => r.totalScore ?? "—" },
+        { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" },
+    ],
+    filterFields: [
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "reviewerId", label: "Reviewer", type: "objectId" },
+        { name: "appraisalCycleId", label: "Appraisal Cycle", type: "objectId" },
+        { name: "appraisalId", label: "Appraisal", type: "objectId" },
+        { name: "status", label: "Status", type: "string" },
+        { name: "totalScore", label: "Total Score", type: "number" },
+        { name: "createdAt", label: "Created", type: "date" },
+    ],
+    recordTitle: (r) => `Feedback — ${r.employeeId?.employeeName || r.employeeIdLabel || ""}`,
+    toForm: (data) => ({
+        ...data,
+        employeeId: refId(data.employeeId),
+        reviewerId: refId(data.reviewerId),
+        appraisalId: refId(data.appraisalId),
+        feedbackRatings: (data.feedbackRatings || []).map((row) => ({ ...row, criteriaId: refId(row.criteriaId) })),
+    }),
+    toPayload: (values, mode) => (mode === "edit"
+        ? {
+            feedbackRatings: (values.feedbackRatings || []).map((row) => ({
+                criteriaId: refId(row.criteriaId), weightage: Number(row.weightage) || 0, rating: Number(row.rating) || 0,
+            })),
+            feedback: values.feedback,
+        }
+        : {
+            employeeId: values.employeeId,
+            reviewerId: values.reviewerId,
+            appraisalId: values.appraisalId,
+            feedbackRatings: (values.feedbackRatings || []).map((row) => ({
+                criteriaId: refId(row.criteriaId), weightage: Number(row.weightage) || 0, rating: Number(row.rating) || 0,
+            })),
+            feedback: values.feedback,
+        }),
+};
+
 const EMPLOYEE_BENEFIT_DETAIL_COLUMNS = [
     { name: "salaryComponentId", label: "Salary Component ID", type: "text", placeholder: "Component ObjectId" },
     { name: "amount", label: "Amount", type: "number", placeholder: "0.00" },
@@ -5424,4 +5714,5 @@ export const ADVANCED_ENTITIES = [
     employeeTaxExemptionProofSubmissionConfig,
     gratuityRuleConfig, gratuityConfig,
     kraConfig, employeeFeedbackCriteriaConfig, appraisalTemplateConfig, appraisalCycleConfig, appraisalConfig,
+    goalConfig, employeePerformanceFeedbackConfig,
 ];

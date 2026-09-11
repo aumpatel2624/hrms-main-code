@@ -14,13 +14,17 @@
  * `appraisalCalc.js` — never trusts whatever the client last saw.
  *
  * Goal and EmployeePerformanceFeedback are the deliberately separate second
- * branch (ADR-032) — nothing here references either.
+ * branch (ADR-032, feat/performance-goals) — `Goal` is now wired into
+ * `submitAppraisal`'s automated-mode scoring below; everything else about
+ * either doctype (CRUD, cascades, submit/cancel) lives in
+ * `performanceGoals.controller.js`, not here.
  */
 import KRA from "../../models/KRA.js";
 import EmployeeFeedbackCriteria from "../../models/EmployeeFeedbackCriteria.js";
 import AppraisalTemplate from "../../models/AppraisalTemplate.js";
 import AppraisalCycle from "../../models/AppraisalCycle.js";
 import Appraisal from "../../models/Appraisal.js";
+import Goal from "../../models/Goal.js";
 import Employee from "../../models/Employee.js";
 import Designation from "../../models/Designation.js";
 import Company from "../../models/Company.js";
@@ -827,12 +831,22 @@ export const submitAppraisal = async (req, res) => {
       goalScore = totalScore;
     } else {
       validateWeightageSum(doc.appraisalKra);
-      // Goal doesn't exist yet in this half (second branch) — an empty
-      // lookup means every row's goalCompletion/goalScore stays 0, which is
-      // the correct, honest foundation-half answer, not a placeholder bug.
+      // ADR-032 (transactional half, feat/performance-goals): real Goal
+      // data, replacing the foundation half's honest `{}` placeholder.
+      // Only TOP-LEVEL Goals tagged to this employee+cycle count — a child
+      // goal's progress is already folded into its parent's own `progress`
+      // via the parent-progress rollup (Goal.md), so including children too
+      // would double-count the same completion into a KRA's average.
+      // Archived goals are excluded, matching the rollup's own exclusion.
+      const goalsByKra = await Goal.find({
+        employeeId: doc.employeeId,
+        appraisalCycleId: doc.appraisalCycleId,
+        parentGoalId: null,
+        status: { $ne: "Archived" },
+      }).select("kraId progress").lean();
       const { rows, goalScorePercentage, totalScore } = calculateAutomatedGoalScore({
         appraisalKra: doc.appraisalKra,
-        goalsByKra: {},
+        goalsByKra,
       });
       doc.appraisalKra = rows;
       doc.goalScorePercentage = goalScorePercentage;

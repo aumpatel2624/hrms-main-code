@@ -163,6 +163,37 @@ export const ENDPOINTS = {
         SUBMIT: (id) => `${V1}/gratuities/${id}/submit`,
         CANCEL: (id) => `${V1}/gratuities/${id}/cancel`,
     },
+    // ADR-032 (Performance, module 16, foundation half).
+    KRAS: {
+        BASE: `${V1}/kras`,
+        SEARCH: `${V1}/kras/search`,
+        BY_ID: (id) => `${V1}/kras/${id}`,
+    },
+    EMPLOYEE_FEEDBACK_CRITERIA: {
+        BASE: `${V1}/employee-feedback-criteria`,
+        SEARCH: `${V1}/employee-feedback-criteria/search`,
+        BY_ID: (id) => `${V1}/employee-feedback-criteria/${id}`,
+    },
+    APPRAISAL_TEMPLATES: {
+        BASE: `${V1}/appraisal-templates`,
+        SEARCH: `${V1}/appraisal-templates/search`,
+        BY_ID: (id) => `${V1}/appraisal-templates/${id}`,
+    },
+    APPRAISAL_CYCLES: {
+        BASE: `${V1}/appraisal-cycles`,
+        SEARCH: `${V1}/appraisal-cycles/search`,
+        BY_ID: (id) => `${V1}/appraisal-cycles/${id}`,
+        ELIGIBLE_EMPLOYEES: (id) => `${V1}/appraisal-cycles/${id}/eligible-employees`,
+        CREATE_APPRAISALS: (id) => `${V1}/appraisal-cycles/${id}/create-appraisals`,
+        COMPLETE: (id) => `${V1}/appraisal-cycles/${id}/complete`,
+    },
+    APPRAISALS: {
+        BASE: `${V1}/appraisals`,
+        SEARCH: `${V1}/appraisals/search`,
+        BY_ID: (id) => `${V1}/appraisals/${id}`,
+        SUBMIT: (id) => `${V1}/appraisals/${id}/submit`,
+        CANCEL: (id) => `${V1}/appraisals/${id}/cancel`,
+    },
 
     // Auth endpoints
     AUTH: {

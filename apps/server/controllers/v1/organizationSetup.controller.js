@@ -260,7 +260,9 @@ export const listBranchByParams = async (req, res) => {
 
 export const createDesignation = async (req, res) => {
   try {
-    const { designationName, companyId, isActive } = req.body;
+    // ADR-032 (Performance, module 16) retrofit — optional default
+    // Appraisal Template for this Designation's employees.
+    const { designationName, companyId, isActive, appraisalTemplateId } = req.body;
     if (!designationName || !companyId) {
       return res.status(400).json({ isOk: false, status: 400, message: "Designation name and company are required" });
     }
@@ -270,7 +272,7 @@ export const createDesignation = async (req, res) => {
       return res.status(400).json({ isOk: false, status: 400, message: "Designation already exists for this company" });
     }
 
-    await Designation.create({ designationName, companyId, isActive });
+    await Designation.create({ designationName, companyId, isActive, appraisalTemplateId: appraisalTemplateId || null });
     return res.status(201).json({ isOk: true, status: 201, message: "Designation created successfully" });
   } catch (error) {
     console.log("Error in createDesignation", error);
@@ -287,7 +289,7 @@ export const updateDesignation = async (req, res) => {
     // failing their `required` validators with an uncaught-looking 500. Real
     // bug, found live wiring the Designation.skills[] retrofit, not part of
     // that retrofit's own scope — fixed here since it blocks it outright.
-    const { designationName, companyId, isActive, skills } = req.body;
+    const { designationName, companyId, isActive, skills, appraisalTemplateId } = req.body;
 
     const designation = await Designation.findById(designationId);
     if (!designation) {
@@ -298,6 +300,8 @@ export const updateDesignation = async (req, res) => {
     if (companyId !== undefined) designation.companyId = companyId;
     if (isActive !== undefined) designation.isActive = isActive;
     if (skills !== undefined) designation.skills = skills;
+    // ADR-032 (Performance, module 16) retrofit.
+    if (appraisalTemplateId !== undefined) designation.appraisalTemplateId = appraisalTemplateId || null;
     await designation.save();
 
     return res.status(200).json({ isOk: true, status: 200, message: "Designation updated successfully" });

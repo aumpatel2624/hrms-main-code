@@ -151,4 +151,14 @@ whenever the main checkout happens to be sitting on `development` at that moment
 the merges above; the fix is simply to keep the main checkout on a non-protected branch (a feature
 branch, or a throwaway `scratch-*` branch) while doing any git operations in other worktrees.
 
+## Module 16 (Performance), foundation half (2026-09-11)
+
+| Task | Tool | Outcome |
+|---|---|---|
+| Design research (10 real specs) | Claude fork | Delivered — grounded ADR-032's full design in one pass (766,658 tokens, 461 tool calls, ~112 min — the largest single research pass this session, reflecting the module's genuinely bigger cascade-graph complexity, per the fork's own complexity assessment). |
+| Foundation-half implementation (KRA, AppraisalCycle, AppraisalTemplate, Appraisal + calc engine) | Claude fork | Delivered (391,221 tokens, 206 tool calls, ~26 min) — matched ADR-032 closely on review (correct copy-at-creation translation logic, correct weightage-validator reuse, correct partial-index workaround for Mongo's `$ne`-in-partial-filter limitation). Did its own real live-browser check per the prompt's explicit instruction (following the /add-pages bug-hunt lesson) and caught+fixed one bug itself (a missing `getAllAppraisalCycles` import) before ever reporting completion — the first delegated task this session to catch its own frontend bug pre-emptively rather than leaving it for the orchestrator's review. |
+| Orchestrator's independent review | Claude (direct) | Found **2 more real bugs** the fork's own (already unusually thorough) verification missed: #25 (`viewFields` replacing rather than extending `fields`, silently dropping 5 real fields from the view page) and #26 (`doc.softDelete()` — not a real method anywhere in this codebase; found here, but independently confirmed to also affect 5 already-shipped delete actions in modules 12 and 15). Fixed all 3 in this module directly, plus the 5 already-shipped instances on a separate hotfix branch. |
+
+**Efficiency note**: this is the second data point (after Gratuity/module 15) where a delegated fork's own live-browser check caught a real bug before the orchestrator's review — the practice of explicitly instructing every module's build prompt to do real frontend verification (not just backend HTTP), adopted after the /add-pages bug hunt, is measurably paying off. It is not a substitute for the orchestrator's own independent pass, though: issue #26 in particular (`doc.softDelete()`) was invisible to *every* verify script's own cleanup routine (all of them bypass the HTTP delete endpoint via direct Mongoose calls) and would have shipped silently in a fourth module had the orchestrator not tested the DELETE action by hand.
+
 *Updated after every delegated task completes — check back for fresh rows as modules 8+ progress.*

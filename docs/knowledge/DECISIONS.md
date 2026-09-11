@@ -3279,4 +3279,116 @@ Copy this block. Number sequentially.
       HR User company confinement, Employee role 403 enforcement, and issue #17 regression tests.
     - All throwaway fixtures cleaned up; employee count at baseline 195; all touched collections at 0.
 
+---
+
+### ADR-028 — Payroll (Adjustments & Incentives): Additional Salary is the universal ingestion primitive, Employee Cost Center is a genuine GL dead end (not a deferral), two source cancellation bugs fixed as a deliberate pattern
+
+- **Date**: 2026-09-11
+- **Status**: accepted
+- **Context**: `system-design` for HRMS module 12, following Payroll — Run (module 11, ADR-027,
+  shipped). Read an `agy` research pass in full: all 6 real per-doctype specs in scope (`Additional
+  Salary`, `Arrear`, `Retention Bonus`, `Employee Incentive`, `Employee Other Income`, `Employee Cost
+  Center`), ADR-026/ADR-027 in full, and this project's current `SalaryStructureAssignment.js`/
+  `SalarySlip.js`/`salarySlipCalc.js`/`payrollFormula.js`. This module directly answers
+  `OPEN-QUESTIONS.md` Q-18 (`payrollCostCenters`, deferred in ADR-026) and bears on Q-20 (`Payroll
+  Correction`, deferred in ADR-027).
+- **`Additional Salary` is the universal ingestion primitive every other doctype in this module
+  routes through** — confirmed by the research: `Retention Bonus`, `Employee Incentive`, and `Arrear`
+  each submit by creating one `AdditionalSalary` record (a one-off `payrollDate` or a recurring
+  `fromDate`/`toDate` range), never touching `SalarySlip` directly. `SalarySlip`'s own calculation
+  (`salarySlipCalc.js`, ADR-027) is retrofitted to query active, non-disabled `AdditionalSalary` rows
+  matching the slip's period at creation time and merge them into the earnings/deductions tables:
+  a component already present gets its row **replaced** if the additional salary is flagged
+  `overwriteSalaryStructureAmount`, or **added to** otherwise; a component not present gets a new row
+  inserted. Every injected/adjusted row is `dependsOnPaymentDays: false` — an adjustment is a fixed
+  value, never prorated by LWP/attendance (matches source exactly, and matches ADR-027's own
+  `dependsOnPaymentDays` semantics — this is additive to that logic, not a new rule).
+- **`Employee Cost Center` is a genuine GL dead end, not a forward-dependency deferral — it is not
+  built, ever, under this rebuild's current scope.** Every prior deferred field on this board
+  (`Overtime Type`, `Income Tax Slab`, `Additional Salary` itself before this module, `Employee
+  Benefit Detail`) points at a real, later module on this project's 17-module board that will
+  eventually need it. `Employee Cost Center` is different: the research confirms its *only* real
+  consumer in source is `Payroll Entry.make_journal_entry()`/`make_bank_entry()`, splitting a GL
+  debit line by percentage across `Cost Center` — an ERPNext chart-of-accounts doctype this project
+  has never had reason to build and never will under ADR-016's "no GL" rule. It has **zero effect** on
+  `SalarySlip` calculation, net pay, attendance, or tax. `SalaryStructureAssignment.payrollCostCenters`
+  (deferred by ADR-026, Q-18) is not "waiting for a module" — **Q-18 closes here with that finding**:
+  the field stays permanently omitted, same category as the three doctypes ADR-027 ruled
+  "permanently out of scope" (Loans/Timesheets/Overtime Slips), extended here to a fourth.
+- **`Payroll Correction` stays deferred — Additional Salary alone does not fully unblock it.** The
+  research traced its real source behavior: on submit it writes BOTH `Additional Salary` records
+  (earning/deduction arrears — buildable now) AND `Employee Benefit Ledger` entries (accrual arrears
+  — "Payroll — Benefits," not built). It also cross-queries prior `Payroll Correction` records from
+  within `Arrear`'s own calculation (to avoid double-counting a previously-reversed LWP day) — a real
+  coupling between the two doctypes that would be incomplete without `Payroll Correction` existing.
+  A narrower, earnings/deductions-only version is possible in principle, but building half a doctype
+  now to reach for later would repeat the "orphaned infrastructure" mistake ADR-018 already named and
+  rejected once (module 2). Stays fully deferred; `OPEN-QUESTIONS.md` Q-20 is updated with this
+  specific finding rather than left as an open question about *whether* it's blocked — it is.
+- **`Employee Other Income` has no current consumer, and that's fine — it's a deliberate "build the
+  input, retrofit the reader later" case, not a stub.** Confirmed by the research: source's own
+  `Employee Other Income` does not create an `Additional Salary` and is never merged into a `Salary
+  Slip` — it exists purely so the income-tax annualization engine (`compute_taxable_earnings_for_year`)
+  can see externally-declared income when projecting an employee's annual tax liability. That engine
+  is exactly what `OPEN-QUESTIONS.md` Q-21 already deferred (Payroll — Run's tax breakup, blocked on
+  `Income Tax Slab`/"Tax & Exemptions"). Built now anyway, because — unlike `Employee Cost Center` —
+  it's genuinely useful, self-contained, self-service data collection an employee can start using
+  today (declaring rental/interest/freelance income), with a real, named future consumer once Tax &
+  Exemptions exists — same shape as `Employee`'s approver fields being added in module 2 before
+  Leaves existed to consume them. Source confirms `Employee Other Income` is one of the few payroll
+  doctypes an `Employee` submits/cancels themselves (not HR-only) — reproduced here as real
+  self-service access (`own` scope), matching the established `buildScopeFilter` pattern.
+- **Two source cancellation-asymmetry bugs, fixed as one deliberate, uniform pattern — not
+  reproduced per-doctype the way source has them.** The research found source itself only wires
+  `Retention Bonus.on_cancel()` to auto-cancel its linked `Additional Salary`; `Employee Incentive`
+  and `Arrear` have no equivalent hook, so cancelling either leaves an active `Additional Salary`
+  behind that still pays out on the next Salary Slip — a real, user-visible correctness gap (an
+  administrator who cancels an incentive reasonably expects the payment to stop, not silently
+  continue). Fixed uniformly: **every** producer doctype (`RetentionBonus`, `EmployeeIncentive`,
+  `Arrear`) auto-cancels its linked `AdditionalSalary` on its own cancel — reproducing source's
+  *correct* `Retention Bonus` behavior everywhere instead of copying its inconsistency forward, same
+  "deliberate improvement over a flagged source gap" category as Employee Separation's duplicate
+  guard (module 5) and the per-item isolation added to `PayrollEntry`'s slip creation (ADR-027).
+- **`AdditionalSalary`'s overwrite-uniqueness is validated at save time, not left to crash at slip
+  time.** Source's own behavior (per the research) only discovers a second active
+  `overwriteSalaryStructureAmount` row for the same employee/component/overlapping-period when a
+  `Salary Slip` tries to calculate and throws `DuplicateAdditionalSalaryError` — a real authoring
+  mistake surfaces as a crash days or weeks later, at payroll-run time, instead of at the moment it's
+  actually created. Validated here at `AdditionalSalary` creation instead — same overlap-rejection
+  discipline this project already applies everywhere else (Leave Application, Shift Assignment,
+  Salary Structure Assignment).
+- **`Arrear`'s positive-only delta is reproduced exactly, not silently extended.** Source computes
+  `diff = new_amount - old_amount` and only creates an arrear when `diff > 0` — a retroactive salary
+  *decrease* (a backdated demotion or an overpayment correction) produces no deduction arrear at all.
+  This is named explicitly here, not fixed, per AGENTS.md's "don't invent behavior not in source" —
+  whether Apidel wants retroactive clawback support is a real business decision, not an engineering
+  gap to quietly close. A new `OPEN-QUESTIONS.md` row records it.
+- **Docstatus folding (ADR-016)**: `AdditionalSalary` gets a simple `status` enum
+  (`active`/`cancelled` — no separate `Draft` state; every producer doctype creates it already-active,
+  matching source's "submitted immediately" real-world usage) rather than a fourth copy of the
+  Draft/Submitted/Cancelled pattern. `Arrear`/`RetentionBonus`/`EmployeeIncentive`/`EmployeeOther
+  Income` each get the familiar `draft`/`submitted`/`cancelled` + submit/cancel actions, matching
+  every other transactional doctype in this build — submit is where the real `AdditionalSalary`
+  creation/cascade happens, same "fold docstatus into an explicit status + action" pattern used
+  throughout.
+- **Decision — models**: `AdditionalSalary` (`employeeId`, `companyId`, `salaryComponentId`
+  (non-statistical only, validated), `type` (fetched Earning/Deduction), `amount` (>0),
+  `isRecurring`+`fromDate`/`toDate` XOR `payrollDate`, `overwriteSalaryStructureAmount`, `currency`
+  (fetched), `status`, `refDoctype`+`refDocnameId` (a discriminator-string + ObjectId pair for the
+  polymorphic back-reference, same shape as `LeaveLedgerEntry.transactionType`/`transactionId`,
+  ADR-024 — not a real Mongoose Dynamic Link)); `Arrear` (+ embedded `earningArrears[]`/
+  `deductionArrears[]`, each a `{ salaryComponentId, amount }` row); `RetentionBonus`
+  (`salaryComponentId` must be Earning, `bonusAmount`, `bonusPaymentDate`, `additionalSalaryId`);
+  `EmployeeIncentive` (`salaryComponentId` must be Earning, `incentiveAmount`, `incentiveDate`,
+  `additionalSalaryId`); `EmployeeOtherIncome` (`payrollPeriodId`, `source` enum, `amount` — can be
+  negative, e.g. deductible home-loan interest, `date`). `Employee Cost Center` — not built, per the
+  GL-dead-end finding above.
+- **Consequences**: `OPEN-QUESTIONS.md` Q-18 closes (Employee Cost Center is a genuine dead end, not
+  deferred). Q-20 updated with the specific Additional-Salary-alone-doesn't-unblock-it finding. New
+  rows for Arrear's positive-only-clawback business question and Employee Other Income's currently-
+  inert status pending Tax & Exemptions.
+- **Deviates from convention**: none beyond what's named above (the uniform cancellation-cascade fix
+  and the save-time overwrite-uniqueness check are both the same "deliberate improvement" category
+  already established repeatedly this session, not a new kind of deviation).
+
 

@@ -342,6 +342,14 @@ const MENU_GROUPS = [
     ],
   },
   {
+    // ADR-033 (module 17, feat/expenses).
+    menuGroupName: "Expenses", sequence: 2.996, icon: "ri-money-dollar-circle-line",
+    menus: [
+      { menuName: "Expense Claim Type", menuUrl: "/expense-claim-type", icon: "ri-price-tag-3-line" },
+      { menuName: "Expense Claim", menuUrl: "/expense-claim", icon: "ri-file-list-3-line" },
+    ],
+  },
+  {
     menuGroupName: "Master",
     sequence: 3,
     icon: "ri-database-2-line",
@@ -1993,6 +2001,23 @@ const seedPerformanceRoles = async () => {
   console.log(`✅ Performance roles: ${matrixRowsAdded} menu grant(s) added`);
 };
 
+const seedExpenseRoles = async () => {
+  const full = { write: true, read: true, edit: true, delete: true, print: true, mail: true };
+  const ownNoDelete = { write: true, read: true, edit: true, delete: false, print: true, mail: true, dataScope: SCOPES.OWN };
+  const approver = { write: false, read: true, edit: true, delete: false, print: true, mail: false, dataScope: SCOPES.APPROVER };
+  const grants = { "/expense-claim-type": { "HR User": full, "HR Manager": full }, "/expense-claim": { "HR User": full, "HR Manager": full, Employee: ownNoDelete, "Expense Approver": approver } };
+  const menus = await MenuMaster.find({ menuUrl: { $in: Object.keys(grants) } }).lean();
+  if (menus.length !== Object.keys(grants).length) return console.log("⚠️ Expenses roles: not every menu row exists yet — run seedMenus first");
+  const byUrl = Object.fromEntries(menus.map((menu) => [menu.menuUrl, menu])); let added = 0;
+  for (const roleName of ["HR User", "HR Manager", "Employee", "Expense Approver"]) {
+    const role = await RoleMaster.findOne({ roleName }); const matrix = role && await UserRoles.findOne({ roleId: role._id }); if (!matrix) continue;
+    let changed = false;
+    for (const [url, roles] of Object.entries(grants)) { const permission = roles[roleName]; const menu = byUrl[url]; if (permission && !matrix.roles.some((row) => String(row.menuId) === String(menu._id))) { matrix.roles.push({ menuId: menu._id, menuGroupId: menu.menuGroup, ...permission }); added++; changed = true; } }
+    if (changed) await matrix.save();
+  }
+  console.log(`✅ Expenses roles: ${added} menu grant(s) added`);
+};
+
 const run = async () => {
   if (!process.env.DATABASE) {
     console.error("❌ DATABASE is not set in .env");
@@ -2036,6 +2061,7 @@ const run = async () => {
   await seedShiftAttendanceTransactionsRoles();
   await seedPayrollRoles();
   await seedPerformanceRoles();
+  await seedExpenseRoles();
   await seedGeographyData();
 
   await mongoose.disconnect();

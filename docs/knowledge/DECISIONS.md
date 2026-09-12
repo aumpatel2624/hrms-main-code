@@ -3891,6 +3891,109 @@ build
   to Payroll/`SalaryStructureAssignment` anywhere in these ten files. A real-world "appraisal feeds a
   salary revision" pattern is not in this module's source at all and is not fabricated here.
 
+### ADR-033 — Expenses: `Expense Claim Account`/`Expense Claim Advance` dropped entirely (no
+non-GL purpose; `Employee Advance` never exists on this 17-module board); the GL posting surface
+(~40% of the module's field/logic count) cut per ADR-016; payment tracking is a manual `isPaid`
+flag, not routed through `AdditionalSalary`; single-branch build
+
+- **Date**: 2026-09-12
+- **Status**: accepted
+- **Context**: `system-design` for HRMS module 17 (Expenses), following module 16 (Performance,
+  ADR-032, shipped). Read a Claude fork's research pass in full, covering all 6 real per-doctype specs
+  under `docs/knowledge/input/hrms/HRMS-Port-Spec/01-Modules/Expenses/` (`_Module-Spec.md`, `Expense
+  Claim Type`, `Expense Claim Account`, `Expense Claim Detail`, `Expense Claim Advance`, `Expense
+  Claim`, `Expense Taxes and Charges`), plus ADR-016 (no GL), ADR-023 (Q-13's origin), the current
+  `TravelRequestCosting.expenseType` code, and a full-tree grep confirming `AdditionalSalary`'s exact
+  shape. The research's first attempt failed (a confused non-answer, no real file-reading done); a
+  retry with an explicit correction produced the report this ADR is built on.
+- **`Expense Claim Account` is dropped entirely, not simplified** — the research confirmed it has
+  zero non-GL purpose: its only job in source is resolving a Type×Company→GL-Account default onto
+  `Expense Claim Detail.defaultAccount`, itself a pure GL field. Nothing else in the module reads it.
+  There is no reduced version of a doctype whose entire reason to exist is a GL lookup.
+- **`Expense Claim Advance` is dropped entirely, not deferred with a placeholder** — its whole
+  mechanism (`employeeAdvance`, `unclaimedAmount`, `returnAmount`, `allocatedAmount`, the
+  advance-reconciliation API pipeline) exists to allocate against `Employee Advance`, which the
+  research confirmed does not exist anywhere in this codebase and — checked against `STATE.md`'s full
+  17-module board (rows 58-75) — is not a future module either; the source spec itself disclaims
+  ownership ("owned by other agents, referenced by name only"). This is not the usual
+  forward-dependency shape this project has retrofitted repeatedly (Q-13/Q-14/Q-15's own pattern,
+  where a real future module fills the gap) — there is no future module to retrofit into, so there is
+  nothing to build a placeholder for. Recorded as an informational, non-blocking note in
+  `OPEN-QUESTIONS.md`: if Apidel ever wants real cash-advance tracking, `Employee Advance` would need
+  to be scoped as a brand-new module first, outside this port's original 17.
+- **The GL posting surface is the single largest cut this module has faced** — per the research, ~40%
+  of `Expense Claim`'s own field count plus the entirety of two child tables is GL-only:
+  `defaultAccount`, `advanceAccount`, `payableAccount`, `bankOrCashAccount`, `gainLossAccount`,
+  `accountHead`, `costCenter` (GL-posting-time-only per the research, distinct from a plain descriptive
+  cost-center label — this project has never modeled cost centers anywhere else either), `docstatus`,
+  `naming_series`, `amendedFrom`, `get_gl_entries()`, `create_exchange_gain_loss_je`, and the whole
+  Payment-Entry/Journal-Entry cross-module reactive-recompute hook (`update_payment_for_expense_claim`,
+  `validate_expense_claim_in_jv`) — none of it has a target once Payment Entry/Journal Entry don't
+  exist. Standard ADR-016 territory, just a larger fraction of one doctype than any prior module.
+- **No multi-currency shadow fields (`exchangeRate`/`base_*` pairs) anywhere in this module** — a
+  full-tree grep confirmed no other model in this codebase tracks an `exchangeRate` or `base_*` shadow
+  pair (`AdditionalSalary.currency` is a plain descriptive string, not a conversion mechanism; neither
+  `Company` nor `Employee` has a currency field at all). Multi-currency is infrastructure this project
+  has never modeled anywhere, not a business rule specific to Expenses — every `amount`/`baseAmount`,
+  `taxAmount`/`baseTaxAmount`, `advancePaid`/`baseAdvancePaid` pair collapses to one plain number.
+- **`Expense Claim Detail.sanctionedAmount` defaults to `amount` at row-creation time, server-side** —
+  the research flagged this as a client-only behavior in source with no server equivalent (entering
+  `amount` mirrors it into `sanctionedAmount` client-side only). Replicating it server-side, adjustable
+  downward later by whoever approves the claim, is the direct fix — not a business-rule invention,
+  closing a gap the research named explicitly.
+- **`ExpenseClaim.expenseApproverId` defaults via `resolveApprovers("expense", employeeId)`, this
+  module's first real use of the `expense` approver-kind and the already-seeded Expense Approver
+  role** — both `Employee.expenseApproverId`/`Department.expenseApprovers` (`utils/approvers.js`) and
+  the role itself were built and left dormant specifically for this module, the same
+  built-ahead-of-need shape as `expenseType`/Q-13. Approve/reject on a claim is permitted to HR
+  User/HR Manager or the specific resolved approver (`SCOPES.APPROVER`, the same pattern already
+  proven on `LeaveApplication`/`CompensatoryLeaveRequest`, ADR-024); an employee's own claims use
+  `SCOPES.OWN` (the `EmployeeOtherIncome`/Tax Exemption/`Goal` pattern, ADR-030/ADR-032).
+- **State collapses to one `status` enum plus one independent `isPaid` flag, not source's three
+  overlapping fields (`docstatus`/`approvalStatus`/computed `status`)** — `status:
+  draft|approved|rejected|submitted|cancelled`, matching the standard project-wide submit-lifecycle
+  guard shape (`Gratuity`'s exact edit/submit/cancel guard wording: edit only in `draft`, submit only
+  from `approved` — this is where the research's confirmed invariant #1, "cannot submit while
+  `approvalStatus == Draft`," lands — cancel only from `submitted`). Reject forces every
+  `expenses[].sanctionedAmount` to 0 and recomputes totals, matching the research's confirmed source
+  behavior. `isPaid` is a separate boolean, flipped once (`submitted` + not yet paid only) by a
+  `markExpenseClaimAsPaid` action with no extra fields captured — this is intentionally the exact
+  shape of `FullAndFinalStatement.markStatementAsPaid` (ADR-020), not a new pattern.
+- **Payment tracking stays a manual flag, does not route through `AdditionalSalary`** — closes Q-3 for
+  Expense Claim specifically (F&F Statement already closed it for itself; Payroll's own release
+  mechanism is a different question). This is a deliberate divergence from the
+  `RetentionBonus`/`EmployeeIncentive`/`EmployeeBenefitClaim`/`Gratuity` precedent (ADR-028/029/031),
+  which all create an `AdditionalSalary` row because source treats those as payroll-cycle components.
+  Source's own `Expense Claim.isPaid` is explicitly an *immediate* payment action (a same-time GL pair
+  at submit, not a wait-for-next-payroll-run component) — routing it through `AdditionalSalary` would
+  change source's real timing semantics, not just its plumbing. The manual flag matches source's own
+  behavior more faithfully than the payroll-ingestion primitive would.
+- **`Expense Taxes and Charges` rows keep `rate`/`taxAmount`, drop `accountHead` (the field's entire
+  purpose) and the per-row `total`/`baseTotal` scratch fields** — those are display-only running
+  totals in source (`taxAmount + total_sanctioned_amount`, not cumulative across rows), superseded by
+  the module's own server-computed `grandTotal`. `costCenter`/`project` also drop from this child
+  table and from `Expense Claim Detail` — GL-posting-time-only per the research, and this project has
+  never modeled `Project` anywhere (ADR-020's own "no Project/Task" call, reapplied here).
+- **`delivery_trip`/`vehicle_log` dropped, no retrofit path** — confirmed by the research: neither
+  Delivery Trip nor Vehicle Log has any equivalent doctype anywhere in this project's 17-module scope.
+- **A new pure-calculation file, `utils/expenseClaimCalc.js`** — `computeExpenseTotals(expenses,
+  taxes)` (claimed/sanctioned/tax/grand-total rollups) and `computeTaxAmount(rate,
+  totalSanctionedAmount)` (the rate-based auto-calc source uses when a tax row's `rate` is set),
+  matching the "one calc file per module" convention (`gratuityCalc.js`, `appraisalCalc.js`) — real
+  arithmetic worth isolating and unit-testing, not complex enough to need a formula evaluator.
+- **Closes Q-13**: `TravelRequestCosting.costings[].expenseType` becomes a real
+  `ref: "ExpenseClaimType"` field (`expenseTypeId`), replacing the trimmed free-text string and its
+  forward-dependency comment — confirmed by the research and ADR-023's own text to be a Link to
+  `Expense Claim Type` (the master), not to `Expense Claim` itself.
+- **Single-branch build, matching Gratuity/Tax & Exemptions, not the two-branch shape of
+  Leaves/Shift & Attendance/Payroll/Performance** — the research's own complexity read: once GL and
+  `Expense Claim Advance` are cut, the buildable surface is one master (`ExpenseClaimType`, no child
+  table) plus one parent with two embedded arrays (`expenses[]`, `taxes[]`) and a calc file — smaller
+  than Performance or Tax & Exemptions in both doctype count and cascade-graph complexity, with no
+  independent second half that could ship on its own.
+- **Coding/implementation delegated to `codex`/`agy`, not a Claude fork** — per the user's standing
+  instruction as of this module.
+
 
 
 

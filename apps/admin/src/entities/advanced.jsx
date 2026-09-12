@@ -38,6 +38,7 @@ import {
     createGratuityRule, getGratuityRuleById, updateGratuityRule, deleteGratuityRule, searchGratuityRules, getAllGratuityRules,
     createGratuity, getGratuityById, updateGratuity, deleteGratuity, searchGratuities, submitGratuity, cancelGratuity,
 } from "../api/gratuity.api";
+import { createExpenseClaimType, getExpenseClaimTypeById, updateExpenseClaimType, deleteExpenseClaimType, searchExpenseClaimTypes, getAllExpenseClaimTypes, createExpenseClaim, getExpenseClaimById, updateExpenseClaim, deleteExpenseClaim, searchExpenseClaims, approveExpenseClaim, rejectExpenseClaim, submitExpenseClaim, cancelExpenseClaim, markExpenseClaimAsPaid } from "../api/expenses.api";
 import {
     createKRA, getKRAById, updateKRA, deleteKRA, searchKRAs, getAllKRAs,
     createEmployeeFeedbackCriteria, getEmployeeFeedbackCriteriaById, updateEmployeeFeedbackCriteria, deleteEmployeeFeedbackCriteria, searchEmployeeFeedbackCriteria, getAllEmployeeFeedbackCriteria,
@@ -2071,7 +2072,7 @@ const TRAVEL_ITINERARY_COLUMNS = [
 ];
 
 const TRAVEL_COSTING_COLUMNS = [
-    { name: "expenseType", label: "Expense Type", type: "text" },
+    { name: "expenseTypeId", label: "Expense Type ID", type: "text" },
     { name: "sponsoredAmount", label: "Sponsored Amount", type: "number" },
     { name: "fundedAmount", label: "Funded Amount", type: "number" },
     { name: "totalAmount", label: "Total Amount", type: "number" },
@@ -4348,6 +4349,34 @@ export const gratuityConfig = {
         }),
 };
 
+const EXPENSE_COLUMNS = [
+    { name: "expenseDate", label: "Expense Date", type: "date" }, { name: "expenseTypeId", label: "Expense Type ID", type: "text" }, { name: "description", label: "Description", type: "text" }, { name: "amount", label: "Claimed Amount", type: "number" }, { name: "sanctionedAmount", label: "Sanctioned Amount", type: "number" },
+];
+const EXPENSE_TAX_COLUMNS = [{ name: "description", label: "Description", type: "text" }, { name: "rate", label: "Rate (%)", type: "number" }, { name: "taxAmount", label: "Tax Amount", type: "number" }];
+export const expenseClaimTypeConfig = {
+    key: "expense-claim-type", path: "/expense-claim-type", section: "Expenses", singular: "Expense Claim Type", plural: "Expense Claim Types", description: "The named categories employees select for each expense line.",
+    api: { search: searchExpenseClaimTypes, getById: getExpenseClaimTypeById, create: createExpenseClaimType, update: updateExpenseClaimType, remove: deleteExpenseClaimType }, sections: [{ id: "details", title: "Details" }],
+    fields: [{ name: "name", label: "Name", section: "details", type: "text", required: true, error: "Name is required" }, { name: "description", label: "Description", section: "details", type: "textarea" }],
+    filterFields: [{ name: "name", label: "Name", type: "string" }, { name: "description", label: "Description", type: "string" }, { name: "createdAt", label: "Created", type: "date" }], columns: [{ name: "Name", selector: (r) => r.name, sortable: true, sortField: "name" }, { name: "Description", selector: (r) => r.description || "—" }], recordTitle: (r) => r.name,
+};
+export const expenseClaimConfig = {
+    key: "expense-claim", path: "/expense-claim", section: "Expenses", singular: "Expense Claim", plural: "Expense Claims", description: "Record a reimbursable expense claim, have it approved, submit it, and mark it paid after reimbursement.",
+    api: { search: searchExpenseClaims, getById: getExpenseClaimById, create: createExpenseClaim, update: updateExpenseClaim, remove: deleteExpenseClaim }, lookups: { employeeId: asOptions(getAllEmployees, "employeeName"), expenseApproverId: asOptions(getAllUsers, "userName") },
+    sections: [{ id: "details", title: "Claim details" }, { id: "expenses", title: "Expenses" }, { id: "taxes", title: "Taxes and charges" }, { id: "totals", title: "Totals" }, { id: "status", title: "Status" }],
+    fields: [{ name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" }, { name: "postingDate", label: "Posting Date", section: "details", type: "date" }, { name: "expenseApproverId", label: "Expense Approver", section: "details", type: "select", optionsFrom: "expenseApproverId", hint: "Leave blank to use the employee or department approver." }, { name: "totalClaimedAmount", label: "Total Claimed", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "totalSanctionedAmount", label: "Total Sanctioned", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "totalTaxesAndCharges", label: "Total Taxes", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "grandTotal", label: "Grand Total", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "status", label: "Status", section: "status", type: "text", disabled: () => true, hideIn: ["add"] }, { name: "isPaid", label: "Paid", section: "status", type: "checkbox", disabled: () => true, hideIn: ["add"] }],
+    renderExtra: ({ mode, id, values, setValues }) => (
+        <>
+            <SimpleArrayField title="Expenses" fieldName="expenses" columns={EXPENSE_COLUMNS} values={values} setValues={setValues} />
+            <SimpleArrayField title="Taxes and Charges" fieldName="taxes" columns={EXPENSE_TAX_COLUMNS} values={values} setValues={setValues} />
+            {mode === "edit" && id && values.status === "draft" && <><SimpleActionButton label="Approve" description="Approve this claim and its sanctioned amounts." onRun={() => approveExpenseClaim(id)} onResult={() => window.location.reload()} /><SimpleActionButton label="Reject" description="Reject this claim and set every sanctioned amount to zero." onRun={() => rejectExpenseClaim(id)} onResult={() => window.location.reload()} /></>}
+            {mode === "edit" && id && values.status === "approved" && <SimpleActionButton label="Submit" description="Lock this approved claim for reimbursement." onRun={() => submitExpenseClaim(id)} onResult={() => window.location.reload()} />}
+            {mode === "edit" && id && values.status === "submitted" && <><SimpleActionButton label="Cancel" description="Cancel this submitted claim." onRun={() => cancelExpenseClaim(id)} onResult={() => window.location.reload()} />{!values.isPaid && <SimpleActionButton label="Mark as Paid" description="Record that this submitted claim has been reimbursed." onRun={() => markExpenseClaimAsPaid(id)} onResult={() => window.location.reload()} />}</>}
+        </>
+    ),
+    filterFields: [{ name: "employeeId", label: "Employee", type: "objectId" }, { name: "departmentId", label: "Department", type: "objectId" }, { name: "status", label: "Status", type: "string" }, { name: "postingDate", label: "Posting Date", type: "date" }, { name: "isPaid", label: "Paid", type: "boolean" }], columns: [{ name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" }, { name: "Posting Date", selector: (r) => String(r.postingDate || "").slice(0, 10), sortable: true, sortField: "postingDate" }, { name: "Total", selector: (r) => r.grandTotal ?? 0 }, { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" }, { name: "Paid", selector: (r) => r.isPaid ? "Yes" : "No", sortable: true, sortField: "isPaid" }], recordTitle: (r) => `Expense Claim — ${r.grandTotal ?? 0}`,
+    toForm: (data) => ({ ...data, employeeId: refId(data.employeeId), expenseApproverId: refId(data.expenseApproverId), postingDate: data.postingDate?.slice(0, 10) || "", expenses: (data.expenses || []).map((r) => ({ ...r, expenseTypeId: refId(r.expenseTypeId), expenseDate: r.expenseDate?.slice(0, 10) || "" })) }), toPayload: (values) => ({ employeeId: values.employeeId, postingDate: values.postingDate, expenseApproverId: values.expenseApproverId || null, expenses: values.expenses, taxes: values.taxes }),
+};
+
 // ============================================================================
 // Performance (ADR-032, module 16, foundation half). Goal and Employee
 // Performance Feedback are the deliberately separate second branch — not
@@ -5712,7 +5741,7 @@ export const ADVANCED_ENTITIES = [
     incomeTaxSlabConfig, employeeTaxExemptionCategoryConfig,
     employeeTaxExemptionSubCategoryConfig, employeeTaxExemptionDeclarationConfig,
     employeeTaxExemptionProofSubmissionConfig,
-    gratuityRuleConfig, gratuityConfig,
+    gratuityRuleConfig, gratuityConfig, expenseClaimTypeConfig, expenseClaimConfig,
     kraConfig, employeeFeedbackCriteriaConfig, appraisalTemplateConfig, appraisalCycleConfig, appraisalConfig,
     goalConfig, employeePerformanceFeedbackConfig,
 ];

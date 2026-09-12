@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import dotenv from "dotenv";
+dotenv.config({ path: "apps/server/.env", quiet: true });
+if (process.env.RUN_EXPENSES_VERIFY !== "1") throw new Error("Set RUN_EXPENSES_VERIFY=1 to run this live HTTP check");
+const base = `http://127.0.0.1:${process.env.PORT || 7003}/api/v1`; const prefix = `expense-verify-${Date.now()}`;
+const login = await fetch(`${base}/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: process.env.SEED_ADMIN_EMAIL || "admin@example.com", password: process.env.SEED_ADMIN_PASSWORD || "Admin@123", locationConsent: true, ipConsent: true }) });
+assert.equal(login.status, 200); const cookie = login.headers.getSetCookie().map((x) => x.split(";")[0]).join("; ");
+const call = async (method, path, body, expected = 200) => { const response = await fetch(base + path, { method, headers: { "content-type": "application/json", cookie }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }); const data = await response.json(); assert.equal(response.status, expected, `${method} ${path}: ${JSON.stringify(data)}`); return data; };
+const employee = (await call("POST", "/employees/search", { page: 1, limit: 1 })).data[0].data[0];
+const type = (await call("POST", "/expense-claim-types", { name: prefix, description: "Auto description" }, 201)).data;
+const claim = (await call("POST", "/expense-claims", { employeeId: employee._id, expenses: [{ expenseTypeId: type._id, amount: 100 }, { expenseTypeId: type._id, amount: 50, sanctionedAmount: 40 }], taxes: [{ description: "GST", rate: 10 }] }, 201)).data;
+assert.equal(claim.totalClaimedAmount, 150); assert.equal(claim.totalSanctionedAmount, 140); assert.equal(claim.totalTaxesAndCharges, 14); assert.equal(claim.grandTotal, 154); assert.equal(claim.expenses[0].description, "Auto description");
+await call("POST", `/expense-claims/${claim._id}/approve`); await call("POST", `/expense-claims/${claim._id}/submit`); await call("DELETE", `/expense-claims/${claim._id}`, undefined, 400); await call("POST", `/expense-claims/${claim._id}/mark-paid`); await call("POST", `/expense-claims/${claim._id}/cancel`); await call("DELETE", `/expense-claims/${claim._id}`); await call("DELETE", `/expense-claim-types/${type._id}`);
+console.log("verify-expenses: claim totals, lifecycle, submitted-delete guard, and endpoint-only cleanup passed");

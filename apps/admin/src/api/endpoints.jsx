@@ -535,6 +535,9 @@ export const ENDPOINTS = {
         BY_ID: (id) => `${V1}/attendances/${id}`,
         SEARCH: `${V1}/attendances/search`,
     },
+    EXPENSE_CLAIM_TYPES: { BASE: `${V1}/expense-claim-types`, SEARCH: `${V1}/expense-claim-types/search`, BY_ID: (id) => `${V1}/expense-claim-types/${id}` },
+    EXPENSE_CLAIMS: { BASE: `${V1}/expense-claims`, SEARCH: `${V1}/expense-claims/search`, BY_ID: (id) => `${V1}/expense-claims/${id}`,
+        APPROVE: (id) => `${V1}/expense-claims/${id}/approve`, REJECT: (id) => `${V1}/expense-claims/${id}/reject`, SUBMIT: (id) => `${V1}/expense-claims/${id}/submit`, CANCEL: (id) => `${V1}/expense-claims/${id}/cancel`, MARK_PAID: (id) => `${V1}/expense-claims/${id}/mark-paid` },
 
     // User endpoints
     USERS: {

@@ -9,8 +9,6 @@ import mongoose from "mongoose";
  * `itinerary[].advanceAmount` is a real Number here, unlike source's untyped
  * Data field — a correct-typing improvement, not a new calculation.
  *
- * `costings[].expenseType` is a plain string for now, NOT a ref — Expenses
- * (ExpenseClaimType) doesn't exist yet. See OPEN-QUESTIONS.md Q-13.
  * `sponsoredAmount`/`fundedAmount`/`totalAmount` are plain Numbers and are
  * deliberately NOT auto-summed — source has no rollup despite the field
  * names implying one; do not invent one here either.
@@ -47,9 +45,7 @@ const TravelItinerarySchema = new mongoose.Schema(
 
 const TravelRequestCostingSchema = new mongoose.Schema(
   {
-    // Free text, not a ref — ExpenseClaimType doesn't exist yet (Expenses,
-    // module 16). Retrofit to a real ref when it does. OPEN-QUESTIONS Q-13.
-    expenseType: { type: String, trim: true },
+    expenseTypeId: { type: mongoose.Schema.Types.ObjectId, ref: "ExpenseClaimType", default: null },
     sponsoredAmount: { type: Number, min: 0, default: null },
     fundedAmount: { type: Number, min: 0, default: null },
     // Not computed — source has no total_amount = sponsored + funded

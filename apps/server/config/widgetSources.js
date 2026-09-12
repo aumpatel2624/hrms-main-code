@@ -1575,6 +1575,14 @@ export const WIDGET_SOURCES = Object.freeze({
     companyConfined: true,
     employeeOwned: false,
   },
+  "expense-claims": {
+    label: "Expense Claim", model: "ExpenseClaim", menuUrl: "/expense-claim",
+    aggregatable: { grandTotal: "Grand total", totalSanctionedAmount: "Total sanctioned", totalClaimedAmount: "Total claimed" },
+    groupable: { status: { label: "Status" }, departmentId: { label: "Department", lookup: { from: "departments", labelField: "departmentName" } } },
+    dateFields: { postingDate: "Posting date" },
+    filterable: { employeeId: "objectId", departmentId: "objectId", status: "string", postingDate: "date", isPaid: "boolean" },
+    scopeable: { owner: "employeeId" }, companyConfined: true, employeeOwned: true,
+  },
   // ADR-032 (module 16, foundation half, feat/performance).
   "kras": {
     label: "KRA",

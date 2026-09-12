@@ -4050,10 +4050,10 @@ consumer; single-branch build
   assignment to read resolved `basic_amt`/`hra_amt`; this project has no document-generation-for-
   preview primitive. The equivalent here: for each submitted `SalaryStructureAssignment` in the
   `Payroll Period` window, look up the linked `SalaryStructure.earnings[]` row matching
-  `Company.basicComponentId`/`hraComponentId`, and resolve its amount via `payrollFormula.js`'s
-  existing `evaluateComponentTable` (the same evaluator `SalarySlip`/`SalaryStructure` computation
-  already uses, ADR-026/027's established "no second formula engine" precedent) — not a document, just
-  a number. `getComponentPay`'s 5-branch pro-rater (Daily/Weekly/Fortnightly/Monthly/Bimonthly) ports
+  `Company.basicComponentId`/`hraComponentId`, and resolve its amount via `utils/payrollCtc.js`'s
+  existing `evaluateComponentTable` (which itself calls `payrollFormula.js`'s `evaluateFormula` —
+  the same evaluator `SalarySlip`/`SalaryStructure` computation already uses, ADR-026/027's
+  established "no second formula engine" precedent) — not a document, just a number. `getComponentPay`'s 5-branch pro-rater (Daily/Weekly/Fortnightly/Monthly/Bimonthly) ports
   as a new pure function in the same calc file. Source's own gap — an unrecognized payroll frequency
   silently falls through and returns nothing, propagating into a currency sum — is **not** reproduced:
   this throws a clear validation error instead, the same "don't let a missing-case gap silently

@@ -49,6 +49,7 @@ import State from "../models/State.js";
 import City from "../models/City.js";
 import PurposeOfTravel from "../models/PurposeOfTravel.js";
 import IdentificationDocumentType from "../models/IdentificationDocumentType.js";
+import GratuityRule from "../models/GratuityRule.js";
 import LeaveType from "../models/LeaveType.js";
 import { PERMISSION_KEYS } from "@demo-panel/shared/permissions";
 import { SCOPES } from "@demo-panel/shared/scopes";
@@ -2018,6 +2019,23 @@ const seedExpenseRoles = async () => {
   console.log(`✅ Expenses roles: ${added} menu grant(s) added`);
 };
 
+// ADR-034. These deliberately have no applicable component: salary components
+// are user-authored per company, so a seed cannot truthfully choose one.
+const seedRegionalGratuityRules = async () => {
+  const rules = [
+    { name: "Indian Standard Gratuity Rule", calculateGratuityAmountBasedOn: "Current Slab", workExperienceCalculationFunction: "Round off Work Experience", minimumYearForGratuity: 5, applicableEarningsComponent: [], gratuityRuleSlabs: [{ fromYear: 0, toYear: null, fractionOfApplicableEarnings: 15 / 26 }] },
+    { name: "Rule Under Limited Contract (UAE)", calculateGratuityAmountBasedOn: "Sum of all previous slabs", workExperienceCalculationFunction: "Take Exact Completed Years", minimumYearForGratuity: 1, applicableEarningsComponent: [], gratuityRuleSlabs: [{ fromYear: 0, toYear: 1, fractionOfApplicableEarnings: 0 }, { fromYear: 1, toYear: 5, fractionOfApplicableEarnings: 21 / 30 }, { fromYear: 5, toYear: null, fractionOfApplicableEarnings: 1 }] },
+    { name: "Rule Under Unlimited Contract on termination (UAE)", calculateGratuityAmountBasedOn: "Current Slab", workExperienceCalculationFunction: "Take Exact Completed Years", minimumYearForGratuity: 1, applicableEarningsComponent: [], gratuityRuleSlabs: [{ fromYear: 0, toYear: 1, fractionOfApplicableEarnings: 0 }, { fromYear: 1, toYear: 5, fractionOfApplicableEarnings: 21 / 30 }, { fromYear: 5, toYear: null, fractionOfApplicableEarnings: 1 }] },
+    { name: "Rule Under Unlimited Contract on resignation (UAE)", calculateGratuityAmountBasedOn: "Current Slab", workExperienceCalculationFunction: "Take Exact Completed Years", minimumYearForGratuity: 1, applicableEarningsComponent: [], gratuityRuleSlabs: [{ fromYear: 0, toYear: 1, fractionOfApplicableEarnings: 0 }, { fromYear: 1, toYear: 3, fractionOfApplicableEarnings: (1 / 3) * (21 / 30) }, { fromYear: 3, toYear: 5, fractionOfApplicableEarnings: (2 / 3) * (21 / 30) }, { fromYear: 5, toYear: null, fractionOfApplicableEarnings: 21 / 30 }] },
+  ];
+  let seeded = 0;
+  for (const rule of rules) {
+    const exists = await GratuityRule.findOne({ name: rule.name }).lean();
+    if (!exists) { await GratuityRule.create(rule); seeded += 1; }
+  }
+  console.log(`⚠️ Seeded ${seeded} Regional Gratuity Rule(s) — add an applicable earning component to each before using it for a real Gratuity (GratuityRule.applicableEarningsComponent is empty).`);
+};
+
 const run = async () => {
   if (!process.env.DATABASE) {
     console.error("❌ DATABASE is not set in .env");
@@ -2062,6 +2080,7 @@ const run = async () => {
   await seedPayrollRoles();
   await seedPerformanceRoles();
   await seedExpenseRoles();
+  await seedRegionalGratuityRules();
   await seedGeographyData();
 
   await mongoose.disconnect();

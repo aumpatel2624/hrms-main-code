@@ -39,6 +39,7 @@ const SALARYCOMPONENT_FIELDS = [
   "doNotIncludeInTotal", "statisticalComponent", "roundToNearestInteger", "exemptedFromIncomeTax",
   "removeIfZeroValued", "variableBasedOnTaxableSalary", "arrearComponent", "accrualComponent",
   "isFlexibleBenefit", "maxBenefitAmount", "payoutMethod", "finalCycleAccrualPayout",
+  "componentType",
   "companyId", "isActive",
 ];
 export { SALARYCOMPONENT_FIELDS };

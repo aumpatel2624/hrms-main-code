@@ -107,6 +107,11 @@ export const calculateTaxByTaxSlab = (annualTaxableEarning = 0, taxSlab = {}, ev
 
   // Sequential compounding surcharges / cesses (Income Tax Slab Other Charges)
   let runningTax = baseTax;
+  const marginalReliefLimit = Number(taxSlab.marginalReliefLimit) || 0;
+  if (marginalReliefLimit > 0 && earning > reliefLimit && earning < marginalReliefLimit) {
+    const incomeExcessOverReliefLimit = earning - reliefLimit;
+    if (incomeExcessOverReliefLimit < runningTax) runningTax = incomeExcessOverReliefLimit;
+  }
   for (const charge of taxSlab.otherTaxesAndCharges || []) {
     const minIncome = Number(charge.minTaxableIncome) || 0;
     const maxIncome = charge.maxTaxableIncome !== undefined && charge.maxTaxableIncome !== null && Number(charge.maxTaxableIncome) > 0

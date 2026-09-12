@@ -19,6 +19,7 @@ const OPTIONAL_FIELDS = [
   "userId", "reportsToId", "status", "relievingDate", "dateOfBirth", "gender",
   "employmentTypeId", "gradeId", "expenseApproverId", "leaveApproverId", "shiftRequestApproverId",
   "healthInsuranceProviderId", "healthInsuranceNo", "shiftPreference", "workMode",
+  "ifscCode", "panNumber", "micrCode", "providentFundAccount",
   "jobApplicantId", "isActive",
 ];
 

@@ -23,7 +23,7 @@ import {
     createEmailSetup, deleteEmailSetup, getEmailSetupById, updateEmailSetup, searchEmailSetups,
 } from "../api/emails.api";
 import { createMenuGroup, deleteMenuGroup, getMenuGroupById, updateMenuGroup, searchMenuGroups } from "../api/menus.api";
-import { getAllSalaryStructures } from "../api/payroll.api";
+import { getAllSalaryStructures, getAllSalaryComponents } from "../api/payroll.api";
 import { createSeoRedirect, deleteSeoRedirect, getSeoRedirectById, updateSeoRedirect, searchSeoRedirects } from "../api/seo.api";
 import { REDIRECT_STATUSES } from "@demo-panel/shared/seo";
 
@@ -217,6 +217,7 @@ export const companyConfig = {
     plural: "Companies",
     description: "Legal entities within Apidel. Every branch, department and designation belongs to one.",
     api: { search: searchCompanies, getById: getCompanyById, create: createCompany, update: updateCompany, remove: deleteCompany },
+    lookups: { basicComponentId: asOptions(getAllSalaryComponents, "salaryComponentName"), hraComponentId: asOptions(getAllSalaryComponents, "salaryComponentName") },
     sections: [
         { id: "details", title: "Company details" },
         { id: "status", title: "Status" },
@@ -224,6 +225,8 @@ export const companyConfig = {
     fields: [
         { name: "companyName", icon: Building07, label: "Company Name", required: true, section: "details", error: "Company Name is required!", placeholder: "Enter company name" },
         { name: "companyCode", icon: Hash02, label: "Company Code", section: "details", placeholder: "Enter company code (optional)" },
+        { name: "basicComponentId", label: "Basic Salary Component", section: "details", type: "select", optionsFrom: "basicComponentId" },
+        { name: "hraComponentId", label: "HRA Salary Component", section: "details", type: "select", optionsFrom: "hraComponentId" },
         ACTIVE,
     ],
     columns: [
@@ -232,6 +235,7 @@ export const companyConfig = {
         { name: "Status", selector: (row) => (row.isActive ? "Active" : "Inactive"), minWidth: "130px" },
     ],
     recordTitle: (r) => r.companyName,
+    toForm: (data) => ({ ...data, basicComponentId: data.basicComponentId?._id || data.basicComponentId || "", hraComponentId: data.hraComponentId?._id || data.hraComponentId || "" }),
 };
 
 export const employmentTypeConfig = {

@@ -80,6 +80,15 @@ console.log("Running incomeTaxCalc.test.js...");
 }
 
 {
+  // ADR-034: unset is unchanged; only the configured marginal window caps tax.
+  const slab = { taxReliefLimit: 500000, slabs: [{ fromAmount: 0, toAmount: null, percentDeduction: 10 }] };
+  assert.equal(calculateTaxByTaxSlab(550000, slab), 55000, "Unset marginal relief must preserve normal tax");
+  const withMarginalRelief = { ...slab, marginalReliefLimit: 600000 };
+  assert.equal(calculateTaxByTaxSlab(550000, withMarginalRelief), 50000, "Tax in the marginal window is capped at income over relief limit");
+  assert.equal(calculateTaxByTaxSlab(600000, withMarginalRelief), 60000, "Cap stops at the marginal relief limit");
+}
+
+{
   // 2f. Sequential compounding surcharges
   // Base tax: 100k
   // Surcharge 1: 10% on tax -> tax becomes 110k

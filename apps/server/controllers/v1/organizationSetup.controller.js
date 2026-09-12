@@ -44,7 +44,7 @@ const referenceGuardedDelete = async (Model, modelName, id, label) => {
 
 export const createCompany = async (req, res) => {
   try {
-    const { companyName, companyCode, isActive } = req.body;
+    const { companyName, companyCode, basicComponentId, hraComponentId, isActive } = req.body;
     if (!companyName) {
       return res.status(400).json({ isOk: false, status: 400, message: "Company name is required" });
     }
@@ -54,7 +54,7 @@ export const createCompany = async (req, res) => {
       return res.status(400).json({ isOk: false, status: 400, message: "Company already exists" });
     }
 
-    await Company.create({ companyName, companyCode, isActive });
+    await Company.create({ companyName, companyCode, basicComponentId, hraComponentId, isActive });
     return res.status(201).json({ isOk: true, status: 201, message: "Company created successfully" });
   } catch (error) {
     console.log("Error in createCompany", error);
@@ -65,7 +65,7 @@ export const createCompany = async (req, res) => {
 export const updateCompany = async (req, res) => {
   try {
     const { companyId } = req.params;
-    const { companyName, companyCode, isActive } = req.body;
+    const { companyName, companyCode, basicComponentId, hraComponentId, isActive } = req.body;
 
     const company = await Company.findById(companyId);
     if (!company) {
@@ -74,6 +74,8 @@ export const updateCompany = async (req, res) => {
 
     company.companyName = companyName;
     company.companyCode = companyCode;
+    company.basicComponentId = basicComponentId || null;
+    company.hraComponentId = hraComponentId || null;
     company.isActive = isActive;
     await company.save();
 

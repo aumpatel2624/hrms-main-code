@@ -41,6 +41,11 @@ const SalaryComponentSchema = new mongoose.Schema(
       default: null,
     },
     finalCycleAccrualPayout: { type: Boolean, default: false },
+    componentType: {
+      type: String,
+      enum: ["", "Provident Fund", "Additional Provident Fund", "Provident Fund Loan", "Professional Tax"],
+      default: "",
+    },
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
     isActive: { type: Boolean, default: true, required: true },
   },

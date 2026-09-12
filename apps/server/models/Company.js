@@ -11,6 +11,10 @@ const CompanySchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // ADR-034 (Regional). Optional HRA exemption inputs; no country dispatch
+    // layer is needed because the calculation is gated by these real values.
+    basicComponentId: { type: mongoose.Schema.Types.ObjectId, ref: "SalaryComponent", default: null },
+    hraComponentId: { type: mongoose.Schema.Types.ObjectId, ref: "SalaryComponent", default: null },
     isActive: {
       type: Boolean,
       default: true,
@@ -37,5 +41,7 @@ CompanySchema.index(
 );
 CompanySchema.index({ isActive: 1, createdAt: -1 });
 CompanySchema.index({ createdAt: -1 });
+CompanySchema.index({ basicComponentId: 1 });
+CompanySchema.index({ hraComponentId: 1 });
 
 export default mongoose.model("Company", CompanySchema);

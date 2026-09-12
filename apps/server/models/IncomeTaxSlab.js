@@ -31,6 +31,7 @@ const IncomeTaxSlabSchema = new mongoose.Schema(
     allowTaxExemption: { type: Boolean, default: false },
     standardDeduction: { type: Number, default: 0, min: 0 },
     taxReliefLimit: { type: Number, default: 0, min: 0 },
+    marginalReliefLimit: { type: Number, default: null, min: 0 },
     disabled: { type: Boolean, default: false },
     currency: { type: String, trim: true, default: "INR" },
     slabs: { type: [TaxableSalarySlabSchema], default: [] },

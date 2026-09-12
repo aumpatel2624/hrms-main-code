@@ -28,6 +28,11 @@ const EmployeeTaxExemptionDeclarationSchema = new mongoose.Schema(
     declarations: { type: [EmployeeTaxExemptionDeclarationCategorySchema], default: [] },
     totalDeclaredAmount: { type: Number, default: 0 },
     totalExemptionAmount: { type: Number, default: 0 },
+    monthlyHouseRent: { type: Number, default: null, min: 0 },
+    rentedInMetroCity: { type: Boolean, default: false },
+    annualHraExemption: { type: Number, default: 0, min: 0 },
+    monthlyHraExemption: { type: Number, default: 0, min: 0 },
+    hraAmount: { type: Number, default: 0, min: 0 },
     status: {
       type: String,
       enum: ["draft", "submitted", "cancelled"],

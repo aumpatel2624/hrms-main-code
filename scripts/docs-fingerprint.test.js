@@ -204,7 +204,7 @@ CONFIG_SCREENS.pop();
     assert.ok(company.description, "the entity description is read");
     assert.deepEqual(
         company.fields.map((f) => f.name),
-        ["companyName", "companyCode", "isActive"],
+        ["companyName", "companyCode", "basicComponentId", "hraComponentId", "isActive"],
         "the bare ACTIVE entry is not dropped",
     );
     assert.equal(

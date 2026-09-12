@@ -163,6 +163,12 @@ const EmployeeSchema = new mongoose.Schema(
       required: false,
       default: null,
     },
+    // ADR-034 (Regional). Identity/banking values collected ahead of an
+    // automated consumer, matching the EmployeeOtherIncome precedent.
+    ifscCode: { type: String, trim: true, default: null },
+    panNumber: { type: String, trim: true, default: null },
+    micrCode: { type: String, trim: true, default: null },
+    providentFundAccount: { type: String, trim: true, default: null },
     isActive: {
       type: Boolean,
       default: true,

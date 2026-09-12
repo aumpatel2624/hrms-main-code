@@ -31,6 +31,13 @@ const EmployeeTaxExemptionProofSubmissionSchema = new mongoose.Schema(
     taxExemptionProofs: { type: [EmployeeTaxExemptionProofSubmissionDetailSchema], default: [] },
     totalActualAmount: { type: Number, default: 0 },
     exemptionAmount: { type: Number, default: 0 },
+    houseRentPaymentAmount: { type: Number, default: null, min: 0 },
+    rentedFrom: { type: Date, default: null },
+    rentedTo: { type: Date, default: null },
+    rentedInMetroCity: { type: Boolean, default: false },
+    monthlyHouseRent: { type: Number, default: 0, min: 0 },
+    totalEligibleHraExemption: { type: Number, default: 0, min: 0 },
+    hraAmount: { type: Number, default: 0, min: 0 },
     attachments: { type: String, default: null },
     status: {
       type: String,

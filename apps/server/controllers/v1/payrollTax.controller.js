@@ -11,6 +11,11 @@ import EmployeeTaxExemptionProofSubmission from "../../models/EmployeeTaxExempti
 import Employee from "../../models/Employee.js";
 import PayrollPeriod from "../../models/PayrollPeriod.js";
 import { calculateTotalExemption } from "../../utils/incomeTaxCalc.js";
+import {
+  calculateAnnualEligibleHraExemption,
+  calculateHraExemptionForPeriod,
+  validateHouseRentDates,
+} from "../../utils/hraExemptionCalc.js";
 
 const failure = (res, error) => {
   if (error.status) return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
@@ -65,6 +70,7 @@ export const validateTaxSlabs = (slabs = []) => {
 export const INCOMETAXSLAB_FIELDS = [
   "name", "companyId", "effectiveFromDate", "allowTaxExemption", "standardDeduction",
   "taxReliefLimit", "disabled", "currency", "slabs", "otherTaxesAndCharges",
+  "marginalReliefLimit",
 ];
 
 export const createIncomeTaxSlab = async (req, res) => {
@@ -89,6 +95,7 @@ export const createIncomeTaxSlab = async (req, res) => {
       allowTaxExemption: req.body.allowTaxExemption ?? false,
       standardDeduction: Number(req.body.standardDeduction) || 0,
       taxReliefLimit: Number(req.body.taxReliefLimit) || 0,
+      marginalReliefLimit: req.body.marginalReliefLimit === undefined || req.body.marginalReliefLimit === null || req.body.marginalReliefLimit === "" ? null : Number(req.body.marginalReliefLimit),
       disabled: req.body.disabled ?? false,
       currency: req.body.currency || "INR",
       slabs: slabs || [],
@@ -163,6 +170,7 @@ export const updateIncomeTaxSlab = async (req, res) => {
     if (req.body.allowTaxExemption !== undefined) doc.allowTaxExemption = req.body.allowTaxExemption;
     if (req.body.standardDeduction !== undefined) doc.standardDeduction = Number(req.body.standardDeduction) || 0;
     if (req.body.taxReliefLimit !== undefined) doc.taxReliefLimit = Number(req.body.taxReliefLimit) || 0;
+    if (req.body.marginalReliefLimit !== undefined) doc.marginalReliefLimit = req.body.marginalReliefLimit === null || req.body.marginalReliefLimit === "" ? null : Number(req.body.marginalReliefLimit);
     if (req.body.disabled !== undefined) doc.disabled = req.body.disabled;
     if (req.body.currency !== undefined) doc.currency = req.body.currency;
     if (req.body.effectiveFromDate !== undefined) doc.effectiveFromDate = new Date(req.body.effectiveFromDate);
@@ -413,7 +421,7 @@ export const deleteEmployeeTaxExemptionSubCategory = async (req, res) => {
 // ============================================================================
 
 export const EMPLOYEE_TAX_EXEMPTION_DECLARATION_FIELDS = [
-  "employeeId", "payrollPeriodId", "currency", "declarations",
+  "employeeId", "payrollPeriodId", "currency", "declarations", "monthlyHouseRent", "rentedInMetroCity",
 ];
 
 const prepareDeclarationRows = async (rows = []) => {
@@ -444,9 +452,28 @@ const prepareDeclarationRows = async (rows = []) => {
   return { prepared, totalDeclaredAmount, totalExemptionAmount };
 };
 
+const applyDeclarationHra = async (doc, payrollPeriod) => {
+  if (!doc.monthlyHouseRent) {
+    doc.annualHraExemption = 0;
+    doc.monthlyHraExemption = 0;
+    doc.hraAmount = 0;
+    return;
+  }
+  const hra = await calculateAnnualEligibleHraExemption({
+    employeeId: doc.employeeId,
+    companyId: doc.companyId,
+    payrollPeriod,
+    monthlyHouseRent: doc.monthlyHouseRent,
+    rentedInMetroCity: doc.rentedInMetroCity,
+  });
+  doc.annualHraExemption = hra.annualExemption;
+  doc.monthlyHraExemption = hra.monthlyExemption;
+  doc.hraAmount = hra.hraAmount;
+};
+
 export const createEmployeeTaxExemptionDeclaration = async (req, res) => {
   try {
-    const { employeeId, payrollPeriodId, declarations, currency } = req.body;
+    const { employeeId, payrollPeriodId, declarations, currency, monthlyHouseRent, rentedInMetroCity } = req.body;
     if (!payrollPeriodId) throwError(400, "Payroll Period is required");
 
     let resolvedEmployeeId = employeeId;
@@ -475,7 +502,7 @@ export const createEmployeeTaxExemptionDeclaration = async (req, res) => {
 
     const { prepared, totalDeclaredAmount, totalExemptionAmount } = await prepareDeclarationRows(declarations || []);
 
-    const doc = await EmployeeTaxExemptionDeclaration.create({
+    const doc = new EmployeeTaxExemptionDeclaration({
       employeeId: resolvedEmployeeId,
       companyId: employee.companyId,
       payrollPeriodId,
@@ -484,7 +511,11 @@ export const createEmployeeTaxExemptionDeclaration = async (req, res) => {
       totalDeclaredAmount,
       totalExemptionAmount,
       status: "draft",
+      monthlyHouseRent: monthlyHouseRent === undefined || monthlyHouseRent === "" ? null : Number(monthlyHouseRent),
+      rentedInMetroCity: rentedInMetroCity ?? false,
     });
+    await applyDeclarationHra(doc, period);
+    await doc.save();
 
     return res.status(201).json({ isOk: true, status: 201, message: "Tax Exemption Declaration created successfully", data: doc });
   } catch (error) {
@@ -582,6 +613,12 @@ export const updateEmployeeTaxExemptionDeclaration = async (req, res) => {
     }
     if (req.body.currency !== undefined) doc.currency = req.body.currency;
     if (req.body.payrollPeriodId !== undefined) doc.payrollPeriodId = req.body.payrollPeriodId;
+    if (req.body.monthlyHouseRent !== undefined) doc.monthlyHouseRent = req.body.monthlyHouseRent === "" || req.body.monthlyHouseRent === null ? null : Number(req.body.monthlyHouseRent);
+    if (req.body.rentedInMetroCity !== undefined) doc.rentedInMetroCity = req.body.rentedInMetroCity;
+
+    const period = await PayrollPeriod.findById(doc.payrollPeriodId).lean();
+    if (!period) throwError(404, "Payroll Period not found");
+    await applyDeclarationHra(doc, period);
 
     await doc.save();
     return res.status(200).json({ isOk: true, status: 200, message: "Tax Exemption Declaration updated successfully", data: doc });
@@ -658,6 +695,7 @@ export const deleteEmployeeTaxExemptionDeclaration = async (req, res) => {
 
 export const EMPLOYEE_TAX_EXEMPTION_PROOF_SUBMISSION_FIELDS = [
   "employeeId", "payrollPeriodId", "submissionDate", "currency", "taxExemptionProofs", "attachments",
+  "houseRentPaymentAmount", "rentedFrom", "rentedTo", "rentedInMetroCity",
 ];
 
 const prepareProofRows = async (rows = []) => {
@@ -690,9 +728,44 @@ const prepareProofRows = async (rows = []) => {
   return { prepared, totalActualAmount, exemptionAmount };
 };
 
+const ensureNoSubmittedRentOverlap = async ({ employeeId, payrollPeriodId, rentedFrom, rentedTo, excludingId = null }) => {
+  if (!rentedFrom || !rentedTo) return;
+  const overlap = await EmployeeTaxExemptionProofSubmission.findOne({
+    employeeId,
+    payrollPeriodId,
+    status: "submitted",
+    ...(excludingId ? { _id: { $ne: excludingId } } : {}),
+    rentedFrom: { $lte: new Date(rentedTo) },
+    rentedTo: { $gte: new Date(rentedFrom) },
+  });
+  if (overlap) throwError(400, "House rent dates overlap another submitted proof submission for this employee and payroll period");
+};
+
+const applyProofHra = async (doc, payrollPeriod) => {
+  if (!doc.houseRentPaymentAmount) {
+    doc.monthlyHouseRent = 0;
+    doc.totalEligibleHraExemption = 0;
+    doc.hraAmount = 0;
+    return;
+  }
+  validateHouseRentDates(doc.rentedFrom, doc.rentedTo);
+  const hra = await calculateHraExemptionForPeriod({
+    employeeId: doc.employeeId,
+    companyId: doc.companyId,
+    payrollPeriod,
+    houseRentPaymentAmount: doc.houseRentPaymentAmount,
+    rentedFrom: doc.rentedFrom,
+    rentedTo: doc.rentedTo,
+    rentedInMetroCity: doc.rentedInMetroCity,
+  });
+  doc.monthlyHouseRent = hra.monthlyHouseRent;
+  doc.totalEligibleHraExemption = hra.totalEligibleHraExemption;
+  doc.hraAmount = hra.hraAmount;
+};
+
 export const createEmployeeTaxExemptionProofSubmission = async (req, res) => {
   try {
-    const { employeeId, payrollPeriodId, taxExemptionProofs, submissionDate, currency, attachments } = req.body;
+    const { employeeId, payrollPeriodId, taxExemptionProofs, submissionDate, currency, attachments, houseRentPaymentAmount, rentedFrom, rentedTo, rentedInMetroCity } = req.body;
     if (!payrollPeriodId) throwError(400, "Payroll Period is required");
 
     let resolvedEmployeeId = employeeId;
@@ -721,7 +794,7 @@ export const createEmployeeTaxExemptionProofSubmission = async (req, res) => {
 
     const { prepared, totalActualAmount, exemptionAmount } = await prepareProofRows(taxExemptionProofs || []);
 
-    const doc = await EmployeeTaxExemptionProofSubmission.create({
+    const doc = new EmployeeTaxExemptionProofSubmission({
       employeeId: resolvedEmployeeId,
       companyId: employee.companyId,
       payrollPeriodId,
@@ -732,7 +805,13 @@ export const createEmployeeTaxExemptionProofSubmission = async (req, res) => {
       exemptionAmount,
       attachments: attachments || null,
       status: "draft",
+      houseRentPaymentAmount: houseRentPaymentAmount === undefined || houseRentPaymentAmount === "" ? null : Number(houseRentPaymentAmount),
+      rentedFrom: rentedFrom ? new Date(rentedFrom) : null,
+      rentedTo: rentedTo ? new Date(rentedTo) : null,
+      rentedInMetroCity: rentedInMetroCity ?? false,
     });
+    await applyProofHra(doc, period);
+    await doc.save();
 
     return res.status(201).json({ isOk: true, status: 201, message: "Tax Exemption Proof Submission created successfully", data: doc });
   } catch (error) {
@@ -832,6 +911,14 @@ export const updateEmployeeTaxExemptionProofSubmission = async (req, res) => {
     if (req.body.currency !== undefined) doc.currency = req.body.currency;
     if (req.body.attachments !== undefined) doc.attachments = req.body.attachments;
     if (req.body.payrollPeriodId !== undefined) doc.payrollPeriodId = req.body.payrollPeriodId;
+    if (req.body.houseRentPaymentAmount !== undefined) doc.houseRentPaymentAmount = req.body.houseRentPaymentAmount === "" || req.body.houseRentPaymentAmount === null ? null : Number(req.body.houseRentPaymentAmount);
+    if (req.body.rentedFrom !== undefined) doc.rentedFrom = req.body.rentedFrom ? new Date(req.body.rentedFrom) : null;
+    if (req.body.rentedTo !== undefined) doc.rentedTo = req.body.rentedTo ? new Date(req.body.rentedTo) : null;
+    if (req.body.rentedInMetroCity !== undefined) doc.rentedInMetroCity = req.body.rentedInMetroCity;
+
+    const period = await PayrollPeriod.findById(doc.payrollPeriodId).lean();
+    if (!period) throwError(404, "Payroll Period not found");
+    await applyProofHra(doc, period);
 
     await doc.save();
     return res.status(200).json({ isOk: true, status: 200, message: "Tax Exemption Proof Submission updated successfully", data: doc });
@@ -854,6 +941,13 @@ export const submitEmployeeTaxExemptionProofSubmission = async (req, res) => {
     }
 
     doc.status = "submitted";
+    await ensureNoSubmittedRentOverlap({
+      employeeId: doc.employeeId,
+      payrollPeriodId: doc.payrollPeriodId,
+      rentedFrom: doc.rentedFrom,
+      rentedTo: doc.rentedTo,
+      excludingId: doc._id,
+    });
     await doc.save();
     return res.status(200).json({ isOk: true, status: 200, message: "Tax Exemption Proof Submission submitted successfully", data: doc });
   } catch (error) {

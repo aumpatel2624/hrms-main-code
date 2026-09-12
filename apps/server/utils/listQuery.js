@@ -151,7 +151,7 @@ export const runListQuery = async (model, body = {}, { searchFields = [], filter
     const pipeline = [];
 
     const base = {};
-    if (isActive !== undefined && isActive !== null && isActive !== "") base.isActive = isActive;
+    if (isActive !== undefined && isActive !== null && isActive !== "" && model.schema.path("isActive")) base.isActive = isActive;
     // Row-level scope goes into the first $match so it rides the indexes and
     // no later stage can widen it.
     if (scopeFilter) Object.assign(base, scopeFilter);

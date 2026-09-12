@@ -3994,6 +3994,143 @@ flag, not routed through `AdditionalSalary`; single-branch build
 - **Coding/implementation delegated to `codex`/`agy`, not a Claude fork** — per the user's standing
   instruction as of this module.
 
+### ADR-034 — Regional (final module): zero new collections — two calculation overrides gated by
+optional fields, not a country-dispatch layer; 21 additive fields across 5 existing models; 4
+`GratuityRule` seeds reusing the existing engine unchanged; three source features (Custom Role
+report grants, the two purely-layout Column Breaks, `arrearComponent`) dropped for lack of a real
+consumer; single-branch build
+
+- **Date**: 2026-09-12
+- **Status**: accepted
+- **Context**: `system-design` for HRMS module 18 (Regional), the final module on this project's
+  17-module board (numbered 18 because Regional was always module 17 by the original count and
+  Expenses took the "17" slot in `STATE.md`'s row order — no functional significance, just row
+  numbering history). Read a Claude fork's research pass in full, covering all 5 real specs under
+  `docs/knowledge/input/hrms/HRMS-Port-Spec/01-Modules/Regional/` (`_Module-Spec.md`, `India HRA
+  Exemption`, `India Marginal Relief Tax`, `India Gratuity Rule Setup + Custom Fields`, `UAE Gratuity
+  Rules`), ADR-016/030/031, `OPEN-QUESTIONS.md` Q-25/Q-6, and current code (`GratuityRule.js`,
+  `Gratuity.js`, `gratuityCalc.js`, `gratuity.controller.js`'s validation, `IncomeTaxSlab.js`,
+  `incomeTaxCalc.js`, `Company.js`, `Employee.js`, `SalaryComponent.js`, `seed/index.js`), plus
+  greps confirming no HRA component and no country field exist anywhere in this codebase today.
+- **The module is not doctypes — it is Frappe's `regional_overrides` plugin mechanism**, confirmed by
+  the research: exactly three override hook points exist in source (all India: HRA annual exemption,
+  HRA period exemption, marginal-relief tax), UAE has zero calculation overrides and contributes only
+  3 seed records, and the "Custom Fields" file is a one-time install fixture, not a doctype. Zero new
+  collections are built by this module — every spec file either overrides an existing calculation or
+  adds fields/seed rows to a doctype this project already has.
+- **No country/regional-settings dispatch layer is built** — the single most important call this ADR
+  makes. Source keys its override lookup on `Company.country` (via Frappe's `hooks.py`); this project
+  has no country field on `Company` or `Employee` today (confirmed by the research's grep — the
+  generic `Country` master exists but is wired only to `User`/`JobApplicant`, never payroll), and
+  building one now, for exactly two optional calculations, would be inventing infrastructure nobody
+  has asked for. Both India overrides are, on inspection, already gated by a real optional value, not
+  a country flag: HRA exemption only computes anything if `Company.basicComponentId`/`hraComponentId`
+  are set **and** the specific declaration/proof-submission sets `monthlyHouseRent`; marginal relief
+  only applies if the specific `IncomeTaxSlab.marginalReliefLimit` is set. A company that never
+  configures those fields never sees either calculation do anything — which is a strictly better fit
+  for a project with real multi-company data (any company could opt in, not just an "India" one) than
+  a hardcoded country switch would be. `GratuityRule` selection is already a plain manual `Link` field
+  on `Gratuity` (ADR-031) — the India/UAE rules become four more named options in that same list, HR
+  picks the applicable one exactly like every other master-data choice in this system, no dispatch
+  needed there either.
+- **India HRA Exemption bolts onto the existing `EmployeeTaxExemptionDeclaration`/
+  `EmployeeTaxExemptionProofSubmission` pair (ADR-030), not a new doctype.** `Company` gains two real
+  fields, `basicComponentId`/`hraComponentId` (both `ref: "SalaryComponent"`) — the two fields the
+  exemption formula itself explicitly depends on, per the research. The exemption formula (the min of
+  three cases: actual HRA paid; `(rent×12) − basic×10%`; `basic×50%` metro / `40%` non-metro) and the
+  period-to-annual conversion (`factor = round((dateDiff+1)/30 × 2)/2`, mutating the declaration's own
+  `monthlyHouseRent`) port faithfully, including the hardcoded 10%/50%/40% constants (source's own
+  `# TODO make this configurable` is not acted on here — no settings doctype exists to back it, and
+  none is invented). `validateHouseRentDates`'s literal `< 14` day-gap check (despite its "at least 15
+  days apart" message disagreeing) and the overlap-against-other-submitted-proofs guard both port as
+  written, per this project's established "reproduce a flagged inconsistency literally, don't
+  silently fix it" discipline.
+- **The assignment-walk/pro-ration engine reuses this project's existing formula machinery, not a new
+  "preview salary slip" concept.** Source generates a real preview `Salary Slip` document per
+  assignment to read resolved `basic_amt`/`hra_amt`; this project has no document-generation-for-
+  preview primitive. The equivalent here: for each submitted `SalaryStructureAssignment` in the
+  `Payroll Period` window, look up the linked `SalaryStructure.earnings[]` row matching
+  `Company.basicComponentId`/`hraComponentId`, and resolve its amount via `payrollFormula.js`'s
+  existing `evaluateComponentTable` (the same evaluator `SalarySlip`/`SalaryStructure` computation
+  already uses, ADR-026/027's established "no second formula engine" precedent) — not a document, just
+  a number. `getComponentPay`'s 5-branch pro-rater (Daily/Weekly/Fortnightly/Monthly/Bimonthly) ports
+  as a new pure function in the same calc file. Source's own gap — an unrecognized payroll frequency
+  silently falls through and returns nothing, propagating into a currency sum — is **not** reproduced:
+  this throws a clear validation error instead, the same "don't let a missing-case gap silently
+  corrupt a financial number" discipline already applied to `Goal`'s cycle-guard (ADR-032) and other
+  places this session where a gap risks data corruption rather than a missing business rule.
+- **India Marginal Relief Tax is one field plus one insertion point, confirmed exact.** `IncomeTaxSlab`
+  gains `marginalReliefLimit` (Currency, optional, unset by default). `utils/incomeTaxCalc.js`'s
+  `calculateTaxByTaxSlab` already has every input the relief formula needs in scope at the right
+  point — `reliefLimit` is already computed at the top of the function (line 68 in the pre-Regional
+  file) and `earning` is the function's own parameter — so the fix is inserted immediately after
+  `let runningTax = baseTax;` and before the surcharge loop begins: if `marginalReliefLimit` is set
+  and `taxReliefLimit < earning < marginalReliefLimit`, cap `runningTax` at
+  `earning − taxReliefLimit` when that's smaller than the tax already computed. This reaches both of
+  the function's two existing callers (`computeIncomeTaxBreakup`'s structured-annual and
+  with-bonus-incremental paths) automatically, with no change to either caller. Source's own
+  always-returns-a-value-vs-truthiness-check mismatch is moot here since this project calls the
+  function directly rather than through a "return `None` means skip" stub convention — nothing to
+  preserve or fix.
+- **India Gratuity Rule Setup adds zero fields to `GratuityRule`/`Gratuity`** — confirmed by the
+  research, its only contribution to that doctype is one seed record (`Indian Standard Gratuity
+  Rule`, `calculateGratuityAmountBasedOn: "Current Slab"`, `workExperienceCalculationFunction: "Round
+  off Work Experience"` — matching this project's existing enum casing exactly — `minimumYearForGratuity:
+  5`, one slab `fromYear 0, toYear null (unbounded), fractionOfApplicableEarnings 15/26`). The
+  "Custom Fields" half of the source file's title lands on five *other* doctypes: `Employee` gains
+  4 real fields (`ifscCode`, `panNumber`, `micrCode`, `providentFundAccount` — plain nullable
+  strings), `SalaryComponent` gains 1 (`componentType`, enum: `""`/Provident Fund/Additional Provident
+  Fund/Provident Fund Loan/Professional Tax). None of these six new fields has a calculation reading
+  them yet, matching this project's own established precedent (`EmployeeOtherIncome`, Q-23 — real
+  data collection built ahead of its first consumer is normal here, not scope creep) — they exist so
+  the India-relevant identity/banking/component data has somewhere to live, the same reason source
+  added them.
+- **`Company.arrearComponentId`, the two pure layout Column Breaks, and the three Custom-Role report
+  grants are all dropped, each for a distinct reason.** `arrearComponentId`: the research found no
+  calculation anywhere in these specs that reads it — `Arrear` (module 12, ADR-028) already carries
+  its own explicit per-record `salaryComponentId`, so a company-level default has no described
+  consumer; not built, add it if a real need for a default surfaces later. The Column Breaks are pure
+  Frappe form-layout metadata with no equivalent concept in this project's entity-config system.
+  The three Custom Role grants ("Professional Tax Deductions", "Provident Fund Deductions", "Income
+  Tax Deductions") target standard Frappe Report doctypes that don't exist here at all — this
+  project's reporting analog is the Dashboard Builder / `widgetSources.js` registry, not a generic
+  Report-permission system, so there is nothing to grant a role onto.
+- **UAE Gratuity Rules need zero engine changes — confirmed field-by-field against the already-built
+  model.** All three seed rules use calculation modes, a work-experience method, and a slab shape this
+  project's `GratuityRule`/`gratuityCalc.js` already support exactly (`"Current Slab"`/`"Sum of all
+  previous slabs"` per `getGratuityAmount`, `"Take Exact Completed Years"` per
+  `workExperienceCalculationFunction`, `toYear: null` for the unbounded-final-slab convention ADR-031
+  already chose over source's `to_year 0` overload). Only the three rules' own seed data (breakpoints,
+  fractions, `minimumYearForGratuity: 1`) is new — no code changes accompany them.
+- **The 4 seeded `GratuityRule` records (India 1 + UAE 3) ship with an empty
+  `applicableEarningsComponent`, not a guessed reference** — `GratuityRule`'s own save-time validation
+  (`validateGratuityRuleTables`, `gratuity.controller.js`) requires at least one row there, but this
+  project's `seed/index.js` seeds **no** `SalaryComponent` records at all (confirmed by the research —
+  every company's Basic Salary / earning components are created ad-hoc through the admin UI, module
+  10), so there is no real component `_id` a seed script could reference honestly at install time.
+  Seeding through the Mongoose model directly (bypassing the HTTP controller's own validation, the
+  way every other `seed/index.js` fixture already works) is what makes this possible; the seed logs an
+  advisory message telling HR to add the applicable earning component to each rule before using it
+  for a real Gratuity — the same "run the other seed step first" advisory pattern already established
+  elsewhere in this seed script (e.g. `seedExpenseRoles`'s "not every menu row exists yet"). This is
+  not a shortcut around the real validation: the moment an admin opens a seeded rule in the edit form
+  and saves it, `validateGratuityRuleTables` still enforces the real constraint, same as any other
+  `GratuityRule`.
+- **Q-25 stays open** — the research confirmed zero matches for "exempt"/"lakh"/"10(10)"/"statutory"
+  anywhere in the Regional spec directory; the India regional pack's entire gratuity contribution is
+  one seeded rule with no tax interaction at all. ADR-031's original judgment ("not fabricated here")
+  is unchanged by this module; Q-25 remains a genuine open business question, not something this
+  source ever answers.
+- **No new screens, no new menu rows.** Every touched field lands on an already-visible entity config
+  (`Company`, `Employee`, `SalaryComponent`, `IncomeTaxSlab`, the two Tax Exemption doctypes,
+  `GratuityRule`) — this module is a pure retrofit pass across existing screens, the smallest module
+  on the entire board by new-surface-area, and the first with zero new collections.
+- **Single-branch build** — there is no transactional doctype to split a foundation/transactional pair
+  around, and the work doesn't divide cleanly by anything except India-vs-UAE, which isn't a
+  meaningful branch boundary (UAE is 3 seed rows with zero code).
+- **Coding/implementation delegated to `codex`/`agy`, not a Claude fork** — per the user's standing
+  instruction, unchanged for this final module.
+
 
 
 

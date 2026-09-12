@@ -1,6 +1,7 @@
 // ponytail: one runnable check, no framework. `node apps/server/utils/listQuery.test.js`
 import assert from "node:assert/strict";
-import { buildFilterMatch, OPERATORS } from "./listQuery.js";
+import mongoose from "mongoose";
+import { buildFilterMatch, OPERATORS, runListQuery } from "./listQuery.js";
 
 const allow = { countryName: "string", isActive: "boolean", sequence: "number", createdAt: "date", roleId: "objectId" };
 
@@ -61,5 +62,27 @@ assert.deepEqual(
 
 // every declared type advertises at least one operator
 for (const [type, ops] of Object.entries(OPERATORS)) assert.ok(ops.length > 0, `${type} has operators`);
+
+// A list request from CrudList always includes isActive. Models that do not
+// declare that optional field must still return their existing documents.
+const NoIsActive = mongoose.model("ListQueryNoIsActiveTest", new mongoose.Schema({ name: String }));
+const document = new NoIsActive({ name: "Existing salary slip" });
+let pipeline;
+NoIsActive.aggregate = async (stages) => {
+    pipeline = stages;
+    return [{ count: 1, data: [document] }];
+};
+const result = await runListQuery(NoIsActive, { skip: 0, per_page: 10, match: "", isActive: true });
+assert.deepEqual(pipeline[0], { $match: {} });
+assert.equal(result[0].data[0].name, "Existing salary slip");
+
+// Models that opt into isActive keep the existing active-only behaviour.
+const HasIsActive = mongoose.model("ListQueryHasIsActiveTest", new mongoose.Schema({ name: String, isActive: Boolean }));
+HasIsActive.aggregate = async (stages) => {
+    pipeline = stages;
+    return [];
+};
+await runListQuery(HasIsActive, { isActive: false });
+assert.deepEqual(pipeline[0], { $match: { isActive: false } });
 
 console.log("listQuery: all checks passed");

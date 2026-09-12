@@ -6,6 +6,8 @@ import {
   calculateManualGoalScore,
   calculateSelfScore,
   calculateFinalScore,
+  deriveGoalStatus,
+  averageGoalProgress,
 } from "./appraisalCalc.js";
 
 console.log("Running appraisalCalc.test.js...");
@@ -189,6 +191,35 @@ console.log("Running appraisalCalc.test.js...");
     Error,
     "A non-arithmetic expression must raise, not execute, arbitrary code",
   );
+}
+
+// ============================================================================
+// 6. deriveGoalStatus (ADR-032, transactional half)
+// ============================================================================
+
+{
+  assert.equal(deriveGoalStatus({ progress: 0, currentStatus: "Pending" }), "Pending");
+  assert.equal(deriveGoalStatus({ progress: 100, currentStatus: "In Progress" }), "Completed");
+  assert.equal(deriveGoalStatus({ progress: 45, currentStatus: "Pending" }), "In Progress");
+  assert.equal(deriveGoalStatus({ progress: 1, currentStatus: "Pending" }), "In Progress");
+  assert.equal(deriveGoalStatus({ progress: 99, currentStatus: "Completed" }), "In Progress");
+}
+
+{
+  // Archived/Closed are sticky — no recompute regardless of progress.
+  assert.equal(deriveGoalStatus({ progress: 100, currentStatus: "Archived" }), "Archived");
+  assert.equal(deriveGoalStatus({ progress: 0, currentStatus: "Closed" }), "Closed");
+}
+
+// ============================================================================
+// 7. averageGoalProgress (ADR-032, transactional half)
+// ============================================================================
+
+{
+  assert.equal(averageGoalProgress([80, 100]), 90);
+  assert.equal(averageGoalProgress([50]), 50);
+  assert.equal(averageGoalProgress([]), 0, "No children -> 0, not NaN/throw");
+  assert.equal(averageGoalProgress([33.33, 33.33, 33.34]), 33.33);
 }
 
 console.log("✅ All appraisalCalc.test.js assertions passed!");

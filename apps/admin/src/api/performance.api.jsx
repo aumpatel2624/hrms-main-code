@@ -46,3 +46,26 @@ export const searchAppraisals = async (data) => api.post(ENDPOINTS.APPRAISALS.SE
 export const submitAppraisal = async (id) => api.post(ENDPOINTS.APPRAISALS.SUBMIT(id));
 export const cancelAppraisal = async (id) => api.post(ENDPOINTS.APPRAISALS.CANCEL(id));
 export const deleteAppraisal = async (id) => api.delete(ENDPOINTS.APPRAISALS.BY_ID(id));
+
+// ---- Goal (ADR-032, transactional half, feat/performance-goals) -------------
+export const createGoal = async (data) => api.post(ENDPOINTS.GOALS.BASE, data);
+export const getAllGoals = async () => api.get(ENDPOINTS.GOALS.BASE);
+export const getGoalById = async (id) => api.get(ENDPOINTS.GOALS.BY_ID(id));
+export const updateGoal = async (id, data) => api.put(ENDPOINTS.GOALS.BY_ID(id), data);
+export const searchGoals = async (data) => api.post(ENDPOINTS.GOALS.SEARCH, data);
+export const deleteGoal = async (id) => api.delete(ENDPOINTS.GOALS.BY_ID(id));
+export const archiveGoal = async (id) => api.post(ENDPOINTS.GOALS.ARCHIVE(id));
+export const unarchiveGoal = async (id) => api.post(ENDPOINTS.GOALS.UNARCHIVE(id));
+export const closeGoal = async (id) => api.post(ENDPOINTS.GOALS.CLOSE(id));
+export const reopenGoal = async (id) => api.post(ENDPOINTS.GOALS.REOPEN(id));
+export const bulkUpdateGoalStatus = async (data) => api.post(ENDPOINTS.GOALS.BULK_STATUS, data);
+
+// ---- Employee Performance Feedback (ADR-032, transactional half) -----------
+export const createEmployeePerformanceFeedback = async (data) => api.post(ENDPOINTS.EMPLOYEE_PERFORMANCE_FEEDBACKS.BASE, data);
+export const getAllEmployeePerformanceFeedbacks = async () => api.get(ENDPOINTS.EMPLOYEE_PERFORMANCE_FEEDBACKS.BASE);
+export const getEmployeePerformanceFeedbackById = async (id) => api.get(ENDPOINTS.EMPLOYEE_PERFORMANCE_FEEDBACKS.BY_ID(id));
+export const updateEmployeePerformanceFeedback = async (id, data) => api.put(ENDPOINTS.EMPLOYEE_PERFORMANCE_FEEDBACKS.BY_ID(id), data);
+export const searchEmployeePerformanceFeedbacks = async (data) => api.post(ENDPOINTS.EMPLOYEE_PERFORMANCE_FEEDBACKS.SEARCH, data);
+export const submitEmployeePerformanceFeedback = async (id) => api.post(ENDPOINTS.EMPLOYEE_PERFORMANCE_FEEDBACKS.SUBMIT(id));
+export const cancelEmployeePerformanceFeedback = async (id) => api.post(ENDPOINTS.EMPLOYEE_PERFORMANCE_FEEDBACKS.CANCEL(id));
+export const deleteEmployeePerformanceFeedback = async (id) => api.delete(ENDPOINTS.EMPLOYEE_PERFORMANCE_FEEDBACKS.BY_ID(id));

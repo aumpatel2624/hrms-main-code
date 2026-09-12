@@ -122,6 +122,36 @@ export const calculateSelfScore = (selfRatings = []) =>
  * win over any same-named key in `evalContext` (Appraisal's own computed
  * scores are the authoritative ones).
  */
+/**
+ * `Goal.status` derivation (ADR-032, transactional half) — `Goal.md`'s
+ * `set_status()`: `Archived`/`Closed` are sticky terminal states that
+ * survive any progress change (return unchanged); otherwise the status is
+ * recomputed purely from `progress` on every save. Pure and unit-tested so
+ * the exact thresholds (0 -> Pending, 100 -> Completed, in between -> In
+ * Progress) are pinned down independently of the DB-touching save cascade
+ * that calls this.
+ */
+export const deriveGoalStatus = ({ progress, currentStatus } = {}) => {
+  if (currentStatus === "Archived" || currentStatus === "Closed") return currentStatus;
+  const value = Number(progress) || 0;
+  if (value === 0) return "Pending";
+  if (value >= 100) return "Completed";
+  return "In Progress";
+};
+
+/**
+ * `Goal.update_parent_progress()`'s aggregation step — the average
+ * `progress` of a set of sibling goals (the caller has already excluded
+ * `Archived` rows and resolved which children to average, per `Goal.md`).
+ * Rounded to 2dp, same precision convention as every other score in this
+ * module. An empty list (all children removed/archived) averages to 0
+ * rather than throwing — the caller decides whether that 0 is meaningful.
+ */
+export const averageGoalProgress = (progresses = []) => {
+  if (!Array.isArray(progresses) || progresses.length === 0) return 0;
+  return round2(progresses.reduce((sum, p) => sum + (Number(p) || 0), 0) / progresses.length);
+};
+
 export const calculateFinalScore = ({
   goalScore = 0,
   selfScore = 0,

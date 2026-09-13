@@ -789,6 +789,7 @@ export const listLeaveApplicationByParams = async (req, res) => {
       stages: [
         { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employee" } },
         { $addFields: { employeeName: { $arrayElemAt: ["$employee.employeeName", 0] } } },
+        { $project: { employee: 0 } },
       ],
       scopeFilter,
     });

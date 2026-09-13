@@ -106,20 +106,20 @@
     --color-alpha-white: rgb(255 255 255);
     --color-alpha-black: rgb(0 0 0);
 
-    /* Neutral slate brand scale. 600 is the solid used by buttons, badges and
+    /* Apidel teal brand scale. 600 is the solid used by buttons, badges and
        focus rings; 900 is the sidebar surface. Keeping one scale for both means
        the sidebar and the accents can't drift apart. */
-    --color-brand-50: rgb(248 250 252);
-    --color-brand-100: rgb(241 245 249);
-    --color-brand-200: rgb(226 232 240);
-    --color-brand-300: rgb(203 213 225);
-    --color-brand-400: rgb(148 163 184);
-    --color-brand-500: rgb(100 116 139);
-    --color-brand-600: rgb(51 65 85);
-    --color-brand-700: rgb(30 41 59);
-    --color-brand-800: rgb(23 32 51);
-    --color-brand-900: rgb(15 23 42);
-    --color-brand-950: rgb(2 6 23);
+    --color-brand-50: rgb(247 252 252);
+    --color-brand-100: rgb(240 251 250);
+    --color-brand-200: rgb(221 247 246);
+    --color-brand-300: rgb(190 242 241);
+    --color-brand-400: rgb(110 232 229);
+    --color-brand-500: rgb(26 230 224);
+    --color-brand-600: rgb(11 148 144);
+    --color-brand-700: rgb(8 95 92);
+    --color-brand-800: rgb(7 77 75);
+    --color-brand-900: rgb(6 58 56);
+    --color-brand-950: rgb(2 22 22);
 
     /* LIGHT MODE VARIABLES */
 

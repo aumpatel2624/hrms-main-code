@@ -100,7 +100,7 @@ const LeaveControlPanel = () => {
         }
     };
 
-    document.title = "Leave Control Panel | Demo Panel";
+    document.title = "Leave Control Panel | Apidel HRMS";
 
     if (!currentPagePermissions.edit) {
         return (

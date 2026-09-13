@@ -114,7 +114,7 @@ const LeaveLedgerEntries = () => {
         [],
     );
 
-    document.title = "Leave Ledger | Demo Panel";
+    document.title = "Leave Ledger | Apidel HRMS";
 
     if (!currentPagePermissions.read) {
         return (

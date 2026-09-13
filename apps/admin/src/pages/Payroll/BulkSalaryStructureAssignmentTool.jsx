@@ -126,7 +126,7 @@ const BulkSalaryStructureAssignmentTool = () => {
         }
     };
 
-    document.title = "Bulk Salary Structure Assignment | Demo Panel";
+    document.title = "Bulk Salary Structure Assignment | Apidel HRMS";
 
     if (!currentPagePermissions.edit) {
         return (

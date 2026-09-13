@@ -4134,3 +4134,22 @@ consumer; single-branch build
 
 
 
+### ADR-035 — Session-level direct branch handoff for orchestrated branding work
+
+- **Date**: 2026-09-13
+- **Status**: accepted
+- **Context**: The project convention normally requires every completed feature branch to be pushed
+  and opened as a GitHub pull request. For this delegated branding pass, the user confirmed that an
+  orchestrator performs every feature-branch merge through an isolated-worktree merge pattern and
+  explicitly instructed this agent to push `feat/apidel-branding` without opening a PR.
+- **Options considered**:
+  - _Open a normal GitHub PR_ — lost for this session; it duplicates the orchestrator’s established
+    merge handoff and contradicts the user's explicit delivery instruction.
+  - _Push the verified branch and let the orchestrator perform its isolated-worktree merge_ — won.
+- **Decision**: Commit and push the verified `feat/apidel-branding` branch without creating a GitHub
+  PR. The branch is still pushed before handoff, so the orchestrator receives an immutable remote
+  change to review and merge.
+- **Consequences**: This is a session-level delivery deviation only. It does not authorise direct
+  commits to long-lived branches, self-merging, deployment, or skipping verification.
+- **Deviates from convention**: yes — the push-and-open-PR step in `AGENTS.md`/`git-flow`. Approved
+  by the user on 2026-09-13 for this session’s orchestrated merge workflow.

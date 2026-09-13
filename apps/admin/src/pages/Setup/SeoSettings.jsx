@@ -224,7 +224,7 @@ const SeoSettings = () => {
         }
     };
 
-    document.title = "SEO Settings | Demo Panel";
+    document.title = "SEO Settings | Apidel HRMS";
 
     if (loading) {
         return (

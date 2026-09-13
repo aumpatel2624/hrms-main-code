@@ -218,7 +218,7 @@ const DashboardBuilder = () => {
         }
     };
 
-    document.title = `Dashboard Builder | Demo Panel`;
+    document.title = `Dashboard Builder | Apidel HRMS`;
 
     if (loading) {
         return (

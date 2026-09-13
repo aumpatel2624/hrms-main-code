@@ -39,7 +39,7 @@ export default function PayrollEntry() {
         } catch (error) { toast.error(error.response?.data?.message || "Payroll action failed"); }
         finally { setBusy(false); }
     };
-    document.title = "Payroll Entry | Demo Panel";
+    document.title = "Payroll Entry | Apidel HRMS";
     if (!permissions.read || (!id && !permissions.write)) return <Card className="p-5">You do not have access to this payroll entry.</Card>;
     return <>
         <PageHeader title="Payroll Entry" pageTitle="Payroll" description="Select eligible employees, create their slips, then submit the batch. Each employee's result is recorded separately." />

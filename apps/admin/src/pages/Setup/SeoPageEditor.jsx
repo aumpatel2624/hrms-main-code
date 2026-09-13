@@ -249,7 +249,7 @@ const SeoPageEditor = ({ mode = "add" }) => {
         }
     };
 
-    document.title = `${mode === "add" ? "New SEO page" : form.pageName || "SEO page"} | Demo Panel`;
+    document.title = `${mode === "add" ? "New SEO page" : form.pageName || "SEO page"} | Apidel HRMS`;
 
     if (loading) {
         return (

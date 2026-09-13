@@ -231,7 +231,7 @@ const CrudForm = ({ config, mode = "add" }) => {
     const sections = [...declaredSections, ...autoSections];
     const visible = config.fields.filter((f) => !f.hideIn?.includes(mode));
 
-    document.title = `${isEdit ? "Edit" : "Add"} ${config.singular} | Demo Panel`;
+    document.title = `${isEdit ? "Edit" : "Add"} ${config.singular} | Apidel HRMS`;
 
     if (!isEdit && !currentPagePermissions.write) {
         return <PageHeader title={`Add ${config.singular}`} pageTitle={config.plural} description="You do not have permission to create records here." />;

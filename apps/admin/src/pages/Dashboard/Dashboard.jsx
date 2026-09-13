@@ -60,7 +60,7 @@ const Dashboard = () => {
     const hour = new Date().getHours();
     const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
 
-    document.title = `Dashboard | Demo Panel`;
+    document.title = `Dashboard | Apidel HRMS`;
 
     return (
         <>

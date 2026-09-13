@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Menu02, Moon01, Sun, X as XClose } from "@untitledui/icons";
+import { ChevronLeftDouble, ChevronRightDouble, Menu02, Moon01, Sun, X as XClose } from "@untitledui/icons";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { cx } from "@/utils/cx";
 import SidebarNav from "./SidebarNav";
@@ -11,7 +11,12 @@ const Layout = ({ children }) => {
     // Replaces the old data-sidebar-size / data-layout / data-layout-mode
     // attributes that were written straight onto document.documentElement.
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [collapsed, setCollapsed] = useState(() => localStorage.getItem("sidebar-collapsed") === "1");
     const [dark, setDark] = useState(false);
+
+    useEffect(() => {
+        localStorage.setItem("sidebar-collapsed", collapsed ? "1" : "0");
+    }, [collapsed]);
 
     const toggleTheme = () => {
         setDark((prev) => {
@@ -33,17 +38,27 @@ const Layout = ({ children }) => {
 
             <aside
                 className={cx(
-                    "fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col bg-brand-900 shadow-xl ring-1 ring-black/10 transition-transform duration-200 ease-out lg:sticky lg:top-0 lg:bottom-auto lg:h-dvh lg:translate-x-0 lg:shadow-none",
+                    "fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col bg-brand-900 shadow-xl ring-1 ring-black/10 transition-[transform,width] duration-200 ease-out lg:sticky lg:top-0 lg:bottom-auto lg:h-dvh lg:translate-x-0 lg:shadow-none",
                     sidebarOpen ? "translate-x-0" : "-translate-x-full",
+                    collapsed ? "lg:w-[76px]" : "lg:w-64",
                 )}
             >
-                <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-white/10 px-4">
+                <div className={cx("flex h-16 shrink-0 items-center justify-between gap-2 border-b border-white/10 px-4", collapsed && "lg:justify-center lg:px-2")}>
                     <Link
                         to="/dashboard"
-                        className="flex items-center rounded-lg px-2 py-1 outline-focus-ring transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2"
+                        className={cx("flex min-w-0 items-center rounded-lg px-2 py-1 outline-focus-ring transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2", collapsed && "lg:hidden")}
                     >
-                        <span className="text-base font-semibold tracking-tight text-white/90">Admin</span>
+                        <img src="/brand/apidel-logo.png" alt="Apidel Technologies" className="h-7 w-auto brightness-0 invert" />
                     </Link>
+                    <button
+                        type="button"
+                        aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+                        title={collapsed ? "Expand navigation" : "Collapse navigation"}
+                        onClick={() => setCollapsed((value) => !value)}
+                        className="hidden rounded-lg p-2 text-white/75 transition hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white lg:inline-flex"
+                    >
+                        {collapsed ? <ChevronRightDouble className="size-5" /> : <ChevronLeftDouble className="size-5" />}
+                    </button>
                     <button
                         type="button"
                         aria-label="Close navigation"
@@ -54,7 +69,7 @@ const Layout = ({ children }) => {
                     </button>
                 </div>
 
-                <SidebarNav />
+                <SidebarNav collapsed={collapsed} />
             </aside>
 
             <div className="flex min-w-0 flex-1 flex-col">

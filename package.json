@@ -16,7 +16,7 @@
     "build": "npm run build -w @demo-panel/admin",
     "start": "npm start -w @demo-panel/server",
     "seed": "npm run seed -w @demo-panel/server",
-    "seed:demo": "node apps/server/seed/demo-data.js",
+    "seed:demo": "npm run seed:demo -w @demo-panel/server",
     "verify:demo-seed": "node scripts/demo-data-browser-verify.mjs",
     "docs": "node scripts/docs-capture.js",
     "serve": "npm run build && npm start",

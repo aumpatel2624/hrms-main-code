@@ -16,6 +16,21 @@ import {
   formatReferenceMessage,
 } from "../../utils/referenceHelper.js";
 
+const failure = (res, error) => {
+  if (error.status) {
+    return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
+  }
+  if (error.name === "ValidationError" || error.name === "CastError" || error.code === 11000) {
+    return res.status(400).json({
+      isOk: false,
+      status: 400,
+      message: error.code === 11000 ? "A record with these unique values already exists" : error.message,
+    });
+  }
+  console.error("Staffing Plan request failed", error);
+  return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+};
+
 export const getDesignationCounts = async (designationId, companyId, excludeJobOpeningId = null) => {
   const employeeCount = await Employee.countDocuments({ designationId, companyId, status: "Active" });
   const openingFilter = { designationId, companyId, status: "Open" };
@@ -99,7 +114,7 @@ export const createStaffingPlan = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Staffing Plan created successfully" });
   } catch (error) {
     console.log("Error in createStaffingPlan", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -123,7 +138,7 @@ export const updateStaffingPlan = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Staffing Plan updated successfully" });
   } catch (error) {
     console.log("Error in updateStaffingPlan", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -146,7 +161,7 @@ export const deleteStaffingPlan = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Staffing Plan deleted successfully" });
   } catch (error) {
     console.log("Error in deleteStaffingPlan", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -159,7 +174,7 @@ export const getStaffingPlanById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getStaffingPlanById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -169,7 +184,7 @@ export const listStaffingPlans = async (_req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listStaffingPlans", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -185,6 +200,6 @@ export const listStaffingPlansByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };

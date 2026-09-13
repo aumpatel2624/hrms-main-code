@@ -13,6 +13,21 @@ import {
   formatReferenceMessage,
 } from "../../utils/referenceHelper.js";
 
+const failure = (res, error) => {
+  if (error.status) {
+    return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
+  }
+  if (error.name === "ValidationError" || error.name === "CastError" || error.code === 11000) {
+    return res.status(400).json({
+      isOk: false,
+      status: 400,
+      message: error.code === 11000 ? "A record with these unique values already exists" : error.message,
+    });
+  }
+  console.error("Recruitment Masters request failed", error);
+  return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+};
+
 const referenceGuardedDelete = async (Model, modelName, id, label) => {
   const referenceInfo = await getReferencingCounts(modelName, id);
   if (referenceInfo.totalReferences > 0) {
@@ -48,7 +63,7 @@ export const createJobApplicantSource = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Job Applicant Source created successfully" });
   } catch (error) {
     console.log("Error in createJobApplicantSource", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -65,7 +80,7 @@ export const updateJobApplicantSource = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Job Applicant Source updated successfully" });
   } catch (error) {
     console.log("Error in updateJobApplicantSource", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -81,7 +96,7 @@ export const deleteJobApplicantSource = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Job Applicant Source deleted successfully" });
   } catch (error) {
     console.log("Error in deleteJobApplicantSource", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -94,7 +109,7 @@ export const getJobApplicantSourceById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: source });
   } catch (error) {
     console.log("Error in getJobApplicantSourceById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -104,7 +119,7 @@ export const listJobApplicantSources = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: sources });
   } catch (error) {
     console.log("Error in listJobApplicantSources", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -117,7 +132,7 @@ export const listJobApplicantSourcesByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -137,7 +152,7 @@ export const createInterviewType = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Interview Type created successfully" });
   } catch (error) {
     console.log("Error in createInterviewType", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -161,7 +176,7 @@ export const updateInterviewType = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Interview Type updated successfully" });
   } catch (error) {
     console.log("Error in updateInterviewType", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -177,7 +192,7 @@ export const deleteInterviewType = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Interview Type deleted successfully" });
   } catch (error) {
     console.log("Error in deleteInterviewType", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -190,7 +205,7 @@ export const getInterviewTypeById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: interviewType });
   } catch (error) {
     console.log("Error in getInterviewTypeById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -200,7 +215,7 @@ export const listInterviewTypes = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: interviewTypes });
   } catch (error) {
     console.log("Error in listInterviewTypes", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -213,7 +228,7 @@ export const listInterviewTypesByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -233,7 +248,7 @@ export const createJobOfferTermTemplate = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Job Offer Term Template created successfully" });
   } catch (error) {
     console.log("Error in createJobOfferTermTemplate", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -250,7 +265,7 @@ export const updateJobOfferTermTemplate = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Job Offer Term Template updated successfully" });
   } catch (error) {
     console.log("Error in updateJobOfferTermTemplate", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -266,7 +281,7 @@ export const deleteJobOfferTermTemplate = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Job Offer Term Template deleted successfully" });
   } catch (error) {
     console.log("Error in deleteJobOfferTermTemplate", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -279,7 +294,7 @@ export const getJobOfferTermTemplateById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: template });
   } catch (error) {
     console.log("Error in getJobOfferTermTemplateById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -289,7 +304,7 @@ export const listJobOfferTermTemplates = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: templates });
   } catch (error) {
     console.log("Error in listJobOfferTermTemplates", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -302,6 +317,6 @@ export const listJobOfferTermTemplatesByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };

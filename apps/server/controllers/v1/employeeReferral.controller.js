@@ -16,6 +16,21 @@ import {
   formatReferenceMessage,
 } from "../../utils/referenceHelper.js";
 
+const failure = (res, error) => {
+  if (error.status) {
+    return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
+  }
+  if (error.name === "ValidationError" || error.name === "CastError" || error.code === 11000) {
+    return res.status(400).json({
+      isOk: false,
+      status: 400,
+      message: error.code === 11000 ? "A record with these unique values already exists" : error.message,
+    });
+  }
+  console.error("Employee Referral request failed", error);
+  return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+};
+
 const REQUIRED_FIELDS = ["firstName", "lastName", "date", "forDesignationId", "email", "referrerId"];
 const OPTIONAL_FIELDS = [
   "status", "contactNo", "currentEmployer", "currentJobTitle", "resume", "resumeLink",
@@ -57,7 +72,7 @@ export const createEmployeeReferral = async (req, res) => {
       return res.status(409).json({ isOk: false, status: 409, message: "Employee Referral already exists for this email" });
     }
     console.log("Error in createEmployeeReferral", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -77,7 +92,7 @@ export const updateEmployeeReferral = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Employee Referral updated successfully" });
   } catch (error) {
     console.log("Error in updateEmployeeReferral", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -100,7 +115,7 @@ export const deleteEmployeeReferral = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Employee Referral deleted successfully" });
   } catch (error) {
     console.log("Error in deleteEmployeeReferral", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -113,7 +128,7 @@ export const getEmployeeReferralById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getEmployeeReferralById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -123,7 +138,7 @@ export const listEmployeeReferrals = async (_req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listEmployeeReferrals", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -139,7 +154,7 @@ export const listEmployeeReferralsByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -171,6 +186,6 @@ export const createJobApplicantFromReferral = async (req, res) => {
     });
   } catch (error) {
     console.log("Error in createJobApplicantFromReferral", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };

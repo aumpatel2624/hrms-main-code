@@ -16,6 +16,21 @@ import {
   formatReferenceMessage,
 } from "../../utils/referenceHelper.js";
 
+const failure = (res, error) => {
+  if (error.status) {
+    return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
+  }
+  if (error.name === "ValidationError" || error.name === "CastError" || error.code === 11000) {
+    return res.status(400).json({
+      isOk: false,
+      status: 400,
+      message: error.code === 11000 ? "A record with these unique values already exists" : error.message,
+    });
+  }
+  console.error("Employee Separation request failed", error);
+  return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+};
+
 const deriveBoardingStatus = (activities = []) => {
   if (!activities.length) return "Pending";
   const completed = activities.filter((a) => a.status === "Completed").length;
@@ -69,7 +84,7 @@ export const createEmployeeSeparation = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Employee Separation created successfully", data: { _id: doc._id } });
   } catch (error) {
     console.log("Error in createEmployeeSeparation", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -86,7 +101,7 @@ export const updateEmployeeSeparation = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Employee Separation updated successfully" });
   } catch (error) {
     console.log("Error in updateEmployeeSeparation", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -109,7 +124,7 @@ export const deleteEmployeeSeparation = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Employee Separation deleted successfully" });
   } catch (error) {
     console.log("Error in deleteEmployeeSeparation", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -122,7 +137,7 @@ export const getEmployeeSeparationById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getEmployeeSeparationById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -132,7 +147,7 @@ export const listEmployeeSeparations = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listEmployeeSeparations", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -151,7 +166,7 @@ export const listEmployeeSeparationsByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -171,7 +186,7 @@ export const createEmployeeSeparationTemplate = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Employee Separation Template created successfully" });
   } catch (error) {
     console.log("Error in createEmployeeSeparationTemplate", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -187,7 +202,7 @@ export const updateEmployeeSeparationTemplate = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Employee Separation Template updated successfully" });
   } catch (error) {
     console.log("Error in updateEmployeeSeparationTemplate", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -210,7 +225,7 @@ export const deleteEmployeeSeparationTemplate = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Employee Separation Template deleted successfully" });
   } catch (error) {
     console.log("Error in deleteEmployeeSeparationTemplate", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -223,7 +238,7 @@ export const getEmployeeSeparationTemplateById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getEmployeeSeparationTemplateById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -233,7 +248,7 @@ export const listEmployeeSeparationTemplates = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listEmployeeSeparationTemplates", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -246,6 +261,6 @@ export const listEmployeeSeparationTemplatesByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };

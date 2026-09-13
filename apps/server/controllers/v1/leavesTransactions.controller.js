@@ -42,6 +42,21 @@ import HolidayList from "../../models/HolidayList.js";
 import Employee from "../../models/Employee.js";
 import Attendance from "../../models/Attendance.js";
 
+const failure = (res, error) => {
+  if (error.status) {
+    return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
+  }
+  if (error.name === "ValidationError" || error.name === "CastError" || error.code === 11000) {
+    return res.status(400).json({
+      isOk: false,
+      status: 400,
+      message: error.code === 11000 ? "A record with these unique values already exists" : error.message,
+    });
+  }
+  console.error("Leaves Transactions request failed", error);
+  return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+};
+
 const referenceGuardedDelete = async (Model, modelName, id, label) => {
   const referenceInfo = await getReferencingCounts(modelName, id);
   if (referenceInfo.totalReferences > 0) {
@@ -144,7 +159,7 @@ export const createLeaveAdjustment = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Leave Adjustment created successfully", data: { _id: doc._id } });
   } catch (error) {
     console.log("Error in createLeaveAdjustment", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -157,7 +172,7 @@ export const getLeaveAdjustmentById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getLeaveAdjustmentById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -177,7 +192,7 @@ export const listLeaveAdjustmentByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log("Error in listLeaveAdjustmentByParams", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -232,7 +247,7 @@ export const createCompensatoryLeaveRequest = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Compensatory Leave Request created successfully", data: { _id: doc._id } });
   } catch (error) {
     console.log("Error in createCompensatoryLeaveRequest", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -248,7 +263,7 @@ export const updateCompensatoryLeaveRequest = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Compensatory Leave Request updated successfully" });
   } catch (error) {
     console.log("Error in updateCompensatoryLeaveRequest", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -265,7 +280,7 @@ export const deleteCompensatoryLeaveRequest = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Compensatory Leave Request deleted successfully" });
   } catch (error) {
     console.log("Error in deleteCompensatoryLeaveRequest", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -279,7 +294,7 @@ export const getCompensatoryLeaveRequestById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getCompensatoryLeaveRequestById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -306,7 +321,7 @@ export const listCompensatoryLeaveRequestByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log("Error in listCompensatoryLeaveRequestByParams", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -428,7 +443,7 @@ export const approveCompensatoryLeaveRequest = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Compensatory Leave Request approved successfully", data: { leaveAllocationId: allocation._id } });
   } catch (error) {
     console.log("Error in approveCompensatoryLeaveRequest", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -444,7 +459,7 @@ export const rejectCompensatoryLeaveRequest = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Compensatory Leave Request rejected" });
   } catch (error) {
     console.log("Error in rejectCompensatoryLeaveRequest", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -675,7 +690,7 @@ export const createLeaveApplication = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Leave Application created successfully", data: { _id: doc._id, totalLeaveDays: result.totalLeaveDays } });
   } catch (error) {
     console.log("Error in createLeaveApplication", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -703,7 +718,7 @@ export const updateLeaveApplication = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Leave Application updated successfully" });
   } catch (error) {
     console.log("Error in updateLeaveApplication", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -738,7 +753,7 @@ export const getLeaveApplicationById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: { ...doc.toObject(), currentBalance: balance } });
   } catch (error) {
     console.log("Error in getLeaveApplicationById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -776,7 +791,7 @@ export const listLeaveApplicationByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log("Error in listLeaveApplicationByParams", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -881,7 +896,7 @@ export const approveLeaveApplication = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Leave Application approved successfully" });
   } catch (error) {
     console.log("Error in approveLeaveApplication", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -900,7 +915,7 @@ export const rejectLeaveApplication = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Leave Application rejected" });
   } catch (error) {
     console.log("Error in rejectLeaveApplication", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -935,7 +950,7 @@ export const cancelLeaveApplication = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Leave Application cancelled successfully" });
   } catch (error) {
     console.log("Error in cancelLeaveApplication", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -1049,7 +1064,7 @@ export const createLeaveEncashment = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Leave Encashment created successfully", data: { _id: doc._id, encashmentAmount } });
   } catch (error) {
     console.log("Error in createLeaveEncashment", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -1063,7 +1078,7 @@ export const getLeaveEncashmentById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getLeaveEncashmentById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -1084,7 +1099,7 @@ export const listLeaveEncashmentByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log("Error in listLeaveEncashmentByParams", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -1119,7 +1134,7 @@ export const markLeaveEncashmentPaid = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Leave Encashment marked as paid" });
   } catch (error) {
     console.log("Error in markLeaveEncashmentPaid", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -1159,7 +1174,7 @@ export const createLeaveBlockList = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Leave Block List created successfully", data: { _id: doc._id } });
   } catch (error) {
     console.log("Error in createLeaveBlockList", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -1178,7 +1193,7 @@ export const updateLeaveBlockList = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Leave Block List updated successfully" });
   } catch (error) {
     console.log("Error in updateLeaveBlockList", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -1192,7 +1207,7 @@ export const deleteLeaveBlockList = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Leave Block List deleted successfully" });
   } catch (error) {
     console.log("Error in deleteLeaveBlockList", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -1206,7 +1221,7 @@ export const getLeaveBlockListById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getLeaveBlockListById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -1227,7 +1242,7 @@ export const listLeaveBlockListByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log("Error in listLeaveBlockListByParams", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -1306,7 +1321,7 @@ export const bulkCreatePolicyAssignments = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Bulk policy assignment run complete", data: { results } });
   } catch (error) {
     console.log("Error in bulkCreatePolicyAssignments", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -1339,6 +1354,6 @@ export const bulkAllocateLeaves = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Bulk allocation run complete", data: { results } });
   } catch (error) {
     console.log("Error in bulkAllocateLeaves", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };

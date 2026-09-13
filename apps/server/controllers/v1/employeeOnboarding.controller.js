@@ -16,6 +16,21 @@ import {
   formatReferenceMessage,
 } from "../../utils/referenceHelper.js";
 
+const failure = (res, error) => {
+  if (error.status) {
+    return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
+  }
+  if (error.name === "ValidationError" || error.name === "CastError" || error.code === 11000) {
+    return res.status(400).json({
+      isOk: false,
+      status: 400,
+      message: error.code === 11000 ? "A record with these unique values already exists" : error.message,
+    });
+  }
+  console.error("Employee Onboarding request failed", error);
+  return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+};
+
 const deriveBoardingStatus = (activities = []) => {
   if (!activities.length) return "Pending";
   const completed = activities.filter((a) => a.status === "Completed").length;
@@ -85,7 +100,7 @@ export const createEmployeeOnboarding = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Employee Onboarding created successfully" });
   } catch (error) {
     console.log("Error in createEmployeeOnboarding", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -102,7 +117,7 @@ export const updateEmployeeOnboarding = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Employee Onboarding updated successfully" });
   } catch (error) {
     console.log("Error in updateEmployeeOnboarding", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -125,7 +140,7 @@ export const deleteEmployeeOnboarding = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Employee Onboarding deleted successfully" });
   } catch (error) {
     console.log("Error in deleteEmployeeOnboarding", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -138,7 +153,7 @@ export const getEmployeeOnboardingById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getEmployeeOnboardingById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -148,7 +163,7 @@ export const listEmployeeOnboardings = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listEmployeeOnboardings", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -164,7 +179,7 @@ export const listEmployeeOnboardingsByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -180,7 +195,7 @@ export const markOnboardingAsCompleted = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Employee Onboarding marked as completed" });
   } catch (error) {
     console.log("Error in markOnboardingAsCompleted", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -213,7 +228,7 @@ export const makeEmployeeFromOnboarding = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: payload });
   } catch (error) {
     console.log("Error in makeEmployeeFromOnboarding", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -233,7 +248,7 @@ export const createEmployeeOnboardingTemplate = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Employee Onboarding Template created successfully" });
   } catch (error) {
     console.log("Error in createEmployeeOnboardingTemplate", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -249,7 +264,7 @@ export const updateEmployeeOnboardingTemplate = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Employee Onboarding Template updated successfully" });
   } catch (error) {
     console.log("Error in updateEmployeeOnboardingTemplate", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -272,7 +287,7 @@ export const deleteEmployeeOnboardingTemplate = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Employee Onboarding Template deleted successfully" });
   } catch (error) {
     console.log("Error in deleteEmployeeOnboardingTemplate", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -285,7 +300,7 @@ export const getEmployeeOnboardingTemplateById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getEmployeeOnboardingTemplateById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -295,7 +310,7 @@ export const listEmployeeOnboardingTemplates = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listEmployeeOnboardingTemplates", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -308,6 +323,6 @@ export const listEmployeeOnboardingTemplatesByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };

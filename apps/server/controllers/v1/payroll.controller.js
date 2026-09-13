@@ -297,7 +297,12 @@ const applyStructureRows = async (doc, req) => {
       doc[table] = await buildRows(req.body[table], doc[table], doc.companyId);
     }
   }
-  const totals = computeStructureTotals(doc);
+  let totals;
+  try {
+    totals = computeStructureTotals(doc);
+  } catch (error) {
+    throwError(400, error.message);
+  }
   for (const table of ROW_TABLES) {
     doc[table].forEach((row, idx) => { row.defaultAmount = totals[table][idx]?.defaultAmount ?? 0; });
   }

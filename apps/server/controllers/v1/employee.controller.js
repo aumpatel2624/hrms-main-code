@@ -13,6 +13,21 @@ import {
   formatReferenceMessage,
 } from "../../utils/referenceHelper.js";
 
+const failure = (res, error) => {
+  if (error.status) {
+    return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
+  }
+  if (error.name === "ValidationError" || error.name === "CastError" || error.code === 11000) {
+    return res.status(400).json({
+      isOk: false,
+      status: 400,
+      message: error.code === 11000 ? "A record with these unique values already exists" : error.message,
+    });
+  }
+  console.error("Employee request failed", error);
+  return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+};
+
 const REQUIRED_FIELDS = ["employeeCode", "employeeName", "companyId", "departmentId", "designationId", "branchId", "dateOfJoining"];
 
 const OPTIONAL_FIELDS = [
@@ -71,7 +86,7 @@ export const createEmployee = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Employee created successfully" });
   } catch (error) {
     console.log("Error in createEmployee", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -96,7 +111,7 @@ export const updateEmployee = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Employee updated successfully" });
   } catch (error) {
     console.log("Error in updateEmployee", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -124,7 +139,7 @@ export const deleteEmployee = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Employee deleted successfully" });
   } catch (error) {
     console.log("Error in deleteEmployee", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -138,7 +153,7 @@ export const getEmployeeById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: employee });
   } catch (error) {
     console.log("Error in getEmployeeById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -153,7 +168,7 @@ export const listEmployees = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: employees });
   } catch (error) {
     console.log("Error in listEmployees", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -193,6 +208,6 @@ export const listEmployeeByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };

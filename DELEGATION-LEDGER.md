@@ -199,4 +199,41 @@ branch, or a throwaway `scratch-*` branch) while doing any git operations in oth
 
 **Session-level note**: this module's merge completes all 17 modules on the original board. See `STATE.md`'s Log for the full board-completion summary.
 
+## Pre-launch QA pass across all 17 modules (2026-09-13)
+
+With the full 17-module board complete and merged, the user asked for a comprehensive pre-launch
+QA pass — fill in every form, test validation/sanitization, verify connected business logic against
+the knowledgebase, test with non-admin roles, file real issues, fix them. First real test of this
+session's tooling stack under load: 6 parallel testers, two different tools, one account-wide quota
+wall, and the first case this session of the user explicitly asking for codex/agy to do *research*
+(not just implementation) — a deliberate broadening of the standing delegation policy.
+
+| Task | Tool | Outcome |
+|---|---|---|
+| QA testing, 6 parallel groups (all module screens, split by domain) | 6× Claude fork | **Failed entirely, zero output.** All 6 hit Claude's own account-wide opus session rate limit within seconds of starting (`resets 11:20pm UTC`) — not a per-task failure, a session-wide wall. Redirected immediately per the user's own instruction to widen delegation to codex/agy for research too, not just implementation. |
+| Retry, same 6 groups, split 3 codex / 3 agy (`--model claude-sonnet-4-6`) | 3× codex, 3× agy | **Mixed.** The 3 codex panes (Org Setup/Employee/Recruitment/Onboarding; Career Events/Training/Travel; Tax/Gratuity/Performance) all completed cleanly on the first pass. All 3 agy panes (Leaves/Shift & Attendance; Payroll; Expenses/Regional) hit agy's own **account-wide** usage quota mid-task (`resets in ~4h30m`) and produced zero usable output — the same failure shape as the Claude-fork wall, just a different tool/account. |
+| Re-retry, the 3 failed groups, moved to codex | 3× codex | Delivered cleanly. All 6 groups' reports collected (`qaA`-`qaF`-REPORT.md). |
+| Orchestrator's independent verification of every reported finding | Claude (direct) | Before filing a single GitHub issue, checked every claim against the actual seed/route/model source rather than trusting the testers' interpretation. **Confirmed 4 real bugs** (#29 the systemic 500-vs-400 gap across 22 controllers + a related payroll.controller.js case; #30 Exit Interview's wrong HR User grant, contradicting ADR-020; #31 Job Applicant's missing email validation; #32 Expense Claim's missing empty-rows guard). **Ruled out 6 false positives** before they became issues — including a "critical RBAC leak" that turned out to be `docs/conventions/30-api.md`'s own documented, intentional dropdown-GET pattern (used everywhere in this codebase, not new), and a "Company save crashes" claim that didn't reproduce at all and was almost certainly a data race from 6 parallel testers hitting the same shared "Apidel" company record in the isolated QA database simultaneously. |
+| Fix #29 (systemic validation-error retrofit, 22 controllers) | codex | Delivered accurately (~6 min) — copied the exact `failure()` shape from an existing newer controller into all 22 files, left every deliberate business-rule response untouched, added the targeted `payroll.controller.js` formula-error fix, and self-verified with an unusually good touch: a simulated genuine DB-outage test proving a real unexpected fault still returns 500 (not just that bad input returns 400 — the harder half of "don't over-correct" to get right). |
+| Fix #30/#31/#32 (three small unrelated bugs, one batch) | codex | Delivered cleanly (~6 min), including reusing an existing shared `isValidEmail` helper instead of writing a new one, and correctly flagging that the seed fix is additive-only so `development`'s own already-seeded database needs a manual one-time correction (or a fresh re-seed) to actually pick up the corrected Exit Interview grant. |
+| Orchestrator's independent review + merge of both fixes | Claude (direct) | Full diff read for both (confirmed exactly one `failure()` helper and zero leftover `"Internal server error"` literals per file across all 22 — a mechanical grep check that would have caught a missed catch block). Re-ran `npm test`/`npm run build` in a fresh isolated worktree combining both branches. Independently re-verified all 7 issue #29 repros and all 3 issue #30-32 repros live against a fresh isolated seed+server — not trusting either codex report — including regression checks (valid requests still succeed) for every fix. Both merged cleanly into `development` (one real `jobApplicant.controller.js` merge conflict between the two branches auto-resolved correctly by git; one `STATE.md` Log-line conflict resolved by hand, keeping both entries). |
+
+**Efficiency note, the main lesson of this pass**: this is the first time in the session that an
+entire delegation *tier* failed at once rather than a single task — both the 6 Claude forks and the
+3 agy panes hit account-wide quota walls, not task-specific errors. The fix each time was the same:
+notice the failure is systemic (not "this one task is hard"), and move the whole batch to whichever
+tool still has headroom, rather than retrying the same tool. codex ended up running all 6 QA testers
+and both fix batches this session — it was the only tool with quota left by the end.
+
+**Second lesson**: independent verification before filing an issue is not optional overhead — of 10
+distinct claims across the 6 reports needing a closer look, 6 were false positives that would have
+wasted a fix cycle (and, in the RBAC case, would have "fixed" something that was actually correct,
+documented, intentional behavior). The 5-10 minutes spent grepping the actual seed/route source for
+each flagged claim before writing a GitHub issue caught every one of them.
+
+**Process note**: `gh`'s "Fixes #N" auto-close keyword does not cover a comma-separated list under
+one keyword — "Fixes #30, #31, #32" only closed #30. #31 and #32 needed manual `gh issue close`.
+Recorded in memory (`feedback_github_issues_for_bugs.md`) so future sessions repeat the keyword per
+issue instead of assuming a list works.
+
 *Updated after every delegated task completes — check back for fresh rows as modules 8+ progress.*

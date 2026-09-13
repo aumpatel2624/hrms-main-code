@@ -5,6 +5,7 @@
  * step here to rely on).
  */
 import { runListQuery } from "../../utils/listQuery.js";
+import { isValidEmail } from "@demo-panel/shared/validation";
 import JobApplicant from "../../models/JobApplicant.js";
 import JobOpening from "../../models/JobOpening.js";
 import {
@@ -31,6 +32,9 @@ export const createJobApplicant = async (req, res) => {
     let { applicantName, emailId } = req.body;
     if (!emailId) {
       return res.status(400).json({ isOk: false, status: 400, message: "Email address is required" });
+    }
+    if (!isValidEmail(emailId)) {
+      return res.status(400).json({ isOk: false, status: 400, message: "A valid email address is required" });
     }
     if (!applicantName) applicantName = deriveNameFromEmail(emailId);
 
@@ -73,6 +77,9 @@ export const updateJobApplicant = async (req, res) => {
     const doc = await JobApplicant.findById(applicantId);
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Job Applicant not found" });
+    }
+    if (req.body.emailId !== undefined && !isValidEmail(req.body.emailId)) {
+      return res.status(400).json({ isOk: false, status: 400, message: "A valid email address is required" });
     }
     Object.assign(doc, pickFields(req.body));
     await doc.save();

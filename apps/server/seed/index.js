@@ -1183,8 +1183,8 @@ const seedRecruitmentRoles = async () => {
  * *not-symmetric* source permission table — several of these differ from
  * this project's usual "HR User + HR Manager both full CRUD" default:
  * neither role gets delete on Employee Onboarding or Employee Separation
- * (System Manager/ADMIN only, in source); Employee Separation Template and
- * Exit Interview give HR User read-only; Full and Final Statement is the
+ * (System Manager/ADMIN only, in source); Employee Separation Template gives
+ * HR User read-only; Full and Final Statement is the
  * one screen here where HR User also gets delete. The `markAsCompleted`/
  * `makeEmployee`/`markAsPaid` action endpoints are gated on the existing
  * "edit" key (this starter's permission matrix has no separate "submit"
@@ -1205,7 +1205,7 @@ const seedOnboardingSeparationRoles = async () => {
     "/employee-onboarding-template": { "HR User": fullNoDelete, "HR Manager": full },
     "/employee-separation": { "HR User": fullNoDelete, "HR Manager": fullNoDelete },
     "/employee-separation-template": { "HR User": readOnly, "HR Manager": full },
-    "/exit-interview": { "HR User": readOnly, "HR Manager": fullNoDelete },
+    "/exit-interview": { "HR User": fullNoDelete, "HR Manager": fullNoDelete },
     "/full-and-final-statement": { "HR User": full, "HR Manager": full },
   };
 

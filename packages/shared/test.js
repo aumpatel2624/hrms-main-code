@@ -43,6 +43,7 @@ assert.equal(isValidEmail("a@b.museum"), true);
 assert.equal(isValidEmail("admin@demopanel.com"), true);
 assert.equal(isValidEmail("a@b"), false);
 assert.equal(isValidEmail("no-at-sign.com"), false);
+assert.equal(isValidEmail("not-an-email"), false);
 assert.equal(isValidEmail(`${"a".repeat(250)}@b.com`), false); // over 254
 
 // auth constants

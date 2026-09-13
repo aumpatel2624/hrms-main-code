@@ -24,6 +24,21 @@ import {
 // (Active employees + other Open postings for the designation, excluding
 // self) compared against the plan's numberOfPositions (as of that plan's
 // own last save). No plan for this designation+company means no cap.
+const failure = (res, error) => {
+  if (error.status) {
+    return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
+  }
+  if (error.name === "ValidationError" || error.name === "CastError" || error.code === 11000) {
+    return res.status(400).json({
+      isOk: false,
+      status: 400,
+      message: error.code === 11000 ? "A record with these unique values already exists" : error.message,
+    });
+  }
+  console.error("Job Opening request failed", error);
+  return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+};
+
 const validateVacancyCap = async (doc, excludeSelfId = null) => {
   if (doc.status !== "Open") return null;
   const found = await findActivePlanDetail(doc.designationId, doc.companyId, doc.postedOn || new Date());
@@ -96,7 +111,7 @@ export const createJobOpening = async (req, res) => {
       return res.status(400).json({ isOk: false, status: 400, message: "A Job Opening with this route already exists" });
     }
     console.log("Error in createJobOpening", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -124,7 +139,7 @@ export const updateJobOpening = async (req, res) => {
       return res.status(400).json({ isOk: false, status: 400, message: "A Job Opening with this route already exists" });
     }
     console.log("Error in updateJobOpening", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -147,7 +162,7 @@ export const deleteJobOpening = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Job Opening deleted successfully" });
   } catch (error) {
     console.log("Error in deleteJobOpening", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -160,7 +175,7 @@ export const getJobOpeningById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getJobOpeningById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -172,7 +187,7 @@ export const listJobOpenings = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listJobOpenings", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -201,6 +216,6 @@ export const listJobOpeningsByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };

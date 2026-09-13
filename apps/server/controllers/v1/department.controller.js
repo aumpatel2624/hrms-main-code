@@ -5,6 +5,21 @@ import {
   formatReferenceMessage,
 } from "../../utils/referenceHelper.js";
 
+const failure = (res, error) => {
+  if (error.status) {
+    return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
+  }
+  if (error.name === "ValidationError" || error.name === "CastError" || error.code === 11000) {
+    return res.status(400).json({
+      isOk: false,
+      status: 400,
+      message: error.code === 11000 ? "A record with these unique values already exists" : error.message,
+    });
+  }
+  console.error("Department request failed", error);
+  return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+};
+
 export const createDepartment = async (req, res) => {
   try {
     const {
@@ -55,11 +70,7 @@ export const createDepartment = async (req, res) => {
     });
   } catch (error) {
     console.log("Error in createDepartment", error);
-    return res.status(500).json({
-      message: "Internal server error",
-      isOk: false,
-      status: 500,
-    });
+    return failure(res, error);
   }
 };
 
@@ -109,11 +120,7 @@ export const updateDepartment = async (req, res) => {
     });
   } catch (error) {
     console.log("Error in updateDepartment", error);
-    return res.status(500).json({
-      message: "Internal server error",
-      isOk: false,
-      status: 500,
-    });
+    return failure(res, error);
   }
 };
 
@@ -158,11 +165,7 @@ export const deleteDepartment = async (req, res) => {
     });
   } catch (error) {
     console.log("Error in deleteDepartment", error);
-    return res.status(500).json({
-      message: "Internal server error",
-      isOk: false,
-      status: 500,
-    });
+    return failure(res, error);
   }
 };
 
@@ -188,11 +191,7 @@ export const getDeparmentById = async (req, res) => {
     });
   } catch (error) {
     console.log("Error in getDeparmentById", error);
-    return res.status(500).json({
-      message: "Internal server error",
-      isOk: false,
-      status: 500,
-    });
+    return failure(res, error);
   }
 };
 
@@ -223,7 +222,7 @@ export const listDepartmentByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, data: list, status: 200 });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, message: "Internal server error", status: 500 });
+    return failure(res, error);
   }
 };
 
@@ -241,10 +240,6 @@ export const listDepartments = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in listDepartments:", error);
-    return res.status(500).json({
-      isOk: false,
-      message: "Internal server error",
-      status: 500,
-    });
+    return failure(res, error);
   }
 };

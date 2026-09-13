@@ -17,6 +17,21 @@ import {
   formatReferenceMessage,
 } from "../../utils/referenceHelper.js";
 
+const failure = (res, error) => {
+  if (error.status) {
+    return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
+  }
+  if (error.name === "ValidationError" || error.name === "CastError" || error.code === 11000) {
+    return res.status(400).json({
+      isOk: false,
+      status: 400,
+      message: error.code === 11000 ? "A record with these unique values already exists" : error.message,
+    });
+  }
+  console.error("Full And Final Statement request failed", error);
+  return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+};
+
 const computeTotals = (doc) => {
   const totalPayableAmount = (doc.payables ?? []).reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
   const totalAssetRecoveryCost = (doc.assetsAllocated ?? [])
@@ -100,7 +115,7 @@ export const createFullAndFinalStatement = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Full and Final Statement created successfully", data: { _id: doc._id } });
   } catch (error) {
     console.log("Error in createFullAndFinalStatement", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -122,7 +137,7 @@ export const updateFullAndFinalStatement = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Full and Final Statement updated successfully" });
   } catch (error) {
     console.log("Error in updateFullAndFinalStatement", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -145,7 +160,7 @@ export const deleteFullAndFinalStatement = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Full and Final Statement deleted successfully" });
   } catch (error) {
     console.log("Error in deleteFullAndFinalStatement", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -158,7 +173,7 @@ export const getFullAndFinalStatementById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getFullAndFinalStatementById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -168,7 +183,7 @@ export const listFullAndFinalStatements = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listFullAndFinalStatements", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -188,7 +203,7 @@ export const listFullAndFinalStatementsByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -213,6 +228,6 @@ export const markStatementAsPaid = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Full and Final Statement marked as paid" });
   } catch (error) {
     console.log("Error in markStatementAsPaid", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };

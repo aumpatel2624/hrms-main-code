@@ -13,6 +13,21 @@ import {
   formatReferenceMessage,
 } from "../../utils/referenceHelper.js";
 
+const failure = (res, error) => {
+  if (error.status) {
+    return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
+  }
+  if (error.name === "ValidationError" || error.name === "CastError" || error.code === 11000) {
+    return res.status(400).json({
+      isOk: false,
+      status: 400,
+      message: error.code === 11000 ? "A record with these unique values already exists" : error.message,
+    });
+  }
+  console.error("Travel request failed", error);
+  return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+};
+
 const referenceGuardedDelete = async (Model, modelName, id, label) => {
   const referenceInfo = await getReferencingCounts(modelName, id);
   if (referenceInfo.totalReferences > 0) {
@@ -48,7 +63,7 @@ export const createPurposeOfTravel = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Purpose of Travel created successfully" });
   } catch (error) {
     console.log("Error in createPurposeOfTravel", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -66,7 +81,7 @@ export const updatePurposeOfTravel = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Purpose of Travel updated successfully" });
   } catch (error) {
     console.log("Error in updatePurposeOfTravel", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -82,7 +97,7 @@ export const deletePurposeOfTravel = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Purpose of Travel deleted successfully" });
   } catch (error) {
     console.log("Error in deletePurposeOfTravel", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -96,7 +111,7 @@ export const getPurposeOfTravelById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getPurposeOfTravelById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -106,7 +121,7 @@ export const listPurposeOfTravels = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listPurposeOfTravels", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -123,7 +138,7 @@ export const listPurposeOfTravelByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log("Error in listPurposeOfTravelByParams", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -143,7 +158,7 @@ export const createIdentificationDocumentType = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Identification Document Type created successfully" });
   } catch (error) {
     console.log("Error in createIdentificationDocumentType", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -161,7 +176,7 @@ export const updateIdentificationDocumentType = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Identification Document Type updated successfully" });
   } catch (error) {
     console.log("Error in updateIdentificationDocumentType", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -182,7 +197,7 @@ export const deleteIdentificationDocumentType = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Identification Document Type deleted successfully" });
   } catch (error) {
     console.log("Error in deleteIdentificationDocumentType", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -196,7 +211,7 @@ export const getIdentificationDocumentTypeById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getIdentificationDocumentTypeById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -206,7 +221,7 @@ export const listIdentificationDocumentTypes = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listIdentificationDocumentTypes", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -223,7 +238,7 @@ export const listIdentificationDocumentTypeByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log("Error in listIdentificationDocumentTypeByParams", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -262,7 +277,7 @@ export const createTravelRequest = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Travel Request created successfully" });
   } catch (error) {
     console.log("Error in createTravelRequest", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -283,7 +298,7 @@ export const updateTravelRequest = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Travel Request updated successfully" });
   } catch (error) {
     console.log("Error in updateTravelRequest", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -299,7 +314,7 @@ export const deleteTravelRequest = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Travel Request deleted successfully" });
   } catch (error) {
     console.log("Error in deleteTravelRequest", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -309,7 +324,7 @@ export const listTravelRequests = async (_req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listTravelRequests", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -327,7 +342,7 @@ export const getTravelRequestById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getTravelRequestById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -351,6 +366,6 @@ export const listTravelRequestByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log("Error in listTravelRequestByParams", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };

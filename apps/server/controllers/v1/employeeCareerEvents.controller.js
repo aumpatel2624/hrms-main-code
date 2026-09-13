@@ -17,6 +17,21 @@ import {
 
 // Applies whichever new*Id fields are set and differ from the Employee's
 // current value; writes one EmployeePropertyChange row per applied change.
+const failure = (res, error) => {
+  if (error.status) {
+    return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
+  }
+  if (error.name === "ValidationError" || error.name === "CastError" || error.code === 11000) {
+    return res.status(400).json({
+      isOk: false,
+      status: 400,
+      message: error.code === 11000 ? "A record with these unique values already exists" : error.message,
+    });
+  }
+  console.error("Employee Career Events request failed", error);
+  return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+};
+
 const applyPropertyChanges = async (employee, changes, effectiveDate, sourceDocType, sourceDocId) => {
   const entries = [];
   for (const { field, employeeField, newValue } of changes) {
@@ -66,7 +81,7 @@ export const createEmployeeTransfer = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Employee Transfer created successfully" });
   } catch (error) {
     console.log("Error in createEmployeeTransfer", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -89,7 +104,7 @@ export const deleteEmployeeTransfer = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Employee Transfer deleted successfully" });
   } catch (error) {
     console.log("Error in deleteEmployeeTransfer", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -102,7 +117,7 @@ export const getEmployeeTransferById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getEmployeeTransferById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -112,7 +127,7 @@ export const listEmployeeTransfers = async (_req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listEmployeeTransfers", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -125,7 +140,7 @@ export const listEmployeeTransfersByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -173,7 +188,7 @@ export const createEmployeePromotion = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Employee Promotion created successfully" });
   } catch (error) {
     console.log("Error in createEmployeePromotion", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -196,7 +211,7 @@ export const deleteEmployeePromotion = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Employee Promotion deleted successfully" });
   } catch (error) {
     console.log("Error in deleteEmployeePromotion", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -209,7 +224,7 @@ export const getEmployeePromotionById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getEmployeePromotionById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -219,7 +234,7 @@ export const listEmployeePromotions = async (_req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listEmployeePromotions", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -232,7 +247,7 @@ export const listEmployeePromotionsByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -247,6 +262,6 @@ export const listEmployeePropertyChangesByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };

@@ -12,6 +12,21 @@ import {
   formatReferenceMessage,
 } from "../../utils/referenceHelper.js";
 
+const failure = (res, error) => {
+  if (error.status) {
+    return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
+  }
+  if (error.name === "ValidationError" || error.name === "CastError" || error.code === 11000) {
+    return res.status(400).json({
+      isOk: false,
+      status: 400,
+      message: error.code === 11000 ? "A record with these unique values already exists" : error.message,
+    });
+  }
+  console.error("Interview Feedback request failed", error);
+  return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+};
+
 export const createInterviewFeedback = async (req, res) => {
   try {
     const { interviewId, interviewerId, result, feedback, skillAssessment } = req.body;
@@ -56,7 +71,7 @@ export const createInterviewFeedback = async (req, res) => {
       return res.status(409).json({ isOk: false, status: 409, message: "Feedback already submitted for this Interview by this interviewer" });
     }
     console.log("Error in createInterviewFeedback", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -73,7 +88,7 @@ export const updateInterviewFeedback = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Interview Feedback updated successfully" });
   } catch (error) {
     console.log("Error in updateInterviewFeedback", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -96,7 +111,7 @@ export const deleteInterviewFeedback = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Interview Feedback deleted successfully" });
   } catch (error) {
     console.log("Error in deleteInterviewFeedback", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -109,7 +124,7 @@ export const getInterviewFeedbackById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getInterviewFeedbackById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -121,7 +136,7 @@ export const listInterviewFeedbacks = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listInterviewFeedbacks", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -141,6 +156,6 @@ export const listInterviewFeedbacksByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };

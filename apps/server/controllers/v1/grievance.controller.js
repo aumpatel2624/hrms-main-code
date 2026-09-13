@@ -15,6 +15,21 @@ import {
 
 // ---------------------------------------------------------- Grievance Type --
 
+const failure = (res, error) => {
+  if (error.status) {
+    return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
+  }
+  if (error.name === "ValidationError" || error.name === "CastError" || error.code === 11000) {
+    return res.status(400).json({
+      isOk: false,
+      status: 400,
+      message: error.code === 11000 ? "A record with these unique values already exists" : error.message,
+    });
+  }
+  console.error("Grievance request failed", error);
+  return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+};
+
 export const createGrievanceType = async (req, res) => {
   try {
     const { grievanceTypeName, description, isActive } = req.body;
@@ -29,7 +44,7 @@ export const createGrievanceType = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Grievance type created successfully" });
   } catch (error) {
     console.log("Error in createGrievanceType", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -45,7 +60,7 @@ export const updateGrievanceType = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Grievance type updated successfully" });
   } catch (error) {
     console.log("Error in updateGrievanceType", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -68,7 +83,7 @@ export const deleteGrievanceType = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Grievance type deleted successfully" });
   } catch (error) {
     console.log("Error in deleteGrievanceType", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -81,7 +96,7 @@ export const getGrievanceTypeById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getGrievanceTypeById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -91,7 +106,7 @@ export const listGrievanceTypes = async (_req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listGrievanceTypes", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -104,7 +119,7 @@ export const listGrievanceTypesByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -149,7 +164,7 @@ export const createEmployeeGrievance = async (req, res) => {
     return res.status(201).json({ isOk: true, status: 201, message: "Employee Grievance created successfully" });
   } catch (error) {
     console.log("Error in createEmployeeGrievance", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -171,7 +186,7 @@ export const updateEmployeeGrievance = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Employee Grievance updated successfully" });
   } catch (error) {
     console.log("Error in updateEmployeeGrievance", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -194,7 +209,7 @@ export const deleteEmployeeGrievance = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Employee Grievance deleted successfully" });
   } catch (error) {
     console.log("Error in deleteEmployeeGrievance", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -207,7 +222,7 @@ export const getEmployeeGrievanceById = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getEmployeeGrievanceById", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -217,7 +232,7 @@ export const listEmployeeGrievances = async (_req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listEmployeeGrievances", error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };
 
@@ -233,6 +248,6 @@ export const listEmployeeGrievancesByParams = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+    return failure(res, error);
   }
 };

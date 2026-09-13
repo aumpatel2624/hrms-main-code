@@ -12,6 +12,10 @@ import {
   getReferencingCounts,
   formatReferenceMessage,
 } from "../../utils/referenceHelper.js";
+import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
+import { buildScopeFilter } from "../../utils/scope.js";
+import { SCOPES } from "@demo-panel/shared/scopes";
+import { ROLES } from "@demo-panel/shared/roles";
 
 const failure = (res, error) => {
   if (error.status) {
@@ -260,17 +264,40 @@ const assertActiveEmployee = async (employeeId) => {
   return { ok: true, employee };
 };
 
+/**
+ * Issue #34 security fix: Travel Request's Employee grant never carried a
+ * dataScope at all (fixed to SCOPES.OWN in seed/index.js), so this doctype
+ * had no ownership enforcement anywhere — create/update trusted employeeId
+ * from the body, get-by-id and the list had no scoping. Mirrors
+ * shiftAttendanceTransactions.controller.js's canAccessOwnRecord/
+ * employeeOwnScopeFilter shape exactly.
+ */
+const canAccessOwnTravelRequest = async (req, doc) => {
+  if (!req.user || req.user.role === ROLES.ADMIN) return true;
+  if (req.user.dataScope !== SCOPES.OWN) return true;
+  await resolveRequestEmployee(req);
+  return String(req.user.employeeId) === String(doc.employeeId);
+};
+
 export const createTravelRequest = async (req, res) => {
   try {
-    const { employeeId, travelType, purposeOfTravelId } = req.body;
+    // A self-service caller can only ever request travel for themselves —
+    // the client-supplied employeeId is trusted only for HR User/HR Manager.
+    let employeeId = req.body.employeeId;
+    if (req.user?.dataScope === SCOPES.OWN) {
+      const ownEmployee = await resolveRequestEmployee(req);
+      if (!ownEmployee) return res.status(403).json({ isOk: false, status: 403, message: "No employee record linked to this user" });
+      employeeId = ownEmployee._id;
+    }
+    const { travelType, purposeOfTravelId } = req.body;
     if (!employeeId || !travelType || !purposeOfTravelId) {
       return res.status(400).json({ isOk: false, status: 400, message: "Employee, Travel Type and Purpose of Travel are required" });
     }
     const guard = await assertActiveEmployee(employeeId);
     if (!guard.ok) return res.status(guard.status).json({ isOk: false, status: guard.status, message: guard.message });
 
-    const payload = {};
-    for (const field of TRAVEL_REQUEST_FIELDS) if (req.body[field] !== undefined) payload[field] = req.body[field];
+    const payload = { employeeId };
+    for (const field of TRAVEL_REQUEST_FIELDS) if (field !== "employeeId" && req.body[field] !== undefined) payload[field] = req.body[field];
     if (!payload.companyId) payload.companyId = guard.employee.companyId;
 
     await TravelRequest.create(payload);
@@ -288,12 +315,19 @@ export const updateTravelRequest = async (req, res) => {
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Travel Request not found" });
     }
+    if (!(await canAccessOwnTravelRequest(req, doc))) {
+      return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to edit this Travel Request" });
+    }
 
-    const nextEmployeeId = req.body.employeeId ?? String(doc.employeeId);
+    // A self-service caller can never reassign the request to a different
+    // employee — the field is dropped from the update entirely for that tier.
+    const body = req.user?.dataScope === SCOPES.OWN ? { ...req.body, employeeId: String(doc.employeeId) } : req.body;
+
+    const nextEmployeeId = body.employeeId ?? String(doc.employeeId);
     const guard = await assertActiveEmployee(nextEmployeeId);
     if (!guard.ok) return res.status(guard.status).json({ isOk: false, status: guard.status, message: guard.message });
 
-    for (const field of TRAVEL_REQUEST_FIELDS) if (req.body[field] !== undefined) doc[field] = req.body[field];
+    for (const field of TRAVEL_REQUEST_FIELDS) if (body[field] !== undefined) doc[field] = body[field];
     await doc.save();
     return res.status(200).json({ isOk: true, status: 200, message: "Travel Request updated successfully" });
   } catch (error) {
@@ -331,14 +365,22 @@ export const listTravelRequests = async (_req, res) => {
 export const getTravelRequestById = async (req, res) => {
   try {
     const { travelRequestId } = req.params;
-    const doc = await TravelRequest.findById(travelRequestId)
-      .populate("employeeId", "employeeName employeeCode")
-      .populate("purposeOfTravelId", "purposeOfTravelName")
-      .populate("personalIdTypeId", "identificationDocumentTypeName")
-      .populate("companyId", "companyName");
+    // Ownership check runs on the raw (unpopulated) doc — a populated
+    // employeeId sub-document's String() is not its hex id (issue #13's
+    // trap, same one leaves/goal controllers already avoid).
+    const doc = await TravelRequest.findById(travelRequestId);
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Travel Request not found" });
     }
+    if (!(await canAccessOwnTravelRequest(req, doc))) {
+      return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to view this Travel Request" });
+    }
+    await doc.populate([
+      { path: "employeeId", select: "employeeName employeeCode" },
+      { path: "purposeOfTravelId", select: "purposeOfTravelName" },
+      { path: "personalIdTypeId", select: "identificationDocumentTypeName" },
+      { path: "companyId", select: "companyName" },
+    ]);
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getTravelRequestById", error);
@@ -348,6 +390,12 @@ export const getTravelRequestById = async (req, res) => {
 
 export const listTravelRequestByParams = async (req, res) => {
   try {
+    // Issue #34 security fix: this list had no scope filter at all — an
+    // Employee (dataScope OWN, per the seed fix) saw every employee's
+    // Travel Requests, not just their own.
+    const ownEmployee = await resolveRequestEmployee(req);
+    const scopeFilter = buildScopeFilter({ ...req.user, id: ownEmployee?._id }, { owner: "employeeId" });
+
     const list = await runListQuery(TravelRequest, req.body, {
       searchFields: ["detailsOfSponsor", "description", "personalIdNumber"],
       filterable: {
@@ -362,6 +410,7 @@ export const listTravelRequestByParams = async (req, res) => {
         { $unwind: { path: "$employee", preserveNullAndEmptyArrays: true } },
         { $addFields: { employeeName: { $ifNull: ["$employee.employeeName", ""] } } },
       ],
+      scopeFilter,
     });
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {

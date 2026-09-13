@@ -1,4 +1,4 @@
-import { createContext, useEffect, useState, useContext } from "react";
+import { createContext, useEffect, useState, useContext, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ROLES } from "@demo-panel/shared/roles";
@@ -47,7 +47,10 @@ const MenuProvider = ({ children }) => {
     });
     const userRoles = userRolesQuery.data?.data?.data?.[0] ?? null;
     const rawMenus = menusQuery.data?.data?.data ?? [];
-    const menuData = isAdmin ? rawMenus : filterMenusByPermission(rawMenus, userRoles?.roles ?? []);
+    const menuData = useMemo(
+        () => (isAdmin ? rawMenus : filterMenusByPermission(rawMenus, userRoles?.roles ?? [])),
+        [isAdmin, rawMenus, userRoles],
+    );
     const loading = currentUserQuery.isLoading || menusQuery.isLoading || (!isAdmin && userRolesQuery.isLoading);
     const error = currentUserQuery.error || menusQuery.error || userRolesQuery.error;
 

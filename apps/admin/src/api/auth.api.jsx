@@ -6,6 +6,7 @@
  */
 import api from "./index";
 import { ENDPOINTS } from "./endpoints";
+import { queryClient } from "../queryClient";
 
 /**
  * Log in. One endpoint for both admin users and users - the server works out
@@ -104,6 +105,7 @@ export const logout = async () => {
     } catch (error) {
         console.error("Logout API error:", error);
     } finally {
+        queryClient.clear();
         // Always clear local storage regardless of API result
         localStorage.removeItem("role");
         window.location.href = "/";

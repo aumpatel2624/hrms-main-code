@@ -2,6 +2,9 @@ import { runListQuery } from "../../utils/listQuery.js";
 import MenuMaster from "../../models/MenuMaster.js";
 import mongoose from "mongoose";
 import { invalidateMenuCache } from "../../middlewares/checkPermission.js";
+import { deleteCache, getOrSet } from "../../utils/cache.js";
+
+const invalidateMenuTree = () => deleteCache("menus:tree:v1");
 
 export const createMenuMaster = async (req, res) => {
   try {
@@ -28,6 +31,7 @@ export const createMenuMaster = async (req, res) => {
     });
 
     invalidateMenuCache();
+    void invalidateMenuTree();
 
     res.status(201).json({
       isOk: true,
@@ -92,6 +96,7 @@ export const updateMenuMaster = async (req, res) => {
     );
 
     invalidateMenuCache();
+    void invalidateMenuTree();
 
     res.status(200).json({
       isOk: true,
@@ -118,6 +123,7 @@ export const deleteMenuMaster = async (req, res) => {
     });
 
     invalidateMenuCache();
+    void invalidateMenuTree();
 
     res.status(200).json({
       isOk: true,
@@ -181,6 +187,7 @@ export const listMenuMasterByParams = async (req, res) => {
 
 export const getMenuByGroups = async (req, res) => {
   try {
+    const result = await getOrSet("menus:tree:v1", 120, async () => {
     // Get all active menu groups ordered by sequence
     const menuGroups = await mongoose
       .model("MenuGroupMaster")
@@ -287,6 +294,8 @@ export const getMenuByGroups = async (req, res) => {
         });
       }
     }
+    return result;
+    });
     res.status(200).json({
       isOk: true,
       message: "Menus by groups fetched successfully",

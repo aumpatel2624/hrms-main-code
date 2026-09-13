@@ -4206,3 +4206,12 @@ consumer; single-branch build
   keys immediately; corresponding client mutations invalidate their query families. Redis was not
   installed in the verification container, so the live fallback path was exercised using a refused
   local Redis URL; the server logged one warning and completed normal browser navigation.
+
+### ADR-038 — Direct branch handoff for Issue #33
+
+- **Date**: 2026-09-13
+- **Status**: accepted
+- **Context**: The normal delivery convention requires a pull request after a feature branch is pushed. The user explicitly instructed the Issue #33 fix to be committed and pushed on `fix/leave-application-employee-name` without a PR because the orchestrator merges directly into `development`.
+- **Decision**: Push the verified branch without opening a pull request.
+- **Consequences**: This is limited to this branch handoff. It does not authorise a self-merge, changes to long-lived branches, or deployment.
+- **Deviates from convention**: yes — the pull-request step in `AGENTS.md`/`git-flow`; explicitly approved by the user on 2026-09-13.

@@ -4153,3 +4153,16 @@ consumer; single-branch build
   commits to long-lived branches, self-merging, deployment, or skipping verification.
 - **Deviates from convention**: yes — the push-and-open-PR step in `AGENTS.md`/`git-flow`. Approved
   by the user on 2026-09-13 for this session’s orchestrated merge workflow.
+
+### ADR-036 — Direct branch handoff for verified demo-data seed
+
+- **Date**: 2026-09-13
+- **Status**: accepted
+- **Context**: The normal delivery convention requires a pull request after a feature branch is
+  pushed. The user explicitly instructed this verification pass to commit and push
+  `feat/demo-data-seed` without a PR because the orchestrator merges directly into `development`.
+- **Decision**: Push the verified branch without opening a pull request.
+- **Consequences**: This is limited to this branch handoff. It does not authorise a self-merge,
+  changes to long-lived branches, or deployment.
+- **Deviates from convention**: yes — the pull-request step in `AGENTS.md`/`git-flow`; explicitly
+  approved by the user on 2026-09-13.

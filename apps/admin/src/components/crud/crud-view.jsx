@@ -170,7 +170,7 @@ const CrudView = ({ config }) => {
     const title = record ? (config.recordTitle?.(record) ?? config.singular) : config.singular;
     const status = record && "isActive" in record ? record.isActive : undefined;
 
-    document.title = `${title} | Demo Panel`;
+    document.title = `${title} | Apidel HRMS`;
 
     return (
         <>

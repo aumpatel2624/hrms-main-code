@@ -136,7 +136,7 @@ const EmployeeAttendanceTool = () => {
         }
     };
 
-    document.title = "Employee Attendance Tool | Demo Panel";
+    document.title = "Employee Attendance Tool | Apidel HRMS";
 
     if (!currentPagePermissions.edit) {
         return (

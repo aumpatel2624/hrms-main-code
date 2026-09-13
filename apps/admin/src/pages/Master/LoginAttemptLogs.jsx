@@ -226,7 +226,7 @@ const LoginAttemptLogs = () => {
         unblock: { title: "Unblock account?", description: `This will restore access for ${selectedUser?.userEmail}.`, confirm: "Unblock" },
     }[modalAction] || {};
 
-    document.title = `Login Attempt Logs | Demo Panel`;
+    document.title = `Login Attempt Logs | Apidel HRMS`;
 
     return (
         <>

@@ -165,7 +165,7 @@ const ShiftAssignmentTool = () => {
         }
     };
 
-    document.title = "Shift Assignment Tool | Demo Panel";
+    document.title = "Shift Assignment Tool | Apidel HRMS";
 
     if (!currentPagePermissions.edit) {
         return (

@@ -187,7 +187,7 @@ const SeoNotFoundLog = () => {
         [currentPagePermissions],
     );
 
-    document.title = "404 Log | Demo Panel";
+    document.title = "404 Log | Apidel HRMS";
 
     return (
         <>

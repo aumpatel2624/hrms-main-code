@@ -7,7 +7,7 @@ const UserProfile = () => {
     const { adminData } = useContext(AuthContext);
     const name = adminData?.adminName || adminData?.userName;
 
-    document.title = `Profile | Demo Panel`;
+    document.title = `Profile | Apidel HRMS`;
 
     return (
         <>

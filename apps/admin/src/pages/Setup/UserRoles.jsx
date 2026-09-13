@@ -703,7 +703,7 @@ const UserRoles = () => {
             </Fragment>
         ));
 
-    document.title = `User Roles | Demo Panel`;
+    document.title = `User Roles | Apidel HRMS`;
 
     return (
         <>

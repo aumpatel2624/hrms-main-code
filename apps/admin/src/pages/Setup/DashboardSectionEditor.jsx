@@ -342,7 +342,7 @@ const DashboardSectionEditor = ({ mode = "add" }) => {
         );
     };
 
-    document.title = `${isEdit ? "Edit" : "New"} dashboard section | Demo Panel`;
+    document.title = `${isEdit ? "Edit" : "New"} dashboard section | Apidel HRMS`;
 
     if (loading) {
         return (

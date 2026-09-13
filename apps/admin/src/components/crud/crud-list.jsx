@@ -153,7 +153,7 @@ const CrudList = ({ config }) => {
         : orderable;
     const columns = [...ordered.filter((c) => !(prefs.hidden ?? []).includes(c.name)), actionColumn].filter(Boolean);
 
-    document.title = `${config.plural} | Demo Panel`;
+    document.title = `${config.plural} | Apidel HRMS`;
 
     return (
         <>

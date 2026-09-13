@@ -52,7 +52,7 @@ const NavBranch = ({ name, icon, isOpen, onToggle, depth, hasActiveChild, childr
 );
 
 /** A navigable leaf. */
-const NavLeaf = ({ to, name, icon, isActive, onClick }) => (
+const NavLeaf = ({ to, name, icon, isActive, onClick, collapsed = false }) => (
     <li>
         <Link
             to={to}
@@ -62,14 +62,65 @@ const NavLeaf = ({ to, name, icon, isActive, onClick }) => (
             className={cx(
                 rowBase,
                 "relative",
+                collapsed && "justify-center px-3",
                 isActive
                     ? "bg-white/15 font-semibold text-white before:absolute before:top-1/2 before:-left-2.5 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-white"
                     : "font-medium text-white/70 hover:bg-white/10 hover:text-white",
             )}
         >
             <MenuIcon icon={icon} className={cx("transition-colors", isActive ? "text-white" : "text-white/55 group-hover:text-white/90")} />
-            <span className="truncate">{name}</span>
+            <span className={cx("truncate", collapsed && "sr-only")}>{name}</span>
         </Link>
+    </li>
+);
+
+const FlyoutItem = ({ item, pathname, onNavigate, depth = 0 }) => {
+    if (!item?.name) return null;
+    if (item.children?.length) {
+        return (
+            <div className={cx("flex flex-col gap-1", depth > 0 && "ml-3 border-l border-white/15 pl-3")}>
+                <p className="px-2 pt-2 text-xs font-semibold text-white/60">{item.name}</p>
+                {item.children.map((child) => <FlyoutItem key={child.id} item={child} pathname={pathname} onNavigate={onNavigate} depth={depth + 1} />)}
+            </div>
+        );
+    }
+
+    return (
+        <Link
+            to={item.url}
+            onClick={() => item.id && onNavigate(item.id)}
+            className={cx(
+                "rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+                pathname === item.url ? "bg-white/15 text-white" : "text-white/75 hover:bg-white/10 hover:text-white",
+            )}
+        >
+            {item.name}
+        </Link>
+    );
+};
+
+const CollapsedBranch = ({ group, pathname, onNavigate, isOpen, setOpen }) => (
+    <li className="relative" onMouseEnter={() => setOpen(group.groupId)} onMouseLeave={() => setOpen(null)}>
+        <button
+            type="button"
+            title={group.groupName}
+            aria-label={group.groupName}
+            aria-expanded={isOpen}
+            className={cx(
+                rowBase,
+                "justify-center px-3",
+                containsPath(group, pathname) ? "bg-white/15 text-white" : "text-white/70 hover:bg-white/10 hover:text-white",
+            )}
+        >
+            <MenuIcon icon={group.icon} className="text-white/75" />
+            <span className="sr-only">{group.groupName}</span>
+        </button>
+        {isOpen && (
+            <div className="absolute top-0 left-full z-50 ml-2 w-64 rounded-xl bg-brand-900 p-2 shadow-xl ring-1 ring-white/15">
+                <p className="px-2 py-2 text-sm font-semibold text-white">{group.groupName}</p>
+                <div className="flex flex-col gap-0.5">{group.menus.map((item) => <FlyoutItem key={item.id} item={item} pathname={pathname} onNavigate={onNavigate} />)}</div>
+            </div>
+        )}
     </li>
 );
 
@@ -122,11 +173,12 @@ const containsPath = (node, path) => {
     return Boolean(kids?.some((kid) => containsPath(kid, path)));
 };
 
-const SidebarNav = () => {
+const SidebarNav = ({ collapsed = false }) => {
     const { menuData, loading, updateCurrentPagePermissions } = useContext(MenuContext);
     const { pathname } = useLocation();
     const [expanded, setExpanded] = useState({});
     const [search, setSearch] = useState("");
+    const [flyoutGroupId, setFlyoutGroupId] = useState(null);
     const searchRef = useRef(null);
 
     const visibleMenu = useMemo(() => filterTree(menuData, search.trim()), [menuData, search]);
@@ -240,7 +292,8 @@ const SidebarNav = () => {
     const groupIds = groups.filter((g) => !g.isLink && g.menus?.length).map((g) => g.groupId);
 
     return (
-        <nav className="scrollbar-thin flex-1 overflow-y-auto px-3 pb-4">
+        <>
+        <nav className={cx("scrollbar-thin flex-1 overflow-y-auto px-3 pb-4", collapsed && "lg:hidden")}>
             <div className="sticky top-0 z-10 -mx-3 bg-brand-900 px-3 pt-4 pb-3">
                 <div className="group relative">
                     <SearchLg className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-white/40 transition-colors group-focus-within:text-white/70" />
@@ -299,6 +352,42 @@ const SidebarNav = () => {
                 {!loading && groups.map((group) => renderGroup(group, groupIds))}
             </ul>
         </nav>
+        {collapsed && (
+            <nav className="hidden flex-1 overflow-visible px-3 pb-4 lg:flex lg:flex-col">
+                <ul className="flex flex-col gap-1 pt-4">
+                    {loading && Array.from({ length: 5 }).map((_, index) => (
+                        <li key={index} className="mx-auto size-8 animate-pulse rounded-lg bg-white/15" />
+                    ))}
+                    {!loading && groups.length === 0 && <li className="px-1 text-center text-xs text-white/55">—</li>}
+                    {!loading && groups.map((group) => {
+                        if (group.isLink) {
+                            return (
+                                <NavLeaf
+                                    key={group.groupId}
+                                    to={group.url}
+                                    name={group.groupName}
+                                    icon={group.icon}
+                                    isActive={pathname === group.url}
+                                    onClick={() => group.groupId && updateCurrentPagePermissions(group.groupId)}
+                                    collapsed
+                                />
+                            );
+                        }
+                        return (
+                            <CollapsedBranch
+                                key={group.groupId}
+                                group={group}
+                                pathname={pathname}
+                                onNavigate={updateCurrentPagePermissions}
+                                isOpen={flyoutGroupId === group.groupId}
+                                setOpen={setFlyoutGroupId}
+                            />
+                        );
+                    })}
+                </ul>
+            </nav>
+        )}
+        </>
     );
 };
 

@@ -214,7 +214,7 @@ const AuditLog = () => {
         [],
     );
 
-    document.title = "Audit Log | Demo Panel";
+    document.title = "Audit Log | Apidel HRMS";
 
     if (!currentPagePermissions.read) {
         return (

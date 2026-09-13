@@ -116,7 +116,17 @@ const CollapsedBranch = ({ group, pathname, onNavigate, isOpen, setOpen }) => (
             <span className="sr-only">{group.groupName}</span>
         </button>
         {isOpen && (
-            <div className="absolute top-0 left-full z-50 ml-2 w-64 rounded-xl bg-brand-900 p-2 shadow-xl ring-1 ring-white/15">
+            // No ml-* gap here — the flyout abuts the trigger at left-full so there is
+            // no dead zone between them. Visual breathing room is achieved with pl-4
+            // padding *inside* the panel rather than a margin *outside* it.
+            // The panel also carries its own onMouseEnter/onMouseLeave as a belt-and-
+            // suspenders guard: the flyout stays open as long as the mouse is over
+            // the trigger <li> OR over this panel.
+            <div
+                className="absolute top-0 left-full z-50 w-64 rounded-xl bg-brand-900 p-2 pl-4 shadow-xl ring-1 ring-white/15"
+                onMouseEnter={() => setOpen(group.groupId)}
+                onMouseLeave={() => setOpen(null)}
+            >
                 <p className="px-2 py-2 text-sm font-semibold text-white">{group.groupName}</p>
                 <div className="flex flex-col gap-0.5">{group.menus.map((item) => <FlyoutItem key={item.id} item={item} pathname={pathname} onNavigate={onNavigate} />)}</div>
             </div>

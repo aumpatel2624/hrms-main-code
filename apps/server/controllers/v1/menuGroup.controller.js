@@ -1,5 +1,8 @@
 import { runListQuery } from "../../utils/listQuery.js";
 import MenuGroupMaster from "../../models/MenuGroupMaster.js";
+import { deleteCache } from "../../utils/cache.js";
+
+const invalidateMenuTree = () => deleteCache("menus:tree:v1");
 
 export const createMenuGroup = async (req, res) => {
   try {
@@ -14,6 +17,7 @@ export const createMenuGroup = async (req, res) => {
       menuUrl: isLink ? menuUrl : "#",
       icon: req.body.icon || "",
     });
+    void invalidateMenuTree();
 
     res.status(201).json({
       isOk: true,
@@ -88,6 +92,7 @@ export const updateMenuGroup = async (req, res) => {
       },
       { new: true },
     );
+    void invalidateMenuTree();
 
     res.status(200).json({
       isOk: true,
@@ -113,6 +118,7 @@ export const deleteMenuGroup = async (req, res) => {
       { isActive: false },
       { new: true },
     );
+    void invalidateMenuTree();
 
     res.status(200).json({
       isOk: true,

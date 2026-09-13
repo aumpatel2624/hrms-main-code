@@ -8,6 +8,11 @@ import { buildScopeFilter } from "../../utils/scope.js";
 import { validateWidget, runWidgetQuery, runWidgetBreakdown } from "../../utils/widgetQuery.js";
 import { resolveUserScope, checkPermission } from "../../middlewares/checkPermission.js";
 import { getReferencingCounts, formatReferenceMessage } from "../../utils/referenceHelper.js";
+import { deleteCacheByPrefix, getOrSet } from "../../utils/cache.js";
+
+const invalidateDashboardCache = () => {
+  void deleteCacheByPrefix("dashboards:");
+};
 
 /**
  * `{ label: slot }` with numeric slots, or undefined when there is nothing to
@@ -96,6 +101,7 @@ export const createDashboardWidget = async (req, res) => {
     }
 
     const created = await DashboardWidget.create(widget);
+    invalidateDashboardCache();
     return res.status(201).json({
       isOk: true,
       status: 201,
@@ -153,6 +159,7 @@ export const updateDashboardWidget = async (req, res) => {
     if (!updated) {
       return res.status(404).json({ isOk: false, status: 404, message: "Widget not found" });
     }
+    invalidateDashboardCache();
     return res.status(200).json({
       isOk: true,
       status: 200,
@@ -185,6 +192,7 @@ export const deleteDashboardWidget = async (req, res) => {
     if (!widget) {
       return res.status(404).json({ isOk: false, status: 404, message: "Widget not found" });
     }
+    invalidateDashboardCache();
     return res.status(200).json({ isOk: true, status: 200, message: "Widget deleted successfully" });
   } catch (error) {
     console.error("Error in deleteDashboardWidget:", error);
@@ -213,7 +221,7 @@ export const listDashboardWidgetByParams = async (req, res) => {
 
 // ============ RUNNING ============
 
-const executeWidget = async (req, res, widget) => {
+const executeWidget = async (req, res, widget, cacheKey = null) => {
   const source = WIDGET_SOURCES[widget.source];
   const errors = validateWidget(widget, source);
   if (errors.length) {
@@ -237,21 +245,20 @@ const executeWidget = async (req, res, widget) => {
     ? await attendanceScope(req, source.employeeOwned)
     : buildScopeFilter(req.user, source.scopeable);
 
-  const rows = await runWidgetQuery(widget, source, scopeFilter);
+  const data = await (cacheKey ? getOrSet(cacheKey, 120, buildResult) : buildResult());
+  return res.status(200).json({ isOk: true, status: 200, data });
 
-  // Every widget gets a breakdown. A chart that already groups reuses the rows
-  // it just fetched — no second query — while a stat tile or a time series
-  // needs one. Runs on the same scopeFilter either way, so the breakdown can
-  // never reveal rows the widget itself would have hidden.
-  const breakdown = await runWidgetBreakdown(widget, source, scopeFilter, rows);
-
-  return res.status(200).json({
-    isOk: true,
-    status: 200,
+  async function buildResult() {
+    const rows = await runWidgetQuery(widget, source, scopeFilter);
+    // Every widget gets a breakdown. A chart that already groups reuses the rows
+    // it just fetched — no second query — while a stat tile or a time series
+    // needs one. Runs on the same scopeFilter either way, so the breakdown can
+    // never reveal rows the widget itself would have hidden.
+    const breakdown = await runWidgetBreakdown(widget, source, scopeFilter, rows);
+    return {
     // seriesColors rides along so a dashboard renders a widget's colours
     // without a second fetch. A Map from Mongoose, a plain object from the
     // preview path — normalise so the client only ever sees one shape.
-    data: {
       title: widget.title,
       description: widget.description || "",
       chartType: widget.chartType,
@@ -260,8 +267,8 @@ const executeWidget = async (req, res, widget) => {
       seriesColors: widget.seriesColors
         ? Object.fromEntries(widget.seriesColors instanceof Map ? widget.seriesColors : Object.entries(widget.seriesColors))
         : null,
-    },
-  });
+    };
+  }
 };
 
 /** Run an unsaved definition from the builder (write-gated on the route). */
@@ -303,7 +310,10 @@ export const runDashboardWidget = async (req, res) => {
       }
     }
 
-    return await executeWidget(req, res, widget);
+    const scopeKey = [req.user.role, req.user.roleId, req.user.departmentId, req.user.id]
+      .filter(Boolean)
+      .join(":");
+    return await executeWidget(req, res, widget, `dashboards:widget:${widget._id}:${scopeKey}`);
   } catch (error) {
     console.error("Error in runDashboardWidget:", error);
     return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
@@ -339,6 +349,7 @@ export const saveRoleDashboard = async (req, res) => {
       { roleId, widgets: pins },
       { upsert: true, new: true, setDefaultsOnInsert: true },
     );
+    invalidateDashboardCache();
     return res.status(200).json({
       isOk: true,
       status: 200,
@@ -352,6 +363,8 @@ export const saveRoleDashboard = async (req, res) => {
 };
 
 const loadDashboard = async (roleId) => {
+  const cacheKey = `dashboards:role:${roleId ?? "default"}`;
+  return getOrSet(cacheKey, 120, async () => {
   const dashboard = await RoleDashboard.findOne({ roleId, isActive: true })
     .populate("widgets.widgetId", "title chartType isActive")
     .lean();
@@ -362,6 +375,7 @@ const loadDashboard = async (roleId) => {
     .filter((pin) => pin.widgetId && pin.widgetId.isActive)
     .sort((a, b) => a.sequence - b.sequence);
   return dashboard;
+  });
 };
 
 /** The caller's own dashboard: their role's, or the default one for ADMIN. */

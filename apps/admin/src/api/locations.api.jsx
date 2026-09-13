@@ -4,6 +4,10 @@
  */
 import api from "./index";
 import { ENDPOINTS } from "./endpoints";
+import { cachedQuery, invalidateQuery } from "../queryClient";
+
+const locationKey = ["reference-data", "locations"];
+const invalidateLocations = () => invalidateQuery(["reference-data"]);
 
 // ============ COUNTRY OPERATIONS ============
 
@@ -13,7 +17,7 @@ import { ENDPOINTS } from "./endpoints";
  * @returns {Promise}
  */
 export const createCountry = async (data) => {
-    return api.post(ENDPOINTS.COUNTRIES.BASE, data);
+    const response = await api.post(ENDPOINTS.COUNTRIES.BASE, data); invalidateLocations(); return response;
 };
 
 /**
@@ -21,7 +25,7 @@ export const createCountry = async (data) => {
  * @returns {Promise}
  */
 export const getAllCountries = async () => {
-    return api.get(ENDPOINTS.COUNTRIES.BASE);
+    return cachedQuery(["reference-data", "countries"], () => api.get(ENDPOINTS.COUNTRIES.BASE));
 };
 
 /**
@@ -40,7 +44,7 @@ export const getCountryById = async (id) => {
  * @returns {Promise}
  */
 export const updateCountry = async (id, data) => {
-    return api.put(ENDPOINTS.COUNTRIES.BY_ID(id), data);
+    const response = await api.put(ENDPOINTS.COUNTRIES.BY_ID(id), data); invalidateLocations(); return response;
 };
 
 /**
@@ -49,7 +53,7 @@ export const updateCountry = async (id, data) => {
  * @returns {Promise}
  */
 export const deleteCountry = async (id) => {
-    return api.delete(ENDPOINTS.COUNTRIES.BY_ID(id));
+    const response = await api.delete(ENDPOINTS.COUNTRIES.BY_ID(id)); invalidateLocations(); return response;
 };
 
 /**
@@ -78,7 +82,7 @@ export const getStatesByCountry = async (countryId) => {
  * @returns {Promise}
  */
 export const createState = async (data) => {
-    return api.post(ENDPOINTS.STATES.BASE, data);
+    const response = await api.post(ENDPOINTS.STATES.BASE, data); invalidateLocations(); return response;
 };
 
 /**
@@ -86,7 +90,7 @@ export const createState = async (data) => {
  * @returns {Promise}
  */
 export const getAllStates = async () => {
-    return api.get(ENDPOINTS.STATES.BASE);
+    return cachedQuery(["reference-data", "states"], () => api.get(ENDPOINTS.STATES.BASE));
 };
 
 /**
@@ -105,7 +109,7 @@ export const getStateById = async (id) => {
  * @returns {Promise}
  */
 export const updateState = async (id, data) => {
-    return api.put(ENDPOINTS.STATES.BY_ID(id), data);
+    const response = await api.put(ENDPOINTS.STATES.BY_ID(id), data); invalidateLocations(); return response;
 };
 
 /**
@@ -114,7 +118,7 @@ export const updateState = async (id, data) => {
  * @returns {Promise}
  */
 export const deleteState = async (id) => {
-    return api.delete(ENDPOINTS.STATES.BY_ID(id));
+    const response = await api.delete(ENDPOINTS.STATES.BY_ID(id)); invalidateLocations(); return response;
 };
 
 /**
@@ -143,7 +147,7 @@ export const getCitiesByState = async (stateId) => {
  * @returns {Promise}
  */
 export const createCity = async (data) => {
-    return api.post(ENDPOINTS.CITIES.BASE, data);
+    const response = await api.post(ENDPOINTS.CITIES.BASE, data); invalidateLocations(); return response;
 };
 
 /**
@@ -151,7 +155,7 @@ export const createCity = async (data) => {
  * @returns {Promise}
  */
 export const getAllCities = async () => {
-    return api.get(ENDPOINTS.CITIES.BASE);
+    return cachedQuery(["reference-data", "cities"], () => api.get(ENDPOINTS.CITIES.BASE));
 };
 
 /**
@@ -170,7 +174,7 @@ export const getCityById = async (id) => {
  * @returns {Promise}
  */
 export const updateCity = async (id, data) => {
-    return api.put(ENDPOINTS.CITIES.BY_ID(id), data);
+    const response = await api.put(ENDPOINTS.CITIES.BY_ID(id), data); invalidateLocations(); return response;
 };
 
 /**
@@ -179,7 +183,7 @@ export const updateCity = async (id, data) => {
  * @returns {Promise}
  */
 export const deleteCity = async (id) => {
-    return api.delete(ENDPOINTS.CITIES.BY_ID(id));
+    const response = await api.delete(ENDPOINTS.CITIES.BY_ID(id)); invalidateLocations(); return response;
 };
 
 /**
@@ -198,7 +202,7 @@ export const searchCities = async (params) => {
  * @returns {Promise}
  */
 export const getAllLocations = async () => {
-    return api.get(ENDPOINTS.LOCATIONS.BASE);
+    return cachedQuery(locationKey, () => api.get(ENDPOINTS.LOCATIONS.BASE));
 };
 
 export default {

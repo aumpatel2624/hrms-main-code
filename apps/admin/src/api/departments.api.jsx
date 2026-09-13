@@ -4,6 +4,10 @@
  */
 import api from "./index";
 import { ENDPOINTS } from "./endpoints";
+import { cachedQuery, invalidateQuery } from "../queryClient";
+
+const departmentKey = ["reference-data", "departments"];
+const invalidateDepartments = () => invalidateQuery(departmentKey);
 
 /**
  * Create a new department
@@ -11,7 +15,7 @@ import { ENDPOINTS } from "./endpoints";
  * @returns {Promise}
  */
 export const createDepartment = async (data) => {
-    return api.post(ENDPOINTS.DEPARTMENTS.BASE, data);
+    const response = await api.post(ENDPOINTS.DEPARTMENTS.BASE, data); invalidateDepartments(); return response;
 };
 
 /**
@@ -19,7 +23,7 @@ export const createDepartment = async (data) => {
  * @returns {Promise}
  */
 export const getAllDepartments = async () => {
-    return api.get(ENDPOINTS.DEPARTMENTS.BASE);
+    return cachedQuery(departmentKey, () => api.get(ENDPOINTS.DEPARTMENTS.BASE));
 };
 
 /**
@@ -38,7 +42,7 @@ export const getDepartmentById = async (id) => {
  * @returns {Promise}
  */
 export const updateDepartment = async (id, data) => {
-    return api.put(ENDPOINTS.DEPARTMENTS.BY_ID(id), data);
+    const response = await api.put(ENDPOINTS.DEPARTMENTS.BY_ID(id), data); invalidateDepartments(); return response;
 };
 
 /**
@@ -47,7 +51,7 @@ export const updateDepartment = async (id, data) => {
  * @returns {Promise}
  */
 export const deleteDepartment = async (id) => {
-    return api.delete(ENDPOINTS.DEPARTMENTS.BY_ID(id));
+    const response = await api.delete(ENDPOINTS.DEPARTMENTS.BY_ID(id)); invalidateDepartments(); return response;
 };
 
 /**

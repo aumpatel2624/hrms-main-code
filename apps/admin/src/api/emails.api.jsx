@@ -4,6 +4,10 @@
  */
 import api from "./index";
 import { ENDPOINTS } from "./endpoints";
+import { cachedQuery, invalidateQuery } from "../queryClient";
+
+const emailSetupKey = ["reference-data", "email-setups"];
+const emailForKey = ["reference-data", "email-for"];
 
 // ============ EMAIL SETUP OPERATIONS ============
 
@@ -13,7 +17,7 @@ import { ENDPOINTS } from "./endpoints";
  * @returns {Promise}
  */
 export const createEmailSetup = async (data) => {
-    return api.post(ENDPOINTS.EMAIL_SETUPS.BASE, data);
+    const response = await api.post(ENDPOINTS.EMAIL_SETUPS.BASE, data); invalidateQuery(emailSetupKey); return response;
 };
 
 /**
@@ -21,7 +25,7 @@ export const createEmailSetup = async (data) => {
  * @returns {Promise}
  */
 export const getAllEmailSetups = async () => {
-    return api.get(ENDPOINTS.EMAIL_SETUPS.BASE);
+    return cachedQuery(emailSetupKey, () => api.get(ENDPOINTS.EMAIL_SETUPS.BASE));
 };
 
 /**
@@ -40,7 +44,7 @@ export const getEmailSetupById = async (id) => {
  * @returns {Promise}
  */
 export const updateEmailSetup = async (id, data) => {
-    return api.put(ENDPOINTS.EMAIL_SETUPS.BY_ID(id), data);
+    const response = await api.put(ENDPOINTS.EMAIL_SETUPS.BY_ID(id), data); invalidateQuery(emailSetupKey); return response;
 };
 
 /**
@@ -49,7 +53,7 @@ export const updateEmailSetup = async (id, data) => {
  * @returns {Promise}
  */
 export const deleteEmailSetup = async (id) => {
-    return api.delete(ENDPOINTS.EMAIL_SETUPS.BY_ID(id));
+    const response = await api.delete(ENDPOINTS.EMAIL_SETUPS.BY_ID(id)); invalidateQuery(emailSetupKey); return response;
 };
 
 /**
@@ -69,7 +73,7 @@ export const searchEmailSetups = async (params) => {
  * @returns {Promise}
  */
 export const createEmailFor = async (data) => {
-    return api.post(ENDPOINTS.EMAIL_FOR.BASE, data);
+    const response = await api.post(ENDPOINTS.EMAIL_FOR.BASE, data); invalidateQuery(emailForKey); return response;
 };
 
 /**
@@ -77,7 +81,7 @@ export const createEmailFor = async (data) => {
  * @returns {Promise}
  */
 export const getAllEmailFor = async () => {
-    return api.get(ENDPOINTS.EMAIL_FOR.BASE);
+    return cachedQuery(emailForKey, () => api.get(ENDPOINTS.EMAIL_FOR.BASE));
 };
 
 /**
@@ -96,7 +100,7 @@ export const getEmailForById = async (id) => {
  * @returns {Promise}
  */
 export const updateEmailFor = async (id, data) => {
-    return api.put(ENDPOINTS.EMAIL_FOR.BY_ID(id), data);
+    const response = await api.put(ENDPOINTS.EMAIL_FOR.BY_ID(id), data); invalidateQuery(emailForKey); return response;
 };
 
 /**
@@ -105,7 +109,7 @@ export const updateEmailFor = async (id, data) => {
  * @returns {Promise}
  */
 export const deleteEmailFor = async (id) => {
-    return api.delete(ENDPOINTS.EMAIL_FOR.BY_ID(id));
+    const response = await api.delete(ENDPOINTS.EMAIL_FOR.BY_ID(id)); invalidateQuery(emailForKey); return response;
 };
 
 /**

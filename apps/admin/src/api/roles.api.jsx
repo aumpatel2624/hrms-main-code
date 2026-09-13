@@ -4,6 +4,10 @@
  */
 import api from "./index";
 import { ENDPOINTS } from "./endpoints";
+import { cachedQuery, invalidateQuery } from "../queryClient";
+
+const roleKey = ["reference-data", "roles"];
+const invalidateRoles = () => invalidateQuery(roleKey);
 
 /**
  * Create a new role
@@ -11,7 +15,7 @@ import { ENDPOINTS } from "./endpoints";
  * @returns {Promise}
  */
 export const createRole = async (data) => {
-    return api.post(ENDPOINTS.ROLES.BASE, data);
+    const response = await api.post(ENDPOINTS.ROLES.BASE, data); invalidateRoles(); return response;
 };
 
 /**
@@ -19,7 +23,7 @@ export const createRole = async (data) => {
  * @returns {Promise}
  */
 export const getAllRoles = async () => {
-    return api.get(ENDPOINTS.ROLES.BASE);
+    return cachedQuery(roleKey, () => api.get(ENDPOINTS.ROLES.BASE));
 };
 
 /**
@@ -38,7 +42,7 @@ export const getRoleById = async (id) => {
  * @returns {Promise}
  */
 export const updateRole = async (id, data) => {
-    return api.put(ENDPOINTS.ROLES.BY_ID(id), data);
+    const response = await api.put(ENDPOINTS.ROLES.BY_ID(id), data); invalidateRoles(); return response;
 };
 
 /**
@@ -47,7 +51,7 @@ export const updateRole = async (id, data) => {
  * @returns {Promise}
  */
 export const deleteRole = async (id) => {
-    return api.delete(ENDPOINTS.ROLES.BY_ID(id));
+    const response = await api.delete(ENDPOINTS.ROLES.BY_ID(id)); invalidateRoles(); return response;
 };
 
 /**

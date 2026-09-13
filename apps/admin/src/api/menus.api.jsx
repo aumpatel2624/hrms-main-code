@@ -4,6 +4,10 @@
  */
 import api from "./index";
 import { ENDPOINTS } from "./endpoints";
+import { cachedQuery, invalidateQuery } from "../queryClient";
+
+const menuTreeKey = ["menus", "tree"];
+const invalidateMenus = () => invalidateQuery(menuTreeKey);
 
 // ============ MENU GROUP OPERATIONS ============
 
@@ -13,7 +17,7 @@ import { ENDPOINTS } from "./endpoints";
  * @returns {Promise}
  */
 export const createMenuGroup = async (data) => {
-    return api.post(ENDPOINTS.MENU_GROUPS.BASE, data);
+    const response = await api.post(ENDPOINTS.MENU_GROUPS.BASE, data); invalidateMenus(); return response;
 };
 
 /**
@@ -40,7 +44,7 @@ export const getMenuGroupById = async (id) => {
  * @returns {Promise}
  */
 export const updateMenuGroup = async (id, data) => {
-    return api.put(ENDPOINTS.MENU_GROUPS.BY_ID(id), data);
+    const response = await api.put(ENDPOINTS.MENU_GROUPS.BY_ID(id), data); invalidateMenus(); return response;
 };
 
 /**
@@ -49,7 +53,7 @@ export const updateMenuGroup = async (id, data) => {
  * @returns {Promise}
  */
 export const deleteMenuGroup = async (id) => {
-    return api.delete(ENDPOINTS.MENU_GROUPS.BY_ID(id));
+    const response = await api.delete(ENDPOINTS.MENU_GROUPS.BY_ID(id)); invalidateMenus(); return response;
 };
 
 /**
@@ -69,7 +73,7 @@ export const searchMenuGroups = async (params) => {
  * @returns {Promise}
  */
 export const createMenu = async (data) => {
-    return api.post(ENDPOINTS.MENUS.BASE, data);
+    const response = await api.post(ENDPOINTS.MENUS.BASE, data); invalidateMenus(); return response;
 };
 
 /**
@@ -96,7 +100,7 @@ export const getMenuById = async (id) => {
  * @returns {Promise}
  */
 export const updateMenu = async (id, data) => {
-    return api.put(ENDPOINTS.MENUS.BY_ID(id), data);
+    const response = await api.put(ENDPOINTS.MENUS.BY_ID(id), data); invalidateMenus(); return response;
 };
 
 /**
@@ -105,7 +109,7 @@ export const updateMenu = async (id, data) => {
  * @returns {Promise}
  */
 export const deleteMenu = async (id) => {
-    return api.delete(ENDPOINTS.MENUS.BY_ID(id));
+    const response = await api.delete(ENDPOINTS.MENUS.BY_ID(id)); invalidateMenus(); return response;
 };
 
 /**
@@ -122,8 +126,10 @@ export const searchMenus = async (params) => {
  * @returns {Promise}
  */
 export const getMenusByGroups = async () => {
-    return api.get(ENDPOINTS.MENUS.BY_GROUPS);
+    return cachedQuery(menuTreeKey, () => api.get(ENDPOINTS.MENUS.BY_GROUPS));
 };
+
+export const fetchMenusByGroups = async () => api.get(ENDPOINTS.MENUS.BY_GROUPS);
 
 export default {
     // Menu Groups

@@ -4153,3 +4153,43 @@ consumer; single-branch build
   commits to long-lived branches, self-merging, deployment, or skipping verification.
 - **Deviates from convention**: yes — the push-and-open-PR step in `AGENTS.md`/`git-flow`. Approved
   by the user on 2026-09-13 for this session’s orchestrated merge workflow.
+
+### ADR-036 — Short-lived two-tier query cache for shared admin reads
+
+- **Date**: 2026-09-13
+- **Status**: accepted
+- **Context**: Repeated navigation reloads the sidebar menu, current account, reference dropdowns,
+  and dashboard aggregations despite those values changing much less often than screens are opened.
+  Existing Mongoose indexes and list-query ordering are already appropriate; the missing layer is
+  reuse of completed reads in the browser and between server requests.
+- **Options considered**:
+  - _Increase MongoDB indexing or cache every list screen_ — lost. The diagnosis already rules out
+    missing indexes as the main cause, and caching high-churn paginated lists would create broad
+    invalidation complexity for little navigation benefit.
+  - _Use only browser caching_ — lost. It avoids repeated page loads in one tab, but dashboard
+    aggregation and the menu tree still repeat MongoDB work for every user/session.
+  - _Use React Query for repeated client reads and Redis for short-lived shared server results_ — won.
+    It deduplicates in-flight browser requests, preserves useful reads across navigation, and shares
+    expensive slow-changing responses without making Redis an availability dependency.
+- **Decision**: Add React Query with a five-minute default stale window, focus refetch disabled, and
+  two retries. Convert authentication/menu and common reference reads to named query keys and
+  invalidate them on the related client mutations. Add an optional Redis `getOrSet` utility with a
+  120-second TTL for the menu tree, role-dashboard definitions, and saved-widget aggregation runs.
+  It fails open to MongoDB and logs a single warning if Redis cannot be used. Writes delete their
+  affected Redis keys immediately.
+- **Consequences**: Typical navigation has fewer client requests and database queries, while an
+  unavailable Redis service cannot prevent a login or page load. Cache entries are scoped where data
+  is user/role-specific; changing menus or dashboards is immediately visible. Redis becomes an
+  optional locally configured service (`REDIS_URL`) rather than a replacement for Mongo-backed
+  sessions. Per-screen paginated result tables remain uncached in this pass.
+- **Deviates from convention**: no — the user explicitly approved the two new dependencies.
+- **As built**: `@tanstack/react-query` is installed at the app root with the stated five-minute
+  stale window, focus behavior, and retry count. `MenuContext` replaces its remount-only state cache
+  with menu/current-user/role-matrix queries; reference loaders for departments, roles, locations,
+  email setups and email lists use the same query client without forcing a form-system rewrite.
+  The dynamic dashboard uses queries for its role dashboard and saved-widget runs. `ioredis` backs
+  `utils/cache.js`; `menus:tree:v1`, `dashboards:role:*`, and scope-keyed
+  `dashboards:widget:*` entries have a 120-second TTL. Menu and dashboard writes delete their server
+  keys immediately; corresponding client mutations invalidate their query families. Redis was not
+  installed in the verification container, so the live fallback path was exercised using a refused
+  local Redis URL; the server logged one warning and completed normal browser navigation.

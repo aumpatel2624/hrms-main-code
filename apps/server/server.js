@@ -41,6 +41,10 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
+// Redis is an optional query cache; it never replaces the MongoDB session store.
+import { initializeCache } from "./utils/cache.js";
+initializeCache();
+
 global.__basedir = __dirname;
 
 // Create log directory if it doesn't exist

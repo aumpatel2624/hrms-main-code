@@ -1,5 +1,6 @@
 import { createContext, useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { getCurrentUser, verifySession } from "../api/auth.api";
 
 const AuthContext = createContext();
@@ -11,11 +12,12 @@ const AuthProvider = ({ children }) => {
     const [isSessionVerified, setIsSessionVerified] = useState(false);
 
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
 
     // Fetch the logged-in account using the session cookie (no ID needed)
     const getAdmin = useCallback(() => {
         setLoading(true);
-        getCurrentUser()
+        queryClient.fetchQuery({ queryKey: ["current-user"], queryFn: getCurrentUser })
             .then((res) => {
                 setAdminData(res.data.data);
             })
@@ -32,7 +34,7 @@ const AuthProvider = ({ children }) => {
             .finally(() => {
                 setLoading(false);
             });
-    }, [navigate]);
+    }, [navigate, queryClient]);
 
     // Verify session on page load/refresh
     const verifyUserSession = useCallback(async () => {

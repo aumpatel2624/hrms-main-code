@@ -153,12 +153,22 @@ const runShiftRequestValidation = async (data, { excludeId = null } = {}) => {
 
 export const createShiftRequest = async (req, res) => {
   try {
-    const result = await runShiftRequestValidation(req.body);
+    // Issue #34 security fix: a self-service caller (dataScope OWN on this
+    // menu) can only ever request a shift change for themselves. The
+    // client-supplied employeeId is trusted only for HR User/HR Manager.
+    let employeeId = req.body.employeeId;
+    if (req.user?.dataScope === SCOPES.OWN) {
+      const ownEmployee = await resolveRequestEmployee(req);
+      if (!ownEmployee) return res.status(403).json({ isOk: false, status: 403, message: "No employee record linked to this user" });
+      employeeId = ownEmployee._id;
+    }
+
+    const result = await runShiftRequestValidation({ ...req.body, employeeId });
     if (result.error) return res.status(result.error.status).json({ isOk: false, status: result.error.status, message: result.error.message });
 
     const doc = await ShiftRequest.create({
       shiftTypeId: req.body.shiftTypeId,
-      employeeId: req.body.employeeId,
+      employeeId,
       companyId: result.companyId,
       approverId: result.approverId,
       fromDate: req.body.fromDate,
@@ -398,11 +408,23 @@ const markAttendanceForRequestDay = async (doc, date) => {
 
 export const createAttendanceRequest = async (req, res) => {
   try {
-    const result = await runAttendanceRequestValidation(req.body);
+    // Issue #34 security fix: a self-service caller (dataScope OWN on this
+    // menu) can only ever request an attendance correction for themselves —
+    // this previously let any Employee mark Attendance rows (On Leave/Half
+    // Day) for someone else's employeeId. Trusted from the body only for
+    // HR User/HR Manager.
+    let employeeId = req.body.employeeId;
+    if (req.user?.dataScope === SCOPES.OWN) {
+      const ownEmployee = await resolveRequestEmployee(req);
+      if (!ownEmployee) return res.status(403).json({ isOk: false, status: 403, message: "No employee record linked to this user" });
+      employeeId = ownEmployee._id;
+    }
+
+    const result = await runAttendanceRequestValidation({ ...req.body, employeeId });
     if (result.error) return res.status(result.error.status).json({ isOk: false, status: result.error.status, message: result.error.message });
 
     const doc = await AttendanceRequest.create({
-      employeeId: req.body.employeeId,
+      employeeId,
       companyId: result.companyId,
       fromDate: req.body.fromDate,
       toDate: req.body.toDate,

@@ -17,6 +17,10 @@ import {
   getReferencingCounts,
   formatReferenceMessage,
 } from "../../utils/referenceHelper.js";
+import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
+import { buildScopeFilter } from "../../utils/scope.js";
+import { SCOPES } from "@demo-panel/shared/scopes";
+import { ROLES } from "@demo-panel/shared/roles";
 
 // --------------------------------------------------------------- Training Program --
 
@@ -289,9 +293,32 @@ export const markTrainingEventScheduled = async (req, res) => {
 
 // -------------------------------------------------------------- Training Feedback --
 
+/**
+ * Issue #34 security fix: Training Feedback's Employee grant never carried a
+ * dataScope at all (fixed to SCOPES.OWN in seed/index.js), so this doctype
+ * had no ownership enforcement anywhere. Mirrors
+ * shiftAttendanceTransactions.controller.js's canAccessOwnRecord shape.
+ * (No update function exists for this doctype and Employee has no delete
+ * grant here, so only create/get need it.)
+ */
+const canAccessOwnTrainingFeedback = async (req, doc) => {
+  if (!req.user || req.user.role === ROLES.ADMIN) return true;
+  if (req.user.dataScope !== SCOPES.OWN) return true;
+  await resolveRequestEmployee(req);
+  return String(req.user.employeeId) === String(doc.employeeId);
+};
+
 export const createTrainingFeedback = async (req, res) => {
   try {
-    const { employeeId, trainingEventId, feedback } = req.body;
+    // A self-service caller can only ever submit feedback as themselves —
+    // the client-supplied employeeId is trusted only for HR User/HR Manager.
+    let employeeId = req.body.employeeId;
+    if (req.user?.dataScope === SCOPES.OWN) {
+      const ownEmployee = await resolveRequestEmployee(req);
+      if (!ownEmployee) return res.status(403).json({ isOk: false, status: 403, message: "No employee record linked to this user" });
+      employeeId = ownEmployee._id;
+    }
+    const { trainingEventId, feedback } = req.body;
     if (!employeeId || !trainingEventId || !feedback) {
       return res.status(400).json({ isOk: false, status: 400, message: "Employee, Training Event and Feedback are required" });
     }
@@ -350,6 +377,9 @@ export const getTrainingFeedbackById = async (req, res) => {
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Training Feedback not found" });
     }
+    if (!(await canAccessOwnTrainingFeedback(req, doc))) {
+      return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to view this Training Feedback" });
+    }
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getTrainingFeedbackById", error);
@@ -369,9 +399,16 @@ export const listTrainingFeedbacks = async (_req, res) => {
 
 export const listTrainingFeedbacksByParams = async (req, res) => {
   try {
+    // Issue #34 security fix: this list had no scope filter at all — an
+    // Employee (dataScope OWN, per the seed fix) saw every employee's
+    // Training Feedback, not just their own.
+    const ownEmployee = await resolveRequestEmployee(req);
+    const scopeFilter = buildScopeFilter({ ...req.user, id: ownEmployee?._id }, { owner: "employeeId" });
+
     const list = await runListQuery(TrainingFeedback, req.body, {
       searchFields: ["feedback"],
       filterable: { employeeId: "objectId", trainingEventId: "objectId", isActive: "boolean", createdAt: "date" },
+      scopeFilter,
     });
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {

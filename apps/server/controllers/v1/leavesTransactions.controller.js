@@ -200,9 +200,33 @@ export const listLeaveAdjustmentByParams = async (req, res) => {
 
 const CLR_UPDATABLE_FIELDS = ["workFromDate", "workEndDate", "halfDay", "halfDayDate", "reason", "leaveTypeId"];
 
+// Issue #34 security fix: this doctype had NO ownership check anywhere —
+// create trusted employeeId from the body, and update/get/delete never
+// verified the caller had any relationship to the request at all. Mirrors
+// canAccessLeaveApplication's shape exactly (same menu-row dataScope,
+// APPROVER, and the same "leave" approver domain).
+const canAccessCompensatoryLeaveRequest = async (req, doc) => {
+  if (!req.user || req.user.role === ROLES.ADMIN) return true;
+  if (req.user.dataScope !== SCOPES.APPROVER) return true;
+  await resolveRequestEmployee(req);
+  const approverIds = await getEmployeesApprovedBy(req.user.id, "leave");
+  const allowedIds = [String(req.user.employeeId), ...approverIds];
+  return allowedIds.includes(String(doc.employeeId));
+};
+
 export const createCompensatoryLeaveRequest = async (req, res) => {
   try {
-    const { employeeId, leaveTypeId, workFromDate, workEndDate, reason } = req.body;
+    // Issue #34 security fix: a self-service caller can only ever request
+    // compensatory leave for themselves — the client-supplied employeeId is
+    // trusted only for HR User/HR Manager (same intent as
+    // createLeaveApplication above).
+    let employeeId = req.body.employeeId;
+    if (req.user?.dataScope === SCOPES.APPROVER) {
+      const ownEmployee = await resolveRequestEmployee(req);
+      if (!ownEmployee) return res.status(403).json({ isOk: false, status: 403, message: "No employee record linked to this user" });
+      employeeId = ownEmployee._id;
+    }
+    const { leaveTypeId, workFromDate, workEndDate, reason } = req.body;
     if (!employeeId || !leaveTypeId || !workFromDate || !workEndDate || !reason) {
       return res.status(400).json({ isOk: false, status: 400, message: "Employee, Leave Type, Work From/End Date and Reason are required" });
     }
@@ -255,6 +279,11 @@ export const updateCompensatoryLeaveRequest = async (req, res) => {
   try {
     const doc = await CompensatoryLeaveRequest.findById(req.params.compensatoryLeaveRequestId);
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Compensatory Leave Request not found" });
+    // Issue #34 security fix: previously any authenticated Employee could
+    // edit ANY Compensatory Leave Request by id.
+    if (!(await canAccessCompensatoryLeaveRequest(req, doc))) {
+      return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to edit this Compensatory Leave Request" });
+    }
     if (doc.status !== "open") {
       return res.status(400).json({ isOk: false, status: 400, message: `Cannot edit a ${doc.status} Compensatory Leave Request` });
     }
@@ -272,6 +301,12 @@ export const deleteCompensatoryLeaveRequest = async (req, res) => {
     const { compensatoryLeaveRequestId } = req.params;
     const doc = await CompensatoryLeaveRequest.findById(compensatoryLeaveRequestId);
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Compensatory Leave Request not found" });
+    // Issue #34 security fix: Employee has delete on this doctype (grant is
+    // `full`) — previously any authenticated Employee could delete ANYONE's
+    // pre-approval request by id.
+    if (!(await canAccessCompensatoryLeaveRequest(req, doc))) {
+      return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to delete this Compensatory Leave Request" });
+    }
     if (doc.status === "approved") {
       return res.status(400).json({ isOk: false, status: 400, message: "Cannot delete an approved Compensatory Leave Request — it has already granted leave" });
     }
@@ -286,11 +321,21 @@ export const deleteCompensatoryLeaveRequest = async (req, res) => {
 
 export const getCompensatoryLeaveRequestById = async (req, res) => {
   try {
-    const doc = await CompensatoryLeaveRequest.findById(req.params.compensatoryLeaveRequestId)
-      .populate("employeeId", "employeeName employeeCode")
-      .populate("leaveTypeId", "leaveTypeName")
-      .populate("leaveAllocationId", "fromDate toDate");
+    // Ownership check runs on the raw (unpopulated) doc — a populated
+    // employeeId sub-document's String() is not its hex id (issue #13's
+    // trap).
+    const doc = await CompensatoryLeaveRequest.findById(req.params.compensatoryLeaveRequestId);
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Compensatory Leave Request not found" });
+    // Issue #34 security fix: previously any authenticated Employee could
+    // view ANY Compensatory Leave Request by id.
+    if (!(await canAccessCompensatoryLeaveRequest(req, doc))) {
+      return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to view this Compensatory Leave Request" });
+    }
+    await doc.populate([
+      { path: "employeeId", select: "employeeName employeeCode" },
+      { path: "leaveTypeId", select: "leaveTypeName" },
+      { path: "leaveAllocationId", select: "fromDate toDate" },
+    ]);
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getCompensatoryLeaveRequestById", error);
@@ -670,11 +715,22 @@ const runLeaveApplicationValidation = async (data, { excludeId = null, actingUse
 
 export const createLeaveApplication = async (req, res) => {
   try {
-    const result = await runLeaveApplicationValidation(req.body, { actingUserId: req.user?.id });
+    // Issue #34 security fix: a self-service caller (dataScope APPROVER on
+    // this menu — see seedLeaveRoles) can only ever apply for themselves.
+    // The client-supplied employeeId is trusted only for HR User/HR
+    // Manager, who legitimately create on behalf of any employee.
+    let employeeId = req.body.employeeId;
+    if (req.user?.dataScope === SCOPES.APPROVER) {
+      const ownEmployee = await resolveRequestEmployee(req);
+      if (!ownEmployee) return res.status(403).json({ isOk: false, status: 403, message: "No employee record linked to this user" });
+      employeeId = ownEmployee._id;
+    }
+
+    const result = await runLeaveApplicationValidation({ ...req.body, employeeId }, { actingUserId: req.user?.id });
     if (result.error) return res.status(result.error.status).json({ isOk: false, status: result.error.status, message: result.error.message });
 
     const doc = await LeaveApplication.create({
-      employeeId: req.body.employeeId,
+      employeeId,
       leaveTypeId: req.body.leaveTypeId,
       companyId: result.companyId,
       fromDate: req.body.fromDate,
@@ -699,16 +755,28 @@ export const updateLeaveApplication = async (req, res) => {
     const { leaveApplicationId } = req.params;
     const doc = await LeaveApplication.findById(leaveApplicationId);
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Leave Application not found" });
+    // Issue #34 security fix: the same ownership guard getLeaveApplicationById/
+    // approve/reject/cancel already use, now also gating edits — previously any
+    // authenticated Employee could edit ANY Leave Application by id.
+    if (!(await canAccessLeaveApplication(req, doc))) {
+      return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to edit this Leave Application" });
+    }
     if (doc.status !== "open") {
       return res.status(400).json({ isOk: false, status: 400, message: `Cannot edit a ${doc.status} Leave Application` });
     }
 
-    const merged = { ...doc.toObject(), ...req.body };
+    // Issue #34 security fix: a self-service caller can never reassign an
+    // application to a different employee — drop the field entirely for
+    // that tier so it falls through to the doc's existing owner untouched.
+    const { employeeId: _ignoredEmployeeId, ...selfServiceBody } = req.body;
+    const body = req.user?.dataScope === SCOPES.APPROVER ? selfServiceBody : req.body;
+
+    const merged = { ...doc.toObject(), ...body };
     const result = await runLeaveApplicationValidation(merged, { excludeId: leaveApplicationId, actingUserId: req.user?.id });
     if (result.error) return res.status(result.error.status).json({ isOk: false, status: result.error.status, message: result.error.message });
 
     const EDITABLE_FIELDS = ["employeeId", "leaveTypeId", "fromDate", "toDate", "halfDay", "halfDayDate", "description", "leaveApproverId", "postingDate"];
-    for (const field of EDITABLE_FIELDS) if (req.body[field] !== undefined) doc[field] = req.body[field];
+    for (const field of EDITABLE_FIELDS) if (body[field] !== undefined) doc[field] = body[field];
     doc.totalLeaveDays = result.totalLeaveDays;
     doc.leaveApproverId = result.leaveApproverId;
     doc.companyId = result.companyId;

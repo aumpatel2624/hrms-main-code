@@ -1375,7 +1375,11 @@ const seedTrainingSkillsRoles = async () => {
   const GRANTS = {
     "/training-program": { "HR User": editOnly, "HR Manager": full },
     "/training-event": { "HR User": editOnly, "HR Manager": full },
-    "/training-feedback": { "HR User": editOnly, "HR Manager": full, Employee: fullNoDelete },
+    // dataScope: SCOPES.OWN (issue #34 security fix) — see seedTravelRoles'
+    // identical comment. Without it an Employee's dataScope on this menu
+    // fell back to SCOPES.ALL, letting them list/act on every employee's
+    // Training Feedback, not just their own.
+    "/training-feedback": { "HR User": editOnly, "HR Manager": full, Employee: { ...fullNoDelete, dataScope: SCOPES.OWN } },
     "/skill": { "HR User": readOnly, "HR Manager": full },
     "/employee-skill-map": { "HR User": fullNoDelete, "HR Manager": full },
   };
@@ -1394,6 +1398,16 @@ const seedTrainingSkillsRoles = async () => {
     return true;
   };
 
+  // See seedTravelRoles' identical helper — a missing/wrong dataScope is a
+  // security gap to correct in place on re-seed, not an admin customisation
+  // to preserve.
+  const fixDataScope = (userRoles, menu, expectedScope) => {
+    const row = userRoles.roles.find((r) => String(r.menuId) === String(menu._id));
+    if (!row || row.dataScope === expectedScope) return false;
+    row.dataScope = expectedScope;
+    return true;
+  };
+
   let matrixRowsAdded = 0;
   const roleNames = ["Employee", "HR User", "HR Manager"];
   for (const roleName of roleNames) {
@@ -1407,6 +1421,7 @@ const seedTrainingSkillsRoles = async () => {
       const permObj = grantByRole[roleName];
       if (!permObj) continue;
       if (addRow(userRoles, menuByUrl[menuUrl], permObj)) { matrixRowsAdded += 1; changed = true; }
+      else if (permObj.dataScope && fixDataScope(userRoles, menuByUrl[menuUrl], permObj.dataScope)) { changed = true; }
     }
     if (changed) await userRoles.save();
   }
@@ -1556,7 +1571,11 @@ const seedTravelRoles = async () => {
 
   // { menuUrl: { roleName: permObject } }
   const GRANTS = {
-    "/travel-request": { Employee: fullNoDelete, "HR User": full, "HR Manager": full },
+    // dataScope: SCOPES.OWN (issue #34 security fix) — without it an Employee's
+    // dataScope falls back to their role-level default (SCOPES.ALL), which let
+    // any Employee list and act on every OTHER employee's Travel Request, not
+    // just their own.
+    "/travel-request": { Employee: { ...fullNoDelete, dataScope: SCOPES.OWN }, "HR User": full, "HR Manager": full },
   };
 
   const allMenuUrls = Object.keys(GRANTS);
@@ -1566,6 +1585,17 @@ const seedTravelRoles = async () => {
     return;
   }
   const menuByUrl = Object.fromEntries(menus.map((m) => [m.menuUrl, m]));
+
+  // Unlike the generic additive addRow below, a missing/wrong dataScope is a
+  // security gap, not an admin customisation to preserve — correct it in
+  // place on re-seed so an already-seeded database gets the fix too (issue
+  // #34), without touching any other field on the row.
+  const fixDataScope = (userRoles, menu, expectedScope) => {
+    const row = userRoles.roles.find((r) => String(r.menuId) === String(menu._id));
+    if (!row || row.dataScope === expectedScope) return false;
+    row.dataScope = expectedScope;
+    return true;
+  };
 
   const addRow = (userRoles, menu, permObj) => {
     if (userRoles.roles.some((r) => String(r.menuId) === String(menu._id))) return false;
@@ -1586,6 +1616,7 @@ const seedTravelRoles = async () => {
       const permObj = grantByRole[roleName];
       if (!permObj) continue;
       if (addRow(userRoles, menuByUrl[menuUrl], permObj)) { matrixRowsAdded += 1; changed = true; }
+      else if (permObj.dataScope && fixDataScope(userRoles, menuByUrl[menuUrl], permObj.dataScope)) { changed = true; }
     }
     if (changed) await userRoles.save();
   }

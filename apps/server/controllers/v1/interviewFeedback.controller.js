@@ -151,6 +151,9 @@ export const listInterviewFeedbacksByParams = async (req, res) => {
       stages: [
         { $lookup: { from: "interviews", localField: "interviewId", foreignField: "_id", as: "interview" } },
         { $addFields: { interviewJobApplicantId: { $arrayElemAt: ["$interview.jobApplicantId", 0] } } },
+        { $lookup: { from: "users", localField: "interviewerId", foreignField: "_id", as: "interviewer" } },
+        { $unwind: { path: "$interviewer", preserveNullAndEmptyArrays: true } },
+        { $addFields: { interviewerName: { $ifNull: ["$interviewer.userName", ""] } } },
       ],
     });
     return res.status(200).json({ isOk: true, status: 200, data: list });

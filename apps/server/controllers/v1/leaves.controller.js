@@ -531,6 +531,11 @@ export const listHolidayListAssignmentByParams = async (req, res) => {
         isActive: "boolean",
         createdAt: "date",
       },
+      stages: [
+        { $lookup: { from: "holidaylists", localField: "holidayListId", foreignField: "_id", as: "holidayList" } },
+        { $unwind: { path: "$holidayList", preserveNullAndEmptyArrays: true } },
+        { $addFields: { holidayListName: { $ifNull: ["$holidayList.holidayListName", ""] } } },
+      ],
     });
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {

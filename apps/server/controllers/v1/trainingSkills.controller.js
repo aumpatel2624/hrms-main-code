@@ -409,6 +409,18 @@ export const listTrainingFeedbacksByParams = async (req, res) => {
       searchFields: ["feedback"],
       filterable: { employeeId: "objectId", trainingEventId: "objectId", isActive: "boolean", createdAt: "date" },
       scopeFilter,
+      stages: [
+        { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employee" } },
+        { $unwind: { path: "$employee", preserveNullAndEmptyArrays: true } },
+        { $lookup: { from: "trainingevents", localField: "trainingEventId", foreignField: "_id", as: "trainingEvent" } },
+        { $unwind: { path: "$trainingEvent", preserveNullAndEmptyArrays: true } },
+        {
+          $addFields: {
+            employeeName: { $ifNull: ["$employee.employeeName", ""] },
+            trainingEventName: { $ifNull: ["$trainingEvent.eventName", ""] },
+          },
+        },
+      ],
     });
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
@@ -597,6 +609,11 @@ export const listEmployeeSkillMapsByParams = async (req, res) => {
     const list = await runListQuery(EmployeeSkillMap, req.body, {
       searchFields: [],
       filterable: { employeeId: "objectId", isActive: "boolean", createdAt: "date" },
+      stages: [
+        { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employee" } },
+        { $unwind: { path: "$employee", preserveNullAndEmptyArrays: true } },
+        { $addFields: { employeeName: { $ifNull: ["$employee.employeeName", ""] } } },
+      ],
     });
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {

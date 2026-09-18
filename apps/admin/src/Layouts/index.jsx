@@ -12,18 +12,18 @@ const Layout = ({ children }) => {
     // attributes that were written straight onto document.documentElement.
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [collapsed, setCollapsed] = useState(() => localStorage.getItem("sidebar-collapsed") === "1");
-    const [dark, setDark] = useState(false);
+    const [dark, setDark] = useState(() => localStorage.getItem("theme") === "dark");
 
     useEffect(() => {
         localStorage.setItem("sidebar-collapsed", collapsed ? "1" : "0");
     }, [collapsed]);
 
-    const toggleTheme = () => {
-        setDark((prev) => {
-            document.documentElement.classList.toggle("dark-mode", !prev);
-            return !prev;
-        });
-    };
+    useEffect(() => {
+        document.documentElement.classList.toggle("dark-mode", dark);
+        localStorage.setItem("theme", dark ? "dark" : "light");
+    }, [dark]);
+
+    const toggleTheme = () => setDark((prev) => !prev);
 
     return (
         <div className="flex min-h-dvh bg-secondary">

@@ -140,10 +140,6 @@ const MENU_GROUPS = [
       { menuName: "Users", menuUrl: "/user", icon: "ri-user-3-line" },
       { menuName: "User Roles", menuUrl: "/user-roles", icon: "ri-lock-password-line" },
       { menuName: "Dashboard Builder", menuUrl: "/dashboard-builder", icon: "ri-bar-chart-2-line" },
-      { menuName: "SEO Pages", menuUrl: "/seo-pages", icon: "ri-search-eye-line" },
-      { menuName: "SEO Settings", menuUrl: "/seo-settings", icon: "ri-global-line" },
-      { menuName: "Redirects", menuUrl: "/seo-redirects", icon: "ri-arrow-left-right-line" },
-      { menuName: "404 Log", menuUrl: "/seo-404", icon: "ri-error-warning-line" },
     ],
   },
   // HRMS module 1 (ADR-017). Department already existed under "Master" —

@@ -14,15 +14,11 @@
  *   live credentials.
  * - `LoginAttempt` — per-user lock state, rewritten on every login attempt.
  *   Authentication history already has its own screen.
- * - `SeoUrl` / `SeoNotFound` — written by the public website, thousands of rows,
- *   no human decision behind any of them.
  */
 export const SKIP_MODELS = Object.freeze([
   "AuditLog",
   "Otp",
   "LoginAttempt",
-  "SeoUrl",
-  "SeoNotFound",
 ]);
 
 /**

@@ -589,40 +589,6 @@ export const CONFIG_SCREENS = [
         ],
     },
     {
-        key: "seo-redirect",
-        config: "seoRedirectConfig",
-        source: "apps/admin/src/entities/index.js",
-        intro:
-            "When a page on your website moves or disappears, a redirect sends anyone asking for the " +
-            "old address to the new one. Without it they see an error, and search engines eventually " +
-            "drop the page.",
-        when:
-            "Add a redirect whenever you change or remove a page's URL — before the change goes live, " +
-            "ideally.",
-        gotchas: [
-            "Use 301 unless the page is genuinely coming back. It tells search engines the move is " +
-                "permanent and passes the old page's standing to the new one.",
-            "410 means gone for good and needs no destination.",
-            "The Times Used column tells you whether a redirect is still earning its place.",
-        ],
-    },
-    {
-        key: "seo-page",
-        config: "seoPageConfig",
-        source: "apps/admin/src/entities/advanced.jsx",
-        listOnly: true,
-        intro:
-            "How each fixed page of your website appears in a search result and when someone shares " +
-            "the link. This screen lists them; opening one takes you to the editor, which previews " +
-            "both as you type.",
-        when: "Review a page's entry whenever its content changes enough that the summary is now wrong.",
-        gotchas: [
-            "Only pages with fixed addresses live here — the home page, About, Contact. Content with " +
-                "its own record carries its own settings.",
-            "A page left blank falls back to the site-wide defaults on the SEO Settings screen.",
-        ],
-    },
-    {
         key: "employee-onboarding-template",
         config: "employeeOnboardingTemplateConfig",
         source: "apps/admin/src/entities/advanced.jsx",
@@ -1514,30 +1480,6 @@ export const CUSTOM_SCREENS = [
         ],
     },
     {
-        key: "seo-settings",
-        title: "SEO Settings",
-        path: "/seo-settings",
-        source: "apps/admin/src/pages/Setup/SeoSettings.jsx",
-        intro:
-            "Site-wide defaults for how your website appears in search results — used by any page that " +
-            "does not set its own.",
-        body: [
-            {
-                heading: "Defaults, not overrides",
-                text:
-                    "Anything set on an individual page wins. What you put here fills the gaps, so a " +
-                    "page nobody has written a description for still has a sensible one.",
-            },
-            {
-                heading: "Templates",
-                text:
-                    "The title template controls how page titles are assembled — typically the page name " +
-                    "followed by your site name. Set it once here rather than repeating the site name on " +
-                    "every page.",
-            },
-        ],
-    },
-    {
         key: "payroll-entry", title: "Payroll Entry", path: "/payroll-entry",
         source: "apps/admin/src/pages/Payroll/PayrollEntry.jsx",
         intro: "Create and process a company payroll batch with a separate outcome for each employee.",
@@ -1575,28 +1517,6 @@ export const CUSTOM_SCREENS = [
                 text:
                     "A Salary Slip is a snapshot taken at creation time — changing a setting here never rewrites " +
                     "one already created.",
-            },
-        ],
-    },
-    {
-        key: "seo-404",
-        title: "404 Log",
-        path: "/seo-404",
-        source: "apps/admin/src/pages/Setup/SeoNotFoundLog.jsx",
-        intro:
-            "Addresses visitors asked for on your website that do not exist, and how often.",
-        body: [
-            {
-                heading: "What to do with it",
-                text:
-                    "A frequently requested missing address usually means a page moved and something " +
-                    "still links to the old location. Turn it into a redirect straight from this screen.",
-            },
-            {
-                heading: "Not everything needs fixing",
-                text:
-                    "Some entries are automated scanning or mistyped addresses nobody will ever visit " +
-                    "again. Sort by how often each was requested and work down from the top.",
             },
         ],
     },

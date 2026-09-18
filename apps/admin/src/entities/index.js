@@ -1,5 +1,5 @@
 import {
-    Building07, CurrencyDollar, Flag01, Globe01, Hash02, Link01,
+    Building07, CurrencyDollar, Flag01, Globe01, Hash02,
     Map01, MarkerPin01, Server01, Shield01, Tag01, Zap,
 } from "@untitledui/icons";
 import { isValidEmail } from "@demo-panel/shared/validation";
@@ -24,8 +24,6 @@ import {
 } from "../api/emails.api";
 import { createMenuGroup, deleteMenuGroup, getMenuGroupById, updateMenuGroup, searchMenuGroups } from "../api/menus.api";
 import { getAllSalaryStructures, getAllSalaryComponents } from "../api/payroll.api";
-import { createSeoRedirect, deleteSeoRedirect, getSeoRedirectById, updateSeoRedirect, searchSeoRedirects } from "../api/seo.api";
-import { REDIRECT_STATUSES } from "@demo-panel/shared/seo";
 
 /** Maps an API list response to the { value, label } shape SelectField wants. */
 const asOptions = (loader, labelKey) => () =>
@@ -493,87 +491,8 @@ export const menuGroupConfig = {
 };
 
 
-/**
- * Redirects are plain CRUD over one entity, so they are a config and nothing
- * else. The SEO *pages* screen is not — its form is replaced by a custom
- * editor; see seoPageConfig in advanced.jsx.
- */
-const REDIRECT_LABELS = {
-    301: "301 — moved permanently",
-    302: "302 — moved temporarily",
-    307: "307 — temporary, keeps the method",
-    308: "308 — permanent, keeps the method",
-    410: "410 — gone for good",
-};
-
-export const seoRedirectConfig = {
-    filterFields: [
-        { name: "fromPath", label: "From", type: "string" },
-        { name: "toPath", label: "To", type: "string" },
-        { name: "statusCode", label: "Status Code", type: "number" },
-        { name: "hits", label: "Times Used", type: "number" },
-        { name: "notes", label: "Notes", type: "string" },
-        { name: "isActive", label: "Active", type: "boolean" },
-        { name: "lastHitAt", label: "Last Used", type: "date" },
-        { name: "createdAt", label: "Created", type: "date" },
-    ],
-    key: "seo-redirect",
-    path: "/seo-redirects",
-    section: "Setup",
-    singular: "Redirect",
-    plural: "Redirects",
-    description: "Send visitors from an old URL to its replacement, so old links and search results keep working.",
-    api: {
-        search: searchSeoRedirects,
-        getById: getSeoRedirectById,
-        create: createSeoRedirect,
-        update: updateSeoRedirect,
-        remove: deleteSeoRedirect,
-    },
-    sections: [
-        { id: "details", title: "Where it goes", description: "The old address, and where visitors should end up instead." },
-        { id: "notes", title: "Notes", description: "Why this redirect exists — useful a year from now." },
-        { id: "status", title: "Status" },
-    ],
-    fields: [
-        {
-            name: "fromPath", icon: Link01, label: "Old URL", required: true, section: "details",
-            error: "The old URL is required!", placeholder: "/old-page",
-            hint: "The path visitors are still asking for.",
-        },
-        {
-            name: "statusCode", label: "Type of move", type: "select", section: "details", default: 301,
-            options: REDIRECT_STATUSES.map((code) => ({ value: code, label: REDIRECT_LABELS[code] })),
-            hint: "Use 301 unless the page is coming back.",
-        },
-        {
-            name: "toPath", icon: Link01, label: "New URL", section: "details", full: true,
-            placeholder: "/new-page",
-            hint: "A path on your site, or a full URL to send them elsewhere. Leave blank only for 410.",
-            disabled: (values) => Number(values.statusCode) === 410,
-            validate: (value, values) =>
-                Number(values.statusCode) !== 410 && !value ? "Tell us where to send visitors!" : undefined,
-        },
-        { name: "notes", label: "Notes", type: "textarea", section: "notes", full: true, placeholder: "Replaced by the new pricing page, Aug 2026" },
-        ACTIVE,
-    ],
-    columns: [
-        { name: "From", selector: (row) => row.fromPath, sortable: true, sortField: "fromPath", minWidth: "220px" },
-        { name: "To", selector: (row) => row.toPath || "—", minWidth: "220px" },
-        { name: "Type", selector: (row) => row.statusCode, sortable: true, sortField: "statusCode", maxWidth: "110px" },
-        { name: "Times Used", selector: (row) => row.hits ?? 0, sortable: true, sortField: "hits", maxWidth: "130px" },
-        {
-            name: "Last Used",
-            selector: (row) => (row.lastHitAt ? new Date(row.lastHitAt).toLocaleDateString() : "Never"),
-            sortable: true, sortField: "lastHitAt", minWidth: "140px",
-        },
-    ],
-    recordTitle: (r) => r.fromPath,
-};
-
 export const UNIFORM_ENTITIES = [
     countryConfig, stateConfig, cityConfig, currencyConfig,
     roleConfig, emailForConfig, emailSetupConfig, menuGroupConfig,
-    seoRedirectConfig,
     companyConfig, employmentTypeConfig, employeeGradeConfig, employeeHealthInsuranceConfig,
 ];

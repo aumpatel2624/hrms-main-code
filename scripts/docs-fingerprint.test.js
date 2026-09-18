@@ -222,9 +222,9 @@ CONFIG_SCREENS.pop();
     );
 
     // Hints are the sentences that make a generated page worth reading.
-    const redirect = extractConfig(uniform, "seoRedirectConfig");
-    const fromPath = redirect.fields.find((f) => f.name === "fromPath");
-    assert.ok(fromPath.hint?.length, "field hints are read");
+    const emailFor = extractConfig(uniform, "emailForConfig");
+    const triggerKey = emailFor.fields.find((f) => f.name === "triggerKey");
+    assert.ok(triggerKey.hint?.length, "field hints are read");
 
     // A config in the other file, with more sections.
     const user = extractConfig(advanced, "userConfig");
@@ -273,9 +273,9 @@ CONFIG_SCREENS.pop();
 
     // A list-only screen hands off to its own editor: there is no shared add or
     // edit form to photograph, and documenting one would be a picture of a
-    // screen the user cannot reach that way.
-    const listOnly = CONFIG_SCREENS.find((s) => s.key === "seo-page");
-    assert.deepEqual(shotsFor(listOnly), ["list"], "a list-only screen photographs only its list");
+    // screen the user cannot reach that way. No real screen uses this flag
+    // right now — a synthetic fixture keeps the mechanism covered.
+    assert.deepEqual(shotsFor({ key: "example-item", listOnly: true }), ["list"], "a list-only screen photographs only its list");
 
     assert.deepEqual(shotsFor({ key: "x", shots: ["list"] }), ["list"], "an explicit shots list wins");
 
@@ -345,16 +345,18 @@ CONFIG_SCREENS.pop();
 
     // `listOnly`: lists records, hands off to its own editor. Documenting an
     // add or delete button here sends someone looking for one that is absent.
-    const seoPage = renderConfigPage(
-        CONFIG_SCREENS.find((s) => s.key === "seo-page"),
-        extractConfig(advanced, "seoPageConfig"),
+    // No real screen uses this flag right now — a synthetic fixture keeps the
+    // mechanism covered without depending on a live entity.
+    const listOnlyScreen = renderConfigPage(
+        { key: "example-item", title: "Example Item", listOnly: true, intro: "An example." },
+        { singular: "Example Item", plural: "Example Items", fields: [{ name: "name", label: "Name" }], sections: [], filterFields: [] },
     );
-    assert.ok(seoPage.includes("## Viewing an SEO Page"), "a list-only screen documents viewing");
+    assert.ok(listOnlyScreen.includes("## Viewing an Example Item"), "a list-only screen documents viewing");
     for (const heading of ["## Adding", "## Editing", "## Deleting"]) {
-        assert.ok(!seoPage.includes(heading), `a list-only screen omits "${heading}"`);
+        assert.ok(!listOnlyScreen.includes(heading), `a list-only screen omits "${heading}"`);
     }
     assert.ok(
-        !seoPage.includes("**Edit** takes you straight"),
+        !listOnlyScreen.includes("**Edit** takes you straight"),
         "a list-only view section does not promise an Edit button",
     );
 

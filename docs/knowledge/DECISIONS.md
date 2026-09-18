@@ -243,7 +243,9 @@ Copy this block. Number sequentially.
 ### ADR-004 — SEO management: path-keyed pages, resolved server-side, served over the first public routes
 
 - **Date**: 2026-08-22
-- **Status**: accepted
+- **Status**: superseded by ADR-039 (2026-09-18) — the module was removed entirely at the user's
+  request. This record stays as history; the code, data and public routes it describes no longer
+  exist.
 - **Context**: The panel must own how the public website appears in search results and when shared,
   and the website will inject those tags with Helmet or an equivalent. The starter has no content
   collections at all — no model in `apps/server/models/` carries a slug — so there is nothing for
@@ -4215,3 +4217,35 @@ consumer; single-branch build
 - **Decision**: Push the verified branch without opening a pull request.
 - **Consequences**: This is limited to this branch handoff. It does not authorise a self-merge, changes to long-lived branches, or deployment.
 - **Deviates from convention**: yes — the pull-request step in `AGENTS.md`/`git-flow`; explicitly approved by the user on 2026-09-13.
+
+### ADR-039 — SEO management module removed
+
+- **Date**: 2026-09-18
+- **Status**: accepted
+- **Context**: The user explicitly requested removal of the entire SEO management module (ADR-004) —
+  "remove all the SEO features". No migration or replacement was requested; the feature is going
+  away, not moving.
+- **Decision**: Delete the module's own files (2 controllers, 5 models, 2 route files, the
+  `middlewares/siteKey.js` public-write guard that existed only for it, 3 admin pages, 2 admin
+  components, `packages/shared/src/seo.js`/`seoResolve.js` plus its test, the standalone
+  `docs/seo-frontend-integration.md`), unwind every registry that referenced it (router mount, 4
+  seeded menu rows, swagger schemas, the audit-log skip list, `inputValidator.js`'s SEO and
+  SEO-only-public-endpoint validation chains, the two admin entity configs, admin routes/endpoints,
+  `globals.css`'s SERP/social-card palette, the shared package's barrel export, the root test script
+  and its stale `allowScripts` pins, the generated client-doc pages/screenshots and their manifest
+  entries), and drop the 5 collections via a one-off script following `20-schema.md`'s backfill
+  convention (permissions stripped, then menu rows, then collections, then the script itself
+  deleted).
+- **Options considered**: none — this is a removal at explicit user instruction, not a design
+  choice between approaches.
+- **Consequences**: The public website integration ADR-004 shipped (Helmet-ready tag resolution,
+  redirects, a 404 log, a site-key-guarded public write path) no longer exists. `docs/conventions/
+  60-limits.md`'s "no content collections... the starter ships master data, users, roles, menus,
+  dashboards and SEO" line is stale until reopened — the starter's public-endpoint pattern
+  (`docs/conventions/30-api.md`'s four-question gate) remains as a convention even though its first
+  worked example is gone; `jobsPublic.routes.js` (ADR-019) is now the only public router. All 5
+  collections held 0 documents at removal time and 0 roles carried a permission entry for any of the
+  4 menu rows — no data or access loss beyond the feature itself.
+- **Deviates from convention**: no — follows `remove-feature`'s skill exactly (inventory shown and
+  confirmed before any deletion, permissions-then-menus-then-collections order, ADR superseded not
+  deleted).

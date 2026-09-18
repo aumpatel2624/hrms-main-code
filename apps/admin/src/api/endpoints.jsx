@@ -648,23 +648,6 @@ export const ENDPOINTS = {
         RECORD_HISTORY: (model, documentId) => `${V1}/audit-logs/record/${model}/${documentId}`,
     },
 
-    // SEO management
-    SEO: {
-        PAGES: `${V1}/seo-pages`,
-        PAGE_BY_ID: (id) => `${V1}/seo-pages/${id}`,
-        PAGE_SEARCH: `${V1}/seo-pages/search`,
-        PAGE_UPLOAD_IMAGE: `${V1}/seo-pages/upload-image`,
-        SETTINGS: `${V1}/seo-settings`,
-        SITE_KEY: `${V1}/seo-settings/site-key`,
-        REDIRECTS: `${V1}/seo-redirects`,
-        REDIRECT_BY_ID: (id) => `${V1}/seo-redirects/${id}`,
-        REDIRECT_SEARCH: `${V1}/seo-redirects/search`,
-        REDIRECT_IMPORT: `${V1}/seo-redirects/import`,
-        NOT_FOUND_SEARCH: `${V1}/seo-not-found/search`,
-        NOT_FOUND_BY_ID: (id) => `${V1}/seo-not-found/${id}`,
-        NOT_FOUND_REDIRECT: (id) => `${V1}/seo-not-found/${id}/redirect`,
-    },
-
     // Admin endpoints
     ADMIN: {
         LOGIN_ATTEMPTS: `${V1}/admin/auth/login-attempts`,

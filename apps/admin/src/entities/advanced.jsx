@@ -81,7 +81,6 @@ import {
     getAllEmailSetups, getAllEmailFor, searchEmailTemplates, createEmailTemplate,
     deleteEmailTemplate, getEmailTemplateById, updateEmailTemplate,
 } from "../api/emails.api";
-import { deleteSeoPage, getSeoPageById, searchSeoPages } from "../api/seo.api";
 import {
     createJobRequisition, deleteJobRequisition, getJobRequisitionById, updateJobRequisition,
     searchJobRequisitions, getAllJobRequisitions, makeJobOpeningFromRequisition,
@@ -516,52 +515,6 @@ export const emailTemplateConfig = {
     recordTitle: (r) => r.templateName,
 };
 
-
-/**
- * SEO pages — list, view and delete only.
- *
- * NOT in ADVANCED_ENTITIES on purpose. crudRoutes would generate an add/edit
- * form from `fields`, and this is the one screen where a generated form is the
- * wrong answer: its whole value is the live Google preview, share card and
- * health checklist beside the inputs, which no config can express. allRoutes
- * takes the list route from here and points the rest at SeoPageEditor.
- *
- * `create`/`update` are deliberately absent — the editor calls the API itself.
- */
-export const seoPageConfig = {
-    filterFields: [
-        { name: "path", label: "URL", type: "string" },
-        { name: "pageName", label: "Page Name", type: "string" },
-        { name: "title", label: "Title", type: "string" },
-        { name: "description", label: "Description", type: "string" },
-        { name: "focusKeyword", label: "Focus Keyword", type: "string" },
-        { name: "robots.index", label: "Shown in search", type: "boolean" },
-        { name: "sitemap.include", label: "In sitemap", type: "boolean" },
-        { name: "isActive", label: "Active", type: "boolean" },
-        { name: "createdAt", label: "Created", type: "date" },
-        { name: "updatedAt", label: "Updated", type: "date" },
-    ],
-    key: "seo-page",
-    path: "/seo-pages",
-    section: "Setup",
-    singular: "SEO Page",
-    plural: "SEO Pages",
-    description: "How each fixed URL of your website appears in search results and when shared.",
-    api: { search: searchSeoPages, getById: getSeoPageById, remove: deleteSeoPage },
-    columns: [
-        { name: "URL", selector: (row) => row.path, sortable: true, sortField: "path", minWidth: "200px" },
-        { name: "Page Name", selector: (row) => row.pageName, sortable: true, sortField: "pageName", minWidth: "180px" },
-        { name: "Title", selector: (row) => row.title || "Uses the site template", minWidth: "220px" },
-        { name: "In Search", selector: (row) => (row.robots?.index === false ? "Hidden" : "Yes"), maxWidth: "120px" },
-        { name: "In Sitemap", selector: (row) => (row.sitemap?.include === false ? "No" : "Yes"), maxWidth: "130px" },
-        {
-            name: "Updated",
-            selector: (row) => (row.updatedAt ? new Date(row.updatedAt).toLocaleDateString() : "-"),
-            sortable: true, sortField: "updatedAt", minWidth: "130px",
-        },
-    ],
-    recordTitle: (r) => r.pageName,
-};
 
 // ADR-017 (Organization Setup): Department, Branch and Designation each need
 // a companyId select (a `lookups` entry), which is why they live here rather

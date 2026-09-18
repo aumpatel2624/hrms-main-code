@@ -2,7 +2,7 @@ import PayrollEntry from "../pages/Payroll/PayrollEntry";
 import { Navigate } from "react-router-dom";
 import { crudRoutes } from "@/components/crud";
 import { UNIFORM_ENTITIES } from "@/entities";
-import { ADVANCED_ENTITIES, seoPageConfig, payrollEntryConfig } from "@/entities/advanced";
+import { ADVANCED_ENTITIES, payrollEntryConfig } from "@/entities/advanced";
 
 import Login from "../pages/Authentication/Login";
 import UserProfile from "../pages/Authentication/user-profile";
@@ -12,9 +12,6 @@ import DashboardBuilder from "../pages/Setup/DashboardBuilder";
 import DashboardSectionEditor from "../pages/Setup/DashboardSectionEditor";
 import LoginAttemptLogs from "../pages/Master/LoginAttemptLogs";
 import AuditLog from "../pages/Master/AuditLog";
-import SeoPageEditor from "../pages/Setup/SeoPageEditor";
-import SeoSettings from "../pages/Setup/SeoSettings";
-import SeoNotFoundLog from "../pages/Setup/SeoNotFoundLog";
 import LeaveLedgerEntries from "../pages/Leaves/LeaveLedgerEntries";
 import LeaveControlPanel from "../pages/Leaves/LeaveControlPanel";
 import ShiftAssignmentTool from "../pages/ShiftAttendance/ShiftAssignmentTool";
@@ -30,34 +27,24 @@ const authProtectedRoutes = [
     // list / add / view / edit for every CRUD entity
     ...[...UNIFORM_ENTITIES, ...ADVANCED_ENTITIES].flatMap(crudRoutes),
 
-    // SEO pages keep the generated list, view and delete, but the two form
-    // routes are replaced: that screen's value is the live search/social
-    // preview beside the inputs, which an entity config cannot express.
-    crudRoutes(seoPageConfig)[0],
-    { path: "/seo-pages/add", component: <SeoPageEditor key="seo-page-add" mode="add" /> },
-    { path: "/seo-pages/:id", component: <SeoPageEditor key="seo-page-view" mode="view" /> },
-    { path: "/seo-pages/:id/edit", component: <SeoPageEditor key="seo-page-edit" mode="edit" /> },
-
     // Not CRUD screens: a permission matrix, a read-only audit log, a settings
-    // singleton and a 404 log whose point is turning entries into redirects.
+    // singleton.
     { path: "/user-roles", component: <UserRoles /> },
     // Dashboard Builder is the library + the dashboard assignment; building one
-    // section is its own screen for the same reason as SeoPageEditor — the
-    // live preview beside the inputs needs the room.
+    // section is its own screen — the live preview beside the inputs needs
+    // the room.
     { path: "/dashboard-builder", component: <DashboardBuilder /> },
     { path: "/dashboard-builder/add", component: <DashboardSectionEditor key="dashboard-section-add" mode="add" /> },
     { path: "/dashboard-builder/edit/:id", component: <DashboardSectionEditor key="dashboard-section-edit" mode="edit" /> },
     { path: "/login-attempt-logs", component: <LoginAttemptLogs /> },
     { path: "/audit-log", component: <AuditLog /> },
-    { path: "/seo-settings", component: <SeoSettings /> },
-    // ADR-027 (Payroll — Run, foundation half): a true global singleton, same
-    // "genuinely not CRUD" shape as SeoSettings above.
+    // ADR-027 (Payroll — Run, foundation half): a true global singleton,
+    // genuinely not a CRUD screen.
     crudRoutes(payrollEntryConfig)[0],
     { path: "/payroll-entry/add", component: <PayrollEntry /> },
     { path: "/payroll-entry/:id", component: <PayrollEntry /> },
     { path: "/payroll-entry/:id/edit", component: <PayrollEntry /> },
     { path: "/payroll-settings", component: <PayrollSettings /> },
-    { path: "/seo-404", component: <SeoNotFoundLog /> },
     // ADR-024: LeaveLedgerEntry is append-only/system-written, no create/
     // update/delete endpoint at all — same reasoning as AuditLog above.
     { path: "/leave-ledger-entry", component: <LeaveLedgerEntries /> },

@@ -250,7 +250,6 @@ import menusRoutes from "./routes/v1/menus.routes.js";
 import rolesRoutes from "./routes/v1/roles.routes.js";
 import dashboardsRoutes from "./routes/v1/dashboards.routes.js";
 import otpRoutes from "./routes/v1/otp.routes.js";
-import seoRoutes from "./routes/v1/seo.routes.js";
 import auditLogsRoutes from "./routes/v1/auditLogs.routes.js";
 import recruitmentPipelineRoutes from "./routes/v1/recruitmentPipeline.routes.js";
 import interviewsRoutes from "./routes/v1/interviews.routes.js";
@@ -274,7 +273,6 @@ import expensesRoutes from "./routes/v1/expenses.routes.js";
 import performanceRoutes from "./routes/v1/performance.routes.js";
 import performanceGoalsRoutes from "./routes/v1/performanceGoals.routes.js";
 import attendanceRoutes from "./routes/v1/attendance.routes.js";
-import seoPublicRoutes from "./routes/v1/seoPublic.routes.js";
 import jobsPublicRoutes from "./routes/v1/jobsPublic.routes.js";
 import { runDueJobs } from "./jobs/leaveScheduler.js";
 import { runDueJobs as runDueAttendanceJobs } from "./jobs/attendanceScheduler.js";
@@ -292,7 +290,6 @@ app.use("/api/v1", locationsRoutes);
 app.use("/api/v1", menusRoutes);
 app.use("/api/v1", rolesRoutes);
 app.use("/api/v1", dashboardsRoutes);
-app.use("/api/v1", seoRoutes);
 app.use("/api/v1", auditLogsRoutes);
 app.use("/api/v1", recruitmentPipelineRoutes);
 app.use("/api/v1", interviewsRoutes);
@@ -318,11 +315,9 @@ app.use("/api/v1", performanceRoutes);
 app.use("/api/v1", performanceGoalsRoutes);
 app.use("/api/v1/otp", otpRoutes);
 
-// Unauthenticated on purpose — the public website has no session. See
-// routes/v1/seoPublic.routes.js for why, and what is guarded instead.
-app.use("/api/v1", seoPublicRoutes);
-// Second public router (ADR-019) — same reasoning, different shape (a
-// listing, not resolve-by-key). See routes/v1/jobsPublic.routes.js.
+// Unauthenticated on purpose — the public website has no session (ADR-019,
+// a listing shape rather than resolve-by-key). See
+// routes/v1/jobsPublic.routes.js.
 app.use("/api/v1", jobsPublicRoutes);
 
 console.log("✅ V1 API routes loaded");

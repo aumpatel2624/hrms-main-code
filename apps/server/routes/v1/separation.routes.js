@@ -26,7 +26,7 @@ const router = express.Router();
 
 // ---- Employee Separation ----
 router.post("/employee-separations", authMiddleware(ANY_ROLE), checkPermission("/employee-separation", "write"), createEmployeeSeparation);
-router.get("/employee-separations", authMiddleware(ANY_ROLE), listEmployeeSeparations);
+router.get("/employee-separations", authMiddleware(ANY_ROLE), checkPermission("/employee-separation", "read"), listEmployeeSeparations);
 router.get("/employee-separations/:separationId", authMiddleware(ANY_ROLE), checkPermission("/employee-separation", "read"), getEmployeeSeparationById);
 router.put("/employee-separations/:separationId", authMiddleware(ANY_ROLE), checkPermission("/employee-separation", "edit"), updateEmployeeSeparation);
 router.delete("/employee-separations/:separationId", authMiddleware(ANY_ROLE), checkPermission("/employee-separation", "delete"), deleteEmployeeSeparation);
@@ -42,7 +42,7 @@ router.post("/employee-separation-templates/search", authMiddleware(ANY_ROLE), c
 
 // ---- Exit Interview ----
 router.post("/exit-interviews", authMiddleware(ANY_ROLE), checkPermission("/exit-interview", "write"), createExitInterview);
-router.get("/exit-interviews", authMiddleware(ANY_ROLE), listExitInterviews);
+router.get("/exit-interviews", authMiddleware(ANY_ROLE), checkPermission("/exit-interview", "read"), listExitInterviews);
 router.get("/exit-interviews/:interviewId", authMiddleware(ANY_ROLE), checkPermission("/exit-interview", "read"), getExitInterviewById);
 router.put("/exit-interviews/:interviewId", authMiddleware(ANY_ROLE), checkPermission("/exit-interview", "edit"), updateExitInterview);
 router.delete("/exit-interviews/:interviewId", authMiddleware(ANY_ROLE), checkPermission("/exit-interview", "delete"), deleteExitInterview);
@@ -50,7 +50,7 @@ router.post("/exit-interviews/search", authMiddleware(ANY_ROLE), checkPermission
 
 // ---- Full and Final Statement ----
 router.post("/full-and-final-statements", authMiddleware(ANY_ROLE), checkPermission("/full-and-final-statement", "write"), createFullAndFinalStatement);
-router.get("/full-and-final-statements", authMiddleware(ANY_ROLE), listFullAndFinalStatements);
+router.get("/full-and-final-statements", authMiddleware(ANY_ROLE), checkPermission("/full-and-final-statement", "read"), listFullAndFinalStatements);
 router.get("/full-and-final-statements/:statementId", authMiddleware(ANY_ROLE), checkPermission("/full-and-final-statement", "read"), getFullAndFinalStatementById);
 router.put("/full-and-final-statements/:statementId", authMiddleware(ANY_ROLE), checkPermission("/full-and-final-statement", "edit"), updateFullAndFinalStatement);
 router.delete("/full-and-final-statements/:statementId", authMiddleware(ANY_ROLE), checkPermission("/full-and-final-statement", "delete"), deleteFullAndFinalStatement);

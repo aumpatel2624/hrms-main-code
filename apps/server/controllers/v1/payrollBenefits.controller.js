@@ -47,6 +47,22 @@ const throwError = (status, message) => {
   throw error;
 };
 
+// Pre-launch security fix: submit/cancel on Employee Benefit Application/Claim
+// had no ownership check at all (unlike their sibling get/update/delete
+// handlers in this same file) — an Employee-role caller who knew/guessed
+// another employee's doc id could submit or cancel it. Mirrors the
+// `resolveRequestEmployee` + `dataScope === SCOPES.OWN` guard already used on
+// getEmployeeBenefitApplicationById/updateEmployeeBenefitApplication/
+// deleteEmployeeBenefitApplication (and the Claim equivalents) in this file.
+const assertOwnBenefitAccess = async (req, doc) => {
+  if (req.user?.dataScope === SCOPES.OWN) {
+    const ownEmp = await resolveRequestEmployee(req);
+    if (!ownEmp || String(doc.employeeId) !== String(ownEmp._id)) {
+      throwError(403, "Access denied");
+    }
+  }
+};
+
 // ============================================================================
 // 1. Employee Benefit Application
 // ============================================================================
@@ -223,7 +239,9 @@ export const updateEmployeeBenefitApplication = async (req, res) => {
       }
     }
 
-    const employeeId = req.body.employeeId || doc.employeeId;
+    // A self-service (OWN) caller can never reassign a draft to a different
+    // employeeId — only HR (dataScope !== OWN) may supply one.
+    const employeeId = req.user?.dataScope === SCOPES.OWN ? doc.employeeId : (req.body.employeeId || doc.employeeId);
     const payrollPeriodId = req.body.payrollPeriodId || doc.payrollPeriodId;
     const employeeBenefits = req.body.employeeBenefits || doc.employeeBenefits;
 
@@ -311,6 +329,7 @@ export const submitEmployeeBenefitApplication = async (req, res) => {
   try {
     const doc = await EmployeeBenefitApplication.findById(req.params.id);
     if (!doc) throwError(404, "Employee Benefit Application not found");
+    await assertOwnBenefitAccess(req, doc);
     if (doc.status !== "draft") throwError(400, "Only draft applications can be submitted");
 
     // Re-verify that no other submitted application exists for this employee and period
@@ -336,6 +355,7 @@ export const cancelEmployeeBenefitApplication = async (req, res) => {
   try {
     const doc = await EmployeeBenefitApplication.findById(req.params.id);
     if (!doc) throwError(404, "Employee Benefit Application not found");
+    await assertOwnBenefitAccess(req, doc);
     if (doc.status === "cancelled") throwError(400, "Application is already cancelled");
 
     doc.status = "cancelled";
@@ -599,7 +619,9 @@ export const updateEmployeeBenefitClaim = async (req, res) => {
       }
     }
 
-    const employeeId = req.body.employeeId || doc.employeeId;
+    // A self-service (OWN) caller can never reassign a draft to a different
+    // employeeId — only HR (dataScope !== OWN) may supply one.
+    const employeeId = req.user?.dataScope === SCOPES.OWN ? doc.employeeId : (req.body.employeeId || doc.employeeId);
     const salaryComponentId = req.body.salaryComponentId || doc.salaryComponentId;
     const claimDate = req.body.claimDate ? new Date(req.body.claimDate) : doc.claimDate;
     const numClaimed = req.body.claimedAmount !== undefined ? round2(req.body.claimedAmount) : doc.claimedAmount;
@@ -698,6 +720,7 @@ export const submitEmployeeBenefitClaim = async (req, res) => {
   try {
     const doc = await EmployeeBenefitClaim.findById(req.params.id);
     if (!doc) throwError(404, "Employee Benefit Claim not found");
+    await assertOwnBenefitAccess(req, doc);
     if (doc.status !== "draft") throwError(400, "Only draft claims can be submitted");
 
     const employee = await Employee.findById(doc.employeeId).lean();
@@ -757,6 +780,7 @@ export const cancelEmployeeBenefitClaim = async (req, res) => {
   try {
     const doc = await EmployeeBenefitClaim.findById(req.params.id);
     if (!doc) throwError(404, "Employee Benefit Claim not found");
+    await assertOwnBenefitAccess(req, doc);
     if (doc.status === "cancelled") throwError(400, "Claim is already cancelled");
 
     if (doc.additionalSalaryId) {

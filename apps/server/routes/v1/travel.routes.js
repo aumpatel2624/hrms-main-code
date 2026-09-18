@@ -275,7 +275,7 @@ router.post("/travel-requests", authMiddleware(ANY_ROLE), checkPermission("/trav
  *     responses:
  *       200: { description: List of travel requests }
  */
-router.get("/travel-requests", authMiddleware(ANY_ROLE), listTravelRequests);
+router.get("/travel-requests", authMiddleware(ANY_ROLE), checkPermission("/travel-request", "read"), listTravelRequests);
 
 /**
  * @swagger

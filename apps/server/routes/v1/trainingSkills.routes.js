@@ -43,7 +43,7 @@ router.post("/training-events/:trainingEventId/mark-scheduled", authMiddleware(A
 
 // ---- Training Feedback ----
 router.post("/training-feedbacks", authMiddleware(ANY_ROLE), checkPermission("/training-feedback", "write"), createTrainingFeedback);
-router.get("/training-feedbacks", authMiddleware(ANY_ROLE), listTrainingFeedbacks);
+router.get("/training-feedbacks", authMiddleware(ANY_ROLE), checkPermission("/training-feedback", "read"), listTrainingFeedbacks);
 router.get("/training-feedbacks/:trainingFeedbackId", authMiddleware(ANY_ROLE), checkPermission("/training-feedback", "read"), getTrainingFeedbackById);
 router.delete("/training-feedbacks/:trainingFeedbackId", authMiddleware(ANY_ROLE), checkPermission("/training-feedback", "delete"), deleteTrainingFeedback);
 router.post("/training-feedbacks/search", authMiddleware(ANY_ROLE), checkPermission("/training-feedback", "read"), listTrainingFeedbacksByParams);
@@ -58,7 +58,7 @@ router.post("/skills/search", authMiddleware(ANY_ROLE), checkPermission("/skill"
 
 // ---- Employee Skill Map ----
 router.post("/employee-skill-maps", authMiddleware(ANY_ROLE), checkPermission("/employee-skill-map", "write"), createEmployeeSkillMap);
-router.get("/employee-skill-maps", authMiddleware(ANY_ROLE), listEmployeeSkillMaps);
+router.get("/employee-skill-maps", authMiddleware(ANY_ROLE), checkPermission("/employee-skill-map", "read"), listEmployeeSkillMaps);
 router.get("/employee-skill-maps/:skillMapId", authMiddleware(ANY_ROLE), checkPermission("/employee-skill-map", "read"), getEmployeeSkillMapById);
 router.put("/employee-skill-maps/:skillMapId", authMiddleware(ANY_ROLE), checkPermission("/employee-skill-map", "edit"), updateEmployeeSkillMap);
 router.delete("/employee-skill-maps/:skillMapId", authMiddleware(ANY_ROLE), checkPermission("/employee-skill-map", "delete"), deleteEmployeeSkillMap);

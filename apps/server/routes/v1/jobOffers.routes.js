@@ -18,7 +18,7 @@ const router = express.Router();
 
 // ---- Job Offer ----
 router.post("/job-offers", authMiddleware(ANY_ROLE), checkPermission("/job-offer", "write"), createJobOffer);
-router.get("/job-offers", authMiddleware(ANY_ROLE), listJobOffers);
+router.get("/job-offers", authMiddleware(ANY_ROLE), checkPermission("/job-offer", "read"), listJobOffers);
 router.get("/job-offers/:offerId", authMiddleware(ANY_ROLE), checkPermission("/job-offer", "read"), getJobOfferById);
 router.put("/job-offers/:offerId", authMiddleware(ANY_ROLE), checkPermission("/job-offer", "edit"), updateJobOffer);
 router.delete("/job-offers/:offerId", authMiddleware(ANY_ROLE), checkPermission("/job-offer", "delete"), deleteJobOffer);

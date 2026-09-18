@@ -29,7 +29,6 @@ import dotenv from "dotenv";
 
 // Models
 import Employee from "../models/Employee.js";
-import User from "../models/User.js";
 import RoleMaster from "../models/RoleMaster.js";
 import Company from "../models/Company.js";
 import Department from "../models/Department.js";
@@ -299,9 +298,10 @@ const seedUserAccounts = async (companyId) => {
   let leaveApproverLinked = 0;
   let expenseApproverLinked = 0;
 
-  const createdUserByName = new Map(); // name → User doc
+  const createdUserByName = new Map(); // name → Employee doc (login identity now, ADR-040)
 
-  // Pass 1: create User docs + assign role on Employee.
+  // Pass 1: set the real login fields directly on each Employee doc — there
+  // is no separate User collection to create/link any more (ADR-040).
   for (const row of rowsWithEmail) {
     const emp = empByName.get(row.name);
     if (!emp) {
@@ -309,14 +309,11 @@ const seedUserAccounts = async (companyId) => {
       continue;
     }
 
-    // Skip if a User is already linked to this Employee.
-    if (emp.userId) {
-      const existingUser = await User.findById(emp.userId).lean();
-      if (existingUser) {
-        createdUserByName.set(row.name, existingUser);
-        usersSkipped += 1;
-        continue;
-      }
+    // Skip if this Employee already has a real (non-placeholder) login.
+    if (emp.email && !emp.email.endsWith("@apidel.placeholder")) {
+      createdUserByName.set(row.name, emp);
+      usersSkipped += 1;
+      continue;
     }
 
     const roleName = assignRoleName(row, managerNames);
@@ -326,43 +323,44 @@ const seedUserAccounts = async (companyId) => {
       continue;
     }
 
-    // Idempotent: check by email first.
-    let user = await User.findOne({ email: row._email }).lean();
-    if (!user) {
-      try {
-        user = await User.create({
-          userName: row.name,
-          email: row._email,
-          password: hashedPassword,
-          roleId,
-          departmentId: emp.departmentId,
-          countryId: country._id,
-          stateId: state._id,
-          cityId: city._id,
-          address: "Apidel Technologies",
-          isActive: true,
-        });
-        usersCreated += 1;
-      } catch (err) {
-        console.log(`⚠️  Demo data: could not create user for ${row.name}: ${err.message}`);
-        continue;
-      }
+    // Idempotent: another Employee row already holding this email means a
+    // dedupe issue in the source data, not something to overwrite.
+    const emailTaken = await Employee.findOne({ email: row._email, _id: { $ne: emp._id } }).lean();
+    if (emailTaken) {
+      console.log(`⚠️  Demo data: email ${row._email} already used by another employee — skipping ${row.name}`);
+      continue;
     }
 
-    createdUserByName.set(row.name, user);
-
-    // Link the User back to the Employee if not already linked.
-    if (!emp.userId || String(emp.userId) !== String(user._id)) {
-      await Employee.updateOne({ _id: emp._id }, { $set: { userId: user._id } });
+    try {
+      await Employee.updateOne(
+        { _id: emp._id },
+        {
+          $set: {
+            email: row._email,
+            password: hashedPassword,
+            roleId,
+            countryId: country._id,
+            stateId: state._id,
+            cityId: city._id,
+            address: "Apidel Technologies",
+          },
+        },
+      );
+      usersCreated += 1;
+    } catch (err) {
+      console.log(`⚠️  Demo data: could not set login for ${row.name}: ${err.message}`);
+      continue;
     }
+
+    createdUserByName.set(row.name, { ...emp, _id: emp._id, roleId });
   }
 
   // Pass 2: for every real manager, set leaveApproverId + expenseApproverId
-  //         on each of their direct reports.
+  //         on each of their direct reports (self-ref onto Employee now).
   for (const row of rows) {
     if (!row.manager_name) continue;
-    const managerUser = createdUserByName.get(row.manager_name);
-    if (!managerUser) continue;
+    const managerEmployee = createdUserByName.get(row.manager_name) || empByName.get(row.manager_name);
+    if (!managerEmployee) continue;
 
     const subordinate = empByName.get(row.name);
     if (!subordinate) continue;
@@ -370,16 +368,16 @@ const seedUserAccounts = async (companyId) => {
     const updates = {};
     if (
       !subordinate.leaveApproverId ||
-      String(subordinate.leaveApproverId) !== String(managerUser._id)
+      String(subordinate.leaveApproverId) !== String(managerEmployee._id)
     ) {
-      updates.leaveApproverId = managerUser._id;
+      updates.leaveApproverId = managerEmployee._id;
       leaveApproverLinked += 1;
     }
     if (
       !subordinate.expenseApproverId ||
-      String(subordinate.expenseApproverId) !== String(managerUser._id)
+      String(subordinate.expenseApproverId) !== String(managerEmployee._id)
     ) {
-      updates.expenseApproverId = managerUser._id;
+      updates.expenseApproverId = managerEmployee._id;
       expenseApproverLinked += 1;
     }
     if (Object.keys(updates).length) {
@@ -388,7 +386,7 @@ const seedUserAccounts = async (companyId) => {
   }
 
   console.log(
-    `✅ Demo Part 1: ${usersCreated} user account(s) created, ${usersSkipped} already existed, ` +
+    `✅ Demo Part 1: ${usersCreated} employee login(s) set, ${usersSkipped} already had a real login, ` +
     `${leaveApproverLinked} leave approver link(s), ${expenseApproverLinked} expense approver link(s)`,
   );
 
@@ -1403,7 +1401,7 @@ const seedRecruitmentData = async (companyId, employees, companyDoc) => {
   // Find an interviewer-role user
   const interviewerRole = await RoleMaster.findOne({ roleName: "Interviewer" }).lean();
   const interviewerUser = interviewerRole
-    ? await User.findOne({ roleId: interviewerRole._id }).lean()
+    ? await Employee.findOne({ roleId: interviewerRole._id }).lean()
     : null;
 
   // Interview Type
@@ -1828,17 +1826,15 @@ const run = async () => {
   ];
 
   for (const name of SAMPLE_NAMES) {
-    const emp = empByName?.get(name);
-    const user = emp
-      ? await User.findById(emp.userId).lean()
-      : createdUserByName?.get(name);
+    const emp = empByName?.get(name) || createdUserByName?.get(name);
+    const user = emp?.email ? emp : null;
     if (!user) {
       const rows = (await readOrgChartRows()).filter((r) => r.name === name);
       if (rows[0]) {
         const r = dedupeEmails(rows)[0];
-        const role = await User.findOne({ email: r._email }).lean();
-        if (role) {
-          const roleName = await RoleMaster.findById(role.roleId).lean();
+        const employee = await Employee.findOne({ email: r._email }).lean();
+        if (employee) {
+          const roleName = await RoleMaster.findById(employee.roleId).lean();
           console.log(`  ${r._email.padEnd(45)} → ${roleName?.roleName ?? "?"}`);
         }
       }

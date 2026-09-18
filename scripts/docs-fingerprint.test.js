@@ -227,9 +227,9 @@ CONFIG_SCREENS.pop();
     assert.ok(triggerKey.hint?.length, "field hints are read");
 
     // A config in the other file, with more sections.
-    const user = extractConfig(advanced, "userConfig");
-    assert.ok(user.fields.length >= 10, "a large config reads all its fields");
-    assert.ok(user.sections.length >= 3, "sections are read");
+    const employee = extractConfig(advanced, "employeeConfig");
+    assert.ok(employee.fields.length >= 10, "a large config reads all its fields");
+    assert.ok(employee.sections.length >= 3, "sections are read");
 
     assert.throws(() => extractConfig(uniform, "noSuchConfig"), /not found/, "a renamed config fails loudly");
 }
@@ -360,11 +360,12 @@ CONFIG_SCREENS.pop();
         "a list-only view section does not promise an Edit button",
     );
 
-    // An acronym is read letter by letter ("an S-E-O page"); "User" is said
-    // "yoo-zer" and takes "a" despite the vowel.
+    // "User" is said "yoo-zer" and takes "a" despite the vowel — no real
+    // screen is named this any more (ADR-040 merged it into Employee), so a
+    // synthetic fixture keeps the language rule covered.
     const user = renderConfigPage(
-        CONFIG_SCREENS.find((s) => s.key === "user"),
-        extractConfig(advanced, "userConfig"),
+        { key: "user", title: "User" },
+        { singular: "User", plural: "Users", fields: [], sections: [], filterFields: [] },
     );
     assert.ok(user.includes("## Adding a User"), '"User" takes "a", not "an"');
 

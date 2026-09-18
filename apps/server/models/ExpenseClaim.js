@@ -19,7 +19,7 @@ const ExpenseClaimSchema = new mongoose.Schema({
   companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
   departmentId: { type: mongoose.Schema.Types.ObjectId, ref: "Department", default: null },
   postingDate: { type: Date, default: Date.now, required: true },
-  expenseApproverId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  expenseApproverId: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", default: null },
   expenses: { type: [ExpenseClaimDetailSchema], default: [] },
   taxes: { type: [ExpenseTaxAndChargeSchema], default: [] },
   totalClaimedAmount: { type: Number, default: 0, min: 0 },

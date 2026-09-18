@@ -45,7 +45,7 @@ const LeaveApplicationSchema = new mongoose.Schema(
     // linked Employee === employeeId) is always rejected.
     leaveApproverId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Employee",
       required: false,
       default: null,
     },

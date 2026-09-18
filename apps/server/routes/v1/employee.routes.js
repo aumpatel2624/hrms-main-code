@@ -1,9 +1,10 @@
 import express from "express";
 import { authMiddleware } from "../../middlewares/authMiddleware.js";
 import { checkPermission } from "../../middlewares/checkPermission.js";
-import { ANY_ROLE } from "@demo-panel/shared/roles";
+import { ANY_ROLE, ADMIN_ONLY } from "@demo-panel/shared/roles";
 import {
   createEmployee, updateEmployee, deleteEmployee, getEmployeeById, listEmployees, listEmployeeByParams,
+  resetEmployeePassword,
 } from "../../controllers/v1/employee.controller.js";
 
 const router = express.Router();
@@ -120,5 +121,22 @@ router.delete("/employees/:employeeId", authMiddleware(ANY_ROLE), checkPermissio
  *       200: { description: Paginated list of employees }
  */
 router.post("/employees/search", authMiddleware(ANY_ROLE), checkPermission("/employee", "read"), listEmployeeByParams);
+
+/**
+ * @swagger
+ * /employees/{employeeId}/reset-password:
+ *   post:
+ *     summary: Reset an employee's login password (ADR-040 — Employee is the login identity)
+ *     tags: [Employee Records]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Password reset successfully }
+ *       404: { description: Employee not found }
+ */
+router.post(
+  "/employees/:employeeId/reset-password",
+  authMiddleware(ADMIN_ONLY),
+  resetEmployeePassword,
+);
 
 export default router;

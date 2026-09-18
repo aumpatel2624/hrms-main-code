@@ -24,7 +24,7 @@ const InterviewTypeSchema = new mongoose.Schema(
       default: null,
     },
     defaultInterviewers: {
-      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Employee" }],
       default: [],
     },
     expectedSkillSet: {

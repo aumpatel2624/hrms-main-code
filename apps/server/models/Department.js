@@ -45,15 +45,15 @@ const DepartmentSchema = new mongoose.Schema(
     // multi-select field on the Department form — this admin has no
     // multi-select field type yet, a known simplification, not an oversight.
     leaveApprovers: {
-      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Employee" }],
       default: [],
     },
     expenseApprovers: {
-      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Employee" }],
       default: [],
     },
     shiftRequestApprovers: {
-      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Employee" }],
       default: [],
     },
     isActive: {

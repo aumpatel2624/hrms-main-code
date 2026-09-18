@@ -67,13 +67,13 @@ import {
 } from "../api/organizationSetup.api";
 import {
     createEmployee, deleteEmployee, getEmployeeById, updateEmployee, searchEmployees, getAllEmployees,
+    resetEmployeePassword,
 } from "../api/employees.api";
 import { getAllRoles } from "../api/roles.api";
 import { getAllCountries, getStatesByCountry, getCitiesByState } from "../api/locations.api";
 import {
     createAdminUser, deleteAdminUser, getAdminUserById, updateAdminUser, searchAdminUsers, resetAdminUserPassword,
 } from "../api/adminUsers.api";
-import { createUser, deleteUser, getUserById, updateUser, searchUsers, resetUserPassword, getAllUsers } from "../api/users.api";
 import {
     createMenu, deleteMenu, getMenuById, updateMenu, searchMenus, getAllMenuGroups, getAllMenus,
 } from "../api/menus.api";
@@ -257,93 +257,6 @@ export const adminUserConfig = {
         { name: "Mobile", selector: (row) => row.mobileNumber, minWidth: "140px" },
     ],
     recordTitle: (r) => r.adminName,
-};
-
-export const userConfig = {
-    filterFields: [
-        { name: "userName", label: "User Name", type: "string" },
-        { name: "email", label: "Email", type: "string" },
-        { name: "mobileNumber", label: "Mobile", type: "string" },
-        { name: "address", label: "Address", type: "string" },
-        { name: "departmentId", label: "Department", type: "objectId", optionsFrom: "departments" },
-        { name: "roleId", label: "Role", type: "objectId", optionsFrom: "roles" },
-        { name: "isActive", label: "Active", type: "boolean" },
-        { name: "createdAt", label: "Created", type: "date" },
-    ],
-    filterLookups: {
-        departments: asOptions(getAllDepartments, "departmentName"),
-        roles: asOptions(getAllRoles, "roleName"),
-    },
-    key: "user",
-    path: "/user",
-    section: "Setup",
-    singular: "User",
-    plural: "Users",
-    description: "People who use the application, and where they are based.",
-    api: { search: searchUsers, getById: getUserById, create: createUser, update: updateUser, remove: deleteUser },
-    lookups: {
-        departments: asOptions(getAllDepartments, "departmentName"),
-        roles: asOptions(getAllRoles, "roleName"),
-        countries: asOptions(getAllCountries, "countryName"),
-        // Cascade: each level reloads when the level above it changes.
-        states: (values) =>
-            refId(values.countryId)
-                ? getStatesByCountry(refId(values.countryId)).then((res) => (res.data?.data ?? []).map((x) => ({ value: x._id, label: x.stateName })))
-                : Promise.resolve([]),
-        cities: (values) =>
-            refId(values.stateId)
-                ? getCitiesByState(refId(values.stateId)).then((res) => (res.data?.data ?? []).map((x) => ({ value: x._id, label: x.cityName })))
-                : Promise.resolve([]),
-    },
-    lookupDeps: ["countryId", "stateId"],
-    sections: [
-        { id: "details", title: "User details", description: "Name, contact details and where they sit in the organisation." },
-        { id: "location", title: "Location", description: "Country, state and city. Each list narrows the next." },
-        { id: "security", title: "Security" },
-        { id: "status", title: "Status" },
-    ],
-    fields: [
-        { name: "userName", icon: User01, label: "User Name", required: true, section: "details", placeholder: "Enter user name", error: "Name is required" },
-        { name: "departmentId", icon: Building07, label: "Department", type: "select", optionsFrom: "departments", required: true, section: "details", placeholder: "Search department...", error: "Department is required" },
-        { name: "roleId", icon: Shield01, label: "Role", type: "select", optionsFrom: "roles", required: true, section: "details", placeholder: "Search role...", error: "Role is required" },
-        { name: "email", type: "email", label: "Email", required: true, section: "details", error: "Email is required", validate: emailRule },
-        { name: "mobileNumber", icon: Phone, label: "Mobile Number", section: "details", placeholder: "10-digit number", validate: mobileRule },
-        { name: "countryId", label: "Country", type: "select", optionsFrom: "countries", required: true, section: "location", placeholder: "Search country...", error: "Country is required", clears: ["stateId", "cityId"] },
-        { name: "stateId", label: "State", type: "select", optionsFrom: "states", required: true, section: "location", placeholder: "Search state...", error: "State is required", clears: ["cityId"], disabled: (v) => !v.countryId },
-        { name: "cityId", icon: MarkerPin01, label: "City", type: "select", optionsFrom: "cities", required: true, section: "location", placeholder: "Search city...", error: "City is required", disabled: (v) => !v.stateId },
-        { name: "address", type: "textarea", label: "Address", required: true, section: "location", placeholder: "Enter address", error: "Address is required" },
-        {
-            name: "password", type: "password", label: "Password", required: true, section: "security",
-            placeholder: "Enter password", hint: PASSWORD.MESSAGE, hideIn: ["edit"],
-            error: "Password is required", validate: passwordRule,
-        },
-        { ...ACTIVE, default: true },
-    ],
-    toForm: (d) => ({
-        userName: d.userName ?? "",
-        departmentId: d.departmentId?._id ?? d.departmentId ?? "",
-        roleId: d.roleId?._id ?? d.roleId ?? "",
-        email: d.email ?? "",
-        mobileNumber: d.mobileNumber ?? "",
-        countryId: d.countryId?._id ?? d.countryId ?? "",
-        stateId: d.stateId?._id ?? d.stateId ?? "",
-        cityId: d.cityId?._id ?? d.cityId ?? "",
-        address: d.address ?? "",
-        password: "",
-        isActive: d.isActive ?? true,
-    }),
-    toPayload: (values, mode) => {
-        const { password, ...rest } = values;
-        return mode === "edit" ? rest : values;
-    },
-    renderExtra: ({ mode, id }) => (mode === "edit" ? <PasswordResetSection id={id} resetApi={resetUserPassword} /> : null),
-    columns: [
-        { name: "User Name", selector: (row) => row.userName, minWidth: "160px" },
-        { name: "Department", selector: (row) => row.department?.departmentName ?? row.departmentId?.departmentName, minWidth: "160px" },
-        { name: "Email", selector: (row) => row.email, minWidth: "220px" },
-        { name: "Phone", selector: (row) => row.mobileNumber, minWidth: "140px" },
-    ],
-    recordTitle: (r) => r.userName,
 };
 
 export const menuMasterConfig = {
@@ -651,6 +564,8 @@ export const employeeConfig = {
         { name: "designationId", label: "Designation", type: "objectId" },
         { name: "branchId", label: "Branch", type: "objectId" },
         { name: "status", label: "Status", type: "enum" },
+        { name: "email", label: "Email", type: "string" },
+        { name: "roleId", label: "Role", type: "objectId" },
         { name: "dateOfJoining", label: "Date of Joining", type: "date" },
         { name: "isActive", label: "Active", type: "boolean" },
         { name: "createdAt", label: "Created", type: "date" },
@@ -660,7 +575,9 @@ export const employeeConfig = {
     section: "HR Core",
     singular: "Employee",
     plural: "Employees",
-    description: "The employee master — the hub every other HRMS record links to.",
+    // ADR-040: Employee is the login identity now — the former separate
+    // "Users" screen was merged into this one form.
+    description: "The employee master — the hub every other HRMS record links to, and their login.",
     api: { search: searchEmployees, getById: getEmployeeById, create: createEmployee, update: updateEmployee, remove: deleteEmployee },
     lookups: {
         companyId: asOptions(getAllCompanies, "companyName"),
@@ -671,9 +588,23 @@ export const employeeConfig = {
         employmentTypeId: asOptions(getAllEmploymentTypes, "employmentTypeName"),
         gradeId: asOptions(getAllEmployeeGrades, "gradeName"),
         healthInsuranceProviderId: asOptions(getAllEmployeeHealthInsurances, "providerName"),
+        roleId: asOptions(getAllRoles, "roleName"),
+        countries: asOptions(getAllCountries, "countryName"),
+        // Cascade: each level reloads when the level above it changes.
+        states: (values) =>
+            refId(values.countryId)
+                ? getStatesByCountry(refId(values.countryId)).then((res) => (res.data?.data ?? []).map((x) => ({ value: x._id, label: x.stateName })))
+                : Promise.resolve([]),
+        cities: (values) =>
+            refId(values.stateId)
+                ? getCitiesByState(refId(values.stateId)).then((res) => (res.data?.data ?? []).map((x) => ({ value: x._id, label: x.cityName })))
+                : Promise.resolve([]),
     },
+    lookupDeps: ["countryId", "stateId"],
     sections: [
         { id: "identity", title: "Identity" },
+        { id: "account", title: "Login account", description: "Every employee has exactly one login — set it here, not on a separate screen." },
+        { id: "location", title: "Location" },
         { id: "organization", title: "Organization" },
         { id: "employment", title: "Employment" },
         { id: "regional", title: "Regional identity and banking" },
@@ -685,6 +616,20 @@ export const employeeConfig = {
         { name: "employeeName", icon: User01, label: "Employee Name", required: true, section: "identity", error: "Employee Name is required!", placeholder: "Enter employee name" },
         { name: "gender", label: "Gender", type: "select", section: "identity", options: [{ value: "Male", label: "Male" }, { value: "Female", label: "Female" }, { value: "Other", label: "Other" }] },
         { name: "dateOfBirth", label: "Date of Birth", type: "date", section: "identity" },
+
+        { name: "email", type: "email", label: "Email", required: true, section: "account", error: "Email is required", validate: emailRule },
+        { name: "roleId", icon: Shield01, label: "Role", type: "select", required: true, section: "account", placeholder: "Search role...", error: "Role is required", optionsFrom: "roleId" },
+        { name: "mobileNumber", icon: Phone, label: "Mobile Number", section: "account", placeholder: "10-digit number", validate: mobileRule },
+        {
+            name: "password", type: "password", label: "Password", required: true, section: "account",
+            placeholder: "Enter password", hint: PASSWORD.MESSAGE, hideIn: ["edit"],
+            error: "Password is required", validate: passwordRule,
+        },
+
+        { name: "countryId", label: "Country", type: "select", optionsFrom: "countries", section: "location", placeholder: "Search country...", clears: ["stateId", "cityId"] },
+        { name: "stateId", label: "State", type: "select", optionsFrom: "states", section: "location", placeholder: "Search state...", clears: ["cityId"], disabled: (v) => !v.countryId },
+        { name: "cityId", icon: MarkerPin01, label: "City", type: "select", optionsFrom: "cities", section: "location", placeholder: "Search city...", disabled: (v) => !v.stateId },
+        { name: "address", type: "textarea", label: "Address", section: "location", placeholder: "Enter address" },
 
         { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "organization", error: "Company is required!", optionsFrom: "companyId" },
         { name: "departmentId", icon: Building07, label: "Department", type: "select", required: true, section: "organization", error: "Department is required!", optionsFrom: "departmentId" },
@@ -712,6 +657,7 @@ export const employeeConfig = {
     columns: [
         { name: "Employee Code", selector: (row) => row.employeeCode, minWidth: "130px" },
         { name: "Employee Name", selector: (row) => row.employeeName, minWidth: "180px" },
+        { name: "Email", selector: (row) => row.email ?? "—", minWidth: "200px" },
         { name: "Department", selector: (row) => row.departmentName ?? "—", minWidth: "160px" },
         { name: "Designation", selector: (row) => row.designationName ?? "—", minWidth: "160px" },
         { name: "Status", selector: (row) => row.status, minWidth: "120px" },
@@ -727,7 +673,23 @@ export const employeeConfig = {
         employmentTypeId: refId(data.employmentTypeId),
         gradeId: refId(data.gradeId),
         healthInsuranceProviderId: refId(data.healthInsuranceProviderId),
+        roleId: refId(data.roleId),
+        countryId: refId(data.countryId),
+        stateId: refId(data.stateId),
+        cityId: refId(data.cityId),
+        password: "",
     }),
+    // Password is set on create; changes after that go through the reset
+    // section below, never a general profile update (matches the server's
+    // own createEmployee/updateEmployee split, ADR-040).
+    toPayload: (values, mode) => {
+        if (mode === "edit") {
+            const { password, ...rest } = values;
+            return rest;
+        }
+        return values;
+    },
+    renderExtra: ({ mode, id }) => (mode === "edit" ? <PasswordResetSection id={id} resetApi={resetEmployeePassword} /> : null),
 };
 
 // ---------------------------------------------------------- Recruitment (ADR-019) --
@@ -1074,7 +1036,7 @@ export const interviewFeedbackConfig = {
     api: { search: searchInterviewFeedbacks, getById: getInterviewFeedbackById, create: createInterviewFeedback, update: updateInterviewFeedback, remove: deleteInterviewFeedback },
     lookups: {
         interviewId: interviewOptionsLoader,
-        interviewerId: asOptions(getAllUsers, "userName"),
+        interviewerId: asOptions(getAllEmployees, "employeeName"),
     },
     sections: [{ id: "details", title: "Details" }, { id: "status", title: "Status" }],
     fields: [
@@ -2710,7 +2672,7 @@ export const leaveApplicationConfig = {
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
         leaveTypeId: asOptions(getAllLeaveTypes, "leaveTypeName"),
-        leaveApproverId: asOptions(getAllUsers, "userName"),
+        leaveApproverId: asOptions(getAllEmployees, "employeeName"),
     },
     sections: [{ id: "details", title: "Details" }, { id: "approval", title: "Approval" }, { id: "status", title: "Status" }, { id: "actions", title: "Actions" }],
     fields: [
@@ -3141,7 +3103,7 @@ export const shiftRequestConfig = {
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
         shiftTypeId: asOptions(getAllShiftTypes, "shiftTypeName"),
-        approverId: asOptions(getAllUsers, "userName"),
+        approverId: asOptions(getAllEmployees, "employeeName"),
     },
     sections: [{ id: "details", title: "Details" }, { id: "status", title: "Status" }],
     fields: [
@@ -4320,7 +4282,7 @@ export const expenseClaimTypeConfig = {
 };
 export const expenseClaimConfig = {
     key: "expense-claim", path: "/expense-claim", section: "Expenses", singular: "Expense Claim", plural: "Expense Claims", description: "Record a reimbursable expense claim, have it approved, submit it, and mark it paid after reimbursement.",
-    api: { search: searchExpenseClaims, getById: getExpenseClaimById, create: createExpenseClaim, update: updateExpenseClaim, remove: deleteExpenseClaim }, lookups: { employeeId: asOptions(getAllEmployees, "employeeName"), expenseApproverId: asOptions(getAllUsers, "userName") },
+    api: { search: searchExpenseClaims, getById: getExpenseClaimById, create: createExpenseClaim, update: updateExpenseClaim, remove: deleteExpenseClaim }, lookups: { employeeId: asOptions(getAllEmployees, "employeeName"), expenseApproverId: asOptions(getAllEmployees, "employeeName") },
     sections: [{ id: "details", title: "Claim details" }, { id: "expenses", title: "Expenses" }, { id: "taxes", title: "Taxes and charges" }, { id: "totals", title: "Totals" }, { id: "status", title: "Status" }],
     fields: [{ name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" }, { name: "postingDate", label: "Posting Date", section: "details", type: "date" }, { name: "expenseApproverId", label: "Expense Approver", section: "details", type: "select", optionsFrom: "expenseApproverId", hint: "Leave blank to use the employee or department approver." }, { name: "totalClaimedAmount", label: "Total Claimed", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "totalSanctionedAmount", label: "Total Sanctioned", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "totalTaxesAndCharges", label: "Total Taxes", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "grandTotal", label: "Grand Total", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "status", label: "Status", section: "status", type: "text", disabled: () => true, hideIn: ["add"] }, { name: "isPaid", label: "Paid", section: "status", type: "checkbox", disabled: () => true, hideIn: ["add"] }],
     renderExtra: ({ mode, id, values, setValues }) => (
@@ -5689,7 +5651,7 @@ export const employeeTaxExemptionProofSubmissionConfig = {
 export const ADVANCED_ENTITIES = [
     shiftTypeConfig, shiftLocationConfig, shiftAssignmentConfig, shiftScheduleConfig, shiftScheduleAssignmentConfig, employeeCheckinConfig,
     shiftRequestConfig, attendanceRequestConfig,
-    adminUserConfig, userConfig, menuMasterConfig, emailTemplateConfig,
+    adminUserConfig, menuMasterConfig, emailTemplateConfig,
     departmentConfig, branchConfig, designationConfig, employeeConfig,
     jobApplicantSourceConfig, interviewTypeConfig, jobOfferTermTemplateConfig,
     jobRequisitionConfig, jobOpeningConfig, jobApplicantConfig,

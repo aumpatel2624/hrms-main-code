@@ -51,10 +51,7 @@ import EmailTemplate from "../models/EmailTemplate.js";
 import LoginAttempt from "../models/LoginAttempt.js";
 import RoleDashboard from "../models/RoleDashboard.js";
 import RoleMaster from "../models/RoleMaster.js";
-import SeoPage from "../models/SeoPage.js";
-import SeoRedirect from "../models/SeoRedirect.js";
 import State from "../models/State.js";
-import User from "../models/User.js";
 
 dotenv.config();
 
@@ -143,8 +140,7 @@ const wipe = async () => {
   const models = [
     Employee, Branch, Designation, ShiftType, ShiftLocation, ShiftAssignment, ShiftSchedule, ShiftScheduleAssignment, EmployeeCheckin, Attendance,
     City, Company, Country, CurrencyMaster, DashboardWidget, Department, EmailFor,
-    EmailSetup, EmailTemplate, LoginAttempt, RoleDashboard, RoleMaster,
-    SeoPage, SeoRedirect, State, User,
+    EmailSetup, EmailTemplate, LoginAttempt, RoleDashboard, RoleMaster, State,
   ];
   for (const model of models) await model.collection.deleteMany({});
   // Admin users are wiped by email so a real one on a shared database — which
@@ -191,21 +187,34 @@ const seedPeople = async (place) => {
     DEPARTMENTS.map((d) => ({ ...d, companyId: fixtureCompany._id, isActive: true })),
   );
   const roles = await RoleMaster.create(ROLES.map((roleName) => ({ roleName, isActive: true })));
+  // ADR-040: Employee is the login identity now (the former separate `User`
+  // fixture is merged in) — needs a Designation and Branch to satisfy
+  // Employee's other required refs, same fictional-fixture-company pattern.
+  const designations = await Designation.create(
+    ROLES.map((roleName) => ({ designationName: roleName, companyId: fixtureCompany._id, isActive: true })),
+  );
+  const branch = await Branch.create({ branchName: "Fixture HQ", companyId: fixtureCompany._id, isActive: true });
 
   const byDepartment = Object.fromEntries(departments.map((d) => [d.departmentName, d._id]));
   const byRole = Object.fromEntries(roles.map((r) => [r.roleName, r._id]));
+  const byDesignation = Object.fromEntries(designations.map((d) => [d.designationName, d._id]));
 
   // One hash, reused. bcrypt at cost 10 fourteen times is several seconds of a
-  // run that happens on every documentation build, and no fixture user is ever
-  // signed in as — the capture script uses the admin account below.
+  // run that happens on every documentation build, and no fixture person is
+  // ever signed in as — the capture script uses the admin account below.
   const password = await bcrypt.hash("Fixture@123", 10);
 
-  await User.create(
-    PEOPLE.map(([userName, department, role], index) => ({
-      userName,
-      email: emailFor(userName),
+  await Employee.create(
+    PEOPLE.map(([employeeName, department, role], index) => ({
+      employeeCode: `FIX-${String(index + 1).padStart(3, "0")}`,
+      employeeName,
+      email: emailFor(employeeName),
       mobileNumber: `98${String(76543210 + index).padStart(8, "0")}`,
+      companyId: fixtureCompany._id,
       departmentId: byDepartment[department],
+      designationId: byDesignation[role],
+      branchId: branch._id,
+      dateOfJoining: daysAgo(365 - index * 10),
       roleId: byRole[role],
       countryId: place.country._id,
       stateId: place.state._id,
@@ -294,39 +303,6 @@ const seedEmails = async () => {
     })),
   );
   console.log("✅ Email: 3 purposes, 1 SMTP account, 3 templates");
-};
-
-const seedSeo = async () => {
-  await SeoPage.create([
-    {
-      path: "/",
-      pageName: "Home",
-      focusKeyword: "office supplies",
-      title: "Office Supplies, Delivered Next Day | Example Co",
-      description: "Everything your workplace runs on, shipped from our warehouse the same day you order it.",
-      isActive: true,
-    },
-    {
-      path: "/about",
-      pageName: "About us",
-      title: "About Example Co",
-      description: "Family-run since 1998, supplying offices across the country.",
-      isActive: true,
-    },
-    {
-      path: "/contact",
-      pageName: "Contact",
-      title: "Contact Us | Example Co",
-      description: "Talk to our support team by phone, email or live chat.",
-      isActive: true,
-    },
-  ]);
-  await SeoRedirect.create([
-    { fromPath: "/old-pricing", toPath: "/pricing", statusCode: 301, hits: 148, lastHitAt: daysAgo(2), notes: "Replaced by the new pricing page", isActive: true },
-    { fromPath: "/blog/2019", toPath: "/blog", statusCode: 301, hits: 32, lastHitAt: daysAgo(9), isActive: true },
-    { fromPath: "/promo-expired", statusCode: 410, hits: 7, lastHitAt: daysAgo(21), notes: "Campaign ended, no replacement", isActive: true },
-  ]);
-  console.log("✅ SEO: 3 pages, 3 redirects");
 };
 
 /**
@@ -426,7 +402,6 @@ const run = async () => {
   await seedShiftAttendance();
   await seedLoginAttempts();
   await seedEmails();
-  await seedSeo();
   await seedDashboard();
 
   await mongoose.disconnect();

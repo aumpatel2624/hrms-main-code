@@ -59,7 +59,7 @@ const EmployeeGrievanceSchema = new mongoose.Schema(
     },
     resolvedByUserId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Employee",
       required: false,
       default: null,
     },

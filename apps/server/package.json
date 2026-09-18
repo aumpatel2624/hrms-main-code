@@ -15,7 +15,7 @@
   "license": "ISC",
   "dependencies": {
     "@demo-panel/shared": "*",
-    "bcrypt": "^5.1.1",
+    "bcrypt": "^6.0.0",
     "body-parser": "^1.20.2",
     "connect-mongo": "^6.0.0",
     "cors": "^2.8.5",
@@ -33,7 +33,7 @@
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^7.0.12",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.4",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^13.0.0"

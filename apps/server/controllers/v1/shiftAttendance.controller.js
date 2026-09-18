@@ -4,6 +4,9 @@ import { saveShiftRecord, withShiftWriteLock } from "../../utils/shiftAssignment
 import { generateShiftRanges } from "../../utils/shiftSchedule.js";
 import { DAY_MS } from "../../utils/shiftOccurrence.js";
 import { getReferencingCounts, formatReferenceMessage } from "../../utils/referenceHelper.js";
+import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
+import { ROLES } from "@demo-panel/shared/roles";
+import { SCOPES } from "@demo-panel/shared/scopes";
 import ShiftType from "../../models/ShiftType.js";
 import ShiftLocation from "../../models/ShiftLocation.js";
 import ShiftAssignment from "../../models/ShiftAssignment.js";
@@ -309,6 +312,18 @@ export const createEmployeeCheckin = async (req, res) => {
   try {
     const payload = {};
     for (const field of EMPLOYEECHECKIN_FIELDS) if (req.body[field] !== undefined) payload[field] = req.body[field];
+    // Pre-launch security fix: this endpoint took `employeeId` straight from
+    // the client with no ownership check — the Employee role has `write`
+    // here (seedShiftAttendanceRoles), so any employee could punch a
+    // check-in on behalf of a colleague (attendance fraud). A self-service
+    // caller (dataScope !== ALL) can only ever check themself in, same
+    // pattern as every other self-service create in this codebase
+    // (createLeaveApplication, createGoal, etc).
+    if (req.user && req.user.role !== ROLES.ADMIN && req.user.dataScope !== SCOPES.ALL) {
+      const ownEmployee = await resolveRequestEmployee(req);
+      if (!ownEmployee) return res.status(403).json({ isOk: false, status: 403, message: "No employee record linked to this user" });
+      payload.employeeId = ownEmployee._id;
+    }
     const doc = new EmployeeCheckin(payload);
     await saveShiftRecord(doc, null, req);
     return res.status(201).json({ isOk: true, status: 201, data: doc, message: "Employee Checkin created successfully" });

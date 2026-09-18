@@ -144,7 +144,7 @@ router.post(
 
 // =============================================================== LeaveAllocation --
 router.post("/leave-allocations", authMiddleware(ANY_ROLE), checkPermission("/leave-allocation", "write"), createLeaveAllocation);
-router.get("/leave-allocations", authMiddleware(ANY_ROLE), listLeaveAllocations);
+router.get("/leave-allocations", authMiddleware(ANY_ROLE), checkPermission("/leave-allocation", "read"), listLeaveAllocations);
 router.get("/leave-allocations/:leaveAllocationId", authMiddleware(ANY_ROLE), checkPermission("/leave-allocation", "read"), getLeaveAllocationById);
 router.put("/leave-allocations/:leaveAllocationId", authMiddleware(ANY_ROLE), checkPermission("/leave-allocation", "edit"), updateLeaveAllocation);
 router.delete("/leave-allocations/:leaveAllocationId", authMiddleware(ANY_ROLE), checkPermission("/leave-allocation", "delete"), deleteLeaveAllocation);

@@ -12,6 +12,10 @@ import {
   getReferencingCounts,
   formatReferenceMessage,
 } from "../../utils/referenceHelper.js";
+import { ROLES } from "@demo-panel/shared/roles";
+import { SCOPES } from "@demo-panel/shared/scopes";
+import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
+import { buildScopeFilter } from "../../utils/scope.js";
 
 // ---------------------------------------------------------- Grievance Type --
 
@@ -149,13 +153,42 @@ const validateConditionalFields = (fields) => {
   return null;
 };
 
+// Own-scope security fix (pre-launch): a self-service caller can only ever
+// raise, view or edit a grievance about themself — the client-supplied
+// raisedByEmployeeId is trusted only for HR User/HR Manager (same intent as
+// leavesTransactions.controller.js's own createLeaveApplication). No delete
+// right exists for Employee at all (see seedEmployeeCareerEventsRoles), so
+// deleteEmployeeGrievance needs no ownership check of its own.
+const canAccessEmployeeGrievance = async (req, doc) => {
+  if (!req.user || req.user.role === ROLES.ADMIN) return true;
+  if (req.user.dataScope !== SCOPES.OWN) return true;
+  const employee = await resolveRequestEmployee(req);
+  return !!employee && String(doc.raisedByEmployeeId) === String(employee._id);
+};
+
+const employeeGrievanceScopeFilter = async (req) => {
+  if (!req.user || req.user.role === ROLES.ADMIN) return null;
+  if (req.user.dataScope !== SCOPES.OWN) return null;
+  const employee = await resolveRequestEmployee(req);
+  return buildScopeFilter({ ...req.user, id: employee?._id }, { owner: "raisedByEmployeeId" });
+};
+
 export const createEmployeeGrievance = async (req, res) => {
   try {
-    const missing = REQUIRED_FIELDS.filter((k) => !req.body[k]);
+    let raisedByEmployeeId = req.body.raisedByEmployeeId;
+    if (req.user?.dataScope === SCOPES.OWN) {
+      const ownEmployee = await resolveRequestEmployee(req);
+      if (!ownEmployee) {
+        return res.status(403).json({ isOk: false, status: 403, message: "No employee record linked to this user" });
+      }
+      raisedByEmployeeId = ownEmployee._id;
+    }
+    const body = { ...req.body, raisedByEmployeeId };
+    const missing = REQUIRED_FIELDS.filter((k) => !body[k]);
     if (missing.length) {
       return res.status(400).json({ isOk: false, status: 400, message: `Missing required field(s): ${missing.join(", ")}` });
     }
-    const fields = pickFields(req.body);
+    const fields = { ...pickFields(body), raisedByEmployeeId };
     const conditionalError = validateConditionalFields(fields);
     if (conditionalError) {
       return res.status(400).json({ isOk: false, status: 400, message: conditionalError });
@@ -175,7 +208,11 @@ export const updateEmployeeGrievance = async (req, res) => {
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee Grievance not found" });
     }
+    if (!(await canAccessEmployeeGrievance(req, doc))) {
+      return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to update this Employee Grievance" });
+    }
     const fields = pickFields(req.body);
+    delete fields.raisedByEmployeeId; // ownership is fixed at creation, never reassignable by the request body
     const merged = { ...doc.toObject(), ...fields };
     const conditionalError = validateConditionalFields(merged);
     if (conditionalError) {
@@ -219,6 +256,9 @@ export const getEmployeeGrievanceById = async (req, res) => {
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee Grievance not found" });
     }
+    if (!(await canAccessEmployeeGrievance(req, doc))) {
+      return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to view this Employee Grievance" });
+    }
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getEmployeeGrievanceById", error);
@@ -226,9 +266,10 @@ export const getEmployeeGrievanceById = async (req, res) => {
   }
 };
 
-export const listEmployeeGrievances = async (_req, res) => {
+export const listEmployeeGrievances = async (req, res) => {
   try {
-    const docs = await EmployeeGrievance.find({ isActive: true }).select("subject status raisedByEmployeeId");
+    const scopeFilter = await employeeGrievanceScopeFilter(req);
+    const docs = await EmployeeGrievance.find({ isActive: true, ...(scopeFilter ?? {}) }).select("subject status raisedByEmployeeId");
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listEmployeeGrievances", error);
@@ -238,12 +279,14 @@ export const listEmployeeGrievances = async (_req, res) => {
 
 export const listEmployeeGrievancesByParams = async (req, res) => {
   try {
+    const scopeFilter = await employeeGrievanceScopeFilter(req);
     const list = await runListQuery(EmployeeGrievance, req.body, {
       searchFields: ["subject"],
       filterable: {
         raisedByEmployeeId: "objectId", grievanceTypeId: "objectId", status: "enum",
         date: "date", isActive: "boolean", createdAt: "date",
       },
+      scopeFilter,
     });
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {

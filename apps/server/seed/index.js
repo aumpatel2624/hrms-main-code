@@ -966,7 +966,14 @@ const seedEmployees = async (companyId) => {
  * access to Employee; Employee Health Insurance is HR-Manager-full/
  * HR-User-**read-only**, the one doctype so far with an asymmetric split
  * (matches the source permissions table exactly). The other 4 roles get no
- * matrix row for either screen in this module, same reasoning as ADR-017.
+ * matrix row for Health Insurance.
+ *
+ * Employee additionally gets a read-only, `dataScope: SCOPES.TEAM` grant on
+ * `/employee` itself (pre-launch, org-chart manager visibility — this
+ * screen previously had no Employee grant at all, INV-8c). A manager
+ * (someone with direct reports, Employee.reportsToId) sees their own
+ * profile plus everyone in their downward reporting chain; an individual
+ * contributor with no reports sees only themself.
  */
 const seedEmployeeRecordsRoles = async () => {
   const FULL_ACCESS_ROLES = ["HR User", "HR Manager"];
@@ -984,6 +991,7 @@ const seedEmployeeRecordsRoles = async () => {
 
   const allPermTrue = Object.fromEntries(PERMISSION_KEYS.map((key) => [key, key === "read" || key === "write" || key === "edit" || key === "delete"]));
   const readOnlyPerm = Object.fromEntries(PERMISSION_KEYS.map((key) => [key, key === "read"]));
+  const teamReadOnlyPerm = { ...readOnlyPerm, dataScope: SCOPES.TEAM };
 
   let matrixRowsAdded = 0;
   for (const roleName of FULL_ACCESS_ROLES) {
@@ -1009,6 +1017,23 @@ const seedEmployeeRecordsRoles = async () => {
     }
 
     if (changed) await userRoles.save();
+  }
+
+  const employeeRole = await RoleMaster.findOne({ roleName: "Employee" });
+  const employeeUserRoles = employeeRole && await UserRoles.findOne({ roleId: employeeRole._id });
+  if (employeeUserRoles) {
+    const row = employeeUserRoles.roles.find((r) => String(r.menuId) === String(employeeMenu._id));
+    if (!row) {
+      employeeUserRoles.roles.push({ menuId: employeeMenu._id, menuGroupId: employeeMenu.menuGroup, ...teamReadOnlyPerm });
+      matrixRowsAdded += 1;
+      await employeeUserRoles.save();
+    } else if (row.dataScope !== SCOPES.TEAM) {
+      // A wrong/missing dataScope here is a visibility gap, not an admin
+      // customisation to preserve — correct it in place on re-seed (same
+      // targeted-exception pattern as issue #34's fixDataScope).
+      row.dataScope = SCOPES.TEAM;
+      await employeeUserRoles.save();
+    }
   }
 
   console.log(`✅ Employee records roles: ${matrixRowsAdded} menu grant(s) added`);
@@ -1272,11 +1297,13 @@ const seedEmployeeCareerEventsMasters = async () => {
  * key everything else uses since this matrix has no separate submit
  * dimension) that HR User doesn't get on Employee Transfer/Promotion
  * (create+read only, no edit/delete in source — HR Manager alone gets
- * full control there). Employee Grievance's Employee role gets write+
- * delete on their own screen access (per source's literal permission
- * table — not an "only mine" restriction, that mechanism is still open,
- * OPEN-QUESTIONS.md Q-4) but the matrix only grants roles here, not a
- * scoped subset — Employee gets the same full-within-menu grant HR does.
+ * full control there). Employee Grievance's Employee role is
+ * `dataScope: SCOPES.OWN`, no delete (pre-launch security fix, was
+ * previously unscoped full CRUD per source's literal permission table —
+ * OPEN-QUESTIONS.md Q-4 resolved this way for launch: harassment/
+ * discrimination complaints are sensitive enough that "any Employee can
+ * read/edit/delete any other employee's grievance" is not acceptable,
+ * even if that matched the ported source table).
  */
 const seedEmployeeCareerEventsRoles = async () => {
   const perm = (write, edit, del) =>
@@ -1288,7 +1315,7 @@ const seedEmployeeCareerEventsRoles = async () => {
   // { menuUrl: { roleName: permObject } }
   const GRANTS = {
     "/grievance-type": { "HR User": full, "HR Manager": full },
-    "/employee-grievance": { "HR User": full, "HR Manager": full, Employee: full },
+    "/employee-grievance": { "HR User": full, "HR Manager": full, Employee: { ...fullNoDelete, dataScope: SCOPES.OWN } },
     "/employee-transfer": { "HR User": createReadOnly, "HR Manager": full },
     "/employee-promotion": { "HR User": createReadOnly, "HR Manager": full },
     "/employee-referral": { "HR User": fullNoDelete, "HR Manager": full },
@@ -1309,6 +1336,20 @@ const seedEmployeeCareerEventsRoles = async () => {
     return true;
   };
 
+  // A wrong dataScope/delete grant here is a security gap, not an admin
+  // customisation to preserve — correct it in place on re-seed (same
+  // targeted-exception pattern as issue #34's fixDataScope in
+  // seedTravelRoles/seedLeaveRoles) so an already-seeded database gets the
+  // fix too, without touching any other field on the row.
+  const fixSecurityPermission = (userRoles, menu, permObj) => {
+    const row = userRoles.roles.find((r) => String(r.menuId) === String(menu._id));
+    if (!row) return false;
+    let changed = false;
+    if (permObj.dataScope && row.dataScope !== permObj.dataScope) { row.dataScope = permObj.dataScope; changed = true; }
+    if (permObj.delete === false && row.delete !== false) { row.delete = false; changed = true; }
+    return changed;
+  };
+
   let matrixRowsAdded = 0;
   const roleNames = ["Employee", "HR User", "HR Manager"];
   for (const roleName of roleNames) {
@@ -1322,6 +1363,7 @@ const seedEmployeeCareerEventsRoles = async () => {
       const permObj = grantByRole[roleName];
       if (!permObj) continue;
       if (addRow(userRoles, menuByUrl[menuUrl], permObj)) { matrixRowsAdded += 1; changed = true; }
+      else if (fixSecurityPermission(userRoles, menuByUrl[menuUrl], permObj)) { changed = true; }
     }
     if (changed) await userRoles.save();
   }
@@ -1773,6 +1815,13 @@ const seedLeaveRoles = async () => {
   console.log(`✅ Leaves roles: ${matrixRowsAdded} menu grant(s) added`);
 };
 
+// dataScope: SCOPES.TEAM (pre-launch, org-chart manager visibility): was
+// SCOPES.OWN — an Employee with direct reports (Employee.reportsToId) now
+// also sees their team's Shift Assignment/Employee Checkin rows, not just
+// their own. Degrades to exactly "own" for an employee with no reports, so
+// this is a strict widening, not a behaviour change for individual
+// contributors. Corrected in place on re-seed, same as issue #34's
+// fixDataScope in seedTravelRoles.
 const seedShiftAttendanceRoles = async () => {
   const full = { write: true, read: true, edit: true, delete: true, print: true, mail: true };
   const read = { ...full, write: false, edit: false, delete: false, mail: false };
@@ -1786,15 +1835,19 @@ const seedShiftAttendanceRoles = async () => {
       let permissions = full;
       if (roleName === "Employee") {
         if (!["/shift-type", "/shift-assignment", "/employee-checkin"].includes(menu.menuUrl)) continue;
-        permissions = { ...read, ...(menu.menuUrl === "/shift-type" ? {} : { dataScope: SCOPES.OWN }), write: menu.menuUrl === "/employee-checkin" };
+        permissions = { ...read, ...(menu.menuUrl === "/shift-type" ? {} : { dataScope: SCOPES.TEAM }), write: menu.menuUrl === "/employee-checkin" };
       }
       const existing = matrix.roles.find(row => String(row.menuId) === String(menu._id));
       if (!existing) { matrix.roles.push({ menuId: menu._id, menuGroupId: menu.menuGroup, ...permissions }); changes++; changed = true; }
-      else if (String(existing.menuGroupId) !== String(menu.menuGroup)) { existing.menuGroupId = menu.menuGroup; changed = true; changes++; }
+      else {
+        if (String(existing.menuGroupId) !== String(menu.menuGroup)) { existing.menuGroupId = menu.menuGroup; changed = true; }
+        if (permissions.dataScope && existing.dataScope !== permissions.dataScope) { existing.dataScope = permissions.dataScope; changed = true; }
+        if (changed) changes++;
+      }
     }
     if (changed) await matrix.save();
   }
-  console.log(`✅ Shift & Attendance roles: ${changes} menu grant/group change(s)`);
+  console.log(`✅ Shift & Attendance roles: ${changes} menu grant/group/scope change(s)`);
 };
 
 /**
@@ -1810,11 +1863,16 @@ const seedShiftAttendanceTransactionsRoles = async () => {
   const perm = (write, edit, del) =>
     Object.fromEntries(PERMISSION_KEYS.map((key) => [key, key === "read" || (key === "write" && write) || (key === "edit" && edit) || (key === "delete" && del)]));
   const full = perm(true, true, true);
-  const ownReadWrite = { ...perm(true, false, false), dataScope: SCOPES.OWN };
+  // dataScope: SCOPES.TEAM (pre-launch, org-chart manager visibility) — was
+  // SCOPES.OWN. A manager sees, but per canAccessOwnRecord/canViewRecord in
+  // shiftAttendanceTransactions.controller.js can never edit/cancel, their
+  // reports' Shift/Attendance Requests too, matching the parity fix applied
+  // to Leave/CompLeave/Shift Assignment/Employee Checkin this session.
+  const teamReadWrite = { ...perm(true, false, false), dataScope: SCOPES.TEAM };
 
   const GRANTS = {
-    "/shift-request": { Employee: ownReadWrite, "HR User": full, "HR Manager": full },
-    "/attendance-request": { Employee: ownReadWrite, "HR User": full, "HR Manager": full },
+    "/shift-request": { Employee: teamReadWrite, "HR User": full, "HR Manager": full },
+    "/attendance-request": { Employee: teamReadWrite, "HR User": full, "HR Manager": full },
     // Source's own permissions table names HR User as the sole role with
     // access (Shift Assignment Tool.md) — this project also grants HR
     // Manager, matching every other admin-tool screen's "HR User and HR
@@ -1850,6 +1908,10 @@ const seedShiftAttendanceTransactionsRoles = async () => {
       const permObj = grantByRole[roleName];
       if (!permObj) continue;
       if (addRow(userRoles, menuByUrl[menuUrl], permObj)) { matrixRowsAdded += 1; changed = true; }
+      else if (permObj.dataScope) {
+        const row = userRoles.roles.find((r) => String(r.menuId) === String(menuByUrl[menuUrl]._id));
+        if (row && row.dataScope !== permObj.dataScope) { row.dataScope = permObj.dataScope; changed = true; }
+      }
     }
     if (changed) await userRoles.save();
   }
@@ -1974,19 +2036,21 @@ const seedPayrollRoles = async () => {
  * Performance roles (ADR-032, module 16). The foundation half's HR-
  * configuration screens stay HR User/HR Manager only, matching Payroll's own
  * precedent. The transactional half (feat/performance-goals) adds real
- * Employee self-service: `/goal` gets `dataScope: SCOPES.OWN` (an Employee
- * reads/writes only their own goal tree — the real per-action pattern this
- * matches is `EmployeeTaxExemptionDeclaration`'s `fullNoDelete`, ADR-030).
- * `/employee-performance-feedback` is NOT SCOPES.OWN — `Employee Performance
- * Feedback.md`'s own permission table grants Employee/HR Manager broad
- * create/read/write/submit/cancel (no `if_owner` row-level restriction) and
- * HR User read-only; ported faithfully rather than inventing a scoping rule
- * ADR-032 never asked for on this doctype.
+ * Employee self-service: `/goal` gets `dataScope: SCOPES.TEAM` (pre-launch,
+ * org-chart manager visibility — was SCOPES.OWN; an Employee reads/writes
+ * their own goal tree, and a manager's own reports' too, per
+ * Employee.reportsToId — degrades to exactly "own" with no reports). The
+ * real per-action pattern this matches is `EmployeeTaxExemptionDeclaration`'s
+ * `fullNoDelete`, ADR-030. `/employee-performance-feedback` is NOT scoped at
+ * all — `Employee Performance Feedback.md`'s own permission table grants
+ * Employee/HR Manager broad create/read/write/submit/cancel (no `if_owner`
+ * row-level restriction) and HR User read-only; ported faithfully rather
+ * than inventing a scoping rule ADR-032 never asked for on this doctype.
  */
 const seedPerformanceRoles = async () => {
   const full = { write: true, read: true, edit: true, delete: true, print: true, mail: true };
   const fullNoDelete = { write: true, read: true, edit: true, delete: false, print: true, mail: true };
-  const ownFullNoDelete = { ...fullNoDelete, dataScope: SCOPES.OWN };
+  const teamFullNoDelete = { ...fullNoDelete, dataScope: SCOPES.TEAM };
   const readOnly = { write: false, read: true, edit: false, delete: false, print: true, mail: false };
 
   const GRANTS = {
@@ -1996,7 +2060,7 @@ const seedPerformanceRoles = async () => {
     "/appraisal-cycle": { "HR User": full, "HR Manager": full },
     "/appraisal": { "HR User": full, "HR Manager": full },
     // ADR-032 (transactional half, feat/performance-goals).
-    "/goal": { "HR User": full, "HR Manager": full, "Employee": ownFullNoDelete },
+    "/goal": { "HR User": full, "HR Manager": full, "Employee": teamFullNoDelete },
     "/employee-performance-feedback": { "HR User": readOnly, "HR Manager": fullNoDelete, "Employee": fullNoDelete },
   };
 
@@ -2014,6 +2078,17 @@ const seedPerformanceRoles = async () => {
     return true;
   };
 
+  // dataScope: SCOPES.TEAM on `/goal` was SCOPES.OWN — a wrong/stale
+  // dataScope is a security/visibility gap, not an admin customisation to
+  // preserve, so correct it in place on re-seed (same targeted-exception
+  // pattern as issue #34's fixDataScope in seedTravelRoles).
+  const fixDataScope = (userRoles, menu, expectedScope) => {
+    const row = userRoles.roles.find((r) => String(r.menuId) === String(menu._id));
+    if (!row || row.dataScope === expectedScope) return false;
+    row.dataScope = expectedScope;
+    return true;
+  };
+
   let matrixRowsAdded = 0;
   for (const roleName of ["HR User", "HR Manager", "Employee"]) {
     const role = await RoleMaster.findOne({ roleName });
@@ -2026,6 +2101,7 @@ const seedPerformanceRoles = async () => {
       const permObj = grantByRole[roleName];
       if (!permObj) continue;
       if (addRow(userRoles, menuByUrl[menuUrl], permObj)) { matrixRowsAdded += 1; changed = true; }
+      else if (permObj.dataScope && fixDataScope(userRoles, menuByUrl[menuUrl], permObj.dataScope)) { changed = true; }
     }
     if (changed) await userRoles.save();
   }

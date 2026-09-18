@@ -18,6 +18,7 @@ import { runListQuery } from "../../utils/listQuery.js";
 import { getReferencingCounts, formatReferenceMessage } from "../../utils/referenceHelper.js";
 import { getLeaveBalance } from "../../utils/leaveBalance.js";
 import { resolveApprovers, getEmployeesApprovedBy } from "../../utils/approvers.js";
+import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { buildScopeFilter } from "../../utils/scope.js";
 import { countLeaveDays, sameCalendarDay } from "../../utils/leaveDayCalculation.js";
@@ -55,6 +56,21 @@ const failure = (res, error) => {
   }
   console.error("Leaves Transactions request failed", error);
   return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+};
+
+// Pre-launch, org-chart manager visibility: a SCOPES.APPROVER caller's
+// "who else can I see" set is the union of who they're the NAMED approver
+// for (getEmployeesApprovedBy) and everyone in their downward reportsToId
+// chain (getSubordinateEmployeeIds) — a manager sees a report's Leave
+// Application/Compensatory Leave Request even when someone else (or a
+// Department approver array) is the named approver. Caller must have
+// already resolved req.user.employeeId (resolveRequestEmployee).
+const resolveLeaveVisibilityIds = async (req) => {
+  const [approverIds, teamIds] = await Promise.all([
+    getEmployeesApprovedBy(req.user.id, "leave"),
+    getSubordinateEmployeeIds(req.user.employeeId),
+  ]);
+  return [...new Set([...approverIds, ...teamIds])];
 };
 
 const referenceGuardedDelete = async (Model, modelName, id, label) => {
@@ -209,8 +225,8 @@ const canAccessCompensatoryLeaveRequest = async (req, doc) => {
   if (!req.user || req.user.role === ROLES.ADMIN) return true;
   if (req.user.dataScope !== SCOPES.APPROVER) return true;
   await resolveRequestEmployee(req);
-  const approverIds = await getEmployeesApprovedBy(req.user.id, "leave");
-  const allowedIds = [String(req.user.employeeId), ...approverIds];
+  const visibilityIds = await resolveLeaveVisibilityIds(req);
+  const allowedIds = [String(req.user.employeeId), ...visibilityIds];
   return allowedIds.includes(String(doc.employeeId));
 };
 
@@ -347,7 +363,7 @@ export const listCompensatoryLeaveRequestByParams = async (req, res) => {
   try {
     await resolveRequestEmployee(req);
     let approverIds = [];
-    if (req.user?.dataScope === SCOPES.APPROVER) approverIds = await getEmployeesApprovedBy(req.user.id, "leave");
+    if (req.user?.dataScope === SCOPES.APPROVER) approverIds = await resolveLeaveVisibilityIds(req);
     const scopeFilter = buildScopeFilter(req.user, { owner: "employeeId", approverIds });
 
     const list = await runListQuery(CompensatoryLeaveRequest, req.body, {
@@ -795,8 +811,8 @@ const canAccessLeaveApplication = async (req, doc) => {
   if (!req.user || req.user.role === ROLES.ADMIN) return true;
   if (req.user.dataScope !== SCOPES.APPROVER) return true;
   await resolveRequestEmployee(req);
-  const approverIds = await getEmployeesApprovedBy(req.user.id, "leave");
-  const allowedIds = [String(req.user.employeeId), ...approverIds];
+  const visibilityIds = await resolveLeaveVisibilityIds(req);
+  const allowedIds = [String(req.user.employeeId), ...visibilityIds];
   return allowedIds.includes(String(doc.employeeId));
 };
 
@@ -839,7 +855,7 @@ export const listLeaveApplicationByParams = async (req, res) => {
   try {
     await resolveRequestEmployee(req);
     let approverIds = [];
-    if (req.user?.dataScope === SCOPES.APPROVER) approverIds = await getEmployeesApprovedBy(req.user.id, "leave");
+    if (req.user?.dataScope === SCOPES.APPROVER) approverIds = await resolveLeaveVisibilityIds(req);
     const scopeFilter = buildScopeFilter(req.user, { owner: "employeeId", approverIds });
 
     const list = await runListQuery(LeaveApplication, req.body, {

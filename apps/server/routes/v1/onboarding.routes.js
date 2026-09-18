@@ -17,7 +17,7 @@ const router = express.Router();
 
 // ---- Employee Onboarding ----
 router.post("/employee-onboardings", authMiddleware(ANY_ROLE), checkPermission("/employee-onboarding", "write"), createEmployeeOnboarding);
-router.get("/employee-onboardings", authMiddleware(ANY_ROLE), listEmployeeOnboardings);
+router.get("/employee-onboardings", authMiddleware(ANY_ROLE), checkPermission("/employee-onboarding", "read"), listEmployeeOnboardings);
 router.get("/employee-onboardings/:onboardingId", authMiddleware(ANY_ROLE), checkPermission("/employee-onboarding", "read"), getEmployeeOnboardingById);
 router.put("/employee-onboardings/:onboardingId", authMiddleware(ANY_ROLE), checkPermission("/employee-onboarding", "edit"), updateEmployeeOnboarding);
 router.delete("/employee-onboardings/:onboardingId", authMiddleware(ANY_ROLE), checkPermission("/employee-onboarding", "delete"), deleteEmployeeOnboarding);

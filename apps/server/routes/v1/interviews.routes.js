@@ -33,7 +33,7 @@ router.post("/interview-types/search", authMiddleware(ANY_ROLE), checkPermission
 
 // ---- Interview ----
 router.post("/interviews", authMiddleware(ANY_ROLE), checkPermission("/interview", "write"), createInterview);
-router.get("/interviews", authMiddleware(ANY_ROLE), listInterviews);
+router.get("/interviews", authMiddleware(ANY_ROLE), checkPermission("/interview", "read"), listInterviews);
 router.get("/interviews/:interviewId", authMiddleware(ANY_ROLE), checkPermission("/interview", "read"), getInterviewById);
 router.put("/interviews/:interviewId", authMiddleware(ANY_ROLE), checkPermission("/interview", "edit"), updateInterview);
 router.post("/interviews/:interviewId/reschedule", authMiddleware(ANY_ROLE), checkPermission("/interview", "edit"), rescheduleInterview);
@@ -42,7 +42,7 @@ router.post("/interviews/search", authMiddleware(ANY_ROLE), checkPermission("/in
 
 // ---- Interview Feedback ----
 router.post("/interview-feedbacks", authMiddleware(ANY_ROLE), checkPermission("/interview-feedback", "write"), createInterviewFeedback);
-router.get("/interview-feedbacks", authMiddleware(ANY_ROLE), listInterviewFeedbacks);
+router.get("/interview-feedbacks", authMiddleware(ANY_ROLE), checkPermission("/interview-feedback", "read"), listInterviewFeedbacks);
 router.get("/interview-feedbacks/:feedbackId", authMiddleware(ANY_ROLE), checkPermission("/interview-feedback", "read"), getInterviewFeedbackById);
 router.put("/interview-feedbacks/:feedbackId", authMiddleware(ANY_ROLE), checkPermission("/interview-feedback", "edit"), updateInterviewFeedback);
 router.delete("/interview-feedbacks/:feedbackId", authMiddleware(ANY_ROLE), checkPermission("/interview-feedback", "delete"), deleteInterviewFeedback);

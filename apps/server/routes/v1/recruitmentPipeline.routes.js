@@ -30,7 +30,7 @@ const router = express.Router();
 
 // ---- Job Requisition ----
 router.post("/job-requisitions", authMiddleware(ANY_ROLE), checkPermission("/job-requisition", "write"), createJobRequisition);
-router.get("/job-requisitions", authMiddleware(ANY_ROLE), listJobRequisitions);
+router.get("/job-requisitions", authMiddleware(ANY_ROLE), checkPermission("/job-requisition", "read"), listJobRequisitions);
 router.get("/job-requisitions/:requisitionId", authMiddleware(ANY_ROLE), checkPermission("/job-requisition", "read"), getJobRequisitionById);
 router.put("/job-requisitions/:requisitionId", authMiddleware(ANY_ROLE), checkPermission("/job-requisition", "edit"), updateJobRequisition);
 router.delete("/job-requisitions/:requisitionId", authMiddleware(ANY_ROLE), checkPermission("/job-requisition", "delete"), deleteJobRequisition);
@@ -39,7 +39,7 @@ router.post("/job-requisitions/:requisitionId/make-job-opening", authMiddleware(
 
 // ---- Job Opening ----
 router.post("/job-openings", authMiddleware(ANY_ROLE), checkPermission("/job-opening", "write"), createJobOpening);
-router.get("/job-openings", authMiddleware(ANY_ROLE), listJobOpenings);
+router.get("/job-openings", authMiddleware(ANY_ROLE), checkPermission("/job-opening", "read"), listJobOpenings);
 router.get("/job-openings/:openingId", authMiddleware(ANY_ROLE), checkPermission("/job-opening", "read"), getJobOpeningById);
 router.put("/job-openings/:openingId", authMiddleware(ANY_ROLE), checkPermission("/job-opening", "edit"), updateJobOpening);
 router.delete("/job-openings/:openingId", authMiddleware(ANY_ROLE), checkPermission("/job-opening", "delete"), deleteJobOpening);
@@ -47,7 +47,7 @@ router.post("/job-openings/search", authMiddleware(ANY_ROLE), checkPermission("/
 
 // ---- Job Applicant ----
 router.post("/job-applicants", authMiddleware(ANY_ROLE), checkPermission("/job-applicant", "write"), createJobApplicant);
-router.get("/job-applicants", authMiddleware(ANY_ROLE), listJobApplicants);
+router.get("/job-applicants", authMiddleware(ANY_ROLE), checkPermission("/job-applicant", "read"), listJobApplicants);
 router.get("/job-applicants/:applicantId", authMiddleware(ANY_ROLE), checkPermission("/job-applicant", "read"), getJobApplicantById);
 router.put("/job-applicants/:applicantId", authMiddleware(ANY_ROLE), checkPermission("/job-applicant", "edit"), updateJobApplicant);
 router.delete("/job-applicants/:applicantId", authMiddleware(ANY_ROLE), checkPermission("/job-applicant", "delete"), deleteJobApplicant);

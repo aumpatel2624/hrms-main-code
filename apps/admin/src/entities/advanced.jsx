@@ -1135,7 +1135,7 @@ export const interviewFeedbackConfig = {
         ACTIVE,
     ],
     columns: [
-        { name: "Interviewer", selector: (row) => row.interviewerId, minWidth: "160px" },
+        { name: "Interviewer", selector: (row) => row.interviewerName || row.interviewerId, minWidth: "160px" },
         { name: "Result", selector: (row) => row.result, minWidth: "120px" },
     ],
     recordTitle: (r) => `Feedback — ${r.result ?? ""}`,
@@ -1975,8 +1975,8 @@ export const trainingFeedbackConfig = {
         ACTIVE,
     ],
     columns: [
-        { name: "Employee", selector: (row) => row.employeeId, minWidth: "180px" },
-        { name: "Training Event", selector: (row) => row.trainingEventId, minWidth: "180px" },
+        { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "180px" },
+        { name: "Training Event", selector: (row) => row.trainingEventName || row.trainingEventId, minWidth: "180px" },
     ],
     recordTitle: (r) => `Training Feedback — ${r._id}`,
     toForm: (data) => ({ ...data, employeeId: refId(data.employeeId), trainingEventId: refId(data.trainingEventId) }),
@@ -2047,7 +2047,7 @@ export const employeeSkillMapConfig = {
             )}
         </>
     ),
-    columns: [{ name: "Employee", selector: (row) => row.employeeId, minWidth: "220px" }],
+    columns: [{ name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "220px" }],
     recordTitle: (r) => `Employee Skill Map — ${r._id}`,
     toForm: (data) => ({ ...data, employeeId: refId(data.employeeId) }),
 };
@@ -2380,7 +2380,7 @@ export const holidayListAssignmentConfig = {
         ACTIVE,
     ],
     columns: [
-        { name: "Holiday List", selector: (row) => row.holidayListId, minWidth: "180px" },
+        { name: "Holiday List", selector: (row) => row.holidayListName || row.holidayListId, minWidth: "180px" },
         { name: "Applicable For", selector: (row) => row.applicableFor, minWidth: "130px" },
         { name: "From", selector: (row) => row.fromDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
     ],

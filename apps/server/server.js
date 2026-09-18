@@ -238,7 +238,6 @@ setupSwagger(app);
 // Import v1 routes
 import authRoutes from "./routes/v1/auth.routes.js";
 import adminUsersRoutes from "./routes/v1/adminUsers.routes.js";
-import usersRoutes from "./routes/v1/users.routes.js";
 import userRolesRoutes from "./routes/v1/userRoles.routes.js";
 import currenciesRoutes from "./routes/v1/currencies.routes.js";
 import departmentsRoutes from "./routes/v1/departments.routes.js";
@@ -279,7 +278,6 @@ import { runDueJobs as runDueAttendanceJobs } from "./jobs/attendanceScheduler.j
 
 app.use("/api/v1", authRoutes);
 app.use("/api/v1", adminUsersRoutes);
-app.use("/api/v1", usersRoutes);
 app.use("/api/v1", userRolesRoutes);
 app.use("/api/v1", currenciesRoutes);
 app.use("/api/v1", departmentsRoutes);

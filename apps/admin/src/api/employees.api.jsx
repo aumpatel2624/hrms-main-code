@@ -12,3 +12,4 @@ export const getEmployeeById = async (id) => api.get(ENDPOINTS.EMPLOYEES.BY_ID(i
 export const updateEmployee = async (id, data) => api.put(ENDPOINTS.EMPLOYEES.BY_ID(id), data);
 export const deleteEmployee = async (id) => api.delete(ENDPOINTS.EMPLOYEES.BY_ID(id));
 export const searchEmployees = async (params) => api.post(ENDPOINTS.EMPLOYEES.SEARCH, params);
+export const resetEmployeePassword = async (id, data) => api.post(ENDPOINTS.EMPLOYEES.RESET_PASSWORD(id), data);

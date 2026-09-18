@@ -27,7 +27,6 @@ How to use this panel, screen by screen. Pick a screen from the list to read abo
 - [Interview Feedback](interview-feedback)
 - [Job Offers](job-offer)
 - [Job Offer Term Templates](job-offer-term-template)
-- [Users](user)
 - [Roles](role)
 - [Countries](country)
 - [States](state)

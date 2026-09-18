@@ -207,11 +207,12 @@ const Login = () => {
 
     const validate = (values) => {
         const errors = {};
+        // ADR-040: an employee's default login is their own Employee Code
+        // (e.g. "A005"), not necessarily a real email address — accept
+        // either shape here, same identifier the server's login already
+        // matches against a single `email` field.
         if (!values.email) {
-            errors.email = "Email is required!";
-            setErrEmail(true);
-        } else if (!isValidEmail(values.email)) {
-            errors.email = "Invalid Email address!";
+            errors.email = "Email or Employee Code is required!";
             setErrEmail(true);
         } else {
             setErrEmail(false);
@@ -556,12 +557,12 @@ const Login = () => {
                             <AttemptBanner />
 
                             <Input
-                                label="Email"
-                                type="email"
+                                label="Email or Employee Code"
+                                type="text"
                                 icon={Mail01}
                                 isRequired
                                 name="email"
-                                placeholder="name@company.com"
+                                placeholder="name@company.com or A005"
                                 value={values.email}
                                 onChange={(v) => handleChange({ target: { name: "email", value: v } })}
                                 isInvalid={Boolean(isSubmit && formErrors.email)}

@@ -52,7 +52,7 @@ const InterviewSchema = new mongoose.Schema(
       required: true,
     },
     interviewers: {
-      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Employee" }],
       default: [],
     },
     interviewSummary: {

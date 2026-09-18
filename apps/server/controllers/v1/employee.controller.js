@@ -4,6 +4,7 @@
  * masters, since it is substantially bigger (required refs, self-referential
  * reportsToId, several optional fields other modules will read).
  */
+import bcrypt from "bcrypt";
 import { runListQuery } from "../../utils/listQuery.js";
 import Employee from "../../models/Employee.js";
 import JobApplicant from "../../models/JobApplicant.js";
@@ -47,14 +48,21 @@ const failure = (res, error) => {
   return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
 };
 
-const REQUIRED_FIELDS = ["employeeCode", "employeeName", "companyId", "departmentId", "designationId", "branchId", "dateOfJoining"];
+// ADR-040: email/password/roleId are required — Employee is the login
+// identity now (the former separate `User` collection was merged in; this
+// company confirmed every employee always has exactly one login).
+const REQUIRED_FIELDS = [
+  "employeeCode", "employeeName", "companyId", "departmentId", "designationId", "branchId", "dateOfJoining",
+  "email", "password", "roleId",
+];
 
 const OPTIONAL_FIELDS = [
-  "userId", "reportsToId", "status", "relievingDate", "dateOfBirth", "gender",
+  "reportsToId", "status", "relievingDate", "dateOfBirth", "gender",
   "employmentTypeId", "gradeId", "expenseApproverId", "leaveApproverId", "shiftRequestApproverId",
   "healthInsuranceProviderId", "healthInsuranceNo", "shiftPreference", "workMode",
   "ifscCode", "panNumber", "micrCode", "providentFundAccount",
   "jobApplicantId", "isActive",
+  "mobileNumber", "countryId", "stateId", "cityId", "address",
 ];
 
 // Reverse hook (ADR-019): an Employee created from an accepted Job Offer
@@ -98,8 +106,12 @@ export const createEmployee = async (req, res) => {
     if (existing) {
       return res.status(400).json({ isOk: false, status: 400, message: "Employee code already exists" });
     }
+    if (await Employee.findOne({ email: String(req.body.email || "").toLowerCase() })) {
+      return res.status(400).json({ isOk: false, status: 400, message: "Email already exists" });
+    }
 
     const fields = pickFields(req.body);
+    fields.password = await bcrypt.hash(fields.password, 10);
     await Employee.create(fields);
     await syncJobApplicantAndOffer(fields.jobApplicantId);
     return res.status(201).json({ isOk: true, status: 201, message: "Employee created successfully" });
@@ -123,8 +135,18 @@ export const updateEmployee = async (req, res) => {
         return res.status(400).json({ isOk: false, status: 400, message: "Employee code already exists" });
       }
     }
+    if (req.body.email && req.body.email !== employee.email) {
+      const duplicate = await Employee.findOne({ email: String(req.body.email || "").toLowerCase(), _id: { $ne: employeeId } });
+      if (duplicate) {
+        return res.status(400).json({ isOk: false, status: 400, message: "Email already exists" });
+      }
+    }
 
-    Object.assign(employee, pickFields(req.body));
+    // Password changes only ever go through resetEmployeePassword below —
+    // never silently accepted on a general profile update.
+    const fields = pickFields(req.body);
+    delete fields.password;
+    Object.assign(employee, fields);
     await employee.save();
 
     return res.status(200).json({ isOk: true, status: 200, message: "Employee updated successfully" });
@@ -166,7 +188,7 @@ export const getEmployeeById = async (req, res) => {
   try {
     const { employeeId } = req.params;
     const scopeFilter = await employeeTeamScopeFilter(req);
-    const employee = await Employee.findOne({ _id: employeeId, ...(scopeFilter ?? {}) });
+    const employee = await Employee.findOne({ _id: employeeId, ...(scopeFilter ?? {}) }).select("-password");
     if (!employee) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee not found" });
     }
@@ -226,10 +248,39 @@ export const listEmployeeByParams = async (req, res) => {
           },
         },
       ],
+      project: { password: 0 },
     });
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);
+    return failure(res, error);
+  }
+};
+
+// ADR-040: password reset lives here, not on a general profile update —
+// same "findByIdAndUpdate, not save()" reasoning the old User controller's
+// resetUserPassword used: save() re-validates the whole document, so an
+// employee record that predates a later-added required field could never
+// have its password reset over an unrelated validation error.
+export const resetEmployeePassword = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ isOk: false, status: 400, message: "Password is required" });
+    }
+
+    const employee = await Employee.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ isOk: false, status: 404, message: "Employee not found" });
+    }
+
+    const hashed = await bcrypt.hash(password, 10);
+    await employee.updateOne({ $set: { password: hashed } });
+
+    return res.status(200).json({ isOk: true, status: 200, message: "Password reset successfully" });
+  } catch (error) {
+    console.log("Error in resetEmployeePassword", error);
     return failure(res, error);
   }
 };

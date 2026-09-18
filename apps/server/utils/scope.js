@@ -31,6 +31,12 @@ import { SCOPES } from "@demo-panel/shared/scopes";
  * (utils/approvers.js's getEmployeesApprovedBy) — this function stays
  * synchronous and does no querying of its own, so every existing call site
  * (7 modules) is untouched by this addition.
+ *
+ * A fifth scope, "team" (pre-launch, org-chart manager visibility): rows
+ * owned by the user themself OR by anyone in their downward reportsToId
+ * chain. Same shape as "approver" — `scopeable.owner`, plus a
+ * caller-resolved `scopeable.teamIds` array (utils/subordinates.js's
+ * getSubordinateEmployeeIds).
  */
 export const buildScopeFilter = (reqUser, scopeable = {}) => {
   const scope = reqUser?.dataScope || SCOPES.ALL;
@@ -53,6 +59,23 @@ export const buildScopeFilter = (reqUser, scopeable = {}) => {
         ? [new mongoose.Types.ObjectId(String(employeeId))]
         : []),
       ...(scopeable.approverIds || [])
+        .filter((id) => mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(String(id))),
+    ];
+    return { [scopeable.owner]: { $in: ids } }; // ids may be [] — still correctly matches nothing
+  }
+
+  if (scope === SCOPES.TEAM) {
+    if (!scopeable.owner) return null; // dimension not declared for this model
+    const employeeId = reqUser?.employeeId;
+    // Same "don't zero out on a missing employeeId alone" fix as APPROVER
+    // (issue #12) — a manager with subordinates but, for whatever reason, no
+    // employeeId resolved on this request should still see their team.
+    const ids = [
+      ...(employeeId && mongoose.Types.ObjectId.isValid(employeeId)
+        ? [new mongoose.Types.ObjectId(String(employeeId))]
+        : []),
+      ...(scopeable.teamIds || [])
         .filter((id) => mongoose.Types.ObjectId.isValid(id))
         .map((id) => new mongoose.Types.ObjectId(String(id))),
     ];

@@ -1,10 +1,13 @@
 /**
  * ADR-032 (Performance, module 16, transactional half, feat/performance-goals).
  *
- * `Goal`: a tree-shaped, self-service CRUD doctype (SCOPES.OWN — an Employee
- * reads/writes only their own goal tree; HR User/HR Manager see all, same
- * per-action pattern as `payrollTax.controller.js`'s
- * `EmployeeTaxExemptionDeclaration`). Real, deliberate improvements over
+ * `Goal`: a tree-shaped, self-service CRUD doctype. Writes stay own-only
+ * (an Employee reads/writes only their own goal tree); reads/list are
+ * `SCOPES.TEAM` (pre-launch, org-chart manager visibility — was
+ * `SCOPES.OWN`): a manager additionally sees, but cannot edit, their
+ * reports' goals per `Employee.reportsToId`. HR User/HR Manager see all,
+ * same per-action pattern as `payrollTax.controller.js`'s
+ * `EmployeeTaxExemptionDeclaration`. Real, deliberate improvements over
  * source per ADR-032: a parent-cycle guard (rejects a `parentGoalId` that is
  * a descendant of the goal being saved, via `utils/goalTree.js`), and a
  * server-side bulk status-transition guard (source only checked this
@@ -26,6 +29,7 @@ import Employee from "../../models/Employee.js";
 import { runListQuery } from "../../utils/listQuery.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
+import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
 import { SCOPES } from "@demo-panel/shared/scopes";
 import { assertCycleNotCompleted } from "./performance.controller.js";
 import {
@@ -156,7 +160,10 @@ export const createGoal = async (req, res) => {
     if (!goalName) throwError(400, "Goal Name is required");
 
     let employeeId = req.body.employeeId;
-    if (req.user?.dataScope === SCOPES.OWN) {
+    // A self-service caller (dataScope !== ALL, i.e. OWN or TEAM) can only
+    // ever create a goal for themself — TEAM widens what a manager can SEE,
+    // never who they can create/edit a goal as.
+    if (req.user?.dataScope && req.user.dataScope !== SCOPES.ALL) {
       const ownEmp = await resolveRequestEmployee(req);
       if (!ownEmp) throwError(403, "No employee record linked to this user");
       employeeId = ownEmp._id;
@@ -251,19 +258,42 @@ export const searchGoals = async (req, res) => {
   } catch (error) { return failure(res, error); }
 };
 
+// getGoalById's `doc` has `employeeId` populated (a whole Employee
+// document), while every other call site here loads Goal unpopulated (a raw
+// ObjectId) — extract `._id` when it's the former so this one helper is
+// correct for both, matching payrollTax.controller.js's own
+// `doc.employeeId?._id || doc.employeeId` idiom.
+const goalOwnerId = (doc) => String(doc.employeeId?._id || doc.employeeId);
+
+// Write access (edit/close/delete) always stays own-only, even for a
+// SCOPES.TEAM manager — TEAM widens what a manager can SEE (getGoalById,
+// list/search via attendanceScope), never what they can change on a
+// report's goal. `!== SCOPES.ALL` (not `=== SCOPES.OWN`) so this still
+// applies correctly now that Employee's own-service scope is SCOPES.TEAM.
 const assertOwnAccess = async (req, doc) => {
-  if (req.user?.dataScope === SCOPES.OWN) {
+  if (req.user?.dataScope !== SCOPES.ALL) {
     const ownEmp = await resolveRequestEmployee(req);
-    // getGoalById's `doc` has `employeeId` populated (a whole Employee
-    // document), while every other call site here loads Goal unpopulated
-    // (a raw ObjectId) — extract `._id` when it's the former so this one
-    // helper is correct for both, matching payrollTax.controller.js's own
-    // `doc.employeeId?._id || doc.employeeId` idiom.
-    const ownerId = doc.employeeId?._id || doc.employeeId;
-    if (!ownEmp || String(ownerId) !== String(ownEmp._id)) {
+    if (!ownEmp || goalOwnerId(doc) !== String(ownEmp._id)) {
       throwError(403, "Access denied");
     }
   }
+};
+
+// View access (getGoalById): own goal, or — under SCOPES.TEAM — a goal
+// belonging to anyone in the caller's downward reportsToId chain (pre-launch
+// org-chart manager visibility, same resolver list/search already use via
+// attendanceScope).
+const assertViewAccess = async (req, doc) => {
+  if (req.user?.dataScope === SCOPES.ALL) return;
+  const ownEmp = await resolveRequestEmployee(req);
+  if (!ownEmp) throwError(403, "Access denied");
+  const ownerId = goalOwnerId(doc);
+  if (ownerId === String(ownEmp._id)) return;
+  if (req.user?.dataScope === SCOPES.TEAM) {
+    const teamIds = await getSubordinateEmployeeIds(ownEmp._id);
+    if (teamIds.map(String).includes(ownerId)) return;
+  }
+  throwError(403, "Access denied");
 };
 
 export const getGoalById = async (req, res) => {
@@ -275,7 +305,7 @@ export const getGoalById = async (req, res) => {
       .populate("appraisalCycleId", "cycleName")
       .populate("kraId", "name");
     if (!doc) throwError(404, "Goal not found");
-    await assertOwnAccess(req, doc);
+    await assertViewAccess(req, doc);
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) { return failure(res, error); }
 };

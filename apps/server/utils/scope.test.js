@@ -104,4 +104,43 @@ assert.deepEqual(
   assert.deepEqual(filter.employeeId.$in.map(String).sort(), [APPROVEE_1, APPROVEE_2].sort());
 }
 
+// team scope (pre-launch, org-chart manager visibility) matches the user's
+// own employeeId plus every pre-resolved teamId, when the owner field is
+// declared.
+{
+  const EMP = "64b000000000000000000003";
+  const REPORT_1 = "64b000000000000000000004";
+  const REPORT_2 = "64b000000000000000000005";
+  const filter = buildScopeFilter(
+    { dataScope: "team", employeeId: EMP },
+    { owner: "employeeId", teamIds: [REPORT_1, REPORT_2] },
+  );
+  assert.deepEqual(Object.keys(filter), ["employeeId"]);
+  const ids = filter.employeeId.$in.map(String);
+  assert.deepEqual(ids.sort(), [EMP, REPORT_1, REPORT_2].sort());
+}
+
+// team scope with no teamIds (an individual contributor with no direct
+// reports) degrades to exactly the user's own employeeId — "own" behaviour.
+{
+  const EMP = "64b000000000000000000003";
+  const filter = buildScopeFilter(
+    { dataScope: "team", employeeId: EMP },
+    { owner: "employeeId" },
+  );
+  assert.deepEqual(filter.employeeId.$in.map(String), [EMP]);
+}
+
+// team scope stays unscoped when the model doesn't declare `owner`.
+assert.equal(
+  buildScopeFilter({ dataScope: "team", employeeId: "64b000000000000000000003" }, {}),
+  null,
+);
+
+// team scope with no employeeId and no teamIds matches nothing — fail closed.
+assert.deepEqual(
+  buildScopeFilter({ dataScope: "team" }, { owner: "employeeId" }),
+  { employeeId: { $in: [] } },
+);
+
 console.log("scope: all checks passed");

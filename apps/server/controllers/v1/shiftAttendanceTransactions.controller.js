@@ -20,6 +20,7 @@ import { runListQuery } from "../../utils/listQuery.js";
 import { resolveApprovers } from "../../utils/approvers.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { buildScopeFilter } from "../../utils/scope.js";
+import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
 import { sameCalendarDay } from "../../utils/leaveDayCalculation.js";
 import { isHolidayForEmployee } from "../../utils/holidayResolution.js";
 import { saveShiftRecord } from "../../utils/shiftAssignmentWrite.js";
@@ -45,18 +46,41 @@ const shiftFailure = (res, error) => {
   return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
 };
 
-/** Own-scope filter for ShiftRequest/AttendanceRequest — see file header. */
+/**
+ * Own/team-scope filter for ShiftRequest/AttendanceRequest — see file
+ * header. Pre-launch, org-chart manager visibility: dataScope TEAM (was
+ * OWN) additionally resolves the caller's downward reportsToId chain, same
+ * mechanism as Leave/Goal/Employee-records TEAM scoping this session.
+ */
 const employeeOwnScopeFilter = async (req) => {
   const employee = await resolveRequestEmployee(req);
-  return buildScopeFilter({ ...req.user, id: employee?._id }, { owner: "employeeId" });
+  const teamIds = req.user?.dataScope === SCOPES.TEAM ? await getSubordinateEmployeeIds(employee?._id) : undefined;
+  return buildScopeFilter({ ...req.user, id: employee?._id }, { owner: "employeeId", teamIds });
 };
 
-/** Defense-in-depth guard mirroring LeaveApplication's canAccessLeaveApplication (own-scope only, no approver dimension here). */
+/**
+ * Write access (update/cancel) always stays own-only, even under
+ * SCOPES.TEAM — a manager can SEE a report's request (canViewRecord below),
+ * never edit/cancel it themself. `!== SCOPES.ALL` so this still applies now
+ * that Employee's own-service scope on this menu is SCOPES.TEAM.
+ */
 const canAccessOwnRecord = async (req, doc) => {
   if (!req.user || req.user.role === ROLES.ADMIN) return true;
-  if (req.user.dataScope !== SCOPES.OWN) return true;
+  if (req.user.dataScope !== SCOPES.OWN && req.user.dataScope !== SCOPES.TEAM) return true;
   await resolveRequestEmployee(req);
   return String(req.user.employeeId) === String(doc.employeeId);
+};
+
+/** View access (get-by-id): own record, or — under SCOPES.TEAM — a report's. */
+const canViewRecord = async (req, doc) => {
+  if (!req.user || req.user.role === ROLES.ADMIN) return true;
+  if (req.user.dataScope !== SCOPES.OWN && req.user.dataScope !== SCOPES.TEAM) return true;
+  const employee = await resolveRequestEmployee(req);
+  if (!employee) return false;
+  if (String(employee._id) === String(doc.employeeId)) return true;
+  if (req.user.dataScope !== SCOPES.TEAM) return false;
+  const teamIds = await getSubordinateEmployeeIds(employee._id);
+  return teamIds.map(String).includes(String(doc.employeeId));
 };
 
 // ================================================================ ShiftRequest --
@@ -157,7 +181,7 @@ export const createShiftRequest = async (req, res) => {
     // menu) can only ever request a shift change for themselves. The
     // client-supplied employeeId is trusted only for HR User/HR Manager.
     let employeeId = req.body.employeeId;
-    if (req.user?.dataScope === SCOPES.OWN) {
+    if (req.user && req.user.role !== ROLES.ADMIN && req.user.dataScope !== SCOPES.ALL) {
       const ownEmployee = await resolveRequestEmployee(req);
       if (!ownEmployee) return res.status(403).json({ isOk: false, status: 403, message: "No employee record linked to this user" });
       employeeId = ownEmployee._id;
@@ -214,7 +238,7 @@ export const getShiftRequestById = async (req, res) => {
   try {
     const doc = await ShiftRequest.findById(req.params.shiftRequestId);
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Shift Request not found" });
-    if (!(await canAccessOwnRecord(req, doc))) {
+    if (!(await canViewRecord(req, doc))) {
       return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to view this Shift Request" });
     }
     await doc.populate([
@@ -414,7 +438,7 @@ export const createAttendanceRequest = async (req, res) => {
     // Day) for someone else's employeeId. Trusted from the body only for
     // HR User/HR Manager.
     let employeeId = req.body.employeeId;
-    if (req.user?.dataScope === SCOPES.OWN) {
+    if (req.user && req.user.role !== ROLES.ADMIN && req.user.dataScope !== SCOPES.ALL) {
       const ownEmployee = await resolveRequestEmployee(req);
       if (!ownEmployee) return res.status(403).json({ isOk: false, status: 403, message: "No employee record linked to this user" });
       employeeId = ownEmployee._id;
@@ -467,7 +491,7 @@ export const getAttendanceRequestById = async (req, res) => {
   try {
     const doc = await AttendanceRequest.findById(req.params.attendanceRequestId);
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Attendance Request not found" });
-    if (!(await canAccessOwnRecord(req, doc))) {
+    if (!(await canViewRecord(req, doc))) {
       return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to view this Attendance Request" });
     }
     await doc.populate([

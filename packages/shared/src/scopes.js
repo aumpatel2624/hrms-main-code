@@ -11,6 +11,12 @@
  *                resolves as the approver for (ADR-024, utils/approvers.js).
  *                Needs a `scopeable.owner` field and a caller-resolved
  *                `scopeable.approverIds` array — see utils/scope.js.
+ * - team       — rows owned by the user themself OR by anyone in their
+ *                downward org-chart reporting chain (Employee.reportsToId),
+ *                resolved by utils/subordinates.js. Needs a `scopeable.owner`
+ *                field and a caller-resolved `scopeable.teamIds` array — same
+ *                convention as "approver". Degrades to exactly "own" for an
+ *                employee with no direct reports.
  *
  * A model opts in per dimension via the `scopeable` map it passes to
  * buildScopeFilter(); a model that does not declare the demanded dimension
@@ -21,6 +27,7 @@ export const SCOPES = Object.freeze({
     DEPARTMENT: "department",
     OWN: "own",
     APPROVER: "approver",
+    TEAM: "team",
 });
 
 /** Enum list for schema validation and dropdowns. */

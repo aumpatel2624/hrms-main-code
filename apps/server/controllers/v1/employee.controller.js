@@ -12,6 +12,25 @@ import {
   getReferencingCounts,
   formatReferenceMessage,
 } from "../../utils/referenceHelper.js";
+import { ROLES } from "@demo-panel/shared/roles";
+import { SCOPES } from "@demo-panel/shared/scopes";
+import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
+import { buildScopeFilter } from "../../utils/scope.js";
+import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
+
+// Pre-launch, org-chart manager visibility (SCOPES.TEAM): a plain Employee
+// gets no grant on this screen at all (HR-only master data, INV-8c); a
+// manager (someone with direct reports, Employee.reportsToId) instead sees
+// their own profile plus their whole downward reporting chain — the model
+// IS the Employee, so the "owner" field buildScopeFilter matches against is
+// its own `_id`, same convention scope.js's own docstring uses for `User`.
+const employeeTeamScopeFilter = async (req) => {
+  if (!req.user || req.user.role === ROLES.ADMIN) return null;
+  if (req.user.dataScope !== SCOPES.TEAM) return null;
+  await resolveRequestEmployee(req);
+  const teamIds = await getSubordinateEmployeeIds(req.user.employeeId);
+  return buildScopeFilter(req.user, { owner: "_id", teamIds });
+};
 
 const failure = (res, error) => {
   if (error.status) {
@@ -146,7 +165,8 @@ export const deleteEmployee = async (req, res) => {
 export const getEmployeeById = async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const employee = await Employee.findById(employeeId);
+    const scopeFilter = await employeeTeamScopeFilter(req);
+    const employee = await Employee.findOne({ _id: employeeId, ...(scopeFilter ?? {}) });
     if (!employee) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee not found" });
     }
@@ -174,7 +194,9 @@ export const listEmployees = async (req, res) => {
 
 export const listEmployeeByParams = async (req, res) => {
   try {
+    const scopeFilter = await employeeTeamScopeFilter(req);
     const list = await runListQuery(Employee, req.body, {
+      scopeFilter,
       searchFields: ["employeeCode", "employeeName"],
       filterable: {
         employeeCode: "string",

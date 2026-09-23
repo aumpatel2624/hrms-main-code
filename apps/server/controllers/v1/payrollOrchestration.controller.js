@@ -136,7 +136,9 @@ export const createSalaryWithholding = handle(async req => {
   if (await SalaryWithholding.exists({ employeeId, status: { $ne: "cancelled" }, "cycles.fromDate": { $lte: cycles.at(-1).toDate }, "cycles.toDate": { $gte: cycles[0].fromDate } })) fail(400, "Salary Withholding already exists for this employee and period");
   return SalaryWithholding.create({ employeeId, companyId: employee.companyId, fromDate, numberOfWithholdingCycles, payrollFrequency, cycles });
 });
-export const getSalaryWithholding = handle(req => getDoc(SalaryWithholding, req));
+// Populated: withheld salary is usually for a departed (inactive) employee,
+// who is missing from the active-only dropdown the detail page would use.
+export const getSalaryWithholding = handle(async req => (await getDoc(SalaryWithholding, req)).populate("employeeId", "employeeName employeeCode"));
 const release = all => handle(async req => {
   const doc = await getDoc(SalaryWithholding, req);
   if (["cancelled", "draft"].includes(doc.status)) fail(400, "Only an active withholding can be released");

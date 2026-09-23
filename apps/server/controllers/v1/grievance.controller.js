@@ -163,7 +163,9 @@ const canAccessEmployeeGrievance = async (req, doc) => {
   if (!req.user || req.user.role === ROLES.ADMIN) return true;
   if (req.user.dataScope !== SCOPES.OWN) return true;
   const employee = await resolveRequestEmployee(req);
-  return !!employee && String(doc.raisedByEmployeeId) === String(employee._id);
+  // getById populates raisedByEmployeeId; compare the id either way.
+  const raisedBy = doc.raisedByEmployeeId?._id ?? doc.raisedByEmployeeId;
+  return !!employee && String(raisedBy) === String(employee._id);
 };
 
 const employeeGrievanceScopeFilter = async (req) => {
@@ -252,7 +254,14 @@ export const deleteEmployeeGrievance = async (req, res) => {
 
 export const getEmployeeGrievanceById = async (req, res) => {
   try {
-    const doc = await EmployeeGrievance.findById(req.params.grievanceId);
+    // Populated so every person on the grievance shows by name even when they
+    // are no longer in the active-only employee dropdown.
+    const doc = await EmployeeGrievance.findById(req.params.grievanceId).populate([
+      { path: "raisedByEmployeeId", select: "employeeName employeeCode" },
+      { path: "grievanceAgainstEmployeeId", select: "employeeName employeeCode" },
+      { path: "employeeResponsibleId", select: "employeeName employeeCode" },
+      { path: "resolvedByUserId", select: "employeeName employeeCode" },
+    ]);
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee Grievance not found" });
     }

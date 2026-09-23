@@ -137,7 +137,10 @@ export const deleteInterview = async (req, res) => {
 
 export const getInterviewById = async (req, res) => {
   try {
-    const doc = await Interview.findById(req.params.interviewId);
+    // Populated so the detail page can title the interview by applicant and type.
+    const doc = await Interview.findById(req.params.interviewId)
+      .populate("jobApplicantId", "applicantName")
+      .populate("interviewTypeId", "interviewTypeName");
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Interview not found" });
     }

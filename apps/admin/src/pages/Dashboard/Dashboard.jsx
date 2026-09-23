@@ -26,7 +26,7 @@ const Dashboard = () => {
     return <>
         <PageHeader title="Dashboard" pageTitle="Dashboard" />
         {dashboardQuery.isLoading ? <div className="flex justify-center py-16"><LoadingIndicator type="dot-circle" size="md" label="Loading dashboard..." /></div>
-            : pins.length === 0 ? <div className="mx-auto max-w-3xl"><Card className="flex flex-col items-center gap-4 px-6 py-14 text-center"><FeaturedIcon color="brand" theme="light" size="xl" icon={Home01} /><h2 className="text-display-sm font-semibold text-brand-secondary">{greeting}!</h2><p className="text-lg text-secondary">{adminData?.adminName || adminData?.userName}</p></Card></div>
+            : pins.length === 0 ? <div className="mx-auto max-w-3xl"><Card className="flex flex-col items-center gap-4 px-6 py-14 text-center"><FeaturedIcon color="brand" theme="light" size="xl" icon={Home01} /><h2 className="text-display-sm font-semibold text-brand-secondary">{greeting}!</h2><p className="text-lg text-secondary">{adminData?.adminName || adminData?.employeeName}</p></Card></div>
                 : <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">{pins.map((pin, index) => {
                     const query = widgetQueries[index];
                     const error = query.error?.response?.status === 409 ? "This widget no longer matches its data source" : query.isError ? "Could not load this widget" : null;

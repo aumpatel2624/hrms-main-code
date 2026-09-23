@@ -58,12 +58,24 @@ const renderValue = (field, raw, lookups) => {
             return <Badge color={raw ? "success" : "gray"}>{raw ? "Yes" : "No"}</Badge>;
         case "select":
         case "objectId": {
+            const loaded = !field.optionsFrom || lookups[field.optionsFrom] !== undefined;
             const options = field.optionsFrom ? (lookups[field.optionsFrom] ?? []) : (field.options ?? []);
             const id = refId(raw);
             const match = options.find((o) => String(o.value) === String(id))?.label;
             // Lookup first (it is the canonical label), then the populated
-            // document's own name, then the bare id — never "[object Object]".
-            return match ?? refLabel(raw) ?? String(id);
+            // document's own name. Never the bare id or "[object Object]": a
+            // reader cannot act on either. While the lookup is still loading
+            // show nothing; once it has loaded and still has no match, the
+            // referenced record is inactive (most option lists are active-only)
+            // or deleted — say so, keeping the id on hover for support.
+            const label = match ?? refLabel(raw);
+            if (label) return label;
+            if (!loaded) return null;
+            return (
+                <span className="text-tertiary" title={String(id)}>
+                    Inactive or deleted record
+                </span>
+            );
         }
         case "date":
             return formatDate(raw);

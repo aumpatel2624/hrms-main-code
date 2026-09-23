@@ -245,7 +245,7 @@ export const getShiftRequestById = async (req, res) => {
       { path: "employeeId", select: "employeeName employeeCode" },
       { path: "shiftTypeId", select: "shiftTypeName" },
       { path: "companyId", select: "companyName" },
-      { path: "approverId", select: "userName" },
+      { path: "approverId", select: "employeeName employeeCode" },
     ]);
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {

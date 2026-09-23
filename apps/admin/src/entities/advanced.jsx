@@ -204,6 +204,23 @@ const asOptions = (loader, labelKey) => () =>
 const refId = (value) =>
     value && typeof value === "object" && !Array.isArray(value) ? (value._id ?? value.id) : value;
 
+/**
+ * Detail-page heading for a record that belongs to one employee:
+ * "Leave Allocation — Jane Doe". Never the raw _id — nobody can read one.
+ * Works whether getById populated employeeId or the row carries a flat
+ * employeeName; with neither it is just the label.
+ */
+const employeeTitle = (label) => (r) => {
+    const name = r.employeeName ?? r.employeeId?.employeeName;
+    return name ? `${label} — ${name}` : label;
+};
+
+/** "2026-04-01 – 2026-04-30" labels for payroll-period dropdowns (startDate alone is a raw timestamp). */
+const payrollPeriodOptions = () =>
+    getAllPayrollPeriods().then((res) => (res.data?.data ?? []).map((row) => ({
+        value: row._id, label: `${row.startDate?.slice?.(0, 10)} – ${row.endDate?.slice?.(0, 10)}`,
+    })));
+
 const mobileRule = (v) => (v && v.length !== 10 ? "Phone number should be 10 digits" : undefined);
 const emailRule = (v) => (v && !isValidEmail(v) ? "Invalid email address" : undefined);
 const passwordRule = (v, _values, mode) =>
@@ -286,7 +303,8 @@ export const menuMasterConfig = {
             if (!values.menuGroup) return [];
             const res = await getAllMenus();
             const all = res.data?.data ?? [];
-            const inGroup = (m) => m.menuGroup?._id === values.menuGroup || m.menuGroup === values.menuGroup;
+            const groupId = String(refId(values.menuGroup));
+            const inGroup = (m) => String(refId(m.menuGroup)) === groupId;
 
             const byId = new Map();
             all.forEach((m) => inGroup(m) && byId.set(m._id.toString(), { ...m, path: m.menuName }));
@@ -829,7 +847,7 @@ export const jobRequisitionConfig = {
         { name: "Positions", selector: (row) => row.noOfPositions, minWidth: "100px" },
         { name: "Status", selector: (row) => row.status, minWidth: "140px" },
     ],
-    recordTitle: (r) => `Requisition — ${r.designationName ?? r.designationId}`,
+    recordTitle: (r) => `Requisition — ${r.designationName ?? r.designationId?.designationName ?? ""}`,
     toForm: (data) => ({
         ...data,
         designationId: refId(data.designationId), departmentId: refId(data.departmentId),
@@ -1009,7 +1027,7 @@ export const interviewConfig = {
         { name: "Scheduled On", selector: (row) => row.scheduledOn?.slice?.(0, 10) ?? "—", minWidth: "130px" },
         { name: "Status", selector: (row) => row.status, minWidth: "120px" },
     ],
-    recordTitle: (r) => `${r.jobApplicantName ?? "Interview"} — ${r.interviewTypeName ?? ""}`,
+    recordTitle: (r) => `${r.jobApplicantName ?? r.jobApplicantId?.applicantName ?? "Interview"} — ${r.interviewTypeName ?? r.interviewTypeId?.interviewTypeName ?? ""}`,
     toForm: (data) => ({ ...data, interviewTypeId: refId(data.interviewTypeId), jobApplicantId: refId(data.jobApplicantId), designationId: refId(data.designationId) }),
 };
 
@@ -1102,7 +1120,7 @@ export const jobOfferConfig = {
         { name: "Offer Date", selector: (row) => row.offerDate?.slice?.(0, 10) ?? "—", minWidth: "120px" },
         { name: "Status", selector: (row) => row.status ?? "—", minWidth: "140px" },
     ],
-    recordTitle: (r) => `Offer — ${r.applicantName ?? r.jobApplicantId}`,
+    recordTitle: (r) => `Offer — ${r.applicantName ?? r.jobApplicantId?.applicantName ?? ""}`,
     toForm: (data) => ({
         ...data, jobApplicantId: refId(data.jobApplicantId), companyId: refId(data.companyId),
         designationId: refId(data.designationId), jobOfferTermTemplateId: refId(data.jobOfferTermTemplateId),
@@ -1338,7 +1356,7 @@ export const employeeSeparationConfig = {
         { name: "Employee", selector: (row) => row.employeeName ?? "—", minWidth: "170px" },
         { name: "Status", selector: (row) => row.boardingStatus ?? "—", minWidth: "120px" },
     ],
-    recordTitle: (r) => `Separation — ${r.employeeName ?? r.employeeId}`,
+    recordTitle: employeeTitle("Separation"),
     toForm: (data) => ({
         ...data, employeeId: refId(data.employeeId), employeeSeparationTemplateId: refId(data.employeeSeparationTemplateId),
     }),
@@ -1386,7 +1404,7 @@ export const exitInterviewConfig = {
         { name: "Status", selector: (row) => row.status ?? "—", minWidth: "120px" },
         { name: "Date", selector: (row) => row.date?.slice?.(0, 10) ?? "—", minWidth: "120px" },
     ],
-    recordTitle: (r) => `Exit Interview — ${r.employeeName ?? r.employeeId}`,
+    recordTitle: employeeTitle("Exit Interview"),
     toForm: (data) => ({ ...data, employeeId: refId(data.employeeId) }),
 };
 
@@ -1451,7 +1469,7 @@ export const fullAndFinalStatementConfig = {
         { name: "Payable", selector: (row) => row.totalPayableAmount ?? 0, minWidth: "100px" },
         { name: "Receivable", selector: (row) => row.totalReceivableAmount ?? 0, minWidth: "100px" },
     ],
-    recordTitle: (r) => `F&F Statement — ${r.employeeName ?? r.employeeId}`,
+    recordTitle: employeeTitle("F&F Statement"),
     toForm: (data) => ({ ...data, employeeId: refId(data.employeeId) }),
 };
 
@@ -1520,7 +1538,7 @@ export const employeeGrievanceConfig = {
         { name: "grievanceAgainstText", label: "Grievance Against (free text, if not a specific employee)", type: "text", section: "details" },
         { name: "description", label: "Description", type: "textarea", required: true, section: "details", error: "Description is required!" },
         { name: "causeOfGrievance", label: "Cause of Grievance", type: "textarea", section: "investigation" },
-        { name: "resolvedByUserId", label: "Resolved By (User id)", type: "text", section: "investigation" },
+        { name: "resolvedByUserId", label: "Resolved By", type: "select", section: "investigation", optionsFrom: "employeeResponsibleId" },
         { name: "resolutionDate", label: "Resolution Date", type: "date", section: "investigation" },
         { name: "resolutionDetail", label: "Resolution Detail", type: "textarea", section: "investigation" },
         { name: "employeeResponsibleId", label: "Employee Responsible", type: "select", section: "investigation", optionsFrom: "employeeResponsibleId" },
@@ -1538,6 +1556,7 @@ export const employeeGrievanceConfig = {
         grievanceAgainstEmployeeId: refId(data.grievanceAgainstEmployeeId),
         grievanceTypeId: refId(data.grievanceTypeId),
         employeeResponsibleId: refId(data.employeeResponsibleId),
+        resolvedByUserId: refId(data.resolvedByUserId),
     }),
 };
 
@@ -1577,7 +1596,7 @@ export const employeeTransferConfig = {
     columns: [
         { name: "Transfer Date", selector: (row) => row.transferDate?.slice?.(0, 10) ?? "—", minWidth: "130px" },
     ],
-    recordTitle: (r) => `Transfer — ${r._id}`,
+    recordTitle: employeeTitle("Transfer"),
     toForm: (data) => ({ ...data, employeeId: refId(data.employeeId) }),
 };
 
@@ -1618,7 +1637,7 @@ export const employeePromotionConfig = {
         { name: "Promotion Date", selector: (row) => row.promotionDate?.slice?.(0, 10) ?? "—", minWidth: "130px" },
         { name: "Revised CTC", selector: (row) => row.revisedCtc ?? "—", minWidth: "110px" },
     ],
-    recordTitle: (r) => `Promotion — ${r._id}`,
+    recordTitle: employeeTitle("Promotion"),
     toForm: (data) => ({ ...data, employeeId: refId(data.employeeId) }),
 };
 
@@ -1727,7 +1746,7 @@ export const staffingPlanConfig = {
         { name: "To", selector: (row) => row.toDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
         { name: "Budget", selector: (row) => row.totalEstimatedBudget ?? 0, minWidth: "110px" },
     ],
-    recordTitle: (r) => `Staffing Plan — ${r._id}`,
+    recordTitle: (r) => (r.fromDate ? `Staffing Plan — ${r.fromDate.slice(0, 10)} to ${r.toDate?.slice(0, 10) ?? ""}` : "Staffing Plan"),
     toForm: (data) => ({ ...data, companyId: refId(data.companyId), departmentId: refId(data.departmentId) }),
 };
 
@@ -1893,7 +1912,7 @@ export const trainingFeedbackConfig = {
         { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "180px" },
         { name: "Training Event", selector: (row) => row.trainingEventName || row.trainingEventId, minWidth: "180px" },
     ],
-    recordTitle: (r) => `Training Feedback — ${r._id}`,
+    recordTitle: employeeTitle("Training Feedback"),
     toForm: (data) => ({ ...data, employeeId: refId(data.employeeId), trainingEventId: refId(data.trainingEventId) }),
 };
 
@@ -1963,7 +1982,7 @@ export const employeeSkillMapConfig = {
         </>
     ),
     columns: [{ name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "220px" }],
-    recordTitle: (r) => `Employee Skill Map — ${r._id}`,
+    recordTitle: employeeTitle("Employee Skill Map"),
     toForm: (data) => ({ ...data, employeeId: refId(data.employeeId) }),
 };
 
@@ -2100,7 +2119,7 @@ export const travelRequestConfig = {
         { name: "Type", selector: (row) => row.travelType, minWidth: "120px" },
         { name: "Status", selector: (row) => row.status, minWidth: "120px" },
     ],
-    recordTitle: (r) => `Travel Request — ${r._id}`,
+    recordTitle: employeeTitle("Travel Request"),
     toForm: (data) => ({
         ...data,
         employeeId: refId(data.employeeId),
@@ -2299,7 +2318,7 @@ export const holidayListAssignmentConfig = {
         { name: "Applicable For", selector: (row) => row.applicableFor, minWidth: "130px" },
         { name: "From", selector: (row) => row.fromDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
     ],
-    recordTitle: (r) => `Holiday List Assignment — ${r._id}`,
+    recordTitle: employeeTitle("Holiday List Assignment"),
     toForm: (data) => ({ ...data, holidayListId: refId(data.holidayListId), employeeId: refId(data.employeeId), companyId: refId(data.companyId) }),
 };
 
@@ -2331,6 +2350,12 @@ export const leavePolicyConfig = {
         { name: "Leave Types", selector: (row) => row.leavePolicyDetails?.length ?? 0, minWidth: "110px" },
     ],
     recordTitle: (r) => r.title,
+    // The default form loader keeps only `fields`, which dropped these rows
+    // ("No rows yet" on edit); getById also populates leaveTypeId per row.
+    toForm: (data) => ({
+        ...data,
+        leavePolicyDetails: (data.leavePolicyDetails ?? []).map((row) => ({ ...row, leaveTypeId: refId(row.leaveTypeId) })),
+    }),
 };
 
 export const leavePolicyAssignmentConfig = {
@@ -2384,7 +2409,7 @@ export const leavePolicyAssignmentConfig = {
         { name: "From", selector: (row) => row.effectiveFrom?.slice?.(0, 10) ?? "—", minWidth: "110px" },
         { name: "To", selector: (row) => row.effectiveTo?.slice?.(0, 10) ?? "—", minWidth: "110px" },
     ],
-    recordTitle: (r) => `Leave Policy Assignment — ${r._id}`,
+    recordTitle: employeeTitle("Leave Policy Assignment"),
     toForm: (data) => ({
         ...data,
         employeeId: refId(data.employeeId),
@@ -2449,7 +2474,7 @@ export const leaveAllocationConfig = {
         { name: "Total (cached)", selector: (row) => row.totalLeavesAllocated, minWidth: "120px" },
         { name: "Status", selector: (row) => row.status, minWidth: "100px" },
     ],
-    recordTitle: (r) => `Leave Allocation — ${r._id}`,
+    recordTitle: employeeTitle("Leave Allocation"),
     toForm: (data) => ({
         ...data,
         employeeId: refId(data.employeeId),
@@ -2517,7 +2542,7 @@ export const attendanceConfig = {
         { name: "Date", selector: (row) => row.attendanceDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
         { name: "Status", selector: (row) => row.status, minWidth: "130px" },
     ],
-    recordTitle: (r) => `Attendance — ${r._id}`,
+    recordTitle: employeeTitle("Attendance"),
     toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["employeeId", "companyId", "attendanceDate", "status", "leaveTypeId", "isActive", "departmentId", "shiftId", "workingHours", "standardWorkingHours", "actualOvertimeDuration", "lateEntry", "earlyExit", "inTime", "outTime", "halfDayStatus"].includes(key)).map(([key, value]) => [key, value === "" ? null : value])),
     toForm: (data) => ({
         ...data,
@@ -2544,7 +2569,7 @@ const BLOCK_DATE_COLUMNS = [
     { name: "reason", label: "Reason", type: "text" },
 ];
 const ALLOW_LIST_COLUMNS = [
-    { name: "allowUserId", label: "Allowed User (id)", type: "text" },
+    { name: "allowUserId", label: "Allowed Employee (id)", type: "text" },
 ];
 
 export const leaveAdjustmentConfig = {
@@ -2583,7 +2608,7 @@ export const leaveAdjustmentConfig = {
         { name: "Leaves", selector: (row) => row.leavesToAdjust, minWidth: "90px" },
         { name: "Posting Date", selector: (row) => row.postingDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
     ],
-    recordTitle: (r) => `Leave Adjustment — ${r._id}`,
+    recordTitle: employeeTitle("Leave Adjustment"),
     toForm: (data) => ({ ...data, employeeId: refId(data.employeeId), leaveTypeId: refId(data.leaveTypeId), leaveAllocationId: refId(data.leaveAllocationId) }),
 };
 
@@ -2644,7 +2669,7 @@ export const compensatoryLeaveRequestConfig = {
         { name: "Work End", selector: (row) => row.workEndDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
         { name: "Status", selector: (row) => row.status, minWidth: "100px" },
     ],
-    recordTitle: (r) => `Compensatory Leave Request — ${r._id}`,
+    recordTitle: employeeTitle("Compensatory Leave Request"),
     toForm: (data) => ({ ...data, employeeId: refId(data.employeeId), leaveTypeId: refId(data.leaveTypeId) }),
 };
 
@@ -2722,7 +2747,7 @@ export const leaveApplicationConfig = {
         { name: "Days", selector: (row) => row.totalLeaveDays, minWidth: "80px" },
         { name: "Status", selector: (row) => row.status, minWidth: "100px" },
     ],
-    recordTitle: (r) => `Leave Application — ${r._id}`,
+    recordTitle: employeeTitle("Leave Application"),
     toForm: (data) => ({ ...data, employeeId: refId(data.employeeId), leaveTypeId: refId(data.leaveTypeId), leaveApproverId: refId(data.leaveApproverId) }),
 };
 
@@ -2779,7 +2804,7 @@ export const leaveEncashmentConfig = {
         { name: "Amount", selector: (row) => row.encashmentAmount, minWidth: "100px" },
         { name: "Status", selector: (row) => row.status, minWidth: "90px" },
     ],
-    recordTitle: (r) => `Leave Encashment — ${r._id}`,
+    recordTitle: employeeTitle("Leave Encashment"),
     toForm: (data) => ({ ...data, employeeId: refId(data.employeeId), leaveTypeId: refId(data.leaveTypeId), leaveAllocationId: refId(data.leaveAllocationId) }),
 };
 
@@ -2824,7 +2849,7 @@ export const leaveBlockListConfig = {
                 fieldName="blockDates" columns={BLOCK_DATE_COLUMNS} values={values} setValues={setValues}
             />
             <SimpleArrayField
-                title="Allow Users" description="Paste a User's id into each row — these users may still approve/apply for leave on the block dates above."
+                title="Allow Users" description="Paste an Employee's id into each row — these employees may still approve/apply for leave on the block dates above."
                 fieldName="allowList" columns={ALLOW_LIST_COLUMNS} values={values} setValues={setValues}
             />
         </>
@@ -2959,7 +2984,7 @@ export const shiftAssignmentConfig = {
         { name: "End date", selector: (row) => String(row.endDate ?? "—"), sortable: true, sortField: "endDate" },
         { name: "Status", selector: (row) => String(row.status ?? "—"), sortable: true, sortField: "status" },
     ],
-    recordTitle: (r) => r.shiftTypeName || r.locationName || "Shift Assignment",
+    recordTitle: employeeTitle("Shift Assignment"),
     toForm: (data) => ({ ...data, startDate: data.startDate?.slice(0, 10) || "", endDate: data.endDate?.slice(0, 10) || "",  employeeId: refId(data.employeeId), shiftTypeId: refId(data.shiftTypeId), shiftLocationId: refId(data.shiftLocationId), companyId: refId(data.companyId) }),
     toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["employeeId", "shiftTypeId", "shiftLocationId", "startDate", "endDate", "status", "companyId", "isActive"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
 };
@@ -3001,7 +3026,7 @@ export const shiftScheduleConfig = {
     ],
     toView: (data) => ({ ...data, repeatOnDaysText: (data.repeatOnDays || []).join(", ") }),
     viewFields: [{ section: "details", name: "frequency", label: "Frequency" }, { section: "details", name: "shiftTypeId", label: "Shift", type: "select", optionsFrom: "shiftTypeId" }, { section: "details", name: "companyId", label: "Company", type: "select", optionsFrom: "companyId" }, { section: "details", name: "repeatOnDaysText", label: "Repeat on days" }, { section: "details", name: "isActive", label: "Active", type: "checkbox" }],
-    recordTitle: (r) => r.shiftTypeName || r.locationName || "Shift Schedule",
+    recordTitle: (r) => (r.shiftTypeId?.shiftTypeName ? `Shift Schedule — ${r.shiftTypeId.shiftTypeName}` : "Shift Schedule"),
     toForm: (data) => ({ ...data,  repeatOnDays: data.repeatOnDays || [], shiftTypeId: refId(data.shiftTypeId), companyId: refId(data.companyId) }),
     toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["frequency", "repeatOnDays", "shiftTypeId", "companyId", "isActive"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
 };
@@ -3043,7 +3068,7 @@ export const shiftScheduleAssignmentConfig = {
         { name: "Enabled", selector: (row) => String(row.enabled ?? "—"), sortable: true, sortField: "enabled" },
         { name: "Status", selector: (row) => String(row.status ?? "—"), sortable: true, sortField: "status" },
     ],
-    recordTitle: (r) => r.shiftTypeName || r.locationName || "Shift Schedule Assignment",
+    recordTitle: employeeTitle("Shift Schedule Assignment"),
     toForm: (data) => ({ ...data, createShiftsAfter: data.createShiftsAfter?.slice(0, 10) || "",  employeeId: refId(data.employeeId), shiftScheduleId: refId(data.shiftScheduleId), shiftLocationId: refId(data.shiftLocationId), companyId: refId(data.companyId) }),
     toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["employeeId", "shiftScheduleId", "shiftLocationId", "enabled", "createShiftsAfter", "status", "companyId", "isActive"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
     renderExtra: ({ mode, id }) => mode === "edit" && id ? <GenerateShiftsPanel id={id} /> : null,
@@ -3091,7 +3116,7 @@ export const employeeCheckinConfig = {
         { name: "Offshift", selector: (row) => String(row.offshift ?? "—"), sortable: true, sortField: "offshift" },
     ],
     toView: (data) => ({ ...data, attendanceLinked: Boolean(data.attendanceId) }),
-    recordTitle: (r) => r.shiftTypeName || r.locationName || "Employee Checkin",
+    recordTitle: employeeTitle("Employee Checkin"),
     toForm: (data) => ({ ...data, time: data.time?.slice(0, 16) || "",  employeeId: refId(data.employeeId), shiftId: refId(data.shiftId), companyId: refId(data.companyId) }),
     toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["employeeId", "time", "logType", "deviceId", "skipAutoAttendance", "latitude", "longitude", "companyId", "isActive"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
 };
@@ -3147,7 +3172,7 @@ export const shiftRequestConfig = {
         { name: "To date", selector: (row) => row.toDate ? String(row.toDate) : "open-ended", sortable: true, sortField: "toDate" },
         { name: "Status", selector: (row) => String(row.status ?? "—"), sortable: true, sortField: "status" },
     ],
-    recordTitle: (r) => `Shift Request — ${r._id}`,
+    recordTitle: employeeTitle("Shift Request"),
     toForm: (data) => ({ ...data, fromDate: data.fromDate?.slice(0, 10) || "", toDate: data.toDate?.slice(0, 10) || "", employeeId: refId(data.employeeId), shiftTypeId: refId(data.shiftTypeId), approverId: refId(data.approverId) }),
     toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["shiftTypeId", "employeeId", "companyId", "approverId", "fromDate", "toDate"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
 };
@@ -3196,7 +3221,7 @@ export const attendanceRequestConfig = {
         { name: "Reason", selector: (row) => String(row.reason ?? "—"), sortable: true, sortField: "reason" },
         { name: "Status", selector: (row) => String(row.status ?? "—"), sortable: true, sortField: "status" },
     ],
-    recordTitle: (r) => `Attendance Request — ${r._id}`,
+    recordTitle: employeeTitle("Attendance Request"),
     toForm: (data) => ({ ...data, fromDate: data.fromDate?.slice(0, 10) || "", toDate: data.toDate?.slice(0, 10) || "", halfDayDate: data.halfDayDate?.slice(0, 10) || "", employeeId: refId(data.employeeId) }),
     toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["employeeId", "companyId", "fromDate", "toDate", "halfDay", "includeHolidays", "halfDayDate", "reason", "explanation"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
 };
@@ -3326,7 +3351,7 @@ export const salaryStructureConfig = {
         { name: "Net pay", selector: (row) => row.netPay ?? "—" },
         { name: "Status", selector: (row) => (row.isActive ? "Active" : "Inactive") },
     ],
-    recordTitle: (r) => `Salary Structure — ${r.payrollFrequency || r._id}`,
+    recordTitle: (r) => (r.payrollFrequency ? `Salary Structure — ${r.payrollFrequency}` : "Salary Structure"),
     toForm: (data) => ({
         ...data,
         companyId: refId(data.companyId),
@@ -3391,7 +3416,7 @@ export const salaryStructureAssignmentConfig = {
         { name: "From date", selector: (row) => String(row.fromDate ?? "—"), sortable: true, sortField: "fromDate" },
         { name: "CTC", selector: (row) => row.ctc ?? "—" },
     ],
-    recordTitle: (r) => `Salary Structure Assignment — ${r._id}`,
+    recordTitle: employeeTitle("Salary Structure Assignment"),
     toForm: (data) => ({ ...data, fromDate: data.fromDate?.slice(0, 10) || "", employeeId: refId(data.employeeId), salaryStructureId: refId(data.salaryStructureId), incomeTaxSlabId: refId(data.incomeTaxSlabId) }),
 };
 
@@ -4008,7 +4033,7 @@ export const employeeOtherIncomeConfig = {
     },
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
-        payrollPeriodId: asOptions(getAllPayrollPeriods, "startDate"),
+        payrollPeriodId: payrollPeriodOptions,
     },
     sections: [
         { id: "details", title: "External Income Details" },
@@ -5001,7 +5026,7 @@ export const employeeBenefitApplicationConfig = {
     },
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
-        payrollPeriodId: asOptions(getAllPayrollPeriods, "startDate"),
+        payrollPeriodId: payrollPeriodOptions,
     },
     sections: [
         { id: "details", title: "Application Details" },
@@ -5059,7 +5084,7 @@ export const employeeBenefitApplicationConfig = {
     ],
     columns: [
         { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
-        { name: "Payroll Period", selector: (r) => (r.payrollPeriodId?.startDate ? String(r.payrollPeriodId.startDate).slice(0, 10) : "—") },
+        { name: "Payroll Period", selector: (r) => r.payrollPeriodIdLabel || "—" },
         { name: "Total Amount", selector: (r) => r.totalAmount ?? "—" },
         { name: "Remaining", selector: (r) => r.remainingBenefit ?? "—" },
         { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" },
@@ -5281,6 +5306,14 @@ export const payrollCorrectionConfig = {
             daysToReverse: Number(values.daysToReverse),
             remarks: values.remarks,
         }),
+    // getById populates the slip; show its period, not whichever string field
+    // the generic renderer would pick (a raw startDate timestamp).
+    toView: (data) => ({
+        ...data,
+        salarySlipId: data.salarySlipId?.startDate
+            ? `${data.salarySlipId.startDate.slice(0, 10)} – ${data.salarySlipId.endDate?.slice(0, 10) ?? ""}`
+            : data.salarySlipId,
+    }),
 };
 
 // ============================================================================
@@ -5542,11 +5575,12 @@ export const employeeTaxExemptionDeclarationConfig = {
         { name: "status", label: "Status", type: "string" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
-    recordTitle: (r) => `Tax Declaration — ${r._id}`,
+    recordTitle: employeeTitle("Tax Declaration"),
     toForm: (data) => ({
         ...data,
         employeeId: refId(data.employeeId),
         payrollPeriodId: refId(data.payrollPeriodId),
+        declarations: (data.declarations ?? []).map((row) => ({ ...row, exemptionSubCategoryId: refId(row.exemptionSubCategoryId) })),
     }),
 };
 
@@ -5637,7 +5671,7 @@ export const employeeTaxExemptionProofSubmissionConfig = {
         { name: "status", label: "Status", type: "string" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
-    recordTitle: (r) => `Proof Submission — ${r._id}`,
+    recordTitle: employeeTitle("Proof Submission"),
     toForm: (data) => ({
         ...data,
         employeeId: refId(data.employeeId),
@@ -5645,6 +5679,7 @@ export const employeeTaxExemptionProofSubmissionConfig = {
         submissionDate: data.submissionDate?.slice(0, 10) || "",
         rentedFrom: data.rentedFrom?.slice(0, 10) || "",
         rentedTo: data.rentedTo?.slice(0, 10) || "",
+        taxExemptionProofs: (data.taxExemptionProofs ?? []).map((row) => ({ ...row, exemptionSubCategoryId: refId(row.exemptionSubCategoryId) })),
     }),
 };
 

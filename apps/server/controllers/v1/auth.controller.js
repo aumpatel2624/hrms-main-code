@@ -482,6 +482,9 @@ export const listLoginAttempts = async (req, res) => {
           userEmail: attempt.userEmail,
           attemptCount: attempt.attemptCount,
           isLocked: attempt.isLocked,
+          // Block/unblock toggles the account's isActive (setAccountActive);
+          // the Login Attempt Logs screen reads this to show Blocked/Unblock.
+          isBlocked: !isActive,
           lockUntil: attempt.lockUntil,
           lastLoginAttempt: attempt.lastLoginAttempt,
           lastLoggedIn: attempt.lastLoggedIn,

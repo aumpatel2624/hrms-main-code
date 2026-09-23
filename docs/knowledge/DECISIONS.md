@@ -4249,3 +4249,61 @@ consumer; single-branch build
 - **Deviates from convention**: no — follows `remove-feature`'s skill exactly (inventory shown and
   confirmed before any deletion, permissions-then-menus-then-collections order, ADR superseded not
   deleted).
+
+### ADR-040 — Merge User into Employee: Employee is the login identity now
+
+- **Date**: 2026-09-18
+- **Status**: accepted
+- **Context**: Two separate collections (`User` — login identity: email, password, role, department;
+  `Employee` — HR record: designation, banking, `reportsToId` hierarchy) existed for the same person,
+  linked one-way by `Employee.userId`. Staff found this confusing — two sidebar screens, two forms to
+  fill for one new hire. Confirmed via `grill-me` before any code was touched: (1) the confusion is a
+  real UX problem (HR filling two forms per hire, two menu items), not a data-sync bug; (2) this
+  company's every employee always has, or will get, exactly one login, no exceptions — the precondition
+  that makes a real schema merge correct instead of the cheaper "one combined form, two documents
+  underneath" compromise that would otherwise be the right call; (3) the project is pre-launch, not
+  deployed, one dev database — no live-data migration needed, a schema change plus a full reseed is
+  sufficient.
+- **Options considered**:
+  - _User survives, absorbs Employee's HR fields_ — lost. Employee is already the richer domain object
+    and what every other collection references by id; this direction would mean renaming Employee
+    everywhere it's used, a much bigger blast radius for no benefit.
+  - _Keep two collections, merge only the admin form/screen_ — the cheaper, usually-correct answer,
+    rejected specifically because of the confirmed always-1:1 precondition. Revisit this direction if
+    that precondition ever stops being true (a login-less employee, or a login not tied to one employee).
+- **Decision**: `Employee` survives; `User` is deleted. Employee absorbs `email`, `password`, `roleId`,
+  `mobileNumber`, `countryId`, `stateId`, `cityId`, `address`. The session identity (`req.user.id`) is
+  now the Employee's own `_id` — no separate identity to resolve. Every `ref: "User"` foreign key
+  (11 fields across 10 models: `Department`'s three approver arrays, `Employee`'s own three approver
+  fields — now self-refs like `reportsToId` already was, `EmployeeGrievance.resolvedByUserId`,
+  `ExpenseClaim.expenseApproverId`, `Interview`/`InterviewType`'s interviewer arrays,
+  `InterviewFeedback.interviewerId`, `LeaveApplication.leaveApproverId`, `LeaveBlockList`,
+  `ShiftRequest.approverId`) became `ref: "Employee"`. The Users admin screen is retired; its fields
+  (login/contact/location) were folded into the Employee form's new "Login account"/"Location"
+  sections, so creating an employee and giving them a login is one form again.
+  `utils/requestEmployee.js`'s `resolveRequestEmployee` — the helper ~15 controllers already called to
+  bridge the old User→Employee gap — was simplified to a plain `Employee.findById` and kept its exact
+  external shape, so every existing call site needed zero changes.
+  **Default credential (explicit user instruction, mid-implementation)**: every seeded employee's
+  login is their own Employee Code for both email and password (e.g. "A005" / "A005") — predictable
+  enough for HR to hand out on day one. This is not a real email address, so the login form's
+  identifier field and its client/server validation chains were relaxed to accept either shape
+  (`loginIdentifierValidator` in `middlewares/inputValidator.js`, replacing the strict `emailValidator`
+  on the login route only — every other route that needs a real email is untouched). Employee.email is
+  matched case-insensitively at login and on the create/update uniqueness checks, since the schema
+  lowercases it on save but Mongoose does not lowercase an incoming query filter automatically.
+- **Consequences**: `password` is required on create and is the one field a general profile update can
+  never touch — only `resetEmployeePassword` (mirroring the retired `resetUserPassword`'s
+  `findByIdAndUpdate`-not-`save()` pattern, for the same reason: a legacy record predating a
+  later-required field must still be resettable). `seed/index.js`'s `seedEmployees` now requires the
+  "Employee" `RoleMaster` row to exist first and backfills login fields only when genuinely absent, so
+  a re-seed never clobbers a real credential `seed/demo-data.js` or an admin already set.
+  `seed/fixtures.js` (the client-docs screenshot fixture generator) needed its own `seedPeople`
+  rewritten to create Employee docs directly, and its dangling `SeoPage`/`SeoRedirect`/`User` imports —
+  a straggler this ADR's audit found from ADR-039's removal, which had missed this file entirely — were
+  fixed in the same pass. `docs-fingerprint.test.js`'s hard-coded `userConfig` assertions (a large-config
+  field-count check and an "an S-E-O page"-style article-rule check) were moved onto `employeeConfig`
+  and a synthetic fixture respectively, so the mechanism they tested stays covered.
+- **Deviates from convention**: no — reuses every existing pattern (`resolveRequestEmployee`'s external
+  shape, the `findByIdAndUpdate`-not-`save()` password-reset idiom, `toPayload`'s create-only password
+  field) rather than inventing new ones.

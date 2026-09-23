@@ -72,7 +72,8 @@ const EmployeeAttendanceTool = () => {
                 ],
                 per_page: 200,
             });
-            setHalfDayRows(res.data?.data?.data ?? []);
+            // Search endpoints return runListQuery's [{ count, data }] shape.
+            setHalfDayRows(res.data?.data?.[0]?.data ?? []);
         } catch (error) {
             console.error("Error loading pending Half Day attendance:", error);
             toast.error("Could not load pending Half Day attendance");

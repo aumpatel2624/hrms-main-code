@@ -786,6 +786,12 @@ export const listLeavePolicyAssignments = async (_req, res) => {
 export const listLeavePolicyAssignmentByParams = async (req, res) => {
   try {
     const list = await runListQuery(LeavePolicyAssignment, req.body, {
+      // The admin column shows employeeName; without this it fell back to the raw id.
+      stages: [
+        { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employee" } },
+        { $addFields: { employeeName: { $arrayElemAt: ["$employee.employeeName", 0] } } },
+        { $project: { employee: 0 } },
+      ],
       searchFields: [],
       filterable: {
         employeeId: "objectId",

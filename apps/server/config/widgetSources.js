@@ -349,33 +349,6 @@ export const WIDGET_SOURCES = Object.freeze({
   }
 },
 
-  users: {
-    label: "Users",
-    model: "User",
-    aggregatable: {},
-    groupable: {
-      departmentId: {
-        label: "Department",
-        lookup: { from: "departments", labelField: "departmentName" },
-      },
-      roleId: {
-        label: "Role",
-        lookup: { from: "rolemasters", labelField: "roleName" },
-      },
-      isActive: { label: "Active status" },
-    },
-    dateFields: { createdAt: "Created" },
-    filterable: {
-      userName: "string",
-      email: "string",
-      isActive: "boolean",
-      departmentId: "objectId",
-      roleId: "objectId",
-      createdAt: "date",
-    },
-    scopeable: { department: "departmentId", owner: "_id" },
-  },
-
   "login-attempts": {
     label: "Login Attempts",
     model: "LoginAttempt",
@@ -524,12 +497,20 @@ export const WIDGET_SOURCES = Object.freeze({
         label: "Company",
         lookup: { from: "companies", labelField: "companyName" },
       },
+      // Carried over from the retired "users" source (User merged into
+      // Employee): the login role now lives on the Employee.
+      roleId: {
+        label: "Role",
+        lookup: { from: "rolemasters", labelField: "roleName" },
+      },
       status: { label: "Status" },
     },
     dateFields: { dateOfJoining: "Date of Joining", createdAt: "Created" },
     filterable: {
       employeeCode: "string",
       employeeName: "string",
+      email: "string",
+      roleId: "objectId",
       companyId: "objectId",
       departmentId: "objectId",
       designationId: "objectId",
@@ -1334,7 +1315,7 @@ export const WIDGET_SOURCES = Object.freeze({
       status: { label: "Status" },
       companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
       employeeId: { label: "Employee", lookup: { from: "employees", labelField: "employeeName" } },
-      salaryComponentId: { label: "Salary Component", lookup: { from: "salarycomponents", labelField: "name" } },
+      salaryComponentId: { label: "Salary Component", lookup: { from: "salarycomponents", labelField: "salaryComponentName" } },
     },
     dateFields: { claimDate: "Claim date", createdAt: "Created" },
     filterable: {
@@ -1360,7 +1341,7 @@ export const WIDGET_SOURCES = Object.freeze({
       transactionType: { label: "Transaction Type" },
       companyId: { label: "Company", lookup: { from: "companies", labelField: "companyName" } },
       employeeId: { label: "Employee", lookup: { from: "employees", labelField: "employeeName" } },
-      salaryComponentId: { label: "Salary Component", lookup: { from: "salarycomponents", labelField: "name" } },
+      salaryComponentId: { label: "Salary Component", lookup: { from: "salarycomponents", labelField: "salaryComponentName" } },
       refDoctype: { label: "Reference Doctype" },
     },
     dateFields: { postingDate: "Posting date", createdAt: "Created" },

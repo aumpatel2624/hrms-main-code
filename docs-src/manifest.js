@@ -277,17 +277,18 @@ export const CONFIG_SCREENS = [
         source: "apps/admin/src/entities/advanced.jsx",
         intro:
             "An employee is the hub every other HR record links to — leave, payroll, performance and " +
-            "everything else eventually refers back to this record. Real employee codes and reporting " +
-            "lines carry over from the org chart, so most employees are already here.",
+            "everything else eventually refers back to this record. It is also their login: every " +
+            "employee has exactly one, set right here rather than on a separate screen.",
         when: "Add an employee when someone new joins, before creating any other record about them.",
         gotchas: [
-            "Company, Department, Designation, Branch and Date of Joining are all required — an " +
-                "employee cannot be saved without them.",
+            "Company, Department, Designation, Branch, Date of Joining, Email, Password and Role are " +
+                "all required — an employee cannot be saved without them.",
+            "Email is what they sign in with, and must be unique.",
+            "The password field only appears when adding someone. To change an existing employee's " +
+                "password, use the reset option on their record instead.",
             "You cannot delete an employee while other records still reference them.",
             "Employment Type, Grade and the three approver fields are optional and are not " +
                 "pre-filled — set them here if you use them.",
-            "This screen does not create a login for the employee. Self-service login is separate, " +
-                "future work — most employees here have no login yet.",
         ],
         roles: "Only HR User and HR Manager can add or edit employees.",
     },
@@ -416,27 +417,6 @@ export const CONFIG_SCREENS = [
         when: "Add one when you have a standard set of offer terms worth reusing.",
         gotchas: ["You cannot delete a template while records still reference it."],
         roles: "Only HR User and HR Manager can add or edit templates.",
-    },
-    {
-        key: "user",
-        config: "userConfig",
-        source: "apps/admin/src/entities/advanced.jsx",
-        intro:
-            "Everyone who signs in to the panel has a user record here. It holds who they are, how to " +
-            "reach them, which department they work in, and which role decides what they can do.",
-        when:
-            "Create a user when someone joins. When they leave, mark them inactive rather than " +
-                "deleting them — an inactive user cannot sign in, but everything they did stays " +
-                "attributable to a name.",
-        gotchas: [
-            "Email addresses must be unique, and they are what people sign in with.",
-            "The password field only appears when adding someone. To change an existing user's " +
-                "password, use the reset option on their record instead.",
-            "Changing someone's role changes what they can see and do the next time they sign in.",
-        ],
-        roles:
-            "Whether you can add, edit or delete users depends on your role's permissions. If a button " +
-            "is missing, your role has not been granted that action.",
     },
     {
         key: "role",

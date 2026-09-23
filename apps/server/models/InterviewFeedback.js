@@ -24,7 +24,7 @@ const InterviewFeedbackSchema = new mongoose.Schema(
     },
     interviewerId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Employee",
       required: true,
     },
     result: {

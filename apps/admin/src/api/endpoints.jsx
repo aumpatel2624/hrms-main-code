@@ -278,6 +278,7 @@ export const ENDPOINTS = {
         BASE: `${V1}/employees`,
         BY_ID: (id) => `${V1}/employees/${id}`,
         SEARCH: `${V1}/employees/search`,
+        RESET_PASSWORD: (id) => `${V1}/employees/${id}/reset-password`,
     },
 
     // Recruitment endpoints (ADR-019)
@@ -540,13 +541,6 @@ export const ENDPOINTS = {
         APPROVE: (id) => `${V1}/expense-claims/${id}/approve`, REJECT: (id) => `${V1}/expense-claims/${id}/reject`, SUBMIT: (id) => `${V1}/expense-claims/${id}/submit`, CANCEL: (id) => `${V1}/expense-claims/${id}/cancel`, MARK_PAID: (id) => `${V1}/expense-claims/${id}/mark-paid` },
 
     // User endpoints
-    USERS: {
-        BASE: `${V1}/users`,
-        BY_ID: (id) => `${V1}/users/${id}`,
-        SEARCH: `${V1}/users/search`,
-        RESET_PASSWORD: (id) => `${V1}/users/${id}/reset-password`,
-    },
-
     // Location endpoints
     COUNTRIES: {
         BASE: `${V1}/countries`,

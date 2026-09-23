@@ -3,7 +3,7 @@ import { PERMISSION_KEYS } from "@demo-panel/shared/permissions";
 import { SCOPES } from "@demo-panel/shared/scopes";
 import UserRoles from "../models/UserRoles.js";
 import MenuMaster from "../models/MenuMaster.js";
-import User from "../models/User.js";
+import Employee from "../models/Employee.js";
 
 /**
  * Server-side enforcement of the UserRoles permission matrix (ADR-002).
@@ -81,14 +81,14 @@ export const resolveUserScope = async (req) => {
   // Sessions created before ADR-002 carry no roleId — resolve once from
   // the database and write it back into the session.
   if (!req.session.user.roleId) {
-    const dbUser = await User.findById(req.user.id, {
+    const dbEmployee = await Employee.findById(req.user.id, {
       roleId: 1,
       departmentId: 1,
     }).lean();
-    if (!dbUser) return false;
-    req.session.user.roleId = String(dbUser.roleId);
-    req.session.user.departmentId = dbUser.departmentId
-      ? String(dbUser.departmentId)
+    if (!dbEmployee) return false;
+    req.session.user.roleId = String(dbEmployee.roleId);
+    req.session.user.departmentId = dbEmployee.departmentId
+      ? String(dbEmployee.departmentId)
       : null;
   }
   req.user.roleId = req.session.user.roleId;

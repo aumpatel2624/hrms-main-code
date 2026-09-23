@@ -151,9 +151,11 @@ export const listInterviewFeedbacksByParams = async (req, res) => {
       stages: [
         { $lookup: { from: "interviews", localField: "interviewId", foreignField: "_id", as: "interview" } },
         { $addFields: { interviewJobApplicantId: { $arrayElemAt: ["$interview.jobApplicantId", 0] } } },
-        { $lookup: { from: "users", localField: "interviewerId", foreignField: "_id", as: "interviewer" } },
+        // interviewerId references Employee since the User→Employee merge.
+        { $lookup: { from: "employees", localField: "interviewerId", foreignField: "_id", as: "interviewer" } },
         { $unwind: { path: "$interviewer", preserveNullAndEmptyArrays: true } },
-        { $addFields: { interviewerName: { $ifNull: ["$interviewer.userName", ""] } } },
+        { $addFields: { interviewerName: { $ifNull: ["$interviewer.employeeName", ""] } } },
+        { $project: { interviewer: 0, interview: 0 } },
       ],
     });
     return res.status(200).json({ isOk: true, status: 200, data: list });

@@ -560,7 +560,8 @@ else is ever trusted as a balance.
 
 `Department` (ADR-017) gained `parentDepartmentId` (optional self-ref, depth-10-bounded walk, no
 protection against anything but a direct self-cycle) and three approver arrays
-(`leaveApprovers`/`expenseApprovers`/`shiftRequestApprovers`, plain `User` ref arrays — schema-ready,
+(`leaveApprovers`/`expenseApprovers`/`shiftRequestApprovers`, plain `Employee` ref arrays since ADR-040
+merged the login identity into Employee — schema-ready,
 not given a form field yet, same precedent as Recruitment's `interviewers`). `utils/approvers.js`
 resolves an employee's approver: their own direct field if set, otherwise the union of the matching
 array across their whole department ancestor chain.

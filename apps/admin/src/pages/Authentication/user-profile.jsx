@@ -5,7 +5,7 @@ import { Avatar } from "@/components/base/avatar/avatar";
 
 const UserProfile = () => {
     const { adminData } = useContext(AuthContext);
-    const name = adminData?.adminName || adminData?.userName;
+    const name = adminData?.adminName || adminData?.employeeName;
 
     document.title = `Profile | Apidel HRMS`;
 

@@ -43,6 +43,14 @@ import HolidayList from "../../models/HolidayList.js";
 import Employee from "../../models/Employee.js";
 import Attendance from "../../models/Attendance.js";
 
+// The admin list columns read `employeeName`; without this join they fell
+// back to printing the raw employeeId.
+const EMPLOYEE_NAME_STAGES = [
+  { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employee" } },
+  { $addFields: { employeeName: { $arrayElemAt: ["$employee.employeeName", 0] } } },
+  { $project: { employee: 0 } },
+];
+
 const failure = (res, error) => {
   if (error.status) {
     return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
@@ -195,6 +203,7 @@ export const getLeaveAdjustmentById = async (req, res) => {
 export const listLeaveAdjustmentByParams = async (req, res) => {
   try {
     const list = await runListQuery(LeaveAdjustment, req.body, {
+      stages: EMPLOYEE_NAME_STAGES,
       searchFields: [],
       filterable: {
         employeeId: "objectId",
@@ -367,6 +376,7 @@ export const listCompensatoryLeaveRequestByParams = async (req, res) => {
     const scopeFilter = buildScopeFilter(req.user, { owner: "employeeId", approverIds });
 
     const list = await runListQuery(CompensatoryLeaveRequest, req.body, {
+      stages: EMPLOYEE_NAME_STAGES,
       searchFields: ["reason"],
       filterable: {
         employeeId: "objectId",
@@ -1174,6 +1184,7 @@ export const getLeaveEncashmentById = async (req, res) => {
 export const listLeaveEncashmentByParams = async (req, res) => {
   try {
     const list = await runListQuery(LeaveEncashment, req.body, {
+      stages: EMPLOYEE_NAME_STAGES,
       searchFields: [],
       filterable: {
         employeeId: "objectId",

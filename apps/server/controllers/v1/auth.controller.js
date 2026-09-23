@@ -1,26 +1,31 @@
 import bcrypt from "bcrypt";
 import { ROLES } from "@demo-panel/shared/roles";
 import AdminUser from "../../models/AdminUser.js";
-import User from "../../models/User.js";
+import Employee from "../../models/Employee.js";
 import LoginAttempt from "../../models/LoginAttempt.js";
 import authService from "../../services/authService.js";
 
 /**
- * Resolve a login email to either an admin user or a user.
- * Admin users are checked first.
+ * Resolve a login email to either an admin user or an employee (ADR-040:
+ * Employee is the login identity now — the former separate `User`
+ * collection was merged into it, this company's every employee always has
+ * exactly one login). Admin users are checked first.
  * @returns {{ account: Object, role: "ADMIN"|"USER" }|null}
  */
 const findAccountByEmail = async (email) => {
   const admin = await AdminUser.findOne({ email, isActive: true });
   if (admin) return { account: admin, role: ROLES.ADMIN };
 
-  const user = await User.findOne({ email, isActive: true })
+  // Employee.email is stored lowercase (schema transform) — an employee
+  // logging in with their Employee Code (e.g. "A005", ADR-040's default
+  // credential) must match regardless of the case they typed it in.
+  const employee = await Employee.findOne({ email: String(email || "").toLowerCase(), isActive: true })
     .populate("departmentId")
     .populate("roleId")
     .populate("countryId")
     .populate("stateId")
     .populate("cityId");
-  if (user) return { account: user, role: ROLES.USER };
+  if (employee) return { account: employee, role: ROLES.USER };
 
   return null;
 };
@@ -132,7 +137,7 @@ export const login = async (req, res) => {
       id: userId.toString(),
       role,
       email: account.email,
-      name: account.adminName || account.userName,
+      name: account.adminName || account.employeeName,
     };
 
     // checkPermission and buildScopeFilter read these; admins bypass both.
@@ -175,7 +180,7 @@ export const getCurrentUser = async (req, res) => {
     const account =
       role === ROLES.ADMIN
         ? await AdminUser.findById(id).select("-password")
-        : await User.findById(id)
+        : await Employee.findById(id)
             .select("-password")
             .populate("departmentId")
             .populate("roleId")
@@ -340,8 +345,8 @@ export const unlockAccount = async (req, res) => {
  * @returns {{ userType: string }|null}
  */
 const setAccountActive = async (userId, isActive) => {
-  const user = await User.findByIdAndUpdate(userId, { isActive });
-  if (user) return { userType: "User" };
+  const employee = await Employee.findByIdAndUpdate(userId, { isActive });
+  if (employee) return { userType: "Employee" };
 
   const admin = await AdminUser.findByIdAndUpdate(userId, { isActive });
   if (admin) return { userType: "Admin user" };
@@ -452,13 +457,13 @@ export const listLoginAttempts = async (req, res) => {
         let isActive = true;
 
         if (attempt.userId) {
-          const user = await User.findById(attempt.userId)
-            .select("userName isActive")
+          const employee = await Employee.findById(attempt.userId)
+            .select("employeeName isActive")
             .lean();
 
-          if (user) {
-            userName = user.userName || "Unknown";
-            isActive = user.isActive;
+          if (employee) {
+            userName = employee.employeeName || "Unknown";
+            isActive = employee.isActive;
           } else {
             const admin = await AdminUser.findById(attempt.userId)
               .select("adminName email isActive")
@@ -477,6 +482,9 @@ export const listLoginAttempts = async (req, res) => {
           userEmail: attempt.userEmail,
           attemptCount: attempt.attemptCount,
           isLocked: attempt.isLocked,
+          // Block/unblock toggles the account's isActive (setAccountActive);
+          // the Login Attempt Logs screen reads this to show Blocked/Unblock.
+          isBlocked: !isActive,
           lockUntil: attempt.lockUntil,
           lastLoginAttempt: attempt.lastLoginAttempt,
           lastLoggedIn: attempt.lastLoggedIn,

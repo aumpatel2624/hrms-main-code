@@ -317,6 +317,10 @@ export const searchEmployeeBenefitApplications = async (req, res) => {
         { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employeeId_joined" } },
         { $addFields: { employeeIdLabel: { $arrayElemAt: ["$employeeId_joined.employeeName", 0] } } },
         { $project: { employeeId_joined: 0 } },
+        // The "Payroll Period" column reads this; payrollPeriodId alone is a bare id.
+        { $lookup: { from: "payrollperiods", localField: "payrollPeriodId", foreignField: "_id", as: "payrollPeriodId_joined" } },
+        { $addFields: { payrollPeriodIdLabel: { $concat: [{ $substr: [{ $arrayElemAt: ["$payrollPeriodId_joined.startDate", 0] }, 0, 10] }, " to ", { $substr: [{ $arrayElemAt: ["$payrollPeriodId_joined.endDate", 0] }, 0, 10] }] } } },
+        { $project: { payrollPeriodId_joined: 0 } },
       ],
     });
     return res.json({ isOk: true, status: 200, data });

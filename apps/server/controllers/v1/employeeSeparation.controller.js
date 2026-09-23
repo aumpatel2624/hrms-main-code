@@ -130,7 +130,7 @@ export const deleteEmployeeSeparation = async (req, res) => {
 
 export const getEmployeeSeparationById = async (req, res) => {
   try {
-    const doc = await EmployeeSeparation.findById(req.params.separationId);
+    const doc = await EmployeeSeparation.findById(req.params.separationId).populate("employeeId", "employeeName employeeCode");
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee Separation not found" });
     }

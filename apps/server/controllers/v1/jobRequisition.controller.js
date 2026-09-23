@@ -113,7 +113,10 @@ export const deleteJobRequisition = async (req, res) => {
 
 export const getJobRequisitionById = async (req, res) => {
   try {
-    const doc = await JobRequisition.findById(req.params.requisitionId);
+    // Populated so the detail page shows names, not ids; the form unwraps with refId().
+    const doc = await JobRequisition.findById(req.params.requisitionId)
+      .populate("designationId", "designationName")
+      .populate("requestedById", "employeeName employeeCode");
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Job Requisition not found" });
     }

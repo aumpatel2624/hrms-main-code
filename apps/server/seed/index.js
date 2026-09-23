@@ -137,7 +137,6 @@ const MENU_GROUPS = [
     icon: "ri-settings-3-line",
     menus: [
       { menuName: "Admin Users", menuUrl: "/admin-user", icon: "ri-shield-user-line" },
-      { menuName: "Users", menuUrl: "/user", icon: "ri-user-3-line" },
       { menuName: "User Roles", menuUrl: "/user-roles", icon: "ri-lock-password-line" },
       { menuName: "Dashboard Builder", menuUrl: "/dashboard-builder", icon: "ri-bar-chart-2-line" },
     ],
@@ -881,14 +880,31 @@ const SHIFT_PREFERENCE_VALUES = new Set(["Day", "Night", "UK"]);
  * is a real bug (module 1's seed covers every distinct department/
  * designation/branch value in this CSV) — fails loudly, not skipped.
  */
+// ADR-040: Employee is the login identity now (the former separate `User`
+// collection was merged in) — every seeded employee needs email/password/
+// roleId. The org-chart CSV has no real email/login data, so the base seed
+// defaults every login to the employee's own code — username and password
+// both the employeeCode (e.g. "A005" / "A005") — matching this company's
+// chosen convention: predictable enough for HR to hand out on day one,
+// forced to change on an employee's first real login (a UI concern, not
+// this seed's). Matches ADR-018's original reasoning for not inventing real
+// credentials for 195 real people, just applied to the now-mandatory fields
+// instead of skipping them. Only backfilled when missing, so a re-seed
+// never clobbers real credentials seed/demo-data.js (or an admin) already
+// set.
 const seedEmployees = async (companyId) => {
   const rows = readOrgChartRows();
 
-  const [departments, designations, branches] = await Promise.all([
+  const [departments, designations, branches, employeeRole] = await Promise.all([
     Department.find({ companyId }).lean(),
     Designation.find({ companyId }).lean(),
     Branch.find({ companyId }).lean(),
+    RoleMaster.findOne({ roleName: "Employee" }).lean(),
   ]);
+  if (!employeeRole) {
+    console.log("⚠️  seedEmployees: no \"Employee\" RoleMaster row yet — run seedOrganizationSetupRoles first");
+    return;
+  }
   const departmentByName = new Map(departments.map((d) => [d.departmentName, d._id]));
   const designationByName = new Map(designations.map((d) => [d.designationName, d._id]));
   const branchByName = new Map(branches.map((b) => [b.branchName, b._id]));
@@ -927,11 +943,25 @@ const seedEmployees = async (companyId) => {
 
     const existing = await Employee.findOne({ employeeCode: row.code });
     if (existing) {
+      // Login fields are never overwritten on an update — a real login (this
+      // seed's placeholder, or one seed/demo-data.js/an admin set for real)
+      // must never be silently clobbered by a re-seed. Backfilled only if
+      // genuinely absent, so a database re-seeded straight from before
+      // ADR-040 (no email/password/roleId at all) doesn't fail full-document
+      // validation on save().
       Object.assign(existing, doc);
+      if (!existing.email) existing.email = row.code;
+      if (!existing.password) existing.password = await bcrypt.hash(row.code, 10);
+      if (!existing.roleId) existing.roleId = employeeRole._id;
       await existing.save();
       updated += 1;
     } else {
-      await Employee.create(doc);
+      await Employee.create({
+        ...doc,
+        email: row.code,
+        password: await bcrypt.hash(row.code, 10),
+        roleId: employeeRole._id,
+      });
       created += 1;
     }
   }

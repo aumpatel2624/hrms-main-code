@@ -131,7 +131,7 @@ export const deleteExitInterview = async (req, res) => {
 
 export const getExitInterviewById = async (req, res) => {
   try {
-    const doc = await ExitInterview.findById(req.params.interviewId);
+    const doc = await ExitInterview.findById(req.params.interviewId).populate("employeeId", "employeeName employeeCode");
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Exit Interview not found" });
     }

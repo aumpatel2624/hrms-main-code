@@ -10,21 +10,60 @@ const EmployeeSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    // Independent of any linked login account — not every Employee has one
-    // (ADR-018: bulk-creating 195 real people's login credentials was
-    // explicitly rejected).
     employeeName: {
       type: String,
       required: true,
       trim: true,
     },
-    // Self-service login link. Optional/nullable — provisioning a specific
-    // person's login is deliberate future work, not part of this seed.
-    userId: {
+    // Login/session identity (ADR-040: merged in from the former separate
+    // `User` collection — this company confirmed every Employee always has
+    // exactly one login, so the two-collection split was pure duplication).
+    // This same document IS the login now; `req.user.id` from the session
+    // equals this Employee's own `_id`, no separate identity to resolve.
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      lowercase: true,
+    },
+    password: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    roleId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "RoleMaster",
+      required: true,
+    },
+    mobileNumber: {
+      type: String,
+      required: false,
+      trim: true,
+    },
+    countryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Country",
       required: false,
       default: null,
+    },
+    stateId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "State",
+      required: false,
+      default: null,
+    },
+    cityId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "City",
+      required: false,
+      default: null,
+    },
+    address: {
+      type: String,
+      required: false,
+      trim: true,
     },
     companyId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -102,19 +141,19 @@ const EmployeeSchema = new mongoose.Schema(
     // mechanism that reads them is still open (OPEN-QUESTIONS.md Q-4).
     expenseApproverId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Employee",
       required: false,
       default: null,
     },
     leaveApproverId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Employee",
       required: false,
       default: null,
     },
     shiftRequestApproverId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Employee",
       required: false,
       default: null,
     },
@@ -180,15 +219,10 @@ const EmployeeSchema = new mongoose.Schema(
 
 // ---- indexes ----------------------------------------------------------
 // employeeCode is globally unique (matches Frappe's own single `name`
-// namespace — ADR-018). userId unique-when-set uses a custom partial filter,
-// not `sparse`, for the same reason Company.companyCode/Department.
-// departmentCode do (models/softDelete.js's own partialFilterExpression
-// rewrite conflicts with `sparse` on the same index).
+// namespace — ADR-016). email is this document's login identity now
+// (ADR-040) — its own `unique: true` on the field above already indexes it.
 EmployeeSchema.index({ employeeCode: 1 }, { unique: true });
-EmployeeSchema.index(
-  { userId: 1 },
-  { unique: true, partialFilterExpression: { userId: { $type: "objectId" } } },
-);
+EmployeeSchema.index({ roleId: 1 });
 EmployeeSchema.index({ companyId: 1 });
 EmployeeSchema.index({ departmentId: 1 });
 EmployeeSchema.index({ designationId: 1 });

@@ -67,7 +67,8 @@ const ShiftAssignmentTool = () => {
                 setShiftTypes(shiftTypesRes.data?.data ?? []);
                 setShiftLocations(shiftLocationsRes.data?.data ?? []);
                 setShiftSchedules(shiftSchedulesRes.data?.data ?? []);
-                setOpenRequests(requestsRes.data?.data?.data ?? []);
+                // Search endpoints return runListQuery's [{ count, data }] shape.
+                setOpenRequests(requestsRes.data?.data?.[0]?.data ?? []);
             } catch (error) {
                 console.error("Error loading Shift Assignment Tool data:", error);
                 toast.error("Could not load employees/shifts/requests");

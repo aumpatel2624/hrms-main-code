@@ -110,6 +110,20 @@ export const emailValidator = body('email')
     .normalizeEmail();
 
 /**
+ * Login identifier chain (ADR-040) — deliberately NOT the strict
+ * emailValidator. An employee's default login is their own Employee Code
+ * (e.g. "A005"), not necessarily a real email address; a real AdminUser/
+ * Employee email still passes since isEmail() is only required to fail,
+ * not required to pass. No normalizeEmail() here for the same reason — it
+ * would mangle a non-email identifier.
+ */
+export const loginIdentifierValidator = body('email')
+    .trim()
+    .notEmpty().withMessage('Email or Employee Code is required')
+    .isLength({ max: MAX_LENGTHS.EMAIL }).withMessage(`Must not exceed ${MAX_LENGTHS.EMAIL} characters`)
+    .customSanitizer(sanitizeString);
+
+/**
  * Login password chain - deliberately NOT the strong policy.
  * Accounts predating the policy must still be able to sign in; rejecting them
  * at login would lock them out permanently, since the reset flow is only
@@ -217,7 +231,7 @@ export const paginationValidators = [
  * Login request validation
  */
 export const loginValidation = [
-    emailValidator,
+    loginIdentifierValidator,
     passwordValidator,
     body('locationConsent')
         .optional()
@@ -235,28 +249,6 @@ export const loginValidation = [
     body('clientLongitude')
         .optional({ nullable: true })
         .isFloat({ min: -180, max: 180 }).withMessage('clientLongitude must be between -180 and 180'),
-    handleValidationErrors,
-];
-
-/**
- * User creation validation
- */
-export const createUserValidation = [
-    nameValidator('userName'),
-    mongoIdValidator('departmentId', 'body'),
-    mongoIdValidator('roleId', 'body'),
-    emailValidator,
-    phoneValidator('mobileNumber'),
-    mongoIdValidator('countryId', 'body'),
-    mongoIdValidator('stateId', 'body'),
-    mongoIdValidator('cityId', 'body'),
-    body('address')
-        .optional()
-        .trim()
-        .isLength({ max: MAX_LENGTHS.MEDIUM_TEXT })
-        .withMessage(`Address must not exceed ${MAX_LENGTHS.MEDIUM_TEXT} characters`)
-        .customSanitizer(sanitizeString),
-    booleanValidator('isActive'),
     handleValidationErrors,
 ];
 
@@ -391,12 +383,6 @@ export const allowedLoginFields = [
     'clientIP', 'clientLatitude', 'clientLongitude'
 ];
 
-export const allowedUserFields = [
-    'userName', 'departmentId', 'roleId', 'email',
-    'mobileNumber', 'countryId', 'stateId', 'cityId',
-    'address', 'password', 'isActive'
-];
-
 export const allowedAdminUserFields = [
     'adminName', 'email', 'password', 'mobileNumber', 'isActive'
 ];
@@ -472,14 +458,12 @@ export default {
     loginValidation,
     strongPasswordValidator,
     strongPasswordFor,
-    createUserValidation,
     createAdminUserValidation,
     otpValidation,
     passwordResetValidation,
     searchValidation,
     allowOnlyFields,
     allowedLoginFields,
-    allowedUserFields,
     allowedAdminUserFields,
     allowedSearchFields,
     filterValidators,

@@ -141,7 +141,12 @@ export const deleteJobOffer = async (req, res) => {
 
 export const getJobOfferById = async (req, res) => {
   try {
-    const doc = await JobOffer.findById(req.params.offerId);
+    // Populated so the detail page can title the offer by applicant name
+    // instead of the raw jobApplicantId; the form unwraps these with refId().
+    const doc = await JobOffer.findById(req.params.offerId)
+      .populate("jobApplicantId", "applicantName emailId")
+      .populate("companyId", "companyName")
+      .populate("designationId", "designationName");
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Job Offer not found" });
     }
@@ -174,12 +179,16 @@ export const listJobOffersByParams = async (req, res) => {
       },
       stages: [
         { $lookup: { from: "jobapplicants", localField: "jobApplicantId", foreignField: "_id", as: "jobApplicant" } },
+        // The admin "Company" column reads companyName; without this it was always blank.
+        { $lookup: { from: "companies", localField: "companyId", foreignField: "_id", as: "company" } },
         {
           $addFields: {
             applicantName: { $arrayElemAt: ["$jobApplicant.applicantName", 0] },
             applicantEmail: { $arrayElemAt: ["$jobApplicant.emailId", 0] },
+            companyName: { $arrayElemAt: ["$company.companyName", 0] },
           },
         },
+        { $project: { jobApplicant: 0, company: 0 } },
       ],
     });
     return res.status(200).json({ isOk: true, status: 200, data: list });

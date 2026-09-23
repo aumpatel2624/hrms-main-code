@@ -10,7 +10,7 @@ import { logout } from "../api/auth.api";
 const ProfileMenu = () => {
     const navigate = useNavigate();
     const { adminData, setAdminData, role } = useContext(AuthContext);
-    const name = adminData?.adminName || adminData?.userName;
+    const name = adminData?.adminName || adminData?.employeeName;
 
     const handleAction = async (key) => {
         if (key === "profile") return navigate("/profile");

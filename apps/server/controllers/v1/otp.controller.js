@@ -1,6 +1,6 @@
 import { OTP } from "@demo-panel/shared/auth";
 import Otp from "../../models/Otp.js";
-import User from "../../models/User.js";
+import Employee from "../../models/Employee.js";
 import AdminUser from "../../models/AdminUser.js";
 import bcrypt from "bcrypt";
 import { sendTriggeredEmail } from "../../utils/sendTriggeredEmail.js";
@@ -12,7 +12,7 @@ export const createOtp = async (req, res) => {
     let user = await AdminUser.findOne({ email });
 
     if (!user) {
-      user = await User.findOne({ email });
+      user = await Employee.findOne({ email });
     }
 
     if (!user) {
@@ -58,7 +58,7 @@ export const createOtp = async (req, res) => {
     // lookup/fill/send this used to do — see sendTriggeredEmail.js. It never
     // throws; the reason it reports maps onto the same responses this
     // endpoint has always returned, so callers see no behaviour change.
-    const username = user.adminName || user.userName || "Admin";
+    const username = user.adminName || user.employeeName || "Admin";
     const { sent, reason } = await sendTriggeredEmail("password.forgot", {
       toEmail: email,
       mergeFields: { USERNAME: username, OTP_CODE: otp },
@@ -165,7 +165,7 @@ export const resetPassword = async (req, res) => {
     let user = await AdminUser.findOne({ email });
 
     if (!user) {
-      user = await User.findOne({ email });
+      user = await Employee.findOne({ email });
     }
 
     if (!user) {
@@ -190,7 +190,7 @@ export const resetPassword = async (req, res) => {
     // template shouldn't fail a reset that already succeeded, so the result
     // is only logged, not surfaced to the caller — unlike password.forgot,
     // where the email *is* the point of the request.
-    const username = user.adminName || user.userName || "Admin";
+    const username = user.adminName || user.employeeName || "Admin";
     const { sent, reason } = await sendTriggeredEmail("password.reset", {
       toEmail: email,
       mergeFields: { USERNAME: username },

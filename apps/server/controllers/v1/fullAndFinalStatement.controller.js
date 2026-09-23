@@ -166,7 +166,7 @@ export const deleteFullAndFinalStatement = async (req, res) => {
 
 export const getFullAndFinalStatementById = async (req, res) => {
   try {
-    const doc = await FullAndFinalStatement.findById(req.params.statementId);
+    const doc = await FullAndFinalStatement.findById(req.params.statementId).populate("employeeId", "employeeName employeeCode");
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Full and Final Statement not found" });
     }

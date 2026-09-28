@@ -74,7 +74,7 @@ JWT. `config/swagger.js` still advertises a `bearerAuth` scheme — that is stal
 
 One process. `apps/admin` builds into `apps/server/out/admin`, and `server.js` serves it with
 `express.static` plus an SPA catch-all. So in production `config.API_URL === ""` and every request
-is same-origin; in development the SPA runs on Vite's port 3000 and talks cross-origin to
+is same-origin; in development the SPA runs on Vite's port 3001 and talks cross-origin to
 `VITE_API_URL_DEV`.
 
 `apps/server/out/` is generated and gitignored. Never edit anything under it.

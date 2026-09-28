@@ -30,7 +30,7 @@ const STAGES = [
 
 const claimScope = async (req) => {
   const company = await attendanceScope(req, false);
-  if (req.user?.dataScope !== SCOPES.APPROVER) return req.user?.dataScope === SCOPES.OWN ? await attendanceScope(req, true) : company;
+  if (req.user?.dataScope !== SCOPES.APPROVER) return [SCOPES.OWN, SCOPES.TEAM].includes(req.user?.dataScope) ? await attendanceScope(req, true) : company;
   const own = await resolveRequestEmployee(req);
   const approverIds = await getEmployeesApprovedBy(req.user.id, "expense");
   const row = buildScopeFilter({ ...req.user, employeeId: own?._id }, { owner: "employeeId", approverIds });

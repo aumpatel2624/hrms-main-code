@@ -2469,7 +2469,7 @@ export const leaveAllocationConfig = {
         )
     ),
     columns: [
-        { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "200px" },
+        { name: "Employee", selector: (row) => row.employeeName || "—", minWidth: "200px" },
         { name: "New Leaves", selector: (row) => row.newLeavesAllocated, minWidth: "110px" },
         { name: "Total (cached)", selector: (row) => row.totalLeavesAllocated, minWidth: "120px" },
         { name: "Status", selector: (row) => row.status, minWidth: "100px" },

@@ -28,6 +28,7 @@ import LeavePolicyAssignment from "../../models/LeavePolicyAssignment.js";
 import LeaveAllocation from "../../models/LeaveAllocation.js";
 import LeaveLedgerEntry from "../../models/LeaveLedgerEntry.js";
 import Employee from "../../models/Employee.js";
+import { attendanceScope } from "../../utils/attendanceScope.js";
 
 const failure = (res, error) => {
   if (error.status) {
@@ -1101,7 +1102,7 @@ export const deleteLeaveAllocation = async (req, res) => {
 
 export const getLeaveAllocationById = async (req, res) => {
   try {
-    const doc = await LeaveAllocation.findById(req.params.leaveAllocationId);
+    const doc = await LeaveAllocation.findOne({ $and: [{ _id: req.params.leaveAllocationId }, await attendanceScope(req, true)] });
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Leave Allocation not found" });
     // Balance computed from the raw (unpopulated) ids — issue #13: passing
     // a populated sub-document into getLeaveBalance's ObjectId constructor
@@ -1124,7 +1125,7 @@ export const listLeaveAllocations = async (req, res) => {
   try {
     const filter = { isActive: true };
     if (req.query.employeeId) filter.employeeId = req.query.employeeId;
-    const docs = await LeaveAllocation.find(filter).select("employeeId leaveTypeId fromDate toDate newLeavesAllocated totalLeavesAllocated status");
+    const docs = await LeaveAllocation.find({ $and: [filter, await attendanceScope(req, true)] }).select("employeeId leaveTypeId fromDate toDate newLeavesAllocated totalLeavesAllocated status");
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listLeaveAllocations", error);
@@ -1135,6 +1136,13 @@ export const listLeaveAllocations = async (req, res) => {
 export const listLeaveAllocationByParams = async (req, res) => {
   try {
     const list = await runListQuery(LeaveAllocation, req.body, {
+      scopeFilter: await attendanceScope(req, true),
+      // The admin column shows employeeName; without this it fell back to the raw id.
+      stages: [
+        { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employee" } },
+        { $addFields: { employeeName: { $arrayElemAt: ["$employee.employeeName", 0] } } },
+        { $project: { employee: 0 } },
+      ],
       searchFields: [],
       filterable: {
         employeeId: "objectId",

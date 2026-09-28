@@ -30,7 +30,9 @@ router.post("/shift-types", authMiddleware(ANY_ROLE), checkPermission("/shift-ty
  *       400: { description: Invalid input }
  *       403: { description: Access denied }
  */
-router.get("/shift-types", authMiddleware(ANY_ROLE), checkPermission("/shift-type", "read"), controller.listShiftTypes);
+// Dropdown source — matrix-free like GET /leave-types: the Shift Request form and rosters
+// need the type names even though the Shift Type setup page is closed to most roles.
+router.get("/shift-types", authMiddleware(ANY_ROLE), controller.listShiftTypes);
 /**
  * @swagger
  * /shift-types/search:

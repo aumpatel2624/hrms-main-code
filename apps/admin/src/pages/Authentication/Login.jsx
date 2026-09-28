@@ -540,7 +540,7 @@ const Login = () => {
 
             <div className="relative w-full max-w-sm">
                 <div className="flex flex-col gap-6 rounded-2xl bg-primary p-6 shadow-lg ring-1 ring-secondary sm:p-8">
-                    <img src="/brand/apidel-logo.png" alt="Apidel Technologies" className="mx-auto h-8 w-auto" />
+                    <img src="/brand/apidel-logo.png" alt="Apidel Technologies" className="mx-auto h-8 w-auto dark:brightness-0 dark:invert" />
                     <div className="flex flex-col gap-2 text-center">
                         <h1 className="text-display-xs font-semibold text-primary">
                             {forgotPasswordMode ? stepCopy.title : "Sign in"}

@@ -4307,3 +4307,39 @@ consumer; single-branch build
 - **Deviates from convention**: no — reuses every existing pattern (`resolveRequestEmployee`'s external
   shape, the `findByIdAndUpdate`-not-`save()` password-reset idiom, `toPayload`'s create-only password
   field) rather than inventing new ones.
+
+### ADR-041 — Org-tier roles seeded from the "Org Tier Page Access" proposal; org-chart employees made opt-in
+
+- **Date**: 2026-09-18
+- **Status**: accepted
+- **Context**: The user shared a proposal (claude.ai artifact `5u5F2TonBJJMpizEHXAUj9`) defining page
+  access for five reporting-line tiers — CEO, Tower, Department Manager, Team Lead, Employee — and asked
+  for a seed script that applies it. They also asked to remove all employees and test with a few users.
+- **Decision**: `npm run seed:tiers` (`seed/org-tiers.js`, data in `seed/org-tiers.data.js`) creates the
+  four new roles and **replaces the whole permission matrix** of all five tier roles (29 menu pages each;
+  Dashboard/Profile/Documentation are not menu rows). It seeds roles and matrices only — it creates, changes
+  or deletes no employees. `npm run seed` no longer loads the 195 org-chart employees unless
+  `SEED_ORG_CHART_EMPLOYEES=true`.
+- **Consequences**: A matrix row holds one `dataScope`, so each row gets the proposal's **widest (view)
+  scope** — "direct" maps to `approver`. Narrower per-action rules (approve = direct reports only, edit =
+  own only) are whatever each controller already enforces; hidden sensitive fields, the directory card, the
+  change-request flow and the new approval steps marked NEW in the proposal are **not** built. While verifying, two defects surfaced and were
+  fixed: (1) password hashes were returned inside every `$lookup` of an employee (49 lookups in 21
+  controllers, introduced by ADR-040) — closed centrally with Express's `json replacer` (`utils/jsonSecrets.js`);
+  (2) `/employees/search` ignored `own` scope, so an Employee-role login saw every employee —
+  `employeeTeamScopeFilter` now handles `own`.
+- **Deviates from convention**: no.
+- **Amendment (2026-09-28, owner decision at review)**: the `--with-test-users` option that hard-deleted
+  every Employee and created a test roster was removed before shipping — `seed:tiers` only seeds roles and
+  their permission matrices. Test logins, if wanted, are created by hand.
+- **Amendment (same day, artifact updated)**: the proposal was revised — Leave Type, Leave Period, Holiday
+  List and Shift Type are now closed to every tier (HR configuration, not employee pages), and nine
+  **functional roles** were added (HR Head, HR Executive, Payroll, Recruiter, Hiring Manager & Interviewer,
+  Finance, L&D Coordinator, System Admin, Auditor). `seed:tiers` now seeds all 14 roles
+  (`seed/org-functional-roles.data.js` is generated from the artifact; its action flags are read off the
+  wording, so review them before real data). The proposal stacks a functional role on a tier, but an
+  Employee holds one role, so each functional role also carries the Employee tier's pages (functional row wins
+  on overlap). Not enforced by any permission row: ASSIGNED company scoping (mapped to `all`),
+  maker–checker, "never on your own record", expiring grants, masked fields, tier-scoped Documentation, the
+  Dashboard holiday widget. `GET /shift-types` (the dropdown) is now matrix-free like `GET /leave-types`, so
+  forms still list the types with the setup page closed.

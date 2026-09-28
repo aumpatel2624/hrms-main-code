@@ -29,6 +29,7 @@ import Employee from "../../models/Employee.js";
 import Designation from "../../models/Designation.js";
 import Company from "../../models/Company.js";
 import { runListQuery } from "../../utils/listQuery.js";
+import { attendanceScope } from "../../utils/attendanceScope.js";
 import {
   validateWeightageSum,
   calculateAutomatedGoalScore,
@@ -721,21 +722,21 @@ export const createAppraisal = async (req, res) => {
 
 export const listAppraisals = async (req, res) => {
   try {
-    const data = await runListQuery(Appraisal, req.query, { filterable: APPRAISAL_FILTERABLE, stages: APPRAISAL_LOOKUP_STAGES });
+    const data = await runListQuery(Appraisal, req.query, { scopeFilter: await attendanceScope(req, true, { directReports: true }), filterable: APPRAISAL_FILTERABLE, stages: APPRAISAL_LOOKUP_STAGES });
     return res.status(200).json({ isOk: true, status: 200, data });
   } catch (error) { return failure(res, error); }
 };
 
 export const searchAppraisals = async (req, res) => {
   try {
-    const data = await runListQuery(Appraisal, req.body, { filterable: APPRAISAL_FILTERABLE, stages: APPRAISAL_LOOKUP_STAGES });
+    const data = await runListQuery(Appraisal, req.body, { scopeFilter: await attendanceScope(req, true, { directReports: true }), filterable: APPRAISAL_FILTERABLE, stages: APPRAISAL_LOOKUP_STAGES });
     return res.status(200).json({ isOk: true, status: 200, data });
   } catch (error) { return failure(res, error); }
 };
 
 export const getAppraisalById = async (req, res) => {
   try {
-    const doc = await Appraisal.findById(req.params.id)
+    const doc = await Appraisal.findOne({ $and: [{ _id: req.params.id }, await attendanceScope(req, true, { directReports: true })] })
       .populate("employeeId", "employeeName employeeCode")
       .populate("companyId", "companyName")
       .populate("appraisalCycleId", "cycleName kraEvaluationMethod calculateFinalScoreBasedOnFormula finalScoreFormula")
@@ -772,7 +773,7 @@ const sanitizeSelfRatings = (rows = []) =>
 
 export const updateAppraisal = async (req, res) => {
   try {
-    const doc = await Appraisal.findById(req.params.id);
+    const doc = await Appraisal.findOne({ $and: [{ _id: req.params.id }, await attendanceScope(req, true, { directReports: true })] });
     if (!doc) throwError(404, "Appraisal not found");
     if (doc.status !== "draft") throwError(400, "Only draft Appraisal documents can be edited");
 
@@ -815,7 +816,7 @@ export const updateAppraisal = async (req, res) => {
 
 export const submitAppraisal = async (req, res) => {
   try {
-    const doc = await Appraisal.findById(req.params.id);
+    const doc = await Appraisal.findOne({ $and: [{ _id: req.params.id }, await attendanceScope(req, true, { directReports: true })] });
     if (!doc) throwError(404, "Appraisal not found");
     if (doc.status !== "draft") throwError(400, "Only draft Appraisal documents can be submitted");
 
@@ -888,7 +889,7 @@ export const submitAppraisal = async (req, res) => {
 
 export const cancelAppraisal = async (req, res) => {
   try {
-    const doc = await Appraisal.findById(req.params.id);
+    const doc = await Appraisal.findOne({ $and: [{ _id: req.params.id }, await attendanceScope(req, true, { directReports: true })] });
     if (!doc) throwError(404, "Appraisal not found");
     if (doc.status !== "submitted") throwError(400, "Only submitted Appraisal documents can be cancelled");
     doc.status = "cancelled";
@@ -899,7 +900,7 @@ export const cancelAppraisal = async (req, res) => {
 
 export const deleteAppraisal = async (req, res) => {
   try {
-    const doc = await Appraisal.findById(req.params.id);
+    const doc = await Appraisal.findOne({ $and: [{ _id: req.params.id }, await attendanceScope(req, true, { directReports: true })] });
     if (!doc) throwError(404, "Appraisal not found");
     if (doc.status === "submitted") throwError(400, "Submitted documents must be cancelled before deletion");
     doc.isDeleted = true;

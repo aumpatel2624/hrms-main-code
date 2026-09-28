@@ -504,7 +504,7 @@ export const submitSalarySlipById = async (salarySlipId, scopeFilter = {}) => {
 
 export const submitSalarySlip = async (req, res) => {
   try {
-    const doc = await submitSalarySlipById(req.params.salarySlipId, await attendanceScope(req, false));
+    const doc = await submitSalarySlipById(req.params.salarySlipId, await attendanceScope(req, true));
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) { return failure(res, error); }
 };
@@ -529,7 +529,7 @@ export const cancelSalarySlipById = async (salarySlipId, scopeFilter = {}) => {
 
 export const cancelSalarySlip = async (req, res) => {
   try {
-    const doc = await cancelSalarySlipById(req.params.salarySlipId, await attendanceScope(req, false));
+    const doc = await cancelSalarySlipById(req.params.salarySlipId, await attendanceScope(req, true));
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) { return failure(res, error); }
 };

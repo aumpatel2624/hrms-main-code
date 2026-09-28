@@ -893,9 +893,8 @@ const SHIFT_PREFERENCE_VALUES = new Set(["Day", "Night", "UK"]);
 // never clobbers real credentials seed/demo-data.js (or an admin) already
 // set.
 const seedEmployees = async (companyId) => {
-  // Off by default while the team tests with a handful of users
-  // (`npm run seed:tiers -- --with-test-users`). Set SEED_ORG_CHART_EMPLOYEES=true
-  // to load the 195 real employees from the org chart again.
+  // Off by default (ADR-041). Set SEED_ORG_CHART_EMPLOYEES=true to load the
+  // 195 real employees from the org chart.
   if (process.env.SEED_ORG_CHART_EMPLOYEES !== "true") {
     console.log("⏭️  Employees: org-chart seeding skipped (set SEED_ORG_CHART_EMPLOYEES=true to enable)");
     return;

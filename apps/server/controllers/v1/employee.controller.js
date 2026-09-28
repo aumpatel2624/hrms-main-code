@@ -191,7 +191,7 @@ export const getEmployeeById = async (req, res) => {
   try {
     const { employeeId } = req.params;
     const scopeFilter = await employeeTeamScopeFilter(req);
-    const employee = await Employee.findOne({ _id: employeeId, ...(scopeFilter ?? {}) }).select("-password");
+    const employee = await Employee.findOne({ $and: [{ _id: employeeId }, scopeFilter ?? {}] }).select("-password");
     if (!employee) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee not found" });
     }

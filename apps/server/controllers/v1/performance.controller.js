@@ -773,7 +773,7 @@ const sanitizeSelfRatings = (rows = []) =>
 
 export const updateAppraisal = async (req, res) => {
   try {
-    const doc = await Appraisal.findById(req.params.id);
+    const doc = await Appraisal.findOne({ $and: [{ _id: req.params.id }, await attendanceScope(req, true, { directReports: true })] });
     if (!doc) throwError(404, "Appraisal not found");
     if (doc.status !== "draft") throwError(400, "Only draft Appraisal documents can be edited");
 
@@ -816,7 +816,7 @@ export const updateAppraisal = async (req, res) => {
 
 export const submitAppraisal = async (req, res) => {
   try {
-    const doc = await Appraisal.findById(req.params.id);
+    const doc = await Appraisal.findOne({ $and: [{ _id: req.params.id }, await attendanceScope(req, true, { directReports: true })] });
     if (!doc) throwError(404, "Appraisal not found");
     if (doc.status !== "draft") throwError(400, "Only draft Appraisal documents can be submitted");
 
@@ -889,7 +889,7 @@ export const submitAppraisal = async (req, res) => {
 
 export const cancelAppraisal = async (req, res) => {
   try {
-    const doc = await Appraisal.findById(req.params.id);
+    const doc = await Appraisal.findOne({ $and: [{ _id: req.params.id }, await attendanceScope(req, true, { directReports: true })] });
     if (!doc) throwError(404, "Appraisal not found");
     if (doc.status !== "submitted") throwError(400, "Only submitted Appraisal documents can be cancelled");
     doc.status = "cancelled";
@@ -900,7 +900,7 @@ export const cancelAppraisal = async (req, res) => {
 
 export const deleteAppraisal = async (req, res) => {
   try {
-    const doc = await Appraisal.findById(req.params.id);
+    const doc = await Appraisal.findOne({ $and: [{ _id: req.params.id }, await attendanceScope(req, true, { directReports: true })] });
     if (!doc) throwError(404, "Appraisal not found");
     if (doc.status === "submitted") throwError(400, "Submitted documents must be cancelled before deletion");
     doc.isDeleted = true;

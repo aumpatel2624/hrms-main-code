@@ -679,7 +679,7 @@ export const getEmployeePerformanceFeedbackById = async (req, res) => {
 
 export const updateEmployeePerformanceFeedback = async (req, res) => {
   try {
-    const doc = await EmployeePerformanceFeedback.findById(req.params.id);
+    const doc = await EmployeePerformanceFeedback.findOne({ $and: [{ _id: req.params.id }, await feedbackScope(req)] });
     if (!doc) throwError(404, "Employee Performance Feedback not found");
     if (doc.status !== "draft") throwError(400, "Only draft feedback can be updated");
 
@@ -700,7 +700,7 @@ export const updateEmployeePerformanceFeedback = async (req, res) => {
 
 export const submitEmployeePerformanceFeedback = async (req, res) => {
   try {
-    const doc = await EmployeePerformanceFeedback.findById(req.params.id);
+    const doc = await EmployeePerformanceFeedback.findOne({ $and: [{ _id: req.params.id }, await feedbackScope(req)] });
     if (!doc) throwError(404, "Employee Performance Feedback not found");
     if (doc.status !== "draft") throwError(400, "Only draft feedback can be submitted");
 
@@ -719,7 +719,7 @@ export const submitEmployeePerformanceFeedback = async (req, res) => {
 
 export const cancelEmployeePerformanceFeedback = async (req, res) => {
   try {
-    const doc = await EmployeePerformanceFeedback.findById(req.params.id);
+    const doc = await EmployeePerformanceFeedback.findOne({ $and: [{ _id: req.params.id }, await feedbackScope(req)] });
     if (!doc) throwError(404, "Employee Performance Feedback not found");
     if (doc.status !== "submitted") throwError(400, "Only submitted feedback can be cancelled");
 
@@ -734,7 +734,7 @@ export const cancelEmployeePerformanceFeedback = async (req, res) => {
 
 export const deleteEmployeePerformanceFeedback = async (req, res) => {
   try {
-    const doc = await EmployeePerformanceFeedback.findById(req.params.id);
+    const doc = await EmployeePerformanceFeedback.findOne({ $and: [{ _id: req.params.id }, await feedbackScope(req)] });
     if (!doc) throwError(404, "Employee Performance Feedback not found");
     if (doc.status === "submitted") throwError(400, "Submitted documents must be cancelled before deletion");
     doc.isDeleted = true;

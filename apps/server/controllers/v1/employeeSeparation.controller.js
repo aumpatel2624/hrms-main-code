@@ -92,7 +92,7 @@ export const createEmployeeSeparation = async (req, res) => {
 export const updateEmployeeSeparation = async (req, res) => {
   try {
     const { separationId } = req.params;
-    const doc = await EmployeeSeparation.findById(separationId);
+    const doc = await EmployeeSeparation.findOne({ $and: [{ _id: separationId }, await attendanceScope(req, true)] });
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee Separation not found" });
     }
@@ -109,7 +109,7 @@ export const updateEmployeeSeparation = async (req, res) => {
 export const deleteEmployeeSeparation = async (req, res) => {
   try {
     const { separationId } = req.params;
-    const doc = await EmployeeSeparation.findById(separationId);
+    const doc = await EmployeeSeparation.findOne({ $and: [{ _id: separationId }, await attendanceScope(req, true)] });
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee Separation not found" });
     }

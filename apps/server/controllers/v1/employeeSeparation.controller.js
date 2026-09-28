@@ -92,7 +92,7 @@ export const createEmployeeSeparation = async (req, res) => {
 export const updateEmployeeSeparation = async (req, res) => {
   try {
     const { separationId } = req.params;
-    const doc = await EmployeeSeparation.findOne({ $and: [{ _id: separationId }, await attendanceScope(req, true)] });
+    const doc = await EmployeeSeparation.findOne({ $and: [{ _id: separationId }, await attendanceScope(req, true, { companyViaEmployee: true })] });
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee Separation not found" });
     }
@@ -109,7 +109,7 @@ export const updateEmployeeSeparation = async (req, res) => {
 export const deleteEmployeeSeparation = async (req, res) => {
   try {
     const { separationId } = req.params;
-    const doc = await EmployeeSeparation.findOne({ $and: [{ _id: separationId }, await attendanceScope(req, true)] });
+    const doc = await EmployeeSeparation.findOne({ $and: [{ _id: separationId }, await attendanceScope(req, true, { companyViaEmployee: true })] });
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee Separation not found" });
     }
@@ -131,7 +131,7 @@ export const deleteEmployeeSeparation = async (req, res) => {
 
 export const getEmployeeSeparationById = async (req, res) => {
   try {
-    const doc = await EmployeeSeparation.findOne({ $and: [{ _id: req.params.separationId }, await attendanceScope(req, true)] })
+    const doc = await EmployeeSeparation.findOne({ $and: [{ _id: req.params.separationId }, await attendanceScope(req, true, { companyViaEmployee: true })] })
       .populate("employeeId", "employeeName employeeCode");
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee Separation not found" });
@@ -156,7 +156,7 @@ export const listEmployeeSeparations = async (req, res) => {
 export const listEmployeeSeparationsByParams = async (req, res) => {
   try {
     const list = await runListQuery(EmployeeSeparation, req.body, {
-      scopeFilter: await attendanceScope(req, true),
+      scopeFilter: await attendanceScope(req, true, { companyViaEmployee: true }),
       searchFields: [],
       filterable: {
         employeeId: "objectId", boardingStatus: "enum", isActive: "boolean", createdAt: "date",

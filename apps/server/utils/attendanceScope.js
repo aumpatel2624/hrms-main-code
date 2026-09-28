@@ -11,11 +11,19 @@ import { getSubordinateEmployeeIds } from "./subordinates.js";
 // no separate Department lookup needed to find it.
 // `directReports`: an APPROVER-scoped caller sees own + their direct reports
 // (org-tier "direct" scope) instead of only what the approver resolvers name.
-export const attendanceScope = async (req, employeeOwned = true, { directReports = false } = {}) => {
+// `companyViaEmployee`: for a collection with no companyId of its own (e.g.
+// EmployeeSeparation), confine by company through its employeeId instead.
+export const attendanceScope = async (req, employeeOwned = true, { directReports = false, companyViaEmployee = false } = {}) => {
   if (req.user.role === ROLES.ADMIN) return {};
   const employee = await resolveRequestEmployee(req);
   const companyId = employee?.companyId;
   const company = companyId ? { companyId } : { companyId: { $in: [] } };
+  if (companyViaEmployee) {
+    const companyEmployees = companyId ? await Employee.find({ companyId }).select("_id").lean() : [];
+    const scope = await attendanceScope(req, employeeOwned, { directReports });
+    const byEmployee = { employeeId: { $in: companyEmployees.map(row => row._id) } };
+    return scope.$and ? { $and: [byEmployee, ...scope.$and.slice(1)] } : byEmployee;
+  }
   if (employeeOwned && req.user.dataScope === "department") {
     const departmentId = employee?.departmentId;
     const employees = departmentId ? await Employee.find({ departmentId, ...company }).select("_id").lean() : [];

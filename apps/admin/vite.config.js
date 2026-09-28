@@ -14,7 +14,8 @@ export default defineConfig({
         },
     },
     server: {
-        port: 3000,
+        port: 3001,
+        strictPort: true,
         // Off when docs-capture.js drives this server headlessly — otherwise
         // every capture run (and every --force rerun) pops a new visible
         // browser tab pointed at the fixture admin.

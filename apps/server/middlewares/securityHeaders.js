@@ -104,7 +104,7 @@ export const getCorsConfig = (allowedOrigins = []) => {
     const defaultOrigins = [
         'http://localhost:3000',
         'http://localhost:3001',
-        'http://localhost:7002',
+        'http://localhost:7001',
     ];
 
     const origins = [...new Set([...defaultOrigins, ...allowedOrigins])];

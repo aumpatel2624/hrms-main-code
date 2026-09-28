@@ -21,7 +21,7 @@ export const corsConfig = {
     allowedOrigins: [
         'http://localhost:3000',
         'http://localhost:3001',
-        'http://localhost:7002',
+        'http://localhost:7001',
         ...(process.env.ALLOWED_ORIGINS?.split(',') || []),
     ].filter(Boolean),
 

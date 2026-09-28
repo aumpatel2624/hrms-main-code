@@ -27,6 +27,9 @@ import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
 // its own `_id`, same convention scope.js's own docstring uses for `User`.
 const employeeTeamScopeFilter = async (req) => {
   if (!req.user || req.user.role === ROLES.ADMIN) return null;
+  // OWN (the org-tier "Employee" role) is the same filter with no team:
+  // buildScopeFilter narrows to `_id === req.user.id`.
+  if (req.user.dataScope === SCOPES.OWN) return buildScopeFilter(req.user, { owner: "_id" });
   if (req.user.dataScope !== SCOPES.TEAM) return null;
   await resolveRequestEmployee(req);
   const teamIds = await getSubordinateEmployeeIds(req.user.employeeId);

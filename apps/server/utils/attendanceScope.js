@@ -9,7 +9,9 @@ import { getSubordinateEmployeeIds } from "./subordinates.js";
 // menu's row scope. Employee is the login identity now (the former separate
 // `User` collection was merged in), so it always carries its own companyId —
 // no separate Department lookup needed to find it.
-export const attendanceScope = async (req, employeeOwned = true) => {
+// `directReports`: an APPROVER-scoped caller sees own + their direct reports
+// (org-tier "direct" scope) instead of only what the approver resolvers name.
+export const attendanceScope = async (req, employeeOwned = true, { directReports = false } = {}) => {
   if (req.user.role === ROLES.ADMIN) return {};
   const employee = await resolveRequestEmployee(req);
   const companyId = employee?.companyId;
@@ -26,8 +28,11 @@ export const attendanceScope = async (req, employeeOwned = true) => {
   const teamIds = employeeOwned && req.user.dataScope === SCOPES.TEAM
     ? await getSubordinateEmployeeIds(employee?._id)
     : undefined;
+  const approverIds = employeeOwned && directReports && req.user.dataScope === SCOPES.APPROVER
+    ? (await Employee.find({ reportsToId: employee?._id }).select("_id").lean()).map((row) => row._id)
+    : undefined;
   const row = employeeOwned ? buildScopeFilter({ ...req.user,
     id: employee?._id, departmentId: employee?.departmentId,
-  }, { owner: "employeeId", department: "departmentId", teamIds }) : null;
+  }, { owner: "employeeId", department: "departmentId", teamIds, approverIds }) : null;
   return row ? { $and: [company, row] } : company;
 };

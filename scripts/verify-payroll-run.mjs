@@ -17,7 +17,7 @@ import LeaveType from "../apps/server/models/LeaveType.js";
 
 dotenv.config({ path: "apps/server/.env", quiet: true });
 if (process.env.RUN_PAYROLL_RUN_VERIFY !== "1") throw new Error("Set RUN_PAYROLL_RUN_VERIFY=1 to run this local fixture walk");
-const base = `http://127.0.0.1:${process.env.PORT || 7002}/api/v1`;
+const base = `http://127.0.0.1:${process.env.PORT || 7001}/api/v1`;
 const prefix = `payroll-run-verify-${Date.now()}`;
 const owned = [];
 const tracked = (Model, doc) => { owned.push([Model, doc._id]); return doc; };

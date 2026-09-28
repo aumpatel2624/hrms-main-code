@@ -10,9 +10,9 @@
 import { chromium } from "playwright";
 
 // Must share a hostname with the API's cookie domain (VITE_API_URL_DEV is
-// http://localhost:7002) — 127.0.0.1 and localhost are different origins for
+// http://localhost:7001) — 127.0.0.1 and localhost are different origins for
 // cookie purposes, so browsing via 127.0.0.1 silently drops the session cookie.
-const ADMIN_BASE = process.env.ADMIN_BASE || "http://localhost:3000";
+const ADMIN_BASE = process.env.ADMIN_BASE || "http://localhost:3001";
 const EMAIL = process.env.SEED_ADMIN_EMAIL || "admin@example.com";
 const PASSWORD = process.env.SEED_ADMIN_PASSWORD || "Admin@123";
 

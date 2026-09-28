@@ -8,7 +8,8 @@
     "dev": "nodemon --watch . --watch ../../packages/shared --ignore log --ignore uploads --ignore out server.js",
     "start": "node server.js",
     "seed": "node seed/index.js",
-    "seed:demo": "node seed/demo-data.js"
+    "seed:demo": "node seed/demo-data.js",
+    "seed:tiers": "node seed/org-tiers.js"
   },
   "keywords": [],
   "author": "",

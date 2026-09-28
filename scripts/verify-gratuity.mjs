@@ -27,7 +27,7 @@ if (process.env.RUN_GRATUITY_VERIFY !== "1") {
   throw new Error("Set RUN_GRATUITY_VERIFY=1 to run this local fixture walk");
 }
 
-const base = `http://127.0.0.1:${process.env.PORT || 7002}/api/v1`;
+const base = `http://127.0.0.1:${process.env.PORT || 7001}/api/v1`;
 const prefix = `gratuity-verify-${Date.now()}`;
 const DAY_MS = 86400000;
 const owned = [];

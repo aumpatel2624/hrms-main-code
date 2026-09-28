@@ -6,6 +6,7 @@ import "./models/softDelete.js";
 import "./models/auditPlugin.js";
 
 import express from "express";
+import { stripCredentials } from "./utils/jsonSecrets.js";
 import mongoose from "mongoose";
 import morgan from "morgan";
 import bodyParser from "body-parser";
@@ -94,6 +95,9 @@ function logError(error) {
 
 const app = express();
 let databasestatus = "In-Progress";
+
+// Never let a credential leave the API, however a controller assembled the row.
+app.set("json replacer", stripCredentials);
 
 // Behind a reverse proxy (nginx in production), the connection Express sees is
 // plain HTTP even when the browser is on HTTPS. Without this, `req.secure` is
@@ -387,7 +391,7 @@ app.use(async (err, req, res, _next) => {
   });
 });
 
-const port = process.env.PORT || 8000;
+const port = process.env.PORT || 7001;
 
 app.listen(port, () => {
   console.log(`✅ Server is running on port ${port}`);

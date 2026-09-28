@@ -307,7 +307,7 @@ export const createSalarySlip = async (req, res) => {
  */
 export const updateSalarySlip = async (req, res) => {
   try {
-    const doc = await SalarySlip.findOne({ $and: [{ _id: req.params.salarySlipId }, await attendanceScope(req, false)] });
+    const doc = await SalarySlip.findOne({ $and: [{ _id: req.params.salarySlipId }, await attendanceScope(req, true)] });
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Salary Slip not found" });
     return res.status(200).json({ isOk: true, status: 200, data: doc, message: "A Salary Slip is a read-only snapshot — use Submit/Cancel instead" });
   } catch (error) { return failure(res, error); }
@@ -315,7 +315,7 @@ export const updateSalarySlip = async (req, res) => {
 
 export const getSalarySlipById = async (req, res) => {
   try {
-    const doc = await SalarySlip.findOne({ $and: [{ _id: req.params.salarySlipId }, await attendanceScope(req, false)] })
+    const doc = await SalarySlip.findOne({ $and: [{ _id: req.params.salarySlipId }, await attendanceScope(req, true)] })
       .populate("employeeId", "employeeName employeeCode")
       .populate("salaryStructureAssignmentId", "salaryStructureId")
       .populate("companyId", "companyName")
@@ -330,7 +330,7 @@ export const getSalarySlipById = async (req, res) => {
 
 export const listSalarySlips = async (req, res) => {
   try {
-    const docs = await SalarySlip.find(await attendanceScope(req, false));
+    const docs = await SalarySlip.find(await attendanceScope(req, true));
     return res.status(200).json({ isOk: true, status: 200, data: await Promise.all(docs.map(withWithholdingDisplay)) });
   } catch (error) { return failure(res, error); }
 };
@@ -338,7 +338,7 @@ export const listSalarySlips = async (req, res) => {
 export const searchSalarySlips = async (req, res) => {
   try {
     const data = await runListQuery(SalarySlip, req.body, {
-      scopeFilter: await attendanceScope(req, false),
+      scopeFilter: await attendanceScope(req, true),
       searchFields: [],
       filterable: {
         employeeId: "objectId", companyId: "objectId", startDate: "date", endDate: "date",
@@ -360,7 +360,7 @@ export const searchSalarySlips = async (req, res) => {
 
 export const deleteSalarySlip = async (req, res) => {
   try {
-    const doc = await SalarySlip.findOne({ $and: [{ _id: req.params.salarySlipId }, await attendanceScope(req, false)] });
+    const doc = await SalarySlip.findOne({ $and: [{ _id: req.params.salarySlipId }, await attendanceScope(req, true)] });
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Salary Slip not found" });
     const references = await getReferencingCounts("SalarySlip", doc._id);
     if (references.totalReferences) return res.status(409).json({ isOk: false, status: 409, message: "Salary Slip is linked to other records", totalReferences: references.totalReferences, references: references.details, formattedMessage: formatReferenceMessage(references.details) });

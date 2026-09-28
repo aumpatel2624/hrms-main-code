@@ -631,9 +631,19 @@ export const createEmployeePerformanceFeedback = async (req, res) => {
   } catch (error) { return failure(res, error); }
 };
 
+// Feedback is visible to the person it is about (per the caller's row scope) and
+// to its named reviewer, whoever they report to.
+const feedbackScope = async (req) => {
+  const scope = await attendanceScope(req, true);
+  if (req.user?.role === "ADMIN") return scope;
+  const me = await resolveRequestEmployee(req);
+  return { $or: [scope, { reviewerId: me?._id }] };
+};
+
 export const listEmployeePerformanceFeedbacks = async (req, res) => {
   try {
     const data = await runListQuery(EmployeePerformanceFeedback, req.query, {
+      scopeFilter: await feedbackScope(req),
       filterable: EMPLOYEE_PERFORMANCE_FEEDBACK_FILTERABLE,
       stages: FEEDBACK_LOOKUP_STAGES,
     });
@@ -644,6 +654,7 @@ export const listEmployeePerformanceFeedbacks = async (req, res) => {
 export const searchEmployeePerformanceFeedbacks = async (req, res) => {
   try {
     const data = await runListQuery(EmployeePerformanceFeedback, req.body, {
+      scopeFilter: await feedbackScope(req),
       searchFields: ["feedback"],
       filterable: EMPLOYEE_PERFORMANCE_FEEDBACK_FILTERABLE,
       stages: FEEDBACK_LOOKUP_STAGES,
@@ -654,7 +665,7 @@ export const searchEmployeePerformanceFeedbacks = async (req, res) => {
 
 export const getEmployeePerformanceFeedbackById = async (req, res) => {
   try {
-    const doc = await EmployeePerformanceFeedback.findById(req.params.id)
+    const doc = await EmployeePerformanceFeedback.findOne({ $and: [{ _id: req.params.id }, await feedbackScope(req)] })
       .populate("employeeId", "employeeName employeeCode")
       .populate("reviewerId", "employeeName employeeCode")
       .populate("companyId", "companyName")

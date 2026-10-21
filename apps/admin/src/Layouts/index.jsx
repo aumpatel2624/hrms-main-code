@@ -82,8 +82,9 @@ const Layout = ({ children }) => {
                         onClick={() => setSidebarOpen((open) => !open)}
                         className="lg:hidden"
                     />
-                    {/* Slot a screen can portal its own header controls into, so
-                        a section with its own toolbar (the documentation) adds to
+                    {/* Slot a screen portals its own header into: every
+                        PageHeader puts its breadcrumb and title here, and a
+                        section with its own toolbar (the documentation) adds to
                         this bar rather than stacking a second one beneath it. */}
                     <div id="app-header-slot" className="flex min-w-0 flex-1 items-center gap-3" />
                     <ButtonUtility
@@ -96,7 +97,7 @@ const Layout = ({ children }) => {
                     <ProfileMenu />
                 </header>
 
-                <main className="flex-1 px-4 py-6 md:px-6">{children}</main>
+                <main className="flex-1 px-4 py-6 md:px-6 [&>:first-child]:mt-0">{children}</main>
                 <Footer />
             </div>
         </div>

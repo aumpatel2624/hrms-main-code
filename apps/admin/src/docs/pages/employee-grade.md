@@ -16,6 +16,11 @@ Add a grade before assigning employees to it.
 
 - **Grade Name** *(required)*
 
+### Payroll defaults
+
+- **Default Salary Structure** *(chosen from a list)* — Not auto-fetched onto a new Salary Structure Assignment (MVP) — informational for now.
+- **Default Base Pay** *(a number)* — Pre-fills the Bulk Salary Structure Assignment tool's eligible-employees list.
+
 ### Status
 
 - **Is Active** *(a yes/no tick box)* — Inactive records stay in the system and keep their history, but stop being offered in dropdowns on other screens.

@@ -314,17 +314,17 @@ const seedEmails = async () => {
 const seedDashboard = async () => {
   const widgets = await DashboardWidget.create([
     {
-      title: "Total users",
+      title: "Total employees",
       description: "Everyone with an account, including inactive ones.",
-      source: "users",
+      source: "employees",
       metric: { type: "count", field: null },
       chartType: "stat",
       dateRange: "all",
       isActive: true,
     },
     {
-      title: "Users by department",
-      source: "users",
+      title: "Employees by department",
+      source: "employees",
       metric: { type: "count", field: null },
       groupBy: "departmentId",
       chartType: "bar",
@@ -333,7 +333,7 @@ const seedDashboard = async () => {
     },
     {
       title: "Team split",
-      source: "users",
+      source: "employees",
       metric: { type: "count", field: null },
       groupBy: "departmentId",
       chartType: "pie",
@@ -341,8 +341,8 @@ const seedDashboard = async () => {
       isActive: true,
     },
     {
-      title: "Accounts created over time",
-      source: "users",
+      title: "Employees added over time",
+      source: "employees",
       metric: { type: "count", field: null },
       dateField: "createdAt",
       chartType: "line",
@@ -372,7 +372,9 @@ const seedShiftAttendance = async () => {
   const companyId = department.companyId;
   const branch = await Branch.create({ branchName: "Central Office", companyId });
   const designation = await Designation.create({ designationName: "Operations Specialist", companyId });
+  const role = await RoleMaster.findOne({ roleName: "Warehouse Staff" });
   const employee = await Employee.create({ employeeCode: "DOC-SHIFT-001", employeeName: "Morgan Taylor", companyId,
+    email: emailFor("Morgan Taylor"), password: await bcrypt.hash("Fixture@123", 10), roleId: role._id,
     departmentId: department._id, branchId: branch._id, designationId: designation._id, dateOfJoining: "2026-01-01" });
   const shift = await ShiftType.create({ shiftTypeName: "Office Day", companyId, startTime: "09:00", endTime: "17:00" });
   const location = await ShiftLocation.create({ locationName: "Central Office", companyId, latitude: 51.5074, longitude: -0.1278, checkinRadius: 150 });

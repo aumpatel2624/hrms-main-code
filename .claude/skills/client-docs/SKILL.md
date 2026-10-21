@@ -83,7 +83,8 @@ they cannot follow.
 
 Run `npm run docs`. Capture is **incremental by fingerprint** — only screens whose inputs moved are
 recaptured. Inputs are the screen's config or page file, the shared UI components it renders
-through, the theme CSS, the fixture seed, and its own capture-list entry.
+through, the layout and page header every screen is drawn in, the theme CSS, the fixture seed, and
+its own capture-list entry — `sourcesFor` in `scripts/docs-fingerprint.js` is the exact list.
 
 - A new screen needs an entry in the capture list, or it is silently never photographed.
 - Every config-driven screen is photographed in **four views** — the list, the add form, a record,

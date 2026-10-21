@@ -3,8 +3,8 @@
  *
  * Decides which screens need recapturing. A screen is photographed again only
  * when something that could change how it looks has changed — its own config or
- * page file, the shared components it renders through, the theme, the fixture
- * data, or its own manifest entry.
+ * page file, the shared components it renders through, the layout around it,
+ * the theme, the fixture data, or its own manifest entry.
  *
  * The hashing is deliberately conservative in one direction only: it will
  * happily recapture a screen that did not need it, and must never skip one that
@@ -21,6 +21,7 @@ import path from "path";
 import {
     CONFIG_SCREENS,
     FIXTURE_SOURCES,
+    LAYOUT_SOURCES,
     SHARED_CRUD_SOURCES,
     THEME_SOURCES,
 } from "../docs-src/manifest.js";
@@ -89,14 +90,15 @@ export const hashFile = (repoRoot, relativePath) => {
  *
  * Config-driven screens all render through the same CRUD components, so those
  * are inputs to every one of them. Custom pages render themselves, so they take
- * only their own file. Both take the theme and the fixture data, because both
- * change every pixel on every screen.
+ * only their own file. Both take the layout, the theme and the fixture data,
+ * because those change every pixel on every screen.
  */
 export const sourcesFor = (screen) => {
     const isConfigDriven = CONFIG_SCREENS.includes(screen);
     return [
         screen.source,
         ...(isConfigDriven ? SHARED_CRUD_SOURCES : []),
+        ...LAYOUT_SOURCES,
         ...THEME_SOURCES,
         ...FIXTURE_SOURCES,
     ];

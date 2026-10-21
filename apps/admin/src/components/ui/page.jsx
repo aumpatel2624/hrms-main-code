@@ -1,3 +1,5 @@
+import { useLayoutEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { ChevronRight, Edit01, Eye, HomeLine, Plus, SearchLg, Trash01 } from "@untitledui/icons";
 import { Button } from "@/components/base/buttons/button";
@@ -8,36 +10,36 @@ import { cx } from "@/utils/cx";
 
 /** Home > Section > Current. Untitled UI gates its own Breadcrumbs behind PRO. */
 const Breadcrumbs = ({ pageTitle, pageHref, title }) => (
-    <nav aria-label="Breadcrumb">
-        <ol className="flex items-center gap-1.5 text-sm">
-            <li className="flex items-center">
+    <nav aria-label="Breadcrumb" className="min-w-0">
+        <ol className="flex min-w-0 items-center gap-1 text-xs">
+            <li className="flex shrink-0 items-center">
                 <Link
                     to="/dashboard"
                     aria-label="Dashboard"
                     className="rounded-sm p-0.5 text-fg-quaternary outline-focus-ring transition hover:text-fg-secondary focus-visible:outline-2 focus-visible:outline-offset-2"
                 >
-                    <HomeLine className="size-4" />
+                    <HomeLine className="size-3.5" />
                 </Link>
             </li>
             {pageTitle && (
                 <>
-                    <ChevronRight className="size-4 shrink-0 text-fg-quaternary" />
-                    <li>
+                    <ChevronRight className="size-3.5 shrink-0 text-fg-quaternary" />
+                    <li className="min-w-0">
                         {pageHref ? (
                             <Link
                                 to={pageHref}
-                                className="rounded-sm font-medium text-tertiary outline-focus-ring transition hover:text-secondary focus-visible:outline-2 focus-visible:outline-offset-2"
+                                className="block truncate rounded-sm font-medium text-tertiary outline-focus-ring transition hover:text-secondary focus-visible:outline-2 focus-visible:outline-offset-2"
                             >
                                 {pageTitle}
                             </Link>
                         ) : (
-                            <span className="font-medium text-tertiary">{pageTitle}</span>
+                            <span className="block truncate font-medium text-tertiary">{pageTitle}</span>
                         )}
                     </li>
                 </>
             )}
-            <ChevronRight className="size-4 shrink-0 text-fg-quaternary" />
-            <li aria-current="page" className="font-semibold text-brand-secondary">
+            <ChevronRight className="size-3.5 shrink-0 text-fg-quaternary" />
+            <li aria-current="page" className="min-w-0 truncate font-semibold text-brand-secondary">
                 {title}
             </li>
         </ol>
@@ -45,16 +47,18 @@ const Breadcrumbs = ({ pageTitle, pageHref, title }) => (
 );
 
 /**
- * The page header and the old list toolbar merged into one block.
+ * The page header: breadcrumb and title in the layout's top bar, list controls
+ * at the top of the page.
  *
- * They used to be separate, which meant the screen name appeared three times
- * ("City" as the page title, again in the breadcrumb, then again as the card
- * header). Now the breadcrumb, the title and the list controls share one row
- * and the card below holds only the table.
+ * The breadcrumb and title portal into the layout's `app-header-slot`, so a
+ * screen no longer spends a full block of height restating its own name. The
+ * slot is looked up in a layout effect - it is the layout's DOM, not ours, and
+ * does not exist yet on the first render - which still lands before paint.
  *
  * The filter/search/add props are optional - pass them and the control cluster
- * renders; omit them and you get a plain header. `handleFilter` still receives
- * a DOM-shaped event so page handlers didn't need to change.
+ * renders beneath the top bar; omit them and the page gets no header block at
+ * all. `handleFilter` still receives a DOM-shaped event so page handlers didn't
+ * need to change.
  */
 export const PageHeader = ({
     title,
@@ -72,46 +76,56 @@ export const PageHeader = ({
     // escape hatch for page-specific buttons
     actions,
 }) => {
+    const [headerSlot, setHeaderSlot] = useState(null);
+    useLayoutEffect(() => {
+        setHeaderSlot(document.getElementById("app-header-slot"));
+    }, []);
+
     const hasControls = Boolean(setQuery || handleFilter || showAddButton || actions);
 
     return (
-        <div className="flex flex-col gap-4 border-b border-secondary pb-5">
-            <Breadcrumbs pageTitle={pageTitle} pageHref={pageHref} title={title} />
-
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex min-w-0 flex-col gap-0.5">
-                    <h1 className="truncate text-display-xs font-semibold text-primary">{title}</h1>
-                    {description && <p className="text-sm text-tertiary">{description}</p>}
-                </div>
-
-                {hasControls && (
-                    <div className="flex flex-wrap items-center gap-3 lg:flex-nowrap lg:justify-end">
-                        {handleFilter && (
-                            <Checkbox
-                                label="Active"
-                                isSelected={Boolean(filter)}
-                                onChange={(checked) => handleFilter({ target: { checked, type: "checkbox" } })}
-                            />
-                        )}
-                        {setQuery && (
-                            <Input
-                                aria-label="Search"
-                                icon={SearchLg}
-                                placeholder={searchPlaceholder}
-                                onChange={(v) => setQuery(v)}
-                                wrapperClassName="w-full sm:w-64"
-                            />
-                        )}
-                        {actions}
-                        {showAddButton && (
-                            <Button iconLeading={Plus} onClick={() => tog_list?.()}>
-                                {addLabel}
-                            </Button>
-                        )}
-                    </div>
+        <>
+            {headerSlot &&
+                createPortal(
+                    <div className="flex min-w-0 flex-col justify-center">
+                        <Breadcrumbs pageTitle={pageTitle} pageHref={pageHref} title={title} />
+                        <h1 className="truncate text-lg font-semibold text-primary">{title}</h1>
+                    </div>,
+                    headerSlot,
                 )}
-            </div>
-        </div>
+            {(description || hasControls) && (
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    {description && <p className="min-w-0 text-sm text-tertiary">{description}</p>}
+
+                    {hasControls && (
+                        <div className="flex flex-wrap items-center gap-3 lg:ml-auto lg:flex-nowrap lg:justify-end">
+                            {handleFilter && (
+                                <Checkbox
+                                    label="Active"
+                                    isSelected={Boolean(filter)}
+                                    onChange={(checked) => handleFilter({ target: { checked, type: "checkbox" } })}
+                                />
+                            )}
+                            {setQuery && (
+                                <Input
+                                    aria-label="Search"
+                                    icon={SearchLg}
+                                    placeholder={searchPlaceholder}
+                                    onChange={(v) => setQuery(v)}
+                                    wrapperClassName="w-full sm:w-64"
+                                />
+                            )}
+                            {actions}
+                            {showAddButton && (
+                                <Button iconLeading={Plus} onClick={() => tog_list?.()}>
+                                    {addLabel}
+                                </Button>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+        </>
     );
 };
 

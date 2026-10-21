@@ -16,6 +16,7 @@ Add a designation for each job title the company uses.
 
 - **Company** *(required, chosen from a list)*
 - **Designation Name** *(required)*
+- **Default Appraisal Template** *(chosen from a list)*
 
 ### Status
 

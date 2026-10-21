@@ -146,10 +146,13 @@ const signIn = async (page) => {
  *
  * The app toggles a `dark-mode` class on the document element from React state.
  * Setting the class directly is equivalent for rendering and avoids depending
- * on the position of a toggle button that may move.
+ * on the position of a toggle button that may move. The stored theme is set too:
+ * the layout mounts after the sign-in check and re-applies whatever is stored,
+ * which would otherwise undo the class before the shot.
  */
 const setTheme = async (page, theme) => {
     await page.evaluate((wantDark) => {
+        localStorage.setItem("theme", wantDark ? "dark" : "light");
         document.documentElement.classList.toggle("dark-mode", wantDark);
     }, theme === "dark");
     // One frame for the transition to settle before the shutter.

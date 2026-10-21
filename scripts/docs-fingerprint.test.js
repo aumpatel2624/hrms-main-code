@@ -48,6 +48,8 @@ const makeFakeRepo = () => {
     write("apps/admin/src/components/crud/crud-form.jsx", "form v1");
     write("apps/admin/src/components/crud/crud-view.jsx", "view v1");
     write("apps/admin/src/components/crud/index.jsx", "index v1");
+    write("apps/admin/src/Layouts/index.jsx", "layout v1");
+    write("apps/admin/src/components/ui/page.jsx", "page v1");
     write("apps/admin/src/styles/globals.css", "theme v1");
     write("apps/admin/src/styles/theme.css", "theme v1");
     write("apps/admin/src/styles/typography.css", "type v1");
@@ -130,6 +132,27 @@ CONFIG_SCREENS.push(screen);
     const after = planCapture(root, [screen]);
     assert.equal(after.capture.length, 1, "shared component change recaptures");
     assert.equal(after.capture[0].reason, "changed");
+}
+
+{
+    // The layout and the page header draw every screen, custom pages included,
+    // so changing either must recapture both kinds of screen.
+    const custom = CUSTOM_SCREENS[0];
+    for (const file of ["apps/admin/src/Layouts/index.jsx", "apps/admin/src/components/ui/page.jsx"]) {
+        const { root, write } = makeFakeRepo();
+        const before = planCapture(root, [screen, custom]);
+        storeFingerprints(root, before.fingerprints);
+        placeImages(root, screen);
+        placeImages(root, custom);
+
+        write(file, "v2");
+        const after = planCapture(root, [screen, custom]);
+        assert.deepEqual(
+            after.capture.map((entry) => [entry.screen.key, entry.reason]),
+            [[screen.key, "changed"], [custom.key, "changed"]],
+            `${file} change recaptures config and custom screens`,
+        );
+    }
 }
 
 {

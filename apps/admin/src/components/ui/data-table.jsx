@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown } from "@untitledui/icons";
 import { Table } from "@/components/application/table/table";
 import { PaginationCardMinimal } from "@/components/application/pagination/pagination";
 import { LoadingIndicator } from "@/components/application/loading-indicator/loading-indicator";
@@ -33,6 +34,16 @@ const DataTable = ({
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(paginationPerPage);
     const [sortDescriptor, setSortDescriptor] = useState(undefined);
+    // Group labels the user has collapsed; groups start expanded.
+    const [collapsed, setCollapsed] = useState(() => new Set());
+
+    const toggleGroup = (label) =>
+        setCollapsed((prev) => {
+            const next = new Set(prev);
+            if (next.has(label)) next.delete(label);
+            else next.add(label);
+            return next;
+        });
 
     // React Aria needs a stable, unique, defined id per column. `sortField` is
     // the server's sort key and is genuinely absent on some columns, so fall
@@ -134,16 +145,29 @@ const DataTable = ({
                     )}
                 >
                     {data.flatMap((row, index) => {
-                        // Optional group heading row whenever groupLabel(row) changes.
+                        // Optional collapsible group heading row whenever groupLabel(row) changes.
                         const label = groupLabel?.(row);
+                        const isOpen = !groupLabel || !collapsed.has(label);
                         const heading =
                             groupLabel && (index === 0 || groupLabel(data[index - 1]) !== label) ? (
                                 <Table.Row key={`group:${index}`} id={`group:${index}`} className="bg-secondary">
                                     <Table.Cell colSpan={cols.length} className="py-2 text-xs font-semibold text-secondary">
-                                        {label}
+                                        <button
+                                            type="button"
+                                            aria-expanded={isOpen}
+                                            onClick={() => toggleGroup(label)}
+                                            className="flex w-full cursor-pointer items-center gap-1.5 text-left outline-focus-ring focus-visible:outline-2"
+                                        >
+                                            <ChevronDown
+                                                aria-hidden="true"
+                                                className={`size-4 shrink-0 text-fg-quaternary transition-transform ${isOpen ? "" : "-rotate-90"}`}
+                                            />
+                                            {label}
+                                        </button>
                                     </Table.Cell>
                                 </Table.Row>
                             ) : null;
+                        if (!isOpen) return [heading].filter(Boolean);
                         return [heading, (
                         <Table.Row size="sm" key={row?._id ?? index} id={String(row?._id ?? index)}>
                             {cols.map((col, colIndex) => (

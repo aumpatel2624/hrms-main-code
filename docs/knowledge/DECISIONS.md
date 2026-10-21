@@ -894,6 +894,11 @@ Copy this block. Number sequentially.
     alongside `exit` and `SIGINT`.
 - **Deviates from convention**: no — it removes one. ADR-012's deviation from
   `40-frontend.md` is retired by this record.
+- **Amendment (2026-10-21, page title moved into the top bar)**: "The slot stays empty on every other
+  screen" no longer holds. `PageHeader` now portals every screen's breadcrumb and title into
+  `#app-header-slot`, so the slot is occupied on every screen that renders one. Documentation renders
+  no `PageHeader` and still owns the slot alone. A screen that adds its own header controls shares the
+  bar with its title, and has to fit beside it rather than assume an empty row.
 
 ### ADR-015 — Dynamic email triggers: a code registry over EmailFor, not a new collection
 

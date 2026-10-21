@@ -108,7 +108,7 @@ Deleting hides the record rather than destroying it, so history and past reports
 > Create is the action — saving computes the eligible days and debits the Leave Ledger immediately.
 
 > [!WARNING] Worth knowing
-> Per Day Encashment Amount is entered by hand — this project has no Payroll module yet to look it up from.
+> Per Day Encashment Amount is optional (ADR-026): leave it blank to use the employee's current Salary Structure Assignment rate, or type one in to override it.
 
 > [!WARNING] Worth knowing
 > Mark as Paid records the payment manually (amount, date, reference) — there is no GL posting or Payment Entry.

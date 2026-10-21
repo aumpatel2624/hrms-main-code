@@ -1,6 +1,6 @@
 # Employees
 
-An employee is the hub every other HR record links to — leave, payroll, performance and everything else eventually refers back to this record. Real employee codes and reporting lines carry over from the org chart, so most employees are already here.
+An employee is the hub every other HR record links to — leave, payroll, performance and everything else eventually refers back to this record. It is also their login: every employee has exactly one, set right here rather than on a separate screen.
 
 ![Employees](../screenshots/employee-light.png "light")
 
@@ -19,6 +19,22 @@ Add an employee when someone new joins, before creating any other record about t
 - **Gender** *(chosen from a list)*
 - **Date of Birth** *(a date)*
 
+### Login account
+
+Every employee has exactly one login — set it here, not on a separate screen.
+
+- **Email** *(required, an email address)*
+- **Role** *(required, chosen from a list)*
+- **Mobile Number**
+- **Password** *(required, a password)*
+
+### Location
+
+- **Country** *(chosen from a list)*
+- **State** *(chosen from a list)*
+- **City** *(chosen from a list)*
+- **Address** *(free text)*
+
 ### Organization
 
 - **Company** *(required, chosen from a list)*
@@ -36,6 +52,13 @@ Add an employee when someone new joins, before creating any other record about t
 - **Employee Grade** *(chosen from a list)*
 - **Work Mode** *(chosen from a list)*
 - **Shift** *(chosen from a list)*
+
+### Regional identity and banking
+
+- **IFSC Code**
+- **PAN Number**
+- **MICR Code**
+- **Provident Fund Account**
 
 ### Other
 
@@ -57,6 +80,8 @@ Use the search box for a quick look-up, or open the filter panel to narrow the l
 - Designation
 - Branch
 - Status
+- Email
+- Role
 - Date of Joining
 - Active
 - Created
@@ -121,16 +146,19 @@ Deleting hides the record rather than destroying it, so history and past reports
 ## Things worth knowing
 
 > [!WARNING] Worth knowing
-> Company, Department, Designation, Branch and Date of Joining are all required — an employee cannot be saved without them.
+> Company, Department, Designation, Branch, Date of Joining, Email, Password and Role are all required — an employee cannot be saved without them.
+
+> [!WARNING] Worth knowing
+> Email is what they sign in with, and must be unique.
+
+> [!WARNING] Worth knowing
+> The password field only appears when adding someone. To change an existing employee's password, use the reset option on their record instead.
 
 > [!WARNING] Worth knowing
 > You cannot delete an employee while other records still reference them.
 
 > [!WARNING] Worth knowing
 > Employment Type, Grade and the three approver fields are optional and are not pre-filled — set them here if you use them.
-
-> [!WARNING] Worth knowing
-> This screen does not create a login for the employee. Self-service login is separate, future work — most employees here have no login yet.
 
 ## What your role controls
 

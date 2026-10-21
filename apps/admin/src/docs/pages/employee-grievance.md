@@ -26,7 +26,7 @@ Log a grievance as soon as it's raised, then update its Status as it's investiga
 ### Investigation & Resolution
 
 - **Cause of Grievance** *(free text)*
-- **Resolved By (User id)**
+- **Resolved By** *(chosen from a list)*
 - **Resolution Date** *(a date)*
 - **Resolution Detail** *(free text)*
 - **Employee Responsible** *(chosen from a list)*

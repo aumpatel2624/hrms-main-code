@@ -61,6 +61,20 @@ export const SHARED_CRUD_SOURCES = [
     "apps/admin/src/components/crud/index.jsx",
 ];
 
+/**
+ * The frame every screen is drawn inside — the layout's sidebar, top bar and
+ * footer, and the shared page header and card that put the title and controls
+ * on every screen, config-driven or custom. A change to any of these moves every
+ * screenshot.
+ */
+export const LAYOUT_SOURCES = [
+    "apps/admin/src/Layouts/index.jsx",
+    "apps/admin/src/Layouts/SidebarNav.jsx",
+    "apps/admin/src/Layouts/ProfileMenu.jsx",
+    "apps/admin/src/Layouts/Footer.jsx",
+    "apps/admin/src/components/ui/page.jsx",
+];
+
 /** Theme tokens. A change here repaints literally everything. */
 export const THEME_SOURCES = [
     "apps/admin/src/styles/globals.css",

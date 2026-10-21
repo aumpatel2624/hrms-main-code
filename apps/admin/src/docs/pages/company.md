@@ -16,6 +16,8 @@ Add a company before adding anything else under it. Mark one inactive rather tha
 
 - **Company Name** *(required)*
 - **Company Code**
+- **Basic Salary Component** *(chosen from a list)*
+- **HRA Salary Component** *(chosen from a list)*
 
 ### Status
 

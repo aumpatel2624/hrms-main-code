@@ -53,8 +53,7 @@ const Breadcrumbs = ({ pageTitle, pageHref, title }) => (
  * The breadcrumb and title portal into the layout's `app-header-slot`, so a
  * screen no longer spends a full block of height restating its own name. The
  * slot is looked up in a layout effect - it is the layout's DOM, not ours, and
- * does not exist yet on the first render - which still lands before paint. A
- * screen rendered outside the layout has no slot and keeps the title inline.
+ * does not exist yet on the first render - which still lands before paint.
  *
  * The filter/search/add props are optional - pass them and the control cluster
  * renders beneath the top bar; omit them and the page gets no header block at
@@ -84,22 +83,19 @@ export const PageHeader = ({
 
     const hasControls = Boolean(setQuery || handleFilter || showAddButton || actions);
 
-    const heading = (
-        <div className="flex min-w-0 flex-col justify-center">
-            <Breadcrumbs pageTitle={pageTitle} pageHref={pageHref} title={title} />
-            <h1 className="truncate text-lg font-semibold text-primary">{title}</h1>
-        </div>
-    );
-
     return (
         <>
-            {headerSlot && createPortal(heading, headerSlot)}
-            {(!headerSlot || description || hasControls) && (
+            {headerSlot &&
+                createPortal(
+                    <div className="flex min-w-0 flex-col justify-center">
+                        <Breadcrumbs pageTitle={pageTitle} pageHref={pageHref} title={title} />
+                        <h1 className="truncate text-lg font-semibold text-primary">{title}</h1>
+                    </div>,
+                    headerSlot,
+                )}
+            {(description || hasControls) && (
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="flex min-w-0 flex-col gap-0.5">
-                        {!headerSlot && heading}
-                        {description && <p className="text-sm text-tertiary">{description}</p>}
-                    </div>
+                    {description && <p className="min-w-0 text-sm text-tertiary">{description}</p>}
 
                     {hasControls && (
                         <div className="flex flex-wrap items-center gap-3 lg:ml-auto lg:flex-nowrap lg:justify-end">

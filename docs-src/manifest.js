@@ -124,7 +124,7 @@ export const CONFIG_SCREENS = [
     "intro": "Give an employee one shift for a date range.",
     "when": "Use this screen when setting up shifts or recording attendance.",
     "gotchas": [
-        "Dates and times use UTC.",
+        "Start and end dates are India (Asia/Kolkata) calendar dates, the same clock the shift's times are read on.",
         "Active assignments cannot overlap. A location radius of zero disables location enforcement."
     ],
     "roles": "HR User and HR Manager manage records within their company. Employees can read shift types and their own assignments, and create/read their own checkins."

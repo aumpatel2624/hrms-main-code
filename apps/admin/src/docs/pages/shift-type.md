@@ -15,8 +15,8 @@ Use this screen when setting up shifts or recording attendance.
 ### Details
 
 - **Shift type name** *(required)*
-- **Start time** *(required)* — 24-hour time, HH:mm (UTC).
-- **End time** *(required)* — 24-hour time, HH:mm (UTC).
+- **Start time** *(required)* — 24-hour time, HH:mm, India time (Asia/Kolkata).
+- **End time** *(required)* — 24-hour time, HH:mm, India time (Asia/Kolkata).
 - **Holiday list** *(chosen from a list)*
 - **Determine check in and check out** *(chosen from a list)*
 - **Working hours calculation basis** *(chosen from a list)*

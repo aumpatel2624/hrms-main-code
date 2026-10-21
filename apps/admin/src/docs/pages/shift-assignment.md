@@ -98,7 +98,7 @@ Deleting hides the record rather than destroying it, so history and past reports
 ## Things worth knowing
 
 > [!WARNING] Worth knowing
-> Dates and times use UTC.
+> Start and end dates are India (Asia/Kolkata) calendar dates, the same clock the shift's times are read on.
 
 > [!WARNING] Worth knowing
 > Active assignments cannot overlap. A location radius of zero disables location enforcement.

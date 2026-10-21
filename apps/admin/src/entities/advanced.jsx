@@ -2877,8 +2877,8 @@ export const shiftTypeConfig = {
     sections: [{ id: "details", title: "Details" }],
     fields: [
         { name: "shiftTypeName", label: "Shift type name", section: "details", type: "text", required: true, error: "Shift type name is required" },
-        { name: "startTime", label: "Start time", section: "details", type: "text", required: true, error: "Start time is required", hint: "24-hour time, HH:mm (UTC)." },
-        { name: "endTime", label: "End time", section: "details", type: "text", required: true, error: "End time is required", hint: "24-hour time, HH:mm (UTC)." },
+        { name: "startTime", label: "Start time", section: "details", type: "text", required: true, error: "Start time is required", hint: "24-hour time, HH:mm, India time (Asia/Kolkata)." },
+        { name: "endTime", label: "End time", section: "details", type: "text", required: true, error: "End time is required", hint: "24-hour time, HH:mm, India time (Asia/Kolkata)." },
         { name: "holidayListId", label: "Holiday list", section: "details", type: "select", optionsFrom: "holidayListId" },
         { name: "determineCheckInAndCheckOut", label: "Determine check in and check out", section: "details", type: "select", options: ["alternating-entries", "strict-in-out"], default: "alternating-entries" },
         { name: "workingHoursCalculationBasis", label: "Working hours calculation basis", section: "details", type: "select", options: ["first-and-last", "every-valid-pair"], default: "first-and-last" },

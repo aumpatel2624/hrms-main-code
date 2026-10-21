@@ -2,7 +2,7 @@ import express from "express";
 import { ANY_ROLE } from "@demo-panel/shared/roles";
 import { authMiddleware } from "../../middlewares/authMiddleware.js";
 import { checkPermission } from "../../middlewares/checkPermission.js";
-import { allowOnlyFields } from "../../middlewares/inputValidator.js";
+import { allowOnlyFields, checkinRegisterValidation } from "../../middlewares/inputValidator.js";
 import * as controller from "../../controllers/v1/shiftAttendance.controller.js";
 const router = express.Router();
 /**
@@ -436,6 +436,43 @@ router.get("/employee-checkins", authMiddleware(ANY_ROLE), checkPermission("/emp
  *       403: { description: Access denied }
  */
 router.post("/employee-checkins/search", authMiddleware(ANY_ROLE), checkPermission("/employee-checkin", "read"), controller.searchEmployeeCheckins);
+/**
+ * @swagger
+ * /employee-checkins/register:
+ *   post:
+ *     summary: Daily attendance register for one employee and one month (ADR-042)
+ *     tags: [Shift & Attendance]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [month]
+ *             properties:
+ *               employeeId: { type: string, description: "Defaults to the caller's own employee" }
+ *               month: { type: string, example: "2026-09" }
+ *               timeZone: { type: string, example: "Asia/Kolkata", description: "IANA zone the register is read in; defaults to UTC" }
+ *     responses:
+ *       200: { description: "Per-day rows, status counts and that day's punches" }
+ *       400: { description: Invalid input }
+ *       403: { description: Access denied }
+ *       404: { description: Employee not found or outside the caller's scope }
+ */
+router.post("/employee-checkins/register", authMiddleware(ANY_ROLE), checkPermission("/employee-checkin", "read"), allowOnlyFields(controller.CHECKIN_REGISTER_FIELDS), checkinRegisterValidation, controller.getEmployeeCheckinRegister);
+/**
+ * @swagger
+ * /employee-checkins/register/employees:
+ *   get:
+ *     summary: Employees whose register the caller may read, and the caller's own employee id
+ *     tags: [Shift & Attendance]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: "{ selfId, employees: [{ _id, employeeName, employeeCode }] }" }
+ *       403: { description: Access denied }
+ */
+router.get("/employee-checkins/register/employees", authMiddleware(ANY_ROLE), checkPermission("/employee-checkin", "read"), controller.listCheckinRegisterEmployees);
 /**
  * @swagger
  * /employee-checkins/{employeeCheckinId}:

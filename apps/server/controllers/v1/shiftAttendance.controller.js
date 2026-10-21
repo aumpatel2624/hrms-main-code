@@ -1,5 +1,6 @@
 import { runListQuery } from "../../utils/listQuery.js";
-import { attendanceScope } from "../../utils/attendanceScope.js";
+import { attendanceScope, attendanceEmployeeScope } from "../../utils/attendanceScope.js";
+import { buildAttendanceRegister } from "../../utils/attendanceRegister.js";
 import { saveShiftRecord, withShiftWriteLock } from "../../utils/shiftAssignmentWrite.js";
 import { generateShiftRanges } from "../../utils/shiftSchedule.js";
 import { DAY_MS } from "../../utils/shiftOccurrence.js";
@@ -13,6 +14,11 @@ import ShiftAssignment from "../../models/ShiftAssignment.js";
 import ShiftSchedule from "../../models/ShiftSchedule.js";
 import ShiftScheduleAssignment from "../../models/ShiftScheduleAssignment.js";
 import EmployeeCheckin from "../../models/EmployeeCheckin.js";
+import Employee from "../../models/Employee.js";
+import Attendance from "../../models/Attendance.js";
+import HolidayList from "../../models/HolidayList.js";
+import HolidayListAssignment from "../../models/HolidayListAssignment.js";
+import LeaveApplication from "../../models/LeaveApplication.js";
 
 const failure = (res, error) => {
   if (error.status === 400 || error.name === "ValidationError" || error.name === "CastError" || error.name === "RangeError" || error.code === 11000) {
@@ -373,6 +379,64 @@ export const deleteEmployeeCheckin = async (req, res) => {
     });
     await EmployeeCheckin.findByIdAndUpdate(doc._id, { isDeleted: true });
     return res.status(200).json({ isOk: true, status: 200, message: "Employee Checkin deleted successfully" });
+  } catch (error) { return failure(res, error); }
+};
+
+/**
+ * ADR-042: the Employee Checkin register — one employee, one month, one row
+ * per day, computed per request from Attendance, Shift Assignment, Holiday
+ * List, approved Leave Application and Employee Checkin. Read-only and not a
+ * list of one collection, so there is no runListQuery here: the caller picks
+ * an employee, and that employee must sit inside the same row scope the
+ * check-in list applies (attendanceEmployeeScope).
+ */
+export const CHECKIN_REGISTER_FIELDS = ["employeeId", "month", "timeZone"];
+export const getEmployeeCheckinRegister = async (req, res) => {
+  try {
+    const { employeeId, month, timeZone = "UTC" } = req.body;
+    const targetId = employeeId || (await resolveRequestEmployee(req))?._id;
+    if (!targetId) return res.status(400).json({ isOk: false, status: 400, message: "Select an employee" });
+    const employee = await Employee.findOne({ $and: [{ _id: targetId }, await attendanceEmployeeScope(req)] })
+      .select("employeeName employeeCode companyId").lean();
+    if (!employee) return res.status(404).json({ isOk: false, status: 404, message: "Employee not found" });
+
+    // Two days either side of the month: a punch belongs to its shift's day,
+    // which can be the day before its own date (a night shift).
+    const [year, monthNumber] = month.split("-").map(Number);
+    const from = new Date(Date.UTC(year, monthNumber - 1, 1) - 2 * DAY_MS);
+    const to = new Date(Date.UTC(year, monthNumber, 1) + 2 * DAY_MS);
+    const [attendance, assignments, holidayAssignments, leaves, checkins] = await Promise.all([
+      Attendance.find({ employeeId: employee._id, isActive: true, attendanceDate: { $gte: from, $lt: to } })
+        .populate("leaveTypeId", "leaveTypeName isLwp").lean(),
+      ShiftAssignment.find({ employeeId: employee._id, status: "active", isActive: true, startDate: { $lt: to },
+        $or: [{ endDate: null }, { endDate: { $gte: from } }] }).populate("shiftTypeId").lean(),
+      HolidayListAssignment.find({ isActive: true, fromDate: { $lt: to }, $or: [
+        { applicableFor: "Employee", employeeId: employee._id },
+        { applicableFor: "Company", companyId: employee.companyId },
+      ] }).lean(),
+      LeaveApplication.find({ employeeId: employee._id, status: "approved", isActive: true, fromDate: { $lt: to }, toDate: { $gte: from } })
+        .populate("leaveTypeId", "leaveTypeName isLwp").lean(),
+      EmployeeCheckin.find({ employeeId: employee._id, isActive: true, time: { $gte: from, $lt: to } }).sort({ time: 1 }).lean(),
+    ]);
+    const holidayListIds = [...holidayAssignments.map(row => row.holidayListId), ...assignments.map(row => row.shiftTypeId?.holidayListId)].filter(Boolean);
+    const holidayLists = await HolidayList.find({ _id: { $in: holidayListIds }, isActive: true }).select("holidays").lean();
+
+    const data = buildAttendanceRegister({ month, timeZone, attendance, assignments, holidayLists, leaves, checkins,
+      holidayAssignments: {
+        employee: holidayAssignments.filter(row => row.applicableFor === "Employee"),
+        company: holidayAssignments.filter(row => row.applicableFor === "Company"),
+      },
+    });
+    return res.status(200).json({ isOk: true, status: 200, data: { employee, month, timeZone, ...data } });
+  } catch (error) { return failure(res, error); }
+};
+/** The register's employee picker: everyone inside the caller's check-in scope, and which one is the caller. */
+export const listCheckinRegisterEmployees = async (req, res) => {
+  try {
+    const self = await resolveRequestEmployee(req);
+    const employees = await Employee.find({ $and: [{ isActive: true }, await attendanceEmployeeScope(req)] })
+      .select("employeeName employeeCode").sort({ employeeName: 1 }).lean();
+    return res.status(200).json({ isOk: true, status: 200, data: { selfId: self?._id ?? null, employees } });
   } catch (error) { return failure(res, error); }
 };
 

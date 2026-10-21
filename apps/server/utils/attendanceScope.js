@@ -44,3 +44,12 @@ export const attendanceScope = async (req, employeeOwned = true, { directReports
   }, { owner: "employeeId", department: "departmentId", teamIds, approverIds }) : null;
   return row ? { $and: [company, row] } : company;
 };
+
+// ADR-042: the same employee-owned row scope, applied to Employee rows
+// themselves — which employees' attendance the caller may read. The owner
+// field `employeeId` becomes the Employee's own `_id`; companyId is shared.
+export const attendanceEmployeeScope = async (req) => {
+  const toEmployee = (filter) => Object.fromEntries(Object.entries(filter).map(([key, value]) =>
+    key === "$and" ? [key, value.map(toEmployee)] : [key === "employeeId" ? "_id" : key, value]));
+  return toEmployee(await attendanceScope(req, true));
+};

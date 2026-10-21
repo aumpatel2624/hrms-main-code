@@ -5689,7 +5689,7 @@ export const employeeTaxExemptionProofSubmissionConfig = {
 };
 
 export const ADVANCED_ENTITIES = [
-    shiftTypeConfig, shiftLocationConfig, shiftAssignmentConfig, shiftScheduleConfig, shiftScheduleAssignmentConfig, employeeCheckinConfig,
+    shiftTypeConfig, shiftLocationConfig, shiftAssignmentConfig, shiftScheduleConfig, shiftScheduleAssignmentConfig,
     shiftRequestConfig, attendanceRequestConfig,
     adminUserConfig, menuMasterConfig, emailTemplateConfig,
     departmentConfig, branchConfig, designationConfig, employeeConfig,

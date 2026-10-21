@@ -4348,3 +4348,46 @@ consumer; single-branch build
   maker–checker, "never on your own record", expiring grants, masked fields, tier-scoped Documentation, the
   Dashboard holiday widget. `GET /shift-types` (the dropdown) is now matrix-free like `GET /leave-types`, so
   forms still list the types with the setup page closed.
+
+### ADR-042 — Employee Checkin screen becomes a daily attendance register
+
+- **Date**: 2026-10-21
+- **Status**: accepted
+- **Context**: The owner shared two screenshots of another HR product — one employee's month as a daily
+  register (status count tiles; one row per date with shift, shift in/out, in/out, first/second half status,
+  portion, late in, gross / net punch / break hours) and a popup listing one day's punches — and asked for
+  the Employee Checkin screen to work like that. The screen was a flat list of punches grouped by date
+  (#43/#44).
+- **Decision**:
+  - `/employee-checkin` is now a custom page (`pages/ShiftAttendance/EmployeeCheckinRegister.jsx`, decision
+    tree step 4 — a report, not CRUD): one employee, one month (default the current one). The employee picker
+    lists everyone inside the caller's check-in row scope; a caller who can only see themself gets no picker.
+  - The register is computed server-side per request by `POST /employee-checkins/register` (read-only, guarded
+    by `checkPermission("/employee-checkin", "read")`, body allowlisted and validated). It is not a list of one
+    collection, so it does not go through `runListQuery`; the requested employee must match
+    `attendanceEmployeeScope` — the same row scope the check-in list applies, moved onto Employee rows — or the
+    answer is 404. `GET /employee-checkins/register/employees` feeds the picker from the same scope.
+  - The calculation is a pure, tested utility (`utils/attendanceRegister.js`). Sources: Attendance (status,
+    half-day other half, times when there are no punches), Shift Assignment + Shift Type (shift, shift times,
+    grace, check-in buffers, IN/OUT mode), Holiday List via Holiday List Assignment (employee, then company,
+    then the shift's own list), approved Leave Application (LV/LWP from `LeaveType.isLwp`), Employee Checkin
+    (punches, in/out, net punch and break hours). Rules are RULES.md CALC-7. Nothing is stored and no column
+    is guessed: an unmarked past working day stays blank, never AB.
+  - **Time zone.** Shift times are wall-clock strings and punches are instants; the project stores no
+    business time zone. The register is computed and shown in the **viewer's browser time zone** (sent as
+    `timeZone`, an IANA name; `utils/zonedTime.js` converts with Node's Intl, no dependency). A punch belongs
+    to the shift window (with buffers) of its own date or the date before — ADR-025's matching order — else
+    to its own calendar date.
+  - Every check-in capability stays: clicking a date opens the day's punches with view/edit/delete (matrix
+    flags as before, both delete-failure modals handled); Add opens the existing form; the old grouped list
+    moved to `/employee-checkin/all` ("All punches"), still `employeeCheckinConfig`, which left
+    `ADVANCED_ENTITIES` so its list route could be replaced (the `seoPageConfig` pattern, reversed). The form
+    and view routes are unchanged and return to the register.
+- **Consequences**: Two viewers in different time zones can see a punch near midnight on different days, and
+  late-in counted against a different wall clock — fine while everyone is in one zone (Q-34). The existing
+  auto-attendance matcher (`shiftOccurrence.js`) still reads shift times as UTC, so on IST data it marks
+  morning IN punches `offshift` with no shift; the register does not use those flags. The register reads
+  Attendance, Leave and Holiday data for anyone the caller may read check-ins for, under the check-in
+  permission. No `widgetSources` change: no model changed. Not built from the reference: shift codes (Shift
+  Type has none — the name is shown), IP address, swipe date and approver remark (no such fields).
+- **Deviates from convention**: no — a page file for a report is decision-tree step 4.

@@ -52,6 +52,13 @@ const CrudList = ({ config }) => {
     const [referenceData, setReferenceData] = useState(null);
     const [blocked, setBlocked] = useState(null);
 
+    // config.groupBy groups rows under a heading while the list is sorted by its
+    // field (the default): { field, sortdir, key(row), label(row) }.
+    const groupBy = config.groupBy;
+    const sortOn = column ?? groupBy?.field;
+    const sortDir = column ? sortDirection : groupBy?.sortdir;
+    const grouped = Boolean(groupBy) && sortOn === groupBy.field;
+
     const fetchRows = async () => {
         setLoading(true);
         let skip = (pageNo - 1) * perPage;
@@ -61,8 +68,8 @@ const CrudList = ({ config }) => {
             const response = await config.api.search({
                 skip,
                 per_page: perPage,
-                sorton: column,
-                sortdir: sortDirection,
+                sorton: sortOn,
+                sortdir: sortDir,
                 match: query,
                 isActive: filter,
                 ...(appliedFilters.length ? { filters: appliedFilters, matchType: prefs.matchType ?? "all" } : {}),
@@ -153,6 +160,13 @@ const CrudList = ({ config }) => {
         : orderable;
     const columns = [...ordered.filter((c) => !(prefs.hidden ?? []).includes(c.name)), actionColumn].filter(Boolean);
 
+    // Keep the server's group order, but list each group's rows oldest first.
+    const tableRows = grouped
+        ? Object.values(Object.groupBy(rows, groupBy.key)).flatMap((group) =>
+              [...group].sort((a, b) => String(a[groupBy.field]).localeCompare(String(b[groupBy.field]))),
+          )
+        : rows;
+
     document.title = `${config.plural} | Apidel HRMS`;
 
     return (
@@ -221,7 +235,8 @@ const CrudList = ({ config }) => {
                 <DataTable
                     ariaLabel={config.plural}
                     columns={columns}
-                    data={rows}
+                    data={tableRows}
+                    groupLabel={grouped ? groupBy.label : undefined}
                     progressPending={loading}
                     onSort={(col, direction) => {
                         setColumn(col.sortField);

@@ -99,6 +99,30 @@ export const resolveUserScope = async (req) => {
   return true;
 };
 
+/**
+ * The data scope req.user holds for `action` on `menuUrl`, or null when the
+ * matrix denies it. ADR-024 (Q-4): a menu row's own dataScope, when set,
+ * overrides the role's default — that's how one role can be "own"/
+ * "approver"-scoped on one screen and "all" on the rest. null/absent (every
+ * pre-ADR-024 row) falls through to the role-level value exactly as before.
+ * ADMIN holds "all". For a USER, call after resolveUserScope.
+ */
+export const menuDataScope = async (req, menuUrl, action) => {
+  if (req.user.role === ROLES.ADMIN) return SCOPES.ALL;
+
+  const [roleDoc, menuId] = await Promise.all([
+    getRoleDoc(req.user.roleId),
+    getMenuIdByUrl(menuUrl),
+  ]);
+
+  const row =
+    menuId &&
+    roleDoc?.roles?.find((role) => String(role.menuId) === menuId);
+
+  if (!row || row[action] !== true) return null;
+  return row.dataScope || roleDoc.dataScope || SCOPES.ALL;
+};
+
 export const checkPermission = (menuUrl, action) => {
   // Wrong action name is a coding error — fail on boot, not per request.
   if (!PERMISSION_KEYS.includes(action)) {
@@ -126,16 +150,8 @@ export const checkPermission = (menuUrl, action) => {
         });
       }
 
-      const [roleDoc, menuId] = await Promise.all([
-        getRoleDoc(req.user.roleId),
-        getMenuIdByUrl(menuUrl),
-      ]);
-
-      const row =
-        menuId &&
-        roleDoc?.roles?.find((role) => String(role.menuId) === menuId);
-
-      if (!row || row[action] !== true) {
+      const dataScope = await menuDataScope(req, menuUrl, action);
+      if (!dataScope) {
         return res.status(403).json({
           isOk: false,
           status: 403,
@@ -143,12 +159,8 @@ export const checkPermission = (menuUrl, action) => {
         });
       }
 
-      // Downstream scope filters read this — see utils/scope.js. ADR-024
-      // (Q-4): a menu row's own dataScope, when set, overrides the role's
-      // default — that's how one role can be "own"/"approver"-scoped on
-      // one screen and "all" on the rest. null/absent (every pre-ADR-024
-      // row) falls through to the role-level value exactly as before.
-      req.user.dataScope = row.dataScope || roleDoc.dataScope || SCOPES.ALL;
+      // Downstream scope filters read this — see utils/scope.js.
+      req.user.dataScope = dataScope;
       return next();
     } catch (error) {
       console.error("Error in checkPermission:", error);

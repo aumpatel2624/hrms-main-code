@@ -6,19 +6,11 @@ import { zonedDateKey, zonedWallTime } from "./zonedTime.js";
  * per calendar day of a month for one employee, built from records the
  * controller has already loaded (Attendance, Shift Assignment + Shift Type,
  * Holiday List, approved Leave Application, Employee Checkin). Nothing is
- * stored; nothing is invented — a column with no source record stays null.
+ * stored. A column with no source record stays null; the one exception is an
+ * unmarked past working day, which takes PayrollSettings'
+ * considerUnmarkedAttendanceAs, as payroll counts it. Status codes are
+ * REGISTER_CODES in @demo-panel/shared/attendance.
  */
-
-export const REGISTER_CODES = [
-  { code: "PR", label: "Present" },
-  { code: "AB", label: "Absent" },
-  { code: "HD", label: "Half Day" },
-  { code: "WFH", label: "Work From Home" },
-  { code: "LV", label: "Leave" },
-  { code: "LWP", label: "Leave Without Pay" },
-  { code: "WO", label: "Weekly Off" },
-  { code: "HO", label: "Holiday" },
-];
 
 const DAY_MS = 86400000;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -60,10 +52,12 @@ const holidaysOn = ({ employee = [], company = [] }, shift, listsById, key) => {
 
 /**
  * First half / second half / portion for one day. A marked Attendance row
- * wins (someone may work a holiday), then approved leave, then the holiday
- * list. An unmarked working day is left blank, not guessed absent.
+ * wins (someone may work a holiday), then approved leave — except on a
+ * holiday its leave type does not count, which leave approval skips too —
+ * then the holiday list. Anything else takes `unmarked`: the payroll
+ * setting's code on a past working day, else blank.
  */
-export const dayStatus = (record, leave, holidays, key) => {
+export const dayStatus = (record, leave, holidays, key, unmarked = null) => {
   if (record?.status === "On Leave") {
     const leaveType = record.leaveTypeId ?? leave?.leaveTypeId;
     return { firstHalf: leaveCode(leaveType), secondHalf: null, portion: 1, note: leaveType?.leaveTypeName ?? null };
@@ -77,7 +71,7 @@ export const dayStatus = (record, leave, holidays, key) => {
     };
   }
   if (record) return { firstHalf: ATTENDANCE_CODE[record.status] ?? null, secondHalf: null, portion: 1, note: null };
-  if (leave) {
+  if (leave && (leave.leaveTypeId?.includeHoliday || !holidays.length)) {
     const halfDay = leave.halfDay && leave.halfDayDate && dayKey(leave.halfDayDate) === key;
     return { firstHalf: leaveCode(leave.leaveTypeId), secondHalf: null, portion: halfDay ? 0.5 : 1, note: leave.leaveTypeId?.leaveTypeName ?? null };
   }
@@ -85,7 +79,7 @@ export const dayStatus = (record, leave, holidays, key) => {
     const holiday = holidays.find((row) => !row.weeklyOff);
     return { firstHalf: holiday ? "HO" : "WO", secondHalf: null, portion: 1, note: (holiday ?? holidays[0]).description ?? null };
   }
-  return { firstHalf: null, secondHalf: null, portion: null, note: null };
+  return { firstHalf: unmarked, secondHalf: null, portion: unmarked ? 1 : null, note: null };
 };
 
 /**
@@ -121,9 +115,13 @@ export const punchDay = (time, timeZone, shiftFor) => {
 };
 
 export const buildAttendanceRegister = ({
-  month, timeZone, attendance = [], assignments = [], holidayAssignments = {}, holidayLists = [], leaves = [], checkins = [],
+  month, timeZone, today = zonedDateKey(new Date(), timeZone), unmarkedAs = null, dateOfJoining = null, relievingDate = null,
+  attendance = [], assignments = [], holidayAssignments = {}, holidayLists = [], leaves = [], checkins = [],
 }) => {
   const keys = monthDateKeys(month);
+  // Payroll counts an unmarked day only inside employment and only once it has passed.
+  const unmarkedCode = ATTENDANCE_CODE[unmarkedAs] ?? null;
+  const employed = (key) => (!dateOfJoining || dayKey(dateOfJoining) <= key) && (!relievingDate || dayKey(relievingDate) >= key);
   const shiftCache = new Map();
   const shiftFor = (key) => {
     if (!shiftCache.has(key)) shiftCache.set(key, shiftOn(assignments, key));
@@ -143,7 +141,8 @@ export const buildAttendanceRegister = ({
     const dayPunches = punchesByDay[key] ?? [];
     const record = attendanceByDay.get(key) ?? null;
     const leave = leaves.find((row) => dayKey(row.fromDate) <= key && dayKey(row.toDate) >= key) ?? null;
-    const status = dayStatus(record, leave, holidaysOn(holidayAssignments, shift, listsById, key), key);
+    const unmarked = key < today && employed(key) ? unmarkedCode : null;
+    const status = dayStatus(record, leave, holidaysOn(holidayAssignments, shift, listsById, key), key, unmarked);
     if (status.firstHalf) summary[status.firstHalf] = (summary[status.firstHalf] ?? 0) + 1;
 
     // In/out come from the punches the day's popup lists; the Attendance row fills in without any.
@@ -161,8 +160,9 @@ export const buildAttendanceRegister = ({
       date: key,
       weekday: WEEKDAYS[new Date(`${key}T00:00:00Z`).getUTCDay()],
       shift: shift ? { _id: shift._id, name: shift.shiftTypeName, startTime: shift.startTime, endTime: shift.endTime } : null,
-      shiftStart: times?.start ?? null,
-      shiftEnd: times?.end ?? null,
+      // The window whose punches count toward this day (punchDay) — the popup's cut-off time.
+      cutOffStart: times?.bufferedStart ?? null,
+      cutOffEnd: times?.bufferedEnd ?? null,
       inTime,
       outTime,
       ...status,

@@ -861,12 +861,16 @@ export const getLeaveApplicationById = async (req, res) => {
  * override needed). See DECISIONS.md ADR-024 "As built (module complete)"
  * for the reasoning.
  */
+export const leaveApplicationScope = async (req) => {
+  await resolveRequestEmployee(req);
+  let approverIds = [];
+  if (req.user?.dataScope === SCOPES.APPROVER) approverIds = await resolveLeaveVisibilityIds(req);
+  return buildScopeFilter(req.user, { owner: "employeeId", approverIds });
+};
+
 export const listLeaveApplicationByParams = async (req, res) => {
   try {
-    await resolveRequestEmployee(req);
-    let approverIds = [];
-    if (req.user?.dataScope === SCOPES.APPROVER) approverIds = await resolveLeaveVisibilityIds(req);
-    const scopeFilter = buildScopeFilter(req.user, { owner: "employeeId", approverIds });
+    const scopeFilter = await leaveApplicationScope(req);
 
     const list = await runListQuery(LeaveApplication, req.body, {
       searchFields: ["description"],

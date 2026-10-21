@@ -1,7 +1,8 @@
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { ChevronLeft, ChevronRight, List } from "@untitledui/icons";
+import { COMPANY_TIME_ZONE, REGISTER_CODES } from "@demo-panel/shared/attendance";
 import { MenuContext } from "../../context/MenuContext";
 import { deleteEmployeeCheckin, getCheckinRegisterEmployees, getEmployeeCheckinRegister } from "../../api/shiftAttendance.api";
 import { Card, PageHeader, RowActions } from "@/components/ui/page";
@@ -25,20 +26,17 @@ import { cx } from "@/utils/cx";
  * /employee-checkin/all.
  */
 
-// Same codes as REGISTER_CODES in apps/server/utils/attendanceRegister.js.
-const STATUS = {
-    PR: { label: "Present", color: "success" },
-    AB: { label: "Absent", color: "error" },
-    HD: { label: "Half Day", color: "orange" },
-    WFH: { label: "Work From Home", color: "blue" },
-    LV: { label: "Leave", color: "indigo" },
-    LWP: { label: "Leave Without Pay", color: "warning" },
-    WO: { label: "Weekly Off", color: "gray" },
-    HO: { label: "Holiday", color: "purple" },
+const STATUS_COLOR = {
+    PR: "success",
+    AB: "error",
+    HD: "orange",
+    WFH: "blue",
+    LV: "indigo",
+    LWP: "pink",
+    WO: "warning",
+    HO: "purple",
 };
 
-// The register is read on the viewer's wall clock (ADR-042).
-const TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const monthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
@@ -52,9 +50,10 @@ const monthLabel = (key) => {
 };
 // "2026-09-21" → "21-Sep-26"
 const dateLabel = (key) => `${key.slice(8, 10)}-${MONTHS[Number(key.slice(5, 7)) - 1]}-${key.slice(2, 4)}`;
+// The register is read on the company's clock, the same one the server computes it on (ADR-042).
 const zonedParts = (value) =>
     Object.fromEntries(
-        new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" })
+        new Intl.DateTimeFormat("en-CA", { timeZone: COMPANY_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" })
             .formatToParts(new Date(value))
             .map((part) => [part.type, part.value]),
     );
@@ -63,7 +62,7 @@ const zonedDateKey = (value) => {
     return `${parts.year}-${parts.month}-${parts.day}`;
 };
 const timeLabel = (value) =>
-    value ? new Date(value).toLocaleTimeString("en-US", { timeZone: TIME_ZONE, hour: "numeric", minute: "2-digit" }) : "";
+    value ? new Date(value).toLocaleTimeString("en-US", { timeZone: COMPANY_TIME_ZONE, hour: "numeric", minute: "2-digit" }) : "";
 const dateTimeLabel = (value) => (value ? `${dateLabel(zonedDateKey(value))} ${timeLabel(value)}` : "");
 // Shift Type times are wall-clock "HH:mm" strings.
 const clockLabel = (time) => {
@@ -75,7 +74,7 @@ const hoursLabel = (minutes) => (minutes == null ? "" : `${Math.floor(minutes / 
 
 const StatusCode = ({ code }) =>
     code ? (
-        <BadgeWithDot size="sm" type="modern" color={STATUS[code]?.color ?? "gray"}>
+        <BadgeWithDot size="sm" type="modern" color={STATUS_COLOR[code] ?? "gray"}>
             {code}
         </BadgeWithDot>
     ) : (
@@ -93,7 +92,7 @@ const EmployeeCheckinRegister = () => {
 
     const [employees, setEmployees] = useState([]);
     const [employeeId, setEmployeeId] = useState("");
-    const [month, setMonth] = useState(() => monthKey(new Date()));
+    const [month, setMonth] = useState(() => zonedDateKey(new Date()).slice(0, 7));
     const [register, setRegister] = useState(null);
     const [loading, setLoading] = useState(true);
     const [openDate, setOpenDate] = useState(null);
@@ -117,19 +116,24 @@ const EmployeeCheckinRegister = () => {
             });
     }, []);
 
+    // Only the latest request may fill the table: an earlier, slower one is for a month or employee no longer selected.
+    const latestRequest = useRef(0);
     const fetchRegister = async () => {
         if (!employeeId) return;
+        const request = ++latestRequest.current;
         setLoading(true);
+        let data = null;
         try {
-            const res = await getEmployeeCheckinRegister({ employeeId, month, timeZone: TIME_ZONE });
-            setRegister(res.data?.data ?? null);
+            const res = await getEmployeeCheckinRegister({ employeeId, month });
+            data = res.data?.data ?? null;
         } catch (err) {
+            if (request !== latestRequest.current) return;
             console.log(err);
-            setRegister(null);
             toast.error(err.response?.data?.message || "Could not load the register");
-        } finally {
-            setLoading(false);
         }
+        if (request !== latestRequest.current) return;
+        setRegister(data);
+        setLoading(false);
     };
 
     useEffect(() => {
@@ -158,13 +162,13 @@ const EmployeeCheckinRegister = () => {
     };
 
     const monthOptions = useMemo(() => {
-        const current = monthKey(new Date());
+        const current = zonedDateKey(new Date()).slice(0, 7);
         return Array.from({ length: 27 }, (_, i) => shiftMonth(current, 2 - i)).map((key) => ({ value: key, label: monthLabel(key) }));
     }, []);
     const today = zonedDateKey(new Date());
     const days = register?.days ?? [];
     const openDay = days.find((day) => day.date === openDate);
-    const counts = Object.keys(STATUS).filter((code) => register?.summary?.[code]);
+    const counts = Object.keys(REGISTER_CODES).filter((code) => register?.summary?.[code]);
     const employeeName = employees.find((row) => row._id === employeeId)?.employeeName ?? register?.employee?.employeeName;
 
     document.title = "Employee Checkin | Apidel HRMS";
@@ -217,7 +221,7 @@ const EmployeeCheckinRegister = () => {
                 {counts.length > 0 && (
                     <ul aria-label="Days by status" className="flex flex-wrap gap-2">
                         {counts.map((code) => (
-                            <li key={code} className="flex min-w-18 flex-col gap-1 rounded-lg px-3 py-2 ring-1 ring-secondary" title={STATUS[code].label}>
+                            <li key={code} className="flex min-w-18 flex-col gap-1 rounded-lg px-3 py-2 ring-1 ring-secondary" title={REGISTER_CODES[code]}>
                                 <StatusCode code={code} />
                                 <span className="text-lg font-semibold text-primary">{register.summary[code]}</span>
                             </li>
@@ -279,10 +283,10 @@ const EmployeeCheckinRegister = () => {
                                         <td className="whitespace-nowrap px-3 py-2.5 text-tertiary">{clockLabel(day.shift?.endTime)}</td>
                                         <td className="whitespace-nowrap px-3 py-2.5 text-primary">{timeLabel(day.inTime)}</td>
                                         <td className="whitespace-nowrap px-3 py-2.5 text-primary">{timeLabel(day.outTime)}</td>
-                                        <td className="px-3 py-2.5" title={day.note ?? STATUS[day.firstHalf]?.label}>
+                                        <td className="px-3 py-2.5" title={day.note ?? REGISTER_CODES[day.firstHalf]}>
                                             <StatusCode code={day.firstHalf} />
                                         </td>
-                                        <td className="px-3 py-2.5" title={STATUS[day.secondHalf]?.label}>
+                                        <td className="px-3 py-2.5" title={REGISTER_CODES[day.secondHalf]}>
                                             <StatusCode code={day.secondHalf} />
                                         </td>
                                         <td className="px-3 py-2.5 text-right tabular-nums text-secondary">{day.portion == null ? "" : day.portion.toFixed(2)}</td>
@@ -300,12 +304,12 @@ const EmployeeCheckinRegister = () => {
             </Card>
 
             <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-tertiary">
-                {Object.entries(STATUS).map(([code, { label }]) => (
+                {Object.entries(REGISTER_CODES).map(([code, label]) => (
                     <span key={code}>
                         <span className="font-semibold text-secondary">{code}</span> {label}
                     </span>
                 ))}
-                <span>Hours are shown as hours:minutes, in {TIME_ZONE} time.</span>
+                <span>Times are {COMPANY_TIME_ZONE} time; hours are shown as hours:minutes.</span>
             </p>
 
             <FormModal
@@ -314,7 +318,7 @@ const EmployeeCheckinRegister = () => {
                 size="xl"
                 title={
                     openDay?.shift
-                        ? `Shift [${openDay.shift.name}] Time: ${dateTimeLabel(openDay.shiftStart)} – ${dateTimeLabel(openDay.shiftEnd)}`
+                        ? `Shift [${openDay.shift.name}] Time: ${dateTimeLabel(openDay.cutOffStart)} – ${dateTimeLabel(openDay.cutOffEnd)} [As per cut-off time]`
                         : `No shift · ${openDay ? dateLabel(openDay.date) : ""}`
                 }
             >

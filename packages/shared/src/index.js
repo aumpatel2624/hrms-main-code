@@ -4,3 +4,4 @@ export * from "./scopes.js";
 export * from "./widgets.js";
 export * from "./validation.js";
 export * from "./auth.js";
+export * from "./attendance.js";

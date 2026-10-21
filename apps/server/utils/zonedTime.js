@@ -15,16 +15,6 @@ const formatterFor = (timeZone) => {
   return formatters.get(timeZone);
 };
 
-export const isValidTimeZone = (timeZone) => {
-  if (typeof timeZone !== "string" || !timeZone) return false;
-  try {
-    formatterFor(timeZone);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
 /** Milliseconds `timeZone` is ahead of UTC at `instant`. */
 export const zoneOffsetMs = (instant, timeZone) => {
   const time = Math.floor(+new Date(instant) / 1000) * 1000;

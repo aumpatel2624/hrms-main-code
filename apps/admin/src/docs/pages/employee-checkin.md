@@ -8,7 +8,7 @@ One employee's attendance for a whole month, a row per day: the shift they were 
 
 ## Choosing the employee and month
 
-The register opens on the current month — use the arrows or the month list to move. If your role lets you see other people's attendance, pick someone in the Employee box; it only offers the people your role covers. Otherwise the register always shows your own attendance.
+The register opens on the current month — use the arrows or the month list to move. If your role lets you see other people's attendance, pick someone in the Employee box; it only offers the people your role covers. Otherwise the register always shows your own attendance. On someone else's register, the statuses and attendance times appear only if your role can also open Attendance for them, and leave names only if it can open Leave Application for them; otherwise those cells stay empty. Your own register always shows everything.
 
 ## The tiles at the top
 
@@ -16,7 +16,7 @@ Each tile counts the days in the month that carry that status, so you can see at
 
 ## Status codes
 
-PR Present · AB Absent · HD Half Day · WFH Work From Home · LV Leave · LWP Leave Without Pay · WO Weekly Off · HO Holiday. A day's status comes from its attendance record first, then from approved leave, then from the holiday list — so someone who worked on a holiday shows as present. A blank status on a past working day means nobody marked attendance for it; the register never assumes an absence.
+PR Present · AB Absent · HD Half Day · WFH Work From Home · LV Leave · LWP Leave Without Pay · WO Weekly Off · HO Holiday. A day's status comes from its attendance record first, then from approved leave, then from the holiday list — so someone who worked on a holiday shows as present, and a weekly off or holiday inside a leave stays WO or HO unless that leave type counts holidays. A past working day nobody marked shows the way payroll treats it — AB, or PR if Payroll Settings counts unmarked days as present. Today and later days stay blank until they are marked.
 
 ## What the columns mean
 
@@ -24,7 +24,7 @@ In time and Out time are the day's first and last punch (or, with no punches, th
 
 ## A day's punches
 
-Click a date to open that day's punches: the shift and its times, then every punch with its time, In or Out, the device and location it came from, and when it was recorded. Each punch can be opened, edited or deleted from there, if your role allows it.
+Click a date to open that day's punches: the title shows the shift and its cut-off time — the window in which a punch counts toward that day — then every punch with its time, In or Out, the device and location it came from, and when it was recorded. Each punch can be opened, edited or deleted from there, if your role allows it.
 
 ## Adding a punch, and the full list
 
@@ -32,4 +32,4 @@ Click a date to open that day's punches: the shift and its times, then every pun
 
 ## Times and night shifts
 
-Times are shown in your computer's time zone. A punch counts toward the day of the shift it falls in, so a night shift's punches after midnight stay on the day the shift started.
+Every time is shown in India time (Asia/Kolkata), whatever your computer's time zone. A punch counts toward the day of the shift it falls in, so a night shift's punches after midnight stay on the day the shift started.

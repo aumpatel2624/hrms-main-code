@@ -449,13 +449,12 @@ router.post("/employee-checkins/search", authMiddleware(ANY_ROLE), checkPermissi
  *         application/json:
  *           schema:
  *             type: object
- *             required: [month]
+ *             required: [employeeId, month]
  *             properties:
- *               employeeId: { type: string, description: "Defaults to the caller's own employee" }
+ *               employeeId: { type: string }
  *               month: { type: string, example: "2026-09" }
- *               timeZone: { type: string, example: "Asia/Kolkata", description: "IANA zone the register is read in; defaults to UTC" }
  *     responses:
- *       200: { description: "Per-day rows, status counts and that day's punches" }
+ *       200: { description: "Per-day rows on the company's clock (Asia/Kolkata), status counts and that day's punches. On another employee's register, Attendance values need /attendance read and leave values /leave-application read, else they are null." }
  *       400: { description: Invalid input }
  *       403: { description: Access denied }
  *       404: { description: Employee not found or outside the caller's scope }

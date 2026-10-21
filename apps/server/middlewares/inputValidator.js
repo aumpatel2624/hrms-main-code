@@ -16,7 +16,6 @@ import mongoSanitize from 'express-mongo-sanitize';
 import { PASSWORD, EMAIL } from '@demo-panel/shared/validation';
 import { OTP } from '@demo-panel/shared/auth';
 import { METRIC_TYPES, CHART_TYPES, DATE_RANGES, WIDGET_SIZES } from '@demo-panel/shared/widgets';
-import { isValidTimeZone } from '../utils/zonedTime.js';
 
 // ============ CONSTANTS ============
 
@@ -452,11 +451,10 @@ export const roleDashboardValidation = [
 ];
 
 
-// ADR-042: the Employee Checkin register — one month, read in an IANA time zone.
+// ADR-042: the Employee Checkin register — one employee, one month.
 export const checkinRegisterValidation = [
-    body('employeeId').optional({ values: 'falsy' }).isMongoId().withMessage('employeeId must be a valid ID'),
+    body('employeeId').isMongoId().withMessage('employeeId must be a valid ID'),
     body('month').matches(/^\d{4}-(0[1-9]|1[0-2])$/).withMessage('month must be YYYY-MM'),
-    body('timeZone').optional().custom(isValidTimeZone).withMessage('timeZone must be an IANA time zone'),
     handleValidationErrors,
 ];
 

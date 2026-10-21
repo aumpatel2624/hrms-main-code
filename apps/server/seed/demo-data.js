@@ -83,6 +83,8 @@ import TrainingEvent from "../models/TrainingEvent.js";
 import DashboardWidget from "../models/DashboardWidget.js";
 import RoleDashboard from "../models/RoleDashboard.js";
 import Designation from "../models/Designation.js";
+import { COMPANY_TIME_ZONE } from "@demo-panel/shared/attendance";
+import { zonedWallTime } from "@demo-panel/shared/zonedTime";
 
 dotenv.config();
 
@@ -243,6 +245,8 @@ const daysAgo = (n) => {
   d.setUTCDate(d.getUTCDate() - n);
   return d;
 };
+// Punches are instants; shift times are wall clock on the company's clock (ADR-042).
+const companyTime = (date, hours) => zonedWallTime(date.toISOString().slice(0, 10), hours * 60, COMPANY_TIME_ZONE);
 
 /** Returns a Date set to today + offsetDays at midnight UTC. */
 const daysFromNow = (n) => {
@@ -686,10 +690,10 @@ const seedShiftAttendanceData = async (companyId, employees) => {
         workingHours: status === "Present" ? 8 : 0,
         standardWorkingHours: 8,
         inTime: status === "Present"
-          ? new Date(attnDate.getTime() + 9 * 3600000)  // 9 AM
+          ? companyTime(attnDate, 9)  // 9 AM
           : null,
         outTime: status === "Present"
-          ? new Date(attnDate.getTime() + 18 * 3600000) // 6 PM
+          ? companyTime(attnDate, 18) // 6 PM
           : null,
         isActive: true,
       });
@@ -697,7 +701,7 @@ const seedShiftAttendanceData = async (companyId, employees) => {
 
       if (status === "Present") {
         // IN checkin
-        const inTime = new Date(attnDate.getTime() + 9 * 3600000);
+        const inTime = companyTime(attnDate, 9);
         const existingIn = await EmployeeCheckin.findOne({
           employeeId: emp._id,
           time: inTime,
@@ -716,7 +720,7 @@ const seedShiftAttendanceData = async (companyId, employees) => {
         }
 
         // OUT checkin
-        const outTime = new Date(attnDate.getTime() + 18 * 3600000);
+        const outTime = companyTime(attnDate, 18);
         const existingOut = await EmployeeCheckin.findOne({
           employeeId: emp._id,
           time: outTime,

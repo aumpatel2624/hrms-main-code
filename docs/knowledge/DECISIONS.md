@@ -4408,14 +4408,13 @@ consumer; single-branch build
     the check-in form, view and All punches list now enter, show and group them on the same company clock as
     the register (owner ruling, 2026-10-21), so a time typed on the form is the time the register shows.
 - **Consequences**: Every viewer reads India time, wherever they are; a business outside India needs a time
-  zone setting first (Q-34). Punches saved before the matcher moved to India time carry the `shiftId` and
-  `offshift` they were matched with on UTC, and `processAutoAttendance` groups unlinked punches by that
-  `shiftId` — left alone, a pre-change night-shift OUT would fall outside the new window and land on the wrong
-  day, writing two wrong Attendance rows that feed payroll. `npm run seed` therefore runs an idempotent
-  backfill, `backfillCheckinShiftMatch` (owner ruling, 2026-10-21): every Employee Checkin with
-  `attendanceId: null` is re-matched with `resolveShiftOccurrence` and only its `shiftId` and `offshift` are
-  rewritten; linked check-ins and their Attendance rows keep the values they were marked with. Run the seed
-  once after deploying this change, before the next auto-attendance run. A manager with check-in read but no `/attendance` grant sees a report's punches and
+  zone setting first (Q-34). Check-ins saved before this change keep the `shiftId` and `offshift` flags they
+  were saved with (matched on UTC) and are not re-matched — no backfill, by owner ruling (2026-10-21): no
+  production data predates the change, only fictional dummy data. Those stale flags are not inert:
+  `processAutoAttendance` still picks up an unlinked pre-change punch by its stored `shiftId`, places it on the
+  India-time window, and creates or overwrites that day's Attendance row from it (only leave-backed rows are
+  skipped). Check-ins already linked to Attendance, and the rows they were marked into, are not revisited.
+  A manager with check-in read but no `/attendance` grant sees a report's punches and
   shifts but blank statuses. The register counts unmarked days the way payroll does: as the setting says on
   the Attendance basis, not at all on the Leave Application basis.
   No `widgetSources` change: no model changed. Not built from the reference, by owner ruling (2026-10-21: no

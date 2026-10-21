@@ -75,23 +75,23 @@ try {
   await call("PUT", `/shift-assignments/${inactive._id}`, { status: "active" }, 400);
   await create(ShiftAssignment, "/shift-assignments", { employeeId, shiftTypeId: night._id, startDate: "2040-09-12", endDate: "2040-09-12" });
   await call("DELETE", `/shift-types/${day._id}`, undefined, 409);
-  const inside = await create(EmployeeCheckin, "/employee-checkins", { employeeId, time: "2040-09-10T09:00:00Z", logType: "IN", latitude: 0, longitude: 0.0001 });
+  const inside = await create(EmployeeCheckin, "/employee-checkins", { employeeId, time: "2040-09-10T09:00:00+05:30", logType: "IN", latitude: 0, longitude: 0.0001 });
   assert.equal(inside.shiftId, day._id); assert.equal(inside.offshift, false);
-  await call("POST", "/employee-checkins", { employeeId, time: "2040-09-10T10:00:00Z", latitude: 1, longitude: 1 }, 400);
-  await call("POST", "/employee-checkins", { employeeId, time: "2040-09-10T09:00:00Z", logType: "IN" }, 400);
-  const noCoordinates = await create(EmployeeCheckin, "/employee-checkins", { employeeId, time: "2040-09-10T12:00:00Z", logType: "OUT" });
-  const reentry = await create(EmployeeCheckin, "/employee-checkins", { employeeId, time: "2040-09-10T13:00:00Z", logType: "IN" });
-  const exit = await create(EmployeeCheckin, "/employee-checkins", { employeeId, time: "2040-09-10T17:30:00Z", logType: "OUT" });
+  await call("POST", "/employee-checkins", { employeeId, time: "2040-09-10T10:00:00+05:30", latitude: 1, longitude: 1 }, 400);
+  await call("POST", "/employee-checkins", { employeeId, time: "2040-09-10T09:00:00+05:30", logType: "IN" }, 400);
+  const noCoordinates = await create(EmployeeCheckin, "/employee-checkins", { employeeId, time: "2040-09-10T12:00:00+05:30", logType: "OUT" });
+  const reentry = await create(EmployeeCheckin, "/employee-checkins", { employeeId, time: "2040-09-10T13:00:00+05:30", logType: "IN" });
+  const exit = await create(EmployeeCheckin, "/employee-checkins", { employeeId, time: "2040-09-10T17:30:00+05:30", logType: "OUT" });
   const actualPunches = [inside, noCoordinates, reentry, exit];
   assert.deepEqual([alternatingFirstAndLast, alternatingEveryValidPair, strictFirstAndLast, strictEveryValidPair].map(fn => fn(actualPunches)), [8.5, 7.5, 8.5, 7.5]);
-  const overnight = await create(EmployeeCheckin, "/employee-checkins", { employeeId, time: "2040-09-13T00:10:00Z" });
+  const overnight = await create(EmployeeCheckin, "/employee-checkins", { employeeId, time: "2040-09-13T00:10:00+05:30" });
   assert.equal(overnight.shiftId, night._id);
-  const offshift = await create(EmployeeCheckin, "/employee-checkins", { employeeId, time: "2040-09-13T12:00:00Z" });
+  const offshift = await create(EmployeeCheckin, "/employee-checkins", { employeeId, time: "2040-09-13T12:00:00+05:30" });
   assert.equal(offshift.offshift, true); assert.equal(offshift.shiftId, null);
   await call("POST", "/attendances", { employeeId, attendanceDate: "2040-09-10", status: "Present" }, 201);
   const attendance = tracked(Attendance, await Attendance.findOne({ employeeId, attendanceDate: new Date("2040-09-10") }));
   await EmployeeCheckin.updateOne({ _id: inside._id }, { attendanceId: attendance._id });
-  await call("PUT", `/employee-checkins/${inside._id}`, { time: "2040-09-10T09:01:00Z" }, 400);
+  await call("PUT", `/employee-checkins/${inside._id}`, { time: "2040-09-10T09:01:00+05:30" }, 400);
   await call("PUT", `/employee-checkins/${inside._id}`, { attendanceId: null }, 400);
   assert.ok((await search("/attendances")).find(row => row._id === String(attendance._id)).employeeName);
   const schedule = await create(ShiftSchedule, "/shift-schedules", { companyId, shiftTypeId: day._id, frequency: "every-1-week", repeatOnDays: ["Monday", "Wednesday", "Friday", "Monday"] });
@@ -118,7 +118,7 @@ try {
   const concurrent = await Promise.all([1, 2].map(() => fetch(base + "/shift-assignments", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ employeeId, shiftTypeId: day._id, startDate: "2040-11-01", endDate: "2040-11-01" }) })));
   for (const response of concurrent) if (response.status === 201) tracked(ShiftAssignment, (await response.json()).data);
   assert.deepEqual(concurrent.map(response => response.status).sort(), [201, 400]); calls += 2;
-  await call("POST", "/employee-checkins", { employeeId, time: "2040-09-13T00:10:00Z" }, 400);
+  await call("POST", "/employee-checkins", { employeeId, time: "2040-09-13T00:10:00+05:30" }, 400);
   for (const source of ["shift-types", "shift-locations", "shift-assignments", "shift-schedules", "shift-schedule-assignments", "employee-checkins", "attendances"]) {
     for (const chartType of ["stat", "bar", "line"]) {
       const data = (await call("POST", "/dashboard-widgets/preview", { source, metric: { type: "count" }, chartType, groupBy: chartType === "bar" ? "companyId" : null, dateField: chartType === "line" ? "createdAt" : null, dateRange: "all", filters: [] })).data;
@@ -151,8 +151,8 @@ try {
   const selfRows = await search("/shift-assignments", selfCookie);
   assert.ok(selfRows.some(row => row._id === assignment._id));
   assert.ok(selfRows.every(row => row.employeeId === employeeId));
-  await call("POST", "/employee-checkins", { employeeId: String(otherEmployee._id), time: "2040-09-14T09:00:00Z" }, 400, selfCookie);
-  const selfCheck = (await call("POST", "/employee-checkins", { employeeId, time: "2040-09-14T09:00:00Z" }, 201, selfCookie)).data;
+  await call("POST", "/employee-checkins", { employeeId: String(otherEmployee._id), time: "2040-09-14T09:00:00+05:30" }, 400, selfCookie);
+  const selfCheck = (await call("POST", "/employee-checkins", { employeeId, time: "2040-09-14T09:00:00+05:30" }, 201, selfCookie)).data;
   tracked(EmployeeCheckin, selfCheck);
   assert.ok((await search("/employee-checkins", selfCookie)).every(row => row.employeeId === employeeId));
   await call("POST", "/shift-locations/search", {}, 403, selfCookie);

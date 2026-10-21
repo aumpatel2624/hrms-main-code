@@ -382,8 +382,8 @@ const seedShiftAttendance = async () => {
   const recurring = await ShiftScheduleAssignment.create({ employeeId: employee._id, companyId, shiftScheduleId: schedule._id, shiftLocationId: location._id, createShiftsAfter: "2026-10-01" });
   await ShiftAssignment.create({ employeeId: employee._id, companyId, shiftTypeId: shift._id, shiftLocationId: location._id, shiftScheduleAssignmentId: recurring._id, startDate: "2026-09-01", endDate: "2026-09-30" });
   const attendance = await Attendance.create({ employeeId: employee._id, companyId, departmentId: department._id, shiftId: shift._id,
-    attendanceDate: "2026-09-10", status: "Present", workingHours: 8, standardWorkingHours: 8, inTime: "2026-09-10T09:00:00Z", outTime: "2026-09-10T17:00:00Z" });
-  await EmployeeCheckin.create({ employeeId: employee._id, companyId, shiftId: shift._id, attendanceId: attendance._id, time: "2026-09-10T09:00:00Z", logType: "IN", offshift: false, deviceId: "Office terminal" });
+    attendanceDate: "2026-09-10", status: "Present", workingHours: 8, standardWorkingHours: 8, inTime: "2026-09-10T09:00:00+05:30", outTime: "2026-09-10T17:00:00+05:30" });
+  await EmployeeCheckin.create({ employeeId: employee._id, companyId, shiftId: shift._id, attendanceId: attendance._id, time: "2026-09-10T09:00:00+05:30", logType: "IN", offshift: false, deviceId: "Office terminal" });
 };
 
 const run = async () => {

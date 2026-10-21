@@ -3115,6 +3115,11 @@ export const employeeCheckinConfig = {
         { name: "Time", selector: (row) => String(row.time ?? "—"), sortable: true, sortField: "time" },
         { name: "Offshift", selector: (row) => String(row.offshift ?? "—"), sortable: true, sortField: "offshift" },
     ],
+    groupBy: {
+        field: "time", sortdir: "desc",
+        key: (row) => String(row.time ?? "").slice(0, 10),
+        label: (row) => row.time ? new Date(row.time).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "No time",
+    },
     toView: (data) => ({ ...data, attendanceLinked: Boolean(data.attendanceId) }),
     recordTitle: employeeTitle("Employee Checkin"),
     toForm: (data) => ({ ...data, time: data.time?.slice(0, 16) || "",  employeeId: refId(data.employeeId), shiftId: refId(data.shiftId), companyId: refId(data.companyId) }),

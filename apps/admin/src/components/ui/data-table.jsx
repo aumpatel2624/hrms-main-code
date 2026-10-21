@@ -28,6 +28,7 @@ const DataTable = ({
     ariaLabel = "Data table",
     widths = {},
     onResize,
+    groupLabel,
 }) => {
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(paginationPerPage);
@@ -132,7 +133,18 @@ const DataTable = ({
                         </div>
                     )}
                 >
-                    {data.map((row, index) => (
+                    {data.flatMap((row, index) => {
+                        // Optional group heading row whenever groupLabel(row) changes.
+                        const label = groupLabel?.(row);
+                        const heading =
+                            groupLabel && (index === 0 || groupLabel(data[index - 1]) !== label) ? (
+                                <Table.Row key={`group:${index}`} id={`group:${index}`} className="bg-secondary">
+                                    <Table.Cell colSpan={cols.length} className="py-2 text-xs font-semibold text-secondary">
+                                        {label}
+                                    </Table.Cell>
+                                </Table.Row>
+                            ) : null;
+                        return [heading, (
                         <Table.Row size="sm" key={row?._id ?? index} id={String(row?._id ?? index)}>
                             {cols.map((col, colIndex) => (
                                 <Table.Cell
@@ -144,7 +156,8 @@ const DataTable = ({
                                 </Table.Cell>
                             ))}
                         </Table.Row>
-                    ))}
+                        )].filter(Boolean);
+                    })}
                 </Table.Body>
             </Table>
 

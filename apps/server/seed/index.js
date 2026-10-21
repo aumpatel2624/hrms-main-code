@@ -24,7 +24,7 @@ import "../models/ShiftLocation.js";
 import "../models/ShiftAssignment.js";
 import "../models/ShiftSchedule.js";
 import "../models/ShiftScheduleAssignment.js";
-import "../models/EmployeeCheckin.js";
+import EmployeeCheckin from "../models/EmployeeCheckin.js";
 
 import bcrypt from "bcrypt";
 import dotenv from "dotenv";
@@ -52,6 +52,7 @@ import IdentificationDocumentType from "../models/IdentificationDocumentType.js"
 import GratuityRule from "../models/GratuityRule.js";
 import LeaveType from "../models/LeaveType.js";
 import { PERMISSION_KEYS } from "@demo-panel/shared/permissions";
+import { resolveShiftOccurrence } from "../utils/shiftOccurrence.js";
 import { SCOPES } from "@demo-panel/shared/scopes";
 
 dotenv.config();
@@ -736,6 +737,35 @@ const backfillDepartmentCompany = async (companyId) => {
     console.log(
       `✅ Department: backfilled companyId on ${result.modifiedCount} existing row(s) → ${APIDEL_COMPANY_NAME}`,
     );
+  }
+};
+
+/**
+ * Backfill for ADR-042 / Q-34: the shift matcher reads Shift Type times on
+ * the company's clock (India time) instead of UTC. An Employee Checkin not
+ * yet linked to Attendance may still carry the shiftId/offshift it was
+ * matched with on UTC, and processAutoAttendance groups by that shiftId — so
+ * re-match each one with resolveShiftOccurrence, the same call check-in
+ * validation makes, and rewrite only shiftId and offshift. Linked check-ins
+ * and Attendance rows are left untouched.
+ *
+ * Idempotent: once every unlinked check-in holds what the matcher resolves,
+ * a re-run writes nothing.
+ */
+const backfillCheckinShiftMatch = async () => {
+  const checkins = await EmployeeCheckin.find({ attendanceId: null }).select("employeeId time shiftId offshift").lean();
+  let rematched = 0;
+  for (const checkin of checkins) {
+    const occurrence = await resolveShiftOccurrence(checkin.employeeId, checkin.time);
+    const shiftId = occurrence?.shift._id ?? null;
+    const offshift = !occurrence;
+    if (String(shiftId) === String(checkin.shiftId ?? null) && offshift === checkin.offshift) continue;
+    await EmployeeCheckin.updateOne({ _id: checkin._id }, { $set: { shiftId, offshift } });
+    rematched += 1;
+  }
+
+  if (rematched) {
+    console.log(`✅ Employee Checkin: re-matched shift on ${rematched} unlinked check-in(s) to India time`);
   }
 };
 
@@ -2194,6 +2224,7 @@ const run = async () => {
   const companyId = await ensureApidelCompany();
   await backfillDepartmentCompany(companyId);
   await backfillSoftDelete();
+  await backfillCheckinShiftMatch();
   await moveDepartmentMenuToHrSetup();
   await renameReportBuilderMenu();
   await seedMenus();

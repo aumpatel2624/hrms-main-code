@@ -24,16 +24,16 @@ const Breadcrumbs = ({ pageTitle, pageHref, title }) => (
             {pageTitle && (
                 <>
                     <ChevronRight className="size-3.5 shrink-0 text-fg-quaternary" />
-                    <li className="min-w-0 truncate">
+                    <li className="min-w-0">
                         {pageHref ? (
                             <Link
                                 to={pageHref}
-                                className="rounded-sm font-medium text-tertiary outline-focus-ring transition hover:text-secondary focus-visible:outline-2 focus-visible:outline-offset-2"
+                                className="block truncate rounded-sm font-medium text-tertiary outline-focus-ring transition hover:text-secondary focus-visible:outline-2 focus-visible:outline-offset-2"
                             >
                                 {pageTitle}
                             </Link>
                         ) : (
-                            <span className="font-medium text-tertiary">{pageTitle}</span>
+                            <span className="block truncate font-medium text-tertiary">{pageTitle}</span>
                         )}
                     </li>
                 </>

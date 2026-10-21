@@ -18,7 +18,7 @@ Open it from "All punches" on the Employee Checkin register when you want to sea
 - **Off shift** *(a yes/no tick box)*
 - **Linked to attendance** *(a yes/no tick box)*
 - **Employee** *(required, chosen from a list)*
-- **Time** — UTC timestamp. Leave blank to use the current time.
+- **Time** — India time (Asia/Kolkata), the same clock as the register. Leave blank to use the current time.
 - **Log type** *(chosen from a list)*
 - **Skip auto attendance** *(a yes/no tick box)*
 - **Latitude** *(a number)*
@@ -106,6 +106,9 @@ Deleting hides the record rather than destroying it, so history and past reports
 
 > [!WARNING] Worth knowing
 > Saving or cancelling the form takes you back to the Employee Checkin register, not to this list.
+
+> [!WARNING] Worth knowing
+> Times are entered and shown in India time (Asia/Kolkata), the same clock as the register, and punches are grouped by their India date.
 
 ## What your role controls
 

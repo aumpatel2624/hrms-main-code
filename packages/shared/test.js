@@ -12,6 +12,10 @@ import {
     isValidEmail,
     LOGIN,
     OTP,
+    fromZonedDateTimeKey,
+    zonedDateKey,
+    zonedDateTimeKey,
+    zonedWallTime,
 } from "./src/index.js";
 
 // roles
@@ -50,5 +54,22 @@ assert.equal(isValidEmail(`${"a".repeat(250)}@b.com`), false); // over 254
 assert.equal(LOGIN.MAX_ATTEMPTS, 3);
 assert.equal(OTP.LENGTH, 6);
 assert.equal(OTP.TTL_MS / 1000, 600);
+
+// zonedTime — wall clock <-> instant, including a daylight-saving zone
+const IST = "Asia/Kolkata";
+assert.equal(zonedWallTime("2026-09-21", 9 * 60 + 30, IST).toISOString(), "2026-09-21T04:00:00.000Z");
+assert.equal(zonedWallTime("2026-09-21", -30, IST).toISOString(), "2026-09-20T18:00:00.000Z"); // before midnight
+assert.equal(zonedWallTime("2026-09-21", 0, "UTC").toISOString(), "2026-09-21T00:00:00.000Z");
+assert.equal(zonedWallTime("2026-03-29", 12 * 60, "Europe/London").toISOString(), "2026-03-29T11:00:00.000Z"); // BST
+assert.equal(zonedWallTime("2026-03-28", 12 * 60, "Europe/London").toISOString(), "2026-03-28T12:00:00.000Z"); // GMT
+assert.equal(zonedDateKey("2026-09-20T18:30:00Z", IST), "2026-09-21");
+assert.equal(zonedDateKey("2026-09-20T18:30:00Z", "UTC"), "2026-09-20");
+
+// the check-in form's datetime-local value: entered and shown on the company clock, stored as UTC
+assert.equal(zonedDateTimeKey("2026-09-21T04:30:00.000Z", IST), "2026-09-21T10:00");
+assert.equal(zonedDateTimeKey("2026-09-21T19:30:00.000Z", IST), "2026-09-22T01:00"); // next day in India
+assert.equal(fromZonedDateTimeKey("2026-09-21T10:00", IST).toISOString(), "2026-09-21T04:30:00.000Z");
+assert.equal(fromZonedDateTimeKey("2026-09-22T01:00", IST).toISOString(), "2026-09-21T19:30:00.000Z");
+assert.equal(fromZonedDateTimeKey("2026-07-01T09:00", "Europe/London").toISOString(), "2026-07-01T08:00:00.000Z"); // BST
 
 console.log("ok");

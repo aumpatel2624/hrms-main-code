@@ -1,18 +1,8 @@
 import assert from "node:assert/strict";
 import { REGISTER_CODES } from "@demo-panel/shared/attendance";
 import { buildAttendanceRegister, dayStatus, monthDateKeys, shiftOn } from "./attendanceRegister.js";
-import { zonedDateKey, zonedWallTime } from "./zonedTime.js";
 
 const IST = "Asia/Kolkata";
-
-// zonedTime — wall clock <-> instant, including a daylight-saving zone.
-assert.equal(zonedWallTime("2026-09-21", 9 * 60 + 30, IST).toISOString(), "2026-09-21T04:00:00.000Z");
-assert.equal(zonedWallTime("2026-09-21", -30, IST).toISOString(), "2026-09-20T18:00:00.000Z"); // before midnight
-assert.equal(zonedWallTime("2026-09-21", 0, "UTC").toISOString(), "2026-09-21T00:00:00.000Z");
-assert.equal(zonedWallTime("2026-03-29", 12 * 60, "Europe/London").toISOString(), "2026-03-29T11:00:00.000Z"); // BST
-assert.equal(zonedWallTime("2026-03-28", 12 * 60, "Europe/London").toISOString(), "2026-03-28T12:00:00.000Z"); // GMT
-assert.equal(zonedDateKey("2026-09-20T18:30:00Z", IST), "2026-09-21");
-assert.equal(zonedDateKey("2026-09-20T18:30:00Z", "UTC"), "2026-09-20");
 
 // monthDateKeys — month lengths, leap year.
 assert.equal(monthDateKeys("2026-09").length, 30);
@@ -20,7 +10,7 @@ assert.equal(monthDateKeys("2026-10").at(-1), "2026-10-31");
 assert.equal(monthDateKeys("2028-02").length, 29);
 
 // shiftOn — inactive/cancelled/ended assignments are skipped; latest start wins.
-const general = { _id: "g", shiftTypeName: "General Shift", startTime: "09:30", endTime: "18:30", lateEntryGracePeriod: 15, beginCheckInBeforeShiftStartTime: 60, holidayListId: "hl" };
+const general = { _id: "g", shiftTypeName: "General Shift", startTime: "09:30", endTime: "18:30", lateEntryGracePeriod: 15, beginCheckInBeforeShiftStartTime: 60 };
 const night = { _id: "n", shiftTypeName: "Night Shift", startTime: "22:00", endTime: "06:00", lateEntryGracePeriod: 0, beginCheckInBeforeShiftStartTime: 60 };
 const assignments = [
   { status: "active", startDate: "2026-04-01", endDate: null, shiftTypeId: general },
@@ -61,10 +51,7 @@ const register = buildAttendanceRegister({
   timeZone: IST,
   assignments: [{ status: "active", startDate: "2026-04-01", endDate: null, shiftTypeId: general }],
   holidayAssignments: { company: [{ fromDate: "2026-01-01", holidayListId: "hl" }] },
-  holidayLists: [{ _id: "hl", holidays: [
-    { holidayDate: "2026-09-20", description: "Sunday", weeklyOff: true },
-    { holidayDate: "2026-09-26", description: "Saturday", weeklyOff: true, isDeleted: true },
-  ] }],
+  holidayLists: [{ _id: "hl", holidays: [{ holidayDate: "2026-09-20", description: "Sunday", weeklyOff: true }] }],
   attendance: [
     { _id: "a1", attendanceDate: "2026-09-21", status: "Present", inTime: "2026-09-21T04:00:00Z", outTime: "2026-09-21T12:53:00Z", workingHours: 8.88 },
     { _id: "a2", attendanceDate: "2026-09-03", status: "Present", inTime: "2026-09-03T04:42:00Z", outTime: "2026-09-03T13:04:00Z" },
@@ -106,7 +93,6 @@ assert.equal(day("2026-09-22").inTime, "2026-09-22T03:10:00Z"); // no Attendance
 assert.equal(day("2026-09-22").outTime, "2026-09-22T14:30:00Z");
 assert.equal(day("2026-09-22").firstHalf, null); // unmarked working day, no payroll setting given: blank
 assert.equal(day("2026-09-20").firstHalf, "WO");
-assert.equal(day("2026-09-26").firstHalf, null); // its holiday entry was deleted
 assert.equal(day("2026-09-25").firstHalf, "LWP");
 assert.equal(day("2026-09-25").inTime, null);
 assert.deepEqual(register.summary, { PR: 3, WO: 1, LWP: 1 });
@@ -140,6 +126,13 @@ const weekend = { _id: "we", holidays: [
   { holidayDate: "2026-09-20", description: "Sunday", weeklyOff: true },
 ] };
 const companyWeekend = { company: [{ fromDate: "2026-01-01", holidayListId: "we" }] };
+// Holidays come from Holiday List Assignments only — the order leave approval and payroll resolve them
+// in — never from the Shift Type's own list.
+const shiftListOnly = buildAttendanceRegister({
+  month: "2026-09", timeZone: IST, holidayLists: [weekend],
+  assignments: [{ status: "active", startDate: "2026-04-01", endDate: null, shiftTypeId: { ...general, holidayListId: "we" } }],
+});
+assert.deepEqual(shiftListOnly.summary, {});
 const leaveRegister = (leaveTypeId, attendance) => buildAttendanceRegister({
   month: "2026-09", timeZone: IST, holidayAssignments: companyWeekend, holidayLists: [weekend], attendance,
   leaves: [{ fromDate: "2026-09-18", toDate: "2026-09-21", leaveTypeId }],

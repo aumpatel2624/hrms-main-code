@@ -162,7 +162,8 @@ export const CONFIG_SCREENS = [
     "when": "Open it from \"All punches\" on the Employee Checkin register when you want to search or filter punches across employees and dates, rather than read one employee's month.",
     "gotchas": [
         "Records referenced elsewhere cannot be deleted.",
-        "Saving or cancelling the form takes you back to the Employee Checkin register, not to this list."
+        "Saving or cancelling the form takes you back to the Employee Checkin register, not to this list.",
+        "Times are entered and shown in India time (Asia/Kolkata), the same clock as the register, and punches are grouped by their India date."
     ],
     "roles": "HR User and HR Manager manage records within their company. Employees can read shift types and their own assignments, and create/read their own checkins."
 },
@@ -1677,8 +1678,10 @@ export const CUSTOM_SCREENS = [
                     "WO Weekly Off · HO Holiday. A day's status comes from its attendance record first, then from " +
                     "approved leave, then from the holiday list — so someone who worked on a holiday shows as present, " +
                     "and a weekly off or holiday inside a leave stays WO or HO unless that leave type counts holidays. " +
-                    "A past working day nobody marked shows the way payroll treats it — AB, or PR if Payroll " +
-                    "Settings counts unmarked days as present. Today and later days stay blank until they are marked.",
+                    "When payroll is worked out from attendance, a past working day nobody marked shows the way " +
+                    "payroll treats it — AB, or PR if Payroll Settings counts unmarked days as present. Otherwise, and " +
+                    "for today and later days, an unmarked day stays blank. Holidays and weekly offs come from the " +
+                    "holiday list assigned to the employee, or else to their company.",
             },
             {
                 heading: "What the columns mean",

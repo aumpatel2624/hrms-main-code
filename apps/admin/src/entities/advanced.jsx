@@ -55,6 +55,8 @@ import {
 import { GenerateShiftsPanel } from "../components/hrms/generate-shifts-panel";
 import { Building07, Hash02, Link01, Mail01, MarkerPin01, Phone, Shield01, Tag01, Type01, User01 } from "@untitledui/icons";
 import { isStrongPassword, isValidEmail, PASSWORD } from "@demo-panel/shared/validation";
+import { COMPANY_TIME_ZONE } from "@demo-panel/shared/attendance";
+import { fromZonedDateTimeKey, zonedDateKey, zonedDateTimeKey } from "@demo-panel/shared/zonedTime";
 import api from "../api/index";
 import { ENDPOINTS } from "../api/endpoints";
 import {
@@ -3074,6 +3076,10 @@ export const shiftScheduleAssignmentConfig = {
     renderExtra: ({ mode, id }) => mode === "edit" && id ? <GenerateShiftsPanel id={id} /> : null,
 };
 
+// ADR-042: a punch is stored as a UTC instant but entered and read on the company's clock, the register's.
+const checkinTimeLabel = (value) =>
+    new Date(value).toLocaleString(undefined, { timeZone: COMPANY_TIME_ZONE, dateStyle: "medium", timeStyle: "short" });
+
 export const employeeCheckinConfig = {
     key: "employee-checkin", path: "/employee-checkin", section: "Shift & Attendance", singular: "Employee Checkin", plural: "Employee Checkins",
     description: "Record an employee punch. The assigned shift and optional location determine whether it counts.",
@@ -3088,7 +3094,7 @@ export const employeeCheckinConfig = {
         { name: "offshift", label: "Off shift", type: "checkbox", section: "details", hideIn: ["add", "edit"] },
         { name: "attendanceLinked", label: "Linked to attendance", type: "checkbox", section: "details", hideIn: ["add", "edit"] },
         { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
-        { name: "time", label: "Time", section: "details", type: "datetime-local", disabled: (values) => Boolean(values.attendanceId), hint: "UTC timestamp. Leave blank to use the current time." },
+        { name: "time", label: "Time", section: "details", type: "datetime-local", disabled: (values) => Boolean(values.attendanceId), hint: "India time (Asia/Kolkata), the same clock as the register. Leave blank to use the current time." },
         { name: "logType", label: "Log type", section: "details", type: "select", options: ["IN", "OUT", null]},
         { name: "skipAutoAttendance", label: "Skip auto attendance", section: "details", type: "checkbox", default: false },
         { name: "latitude", label: "Latitude", section: "details", type: "number" },
@@ -3112,18 +3118,18 @@ export const employeeCheckinConfig = {
     columns: [
         { name: "Employee", selector: (row) => row.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
         { name: "Shift", selector: (row) => row.shiftIdLabel || "—", sortable: true, sortField: "shiftId" },
-        { name: "Time", selector: (row) => String(row.time ?? "—"), sortable: true, sortField: "time" },
+        { name: "Time", selector: (row) => (row.time ? checkinTimeLabel(row.time) : "—"), sortable: true, sortField: "time" },
         { name: "Offshift", selector: (row) => String(row.offshift ?? "—"), sortable: true, sortField: "offshift" },
     ],
     groupBy: {
         field: "time", sortdir: "desc",
-        key: (row) => String(row.time ?? "").slice(0, 10),
-        label: (row) => row.time ? new Date(row.time).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "No time",
+        key: (row) => (row.time ? zonedDateKey(row.time, COMPANY_TIME_ZONE) : ""),
+        label: (row) => row.time ? new Date(row.time).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: COMPANY_TIME_ZONE }) : "No time",
     },
-    toView: (data) => ({ ...data, attendanceLinked: Boolean(data.attendanceId) }),
+    toView: (data) => ({ ...data, time: data.time && checkinTimeLabel(data.time), attendanceLinked: Boolean(data.attendanceId) }),
     recordTitle: employeeTitle("Employee Checkin"),
-    toForm: (data) => ({ ...data, time: data.time?.slice(0, 16) || "",  employeeId: refId(data.employeeId), shiftId: refId(data.shiftId), companyId: refId(data.companyId) }),
-    toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["employeeId", "time", "logType", "deviceId", "skipAutoAttendance", "latitude", "longitude", "companyId", "isActive"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
+    toForm: (data) => ({ ...data, time: data.time ? zonedDateTimeKey(data.time, COMPANY_TIME_ZONE) : "",  employeeId: refId(data.employeeId), shiftId: refId(data.shiftId), companyId: refId(data.companyId) }),
+    toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["employeeId", "time", "logType", "deviceId", "skipAutoAttendance", "latitude", "longitude", "companyId", "isActive"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : key === "time" ? fromZonedDateTimeKey(value, COMPANY_TIME_ZONE).toISOString() : value])),
 };
 
 export const shiftRequestConfig = {

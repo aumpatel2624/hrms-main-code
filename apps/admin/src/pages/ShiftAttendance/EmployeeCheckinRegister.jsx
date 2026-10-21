@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { ChevronLeft, ChevronRight, List } from "@untitledui/icons";
 import { COMPANY_TIME_ZONE, REGISTER_CODES } from "@demo-panel/shared/attendance";
+import { zonedDateKey } from "@demo-panel/shared/zonedTime";
 import { MenuContext } from "../../context/MenuContext";
 import { deleteEmployeeCheckin, getCheckinRegisterEmployees, getEmployeeCheckinRegister } from "../../api/shiftAttendance.api";
 import { Card, PageHeader, RowActions } from "@/components/ui/page";
@@ -51,19 +52,9 @@ const monthLabel = (key) => {
 // "2026-09-21" → "21-Sep-26"
 const dateLabel = (key) => `${key.slice(8, 10)}-${MONTHS[Number(key.slice(5, 7)) - 1]}-${key.slice(2, 4)}`;
 // The register is read on the company's clock, the same one the server computes it on (ADR-042).
-const zonedParts = (value) =>
-    Object.fromEntries(
-        new Intl.DateTimeFormat("en-CA", { timeZone: COMPANY_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" })
-            .formatToParts(new Date(value))
-            .map((part) => [part.type, part.value]),
-    );
-const zonedDateKey = (value) => {
-    const parts = zonedParts(value);
-    return `${parts.year}-${parts.month}-${parts.day}`;
-};
 const timeLabel = (value) =>
     value ? new Date(value).toLocaleTimeString("en-US", { timeZone: COMPANY_TIME_ZONE, hour: "numeric", minute: "2-digit" }) : "";
-const dateTimeLabel = (value) => (value ? `${dateLabel(zonedDateKey(value))} ${timeLabel(value)}` : "");
+const dateTimeLabel = (value) => (value ? `${dateLabel(zonedDateKey(value, COMPANY_TIME_ZONE))} ${timeLabel(value)}` : "");
 // Shift Type times are wall-clock "HH:mm" strings.
 const clockLabel = (time) => {
     if (!time) return "";
@@ -92,7 +83,7 @@ const EmployeeCheckinRegister = () => {
 
     const [employees, setEmployees] = useState([]);
     const [employeeId, setEmployeeId] = useState("");
-    const [month, setMonth] = useState(() => zonedDateKey(new Date()).slice(0, 7));
+    const [month, setMonth] = useState(() => zonedDateKey(new Date(), COMPANY_TIME_ZONE).slice(0, 7));
     const [register, setRegister] = useState(null);
     const [loading, setLoading] = useState(true);
     const [openDate, setOpenDate] = useState(null);
@@ -162,10 +153,10 @@ const EmployeeCheckinRegister = () => {
     };
 
     const monthOptions = useMemo(() => {
-        const current = zonedDateKey(new Date()).slice(0, 7);
+        const current = zonedDateKey(new Date(), COMPANY_TIME_ZONE).slice(0, 7);
         return Array.from({ length: 27 }, (_, i) => shiftMonth(current, 2 - i)).map((key) => ({ value: key, label: monthLabel(key) }));
     }, []);
-    const today = zonedDateKey(new Date());
+    const today = zonedDateKey(new Date(), COMPANY_TIME_ZONE);
     const days = register?.days ?? [];
     const openDay = days.find((day) => day.date === openDate);
     const counts = Object.keys(REGISTER_CODES).filter((code) => register?.summary?.[code]);
@@ -355,7 +346,7 @@ const EmployeeCheckinRegister = () => {
                                     )}
                                     {openDay.punches.map((punch) => (
                                         <tr key={punch._id} className="border-b border-secondary last:border-b-0">
-                                            <td className="whitespace-nowrap px-3 py-2 text-secondary">{dateLabel(zonedDateKey(punch.time))}</td>
+                                            <td className="whitespace-nowrap px-3 py-2 text-secondary">{dateLabel(zonedDateKey(punch.time, COMPANY_TIME_ZONE))}</td>
                                             <td className="whitespace-nowrap px-3 py-2 font-medium text-primary">{timeLabel(punch.time)}</td>
                                             <td className="px-3 py-2 text-secondary">{punch.logType === "IN" ? "In" : punch.logType === "OUT" ? "Out" : "—"}</td>
                                             <td className="whitespace-nowrap px-3 py-2 text-secondary">{punch.deviceId || "—"}</td>

@@ -16,7 +16,7 @@ Each tile counts the days in the month that carry that status, so you can see at
 
 ## Status codes
 
-PR Present · AB Absent · HD Half Day · WFH Work From Home · LV Leave · LWP Leave Without Pay · WO Weekly Off · HO Holiday. A day's status comes from its attendance record first, then from approved leave, then from the holiday list — so someone who worked on a holiday shows as present, and a weekly off or holiday inside a leave stays WO or HO unless that leave type counts holidays. A past working day nobody marked shows the way payroll treats it — AB, or PR if Payroll Settings counts unmarked days as present. Today and later days stay blank until they are marked.
+PR Present · AB Absent · HD Half Day · WFH Work From Home · LV Leave · LWP Leave Without Pay · WO Weekly Off · HO Holiday. A day's status comes from its attendance record first, then from approved leave, then from the holiday list — so someone who worked on a holiday shows as present, and a weekly off or holiday inside a leave stays WO or HO unless that leave type counts holidays. When payroll is worked out from attendance, a past working day nobody marked shows the way payroll treats it — AB, or PR if Payroll Settings counts unmarked days as present. Otherwise, and for today and later days, an unmarked day stays blank. Holidays and weekly offs come from the holiday list assigned to the employee, or else to their company.
 
 ## What the columns mean
 

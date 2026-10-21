@@ -432,7 +432,7 @@ export const getEmployeeCheckinRegister = async (req, res) => {
         : [],
       ShiftAssignment.find({ employeeId: employee._id, status: "active", isActive: true, startDate: { $lt: to },
         $or: [{ endDate: null }, { endDate: { $gte: from } }] }).populate("shiftTypeId").lean(),
-      HolidayListAssignment.find({ isActive: true, fromDate: { $lt: to }, $or: [
+      HolidayListAssignment.find({ fromDate: { $lt: to }, $or: [
         { applicableFor: "Employee", employeeId: employee._id },
         { applicableFor: "Company", companyId: employee.companyId },
       ] }).lean(),
@@ -443,11 +443,10 @@ export const getEmployeeCheckinRegister = async (req, res) => {
       EmployeeCheckin.find({ employeeId: employee._id, isActive: true, time: { $gte: from, $lt: to } }).sort({ time: 1 }).lean(),
       seesAttendance ? getPayrollSettingsDoc() : null,
     ]);
-    const holidayListIds = [...holidayAssignments.map(row => row.holidayListId), ...assignments.map(row => row.shiftTypeId?.holidayListId)].filter(Boolean);
-    const holidayLists = await HolidayList.find({ _id: { $in: holidayListIds }, isActive: true }).select("holidays").lean();
+    const holidayLists = await HolidayList.find({ _id: { $in: holidayAssignments.map(row => row.holidayListId) } }).select("holidays").lean();
 
     const data = buildAttendanceRegister({ month, timeZone: COMPANY_TIME_ZONE, attendance, assignments, holidayLists, leaves, checkins,
-      unmarkedAs: settings?.considerUnmarkedAttendanceAs ?? null,
+      unmarkedAs: settings?.payrollBasedOn === "Attendance" ? settings.considerUnmarkedAttendanceAs : null,
       dateOfJoining: employee.dateOfJoining,
       relievingDate: employee.relievingDate,
       holidayAssignments: {

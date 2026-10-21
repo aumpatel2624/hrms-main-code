@@ -1,5 +1,5 @@
 import { alternatingEveryValidPair, strictEveryValidPair } from "./workingHours.js";
-import { zonedDateKey, zonedWallTime } from "./zonedTime.js";
+import { zonedDateKey, zonedWallTime } from "@demo-panel/shared/zonedTime";
 
 /**
  * ADR-042 — the Employee Checkin register's pure calculation core: one row
@@ -8,7 +8,8 @@ import { zonedDateKey, zonedWallTime } from "./zonedTime.js";
  * Holiday List, approved Leave Application, Employee Checkin). Nothing is
  * stored. A column with no source record stays null; the one exception is an
  * unmarked past working day, which takes PayrollSettings'
- * considerUnmarkedAttendanceAs, as payroll counts it. Status codes are
+ * considerUnmarkedAttendanceAs when payroll runs on Attendance, as payroll
+ * counts it. Status codes are
  * REGISTER_CODES in @demo-panel/shared/attendance.
  */
 
@@ -40,14 +41,15 @@ export const shiftOn = (assignments, key) => assignments
 
 /**
  * Holidays on a date: the employee's own Holiday List Assignment, else the
- * company's (holidayResolution.js's order), else the shift's own list.
+ * company's — holidayResolution.js's order, the one leave approval and
+ * payroll use.
  */
-const holidaysOn = ({ employee = [], company = [] }, shift, listsById, key) => {
+const holidaysOn = ({ employee = [], company = [] }, listsById, key) => {
   const latest = (rows) => rows.filter((row) => dayKey(row.fromDate) <= key)
     .sort((a, b) => new Date(b.fromDate) - new Date(a.fromDate))[0];
-  const listId = (latest(employee) ?? latest(company))?.holidayListId ?? shift?.holidayListId;
+  const listId = (latest(employee) ?? latest(company))?.holidayListId;
   const list = listId ? listsById.get(String(listId)) : null;
-  return (list?.holidays ?? []).filter((holiday) => !holiday.isDeleted && dayKey(holiday.holidayDate) === key);
+  return (list?.holidays ?? []).filter((holiday) => dayKey(holiday.holidayDate) === key);
 };
 
 /**
@@ -142,7 +144,7 @@ export const buildAttendanceRegister = ({
     const record = attendanceByDay.get(key) ?? null;
     const leave = leaves.find((row) => dayKey(row.fromDate) <= key && dayKey(row.toDate) >= key) ?? null;
     const unmarked = key < today && employed(key) ? unmarkedCode : null;
-    const status = dayStatus(record, leave, holidaysOn(holidayAssignments, shift, listsById, key), key, unmarked);
+    const status = dayStatus(record, leave, holidaysOn(holidayAssignments, listsById, key), key, unmarked);
     if (status.firstHalf) summary[status.firstHalf] = (summary[status.firstHalf] ?? 0) + 1;
 
     // In/out come from the punches the day's popup lists; the Attendance row fills in without any.

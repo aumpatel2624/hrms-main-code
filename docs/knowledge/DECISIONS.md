@@ -4376,30 +4376,36 @@ consumer; single-branch build
     punches, shifts and holidays are check-in register data and always show.
   - The calculation is a pure, tested utility (`utils/attendanceRegister.js`). Sources: Attendance (status,
     half-day other half, times when there are no punches), Shift Assignment + Shift Type (shift, shift times,
-    grace, check-in buffers, IN/OUT mode), Holiday List via Holiday List Assignment (employee, then company,
-    then the shift's own list), approved Leave Application (LV/LWP from `LeaveType.isLwp`), Employee Checkin
+    grace, check-in buffers, IN/OUT mode), Holiday List via Holiday List Assignment (employee, then company —
+    `holidayResolution.js`'s order, the one leave approval and payroll use; the Shift Type's own Holiday List
+    is not consulted, owner ruling 2026-10-21), approved Leave Application (LV/LWP from `LeaveType.isLwp`), Employee Checkin
     (punches, in/out, net punch and break hours). Rules are RULES.md CALC-7. Nothing is stored. Approved
     leave does not cover a holiday or weekly off unless its leave type `includeHoliday`, matching what leave
-    approval writes and deducts. An unmarked past day of employment that is not a holiday takes
-    `PayrollSettings.considerUnmarkedAttendanceAs` (AB by default), the way payroll counts it (owner ruling,
-    2026-10-21); today and later days stay blank. Status codes live once, in `@demo-panel/shared/attendance`.
+    approval writes and deducts. When payroll runs on Attendance (`PayrollSettings.payrollBasedOn`), an
+    unmarked past day of employment that is not a holiday takes `considerUnmarkedAttendanceAs` (AB by
+    default), the way payroll counts it; on the Leave Application basis payroll ignores unmarked days and the
+    register leaves them blank (owner rulings, 2026-10-21). Today and later days stay blank. Status codes live
+    once, in `@demo-panel/shared/attendance`.
   - **Time zone.** Shift times are wall-clock strings and punches are instants; the project stores no
     business time zone setting. The register is computed and shown on the **company's clock**,
     `COMPANY_TIME_ZONE` (`Asia/Kolkata`) in `@demo-panel/shared/attendance` (owner ruling, 2026-10-21: the
-    app setting if one exists, else India time). The client sends no zone; `utils/zonedTime.js` converts with
-    Node's Intl, no dependency. A punch belongs to the shift window (with buffers) of its own date or the
+    app setting if one exists, else India time). The client sends no zone; `@demo-panel/shared/zonedTime`
+    converts with the built-in Intl, no dependency. A punch belongs to the shift window (with buffers) of its own date or the
     date before — ADR-025's matching order — else to its own calendar date. The day popup's title shows that
     window, "as per cut-off time".
   - Every check-in capability stays: clicking a date opens the day's punches with view/edit/delete (matrix
     flags as before, both delete-failure modals handled); Add opens the existing form; the old grouped list
     moved to `/employee-checkin/all` ("All punches"), still `employeeCheckinConfig`, which left
     `ADVANCED_ENTITIES` so its list route could be replaced (the `seoPageConfig` pattern, reversed). The form
-    and view routes are unchanged and return to the register.
+    and view routes are unchanged and return to the register. Punches are still stored as UTC instants, but
+    the check-in form, view and All punches list now enter, show and group them on the same company clock as
+    the register (owner ruling, 2026-10-21), so a time typed on the form is the time the register shows.
 - **Consequences**: Every viewer reads India time, wherever they are; a business outside India needs a time
   zone setting first (Q-34). The existing auto-attendance matcher (`shiftOccurrence.js`) still reads shift
   times as UTC, so on IST data it marks morning IN punches `offshift` with no shift; the register does not
   use those flags. A manager with check-in read but no `/attendance` grant sees a report's punches and
-  shifts but blank statuses. The register's AB count matches what payroll would deduct for unmarked days.
+  shifts but blank statuses. The register counts unmarked days the way payroll does: as the setting says on
+  the Attendance basis, not at all on the Leave Application basis.
   No `widgetSources` change: no model changed. Not built from the reference, by owner ruling (2026-10-21: no
   schema changes): shift codes (Shift Type has none — the name is shown), IP address, swipe date and
   approver remark (no such fields).

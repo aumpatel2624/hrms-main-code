@@ -1,5 +1,6 @@
 import { alternatingEveryValidPair, strictEveryValidPair } from "./workingHours.js";
-import { zonedDateKey, zonedWallTime } from "@demo-panel/shared/zonedTime";
+import { shiftWindow } from "./shiftOccurrence.js";
+import { zonedDateKey } from "@demo-panel/shared/zonedTime";
 
 /**
  * ADR-042 — the Employee Checkin register's pure calculation core: one row
@@ -22,7 +23,6 @@ const OTHER_HALF_CODE = { Present: "PR", Absent: "AB" };
 // Date-only HR fields are stored at UTC midnight, like the leave utilities.
 const dayKey = (value) => new Date(value).toISOString().slice(0, 10);
 const addDays = (key, days) => new Date(Date.parse(`${key}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
-const clockMinutes = (time) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
 const minutesBetween = (from, to) => Math.max(0, Math.round((new Date(to) - new Date(from)) / 60000));
 const leaveCode = (leaveType) => (leaveType?.isLwp ? "LWP" : "LV");
 
@@ -85,22 +85,6 @@ export const dayStatus = (record, leave, holidays, key, unmarked = null) => {
 };
 
 /**
- * A shift's nominal start/end on a date and its check-in window (the buffers
- * either side), in the register's time zone — shiftOccurrence.js's
- * shiftWindow, read on the wall clock instead of UTC.
- */
-const shiftTimes = (key, shift, timeZone) => {
-  const startMinutes = clockMinutes(shift.startTime);
-  const endMinutes = clockMinutes(shift.endTime) + (shift.endTime < shift.startTime ? 1440 : 0);
-  return {
-    start: zonedWallTime(key, startMinutes, timeZone),
-    end: zonedWallTime(key, endMinutes, timeZone),
-    bufferedStart: zonedWallTime(key, startMinutes - (shift.beginCheckInBeforeShiftStartTime ?? 60), timeZone),
-    bufferedEnd: zonedWallTime(key, endMinutes + (shift.allowCheckOutAfterShiftEndTime ?? 60), timeZone),
-  };
-};
-
-/**
  * The day a punch belongs to: the shift window it falls in on its own date
  * or the date before (ADR-025's matchShiftOccurrence order, so a night
  * shift keeps its after-midnight punches), else its own calendar date.
@@ -110,7 +94,7 @@ export const punchDay = (time, timeZone, shiftFor) => {
   for (const key of [own, addDays(own, -1)]) {
     const shift = shiftFor(key);
     if (!shift) continue;
-    const window = shiftTimes(key, shift, timeZone);
+    const window = shiftWindow(shift, key, timeZone);
     if (new Date(time) >= window.bufferedStart && new Date(time) <= window.bufferedEnd) return key;
   }
   return own;
@@ -139,7 +123,7 @@ export const buildAttendanceRegister = ({
 
   const days = keys.map((key) => {
     const shift = shiftFor(key);
-    const times = shift ? shiftTimes(key, shift, timeZone) : null;
+    const times = shift ? shiftWindow(shift, key, timeZone) : null;
     const dayPunches = punchesByDay[key] ?? [];
     const record = attendanceByDay.get(key) ?? null;
     const leave = leaves.find((row) => dayKey(row.fromDate) <= key && dayKey(row.toDate) >= key) ?? null;

@@ -4393,6 +4393,13 @@ consumer; single-branch build
     converts with the built-in Intl, no dependency. A punch belongs to the shift window (with buffers) of its own date or the
     date before — ADR-025's matching order — else to its own calendar date. The day popup's title shows that
     window, "as per cut-off time".
+  - **The shift matcher reads the same clock** (owner ruling, 2026-10-21, closing the matcher half of Q-34).
+    `shiftOccurrence.js`'s `shiftWindow` turns a Shift Type's start/end into instants on `COMPANY_TIME_ZONE`
+    (`zonedWallTime`), and an occurrence date is the company's calendar date (`companyDay`), not the UTC one.
+    That one window serves check-in validation (`shiftId`, `offshift`, the Shift Location radius check),
+    `processAutoAttendance` (grouping, late entry / early exit, standard hours, and its "today") and the
+    register, which no longer keeps its own copy. A 09:30 India-time IN on a 09:30–18:30 shift now resolves
+    to that shift, on shift.
   - Every check-in capability stays: clicking a date opens the day's punches with view/edit/delete (matrix
     flags as before, both delete-failure modals handled); Add opens the existing form; the old grouped list
     moved to `/employee-checkin/all` ("All punches"), still `employeeCheckinConfig`, which left
@@ -4401,9 +4408,9 @@ consumer; single-branch build
     the check-in form, view and All punches list now enter, show and group them on the same company clock as
     the register (owner ruling, 2026-10-21), so a time typed on the form is the time the register shows.
 - **Consequences**: Every viewer reads India time, wherever they are; a business outside India needs a time
-  zone setting first (Q-34). The existing auto-attendance matcher (`shiftOccurrence.js`) still reads shift
-  times as UTC, so on IST data it marks morning IN punches `offshift` with no shift; the register does not
-  use those flags. A manager with check-in read but no `/attendance` grant sees a report's punches and
+  zone setting first (Q-34). Punches saved before the matcher moved to India time keep the `shiftId` and
+  `offshift` they were saved with (resolved on UTC) until they are edited; new and edited punches resolve on
+  India time. A manager with check-in read but no `/attendance` grant sees a report's punches and
   shifts but blank statuses. The register counts unmarked days the way payroll does: as the setting says on
   the Attendance basis, not at all on the Leave Application basis.
   No `widgetSources` change: no model changed. Not built from the reference, by owner ruling (2026-10-21: no

@@ -34,7 +34,7 @@ import EmployeeCheckin from "../models/EmployeeCheckin.js";
 import Attendance from "../models/Attendance.js";
 import Employee from "../models/Employee.js";
 import SchedulerRunLog from "../models/SchedulerRunLog.js";
-import { dayStart, shiftWindow, DAY_MS, isAssignmentCurrentlyActive } from "../utils/shiftOccurrence.js";
+import { companyDay, dayStart, shiftWindow, DAY_MS, isAssignmentCurrentlyActive } from "../utils/shiftOccurrence.js";
 import { isHolidayForEmployee } from "../utils/holidayResolution.js";
 import { selectWorkingHoursFn, decideAttendanceStatus, computeLateEarlyFlags } from "../utils/attendanceAutoStatus.js";
 
@@ -59,7 +59,7 @@ const standardWorkingHoursFor = (shiftType, date) => {
  */
 const occurrenceDateForCheckin = (shiftType, time) => {
   const t = new Date(time);
-  const today = dayStart(t);
+  const today = companyDay(t);
   for (const date of [today, new Date(+today - DAY_MS)]) {
     const window = shiftWindow(shiftType, date);
     if (t >= window.bufferedStart && t <= window.bufferedEnd) return date;
@@ -205,7 +205,7 @@ const processAbsenceSweep = async (today) => {
 
 /** The job body `runDueJobs` below calls, at most once per calendar day. */
 export const processAutoAttendance = async () => {
-  const today = dayStart(new Date());
+  const today = companyDay(new Date());
   const shiftTypes = await ShiftType.find({ enableAutoAttendance: true, processAttendanceAfter: { $ne: null } }).lean();
 
   const checkins = { attempted: 0, created: 0, skipped: 0, failed: 0 };

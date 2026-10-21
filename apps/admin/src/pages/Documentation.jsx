@@ -270,7 +270,7 @@ const Documentation = () => {
      *
      * A portal rather than a prop or a context: the layout owns the header, this
      * screen owns these controls, and nothing else in the app needs to know that
-     * either is true. The slot is empty on every other screen.
+     * either is true. Every other screen fills the slot with its PageHeader title.
      */
     const headerControls = headerSlot
         ? createPortal(

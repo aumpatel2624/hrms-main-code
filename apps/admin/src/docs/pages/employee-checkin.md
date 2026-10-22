@@ -1,122 +1,35 @@
-# Employee Checkins
+# Employee Checkin
 
-Record check-in and check-out times for your assigned shift.
+One employee's attendance for a whole month, a row per day: the shift they were on, when they came in and left, the day's status, and how many hours they worked.
 
-![Employee Checkins](../screenshots/employee-checkin-light.png "light")
+![Employee Checkin](../screenshots/employee-checkin-light.png "light")
 
-![Employee Checkins](../screenshots/employee-checkin-dark.png "dark")
+![Employee Checkin](../screenshots/employee-checkin-dark.png "dark")
 
-## When you would use this
+## Choosing the employee and month
 
-Use this screen when setting up shifts or recording attendance.
+The register opens on the current month — use the arrows or the month list to move. If your role lets you see other people's attendance, pick someone in the Employee box; it only offers the people your role covers. Otherwise the register always shows your own attendance. On someone else's register, the statuses and attendance times appear only if your role can also open Attendance for them, and leave names only if it can open Leave Application for them; otherwise those cells stay empty. Your own register always shows everything.
 
-## What you fill in
+## The tiles at the top
 
-### Details
+Each tile counts the days in the month that carry that status, so you can see at a glance how many days were present, absent, on leave or off.
 
-- **Resolved shift** *(chosen from a list)*
-- **Off shift** *(a yes/no tick box)*
-- **Linked to attendance** *(a yes/no tick box)*
-- **Employee** *(required, chosen from a list)*
-- **Time** — UTC timestamp. Leave blank to use the current time.
-- **Log type** *(chosen from a list)*
-- **Skip auto attendance** *(a yes/no tick box)*
-- **Latitude** *(a number)*
-- **Longitude** *(a number)*
-- **Company** *(chosen from a list)*
-- **Is active** *(required, a yes/no tick box)*
+## Status codes
 
-## Finding a record
+PR Present · AB Absent · HD Half Day · WFH Work From Home · LV Leave · LWP Leave Without Pay · WO Weekly Off · HO Holiday. A day's status comes from its attendance record first, then from approved leave, then from the holiday list — so someone who worked on a holiday shows as present, and a weekly off or holiday inside a leave stays WO or HO unless that leave type counts holidays. When payroll is worked out from attendance, a past working day nobody marked shows the way payroll treats it — AB, or PR if Payroll Settings counts unmarked days as present. Otherwise, and for today and later days, an unmarked day stays blank. Holidays and weekly offs come from the holiday list assigned to the employee, or else to their company.
 
-Use the search box for a quick look-up, or open the filter panel to narrow the list by:
+## What the columns mean
 
-- Employee id
-- Shift id
-- Attendance id
-- Time
-- Log type
-- Device id
-- Skip auto attendance
-- Offshift
-- Company id
-- Is active
-- Created at
+In time and Out time are the day's first and last punch (or, with no punches, the times on the attendance record). First half and Second half hold the status codes: a half day shows HD first and the other half's status second. Portion is how much of the day the status covers — 1.00 a whole day, 0.50 a half. Late in is how late the first punch was against the shift start, counted only once past the shift's grace period. Gross hrs runs from In time to Out time; Net punch hrs adds up each In-to-Out stretch; Break hrs is the time between an Out and the next In. Hours are shown as hours:minutes. A column with nothing to show stays empty rather than guessed.
 
-Your filters and column layout are remembered, so the list looks the same next time you open it.
+## A day's punches
 
-## Adding an Employee Checkin
+Click a date to open that day's punches: the title shows the shift and its cut-off time — the window in which a punch counts toward that day — then every punch with its time, In or Out, the device and location it came from, and when it was recorded. Each punch can be opened, edited or deleted from there, if your role allows it.
 
-Press **Add Employee Checkin** at the top right of the list. That opens a blank form.
+## Adding a punch, and the full list
 
-1. Fill in the fields described above. Required ones are marked with an asterisk.
-2. Press **Create employee checkin** at the bottom of the form.
+"Add Employee Checkin" opens the punch form. "All punches" opens every punch as one list grouped by date, with search and filters — the way this screen used to look.
 
-Anything missing or invalid is flagged underneath the field it belongs to, and nothing is saved until every one of those is cleared. Once it saves you are returned to the list with the new record in it.
+## Times and night shifts
 
-**Cancel** leaves without saving. Nothing is kept, so a half-filled form is not waiting for you when you come back.
-
-![Adding an Employee Checkin](../screenshots/employee-checkin-add-light.png "light")
-
-![Adding an Employee Checkin](../screenshots/employee-checkin-add-dark.png "dark")
-
-*Needs the **write** permission — without it the button is not shown.*
-
-## Viewing an Employee Checkin
-
-Press the view icon on a row to open the record on its own screen. It shows the same fields in the same order as the form, but read-only, with related records shown by name rather than as a reference.
-
-At the bottom you get when the record was created and when it was last changed, and a badge at the top shows whether it is active. **Edit** takes you straight into changing it.
-
-**Back** returns to the list. Passwords are never shown here, on any record.
-
-![Viewing an Employee Checkin](../screenshots/employee-checkin-view-light.png "light")
-
-![Viewing an Employee Checkin](../screenshots/employee-checkin-view-dark.png "dark")
-
-*Needs the **read** permission — without it the button is not shown.*
-
-## Editing an Employee Checkin
-
-Press the edit icon on a row, or **Edit** while viewing a record. The form opens with the current values already in it.
-
-Change what you need and press **Save changes**. The same checks as adding apply, and you are returned to the list once it saves.
-
-Every change is recorded — who made it, when, and what each value was before. You can read that back on the **Audit Log** screen.
-
-![Editing an Employee Checkin](../screenshots/employee-checkin-edit-light.png "light")
-
-![Editing an Employee Checkin](../screenshots/employee-checkin-edit-dark.png "dark")
-
-*Needs the **edit** permission — without it the button is not shown.*
-
-## Deleting an Employee Checkin
-
-Press the delete icon on a row. You are asked to confirm first, and nothing is removed until you do.
-
-If something else in the system still refers to this employee checkin, the deletion is refused and you are told what is using it. Clear or reassign those first, then try again.
-
-Deleting hides the record rather than destroying it, so history and past reports stay intact. If you only want it out of the dropdowns on other screens, untick **Is Active** instead — that keeps it available to look up.
-
-*Needs the **delete** permission — without it the button is not shown.*
-
-## Things worth knowing
-
-> [!WARNING] Worth knowing
-> Records referenced elsewhere cannot be deleted.
-
-## What your role controls
-
-Each of these is granted separately for this screen on the **User Roles** screen:
-
-- **read** — see this screen at all
-- **write** — add new records
-- **delete** — remove records
-- **edit** — change existing records
-- **print** — print or export
-- **mail** — send email from this screen
-
-> [!NOTE] Missing a button?
-> A button you cannot see is a permission your role has not been granted. Ask whoever manages roles to grant it on the User Roles screen.
-
-> [!INFO] What you can see
-> HR User and HR Manager manage records within their company. Employees can read shift types and their own assignments, and create/read their own checkins.
+Every time is shown in India time (Asia/Kolkata), whatever your computer's time zone. A punch counts toward the day of the shift it falls in, so a night shift's punches after midnight stay on the day the shift started.

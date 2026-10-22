@@ -1,5 +1,9 @@
 import { runListQuery } from "../../utils/listQuery.js";
-import { attendanceScope } from "../../utils/attendanceScope.js";
+import { attendanceScope, attendanceEmployeeScope, asEmployeeFilter } from "../../utils/attendanceScope.js";
+import { buildAttendanceRegister } from "../../utils/attendanceRegister.js";
+import { menuDataScope } from "../../middlewares/checkPermission.js";
+import { leaveApplicationScope } from "./leavesTransactions.controller.js";
+import { getPayrollSettingsDoc } from "./payrollRun.controller.js";
 import { saveShiftRecord, withShiftWriteLock } from "../../utils/shiftAssignmentWrite.js";
 import { generateShiftRanges } from "../../utils/shiftSchedule.js";
 import { DAY_MS } from "../../utils/shiftOccurrence.js";
@@ -7,12 +11,18 @@ import { getReferencingCounts, formatReferenceMessage } from "../../utils/refere
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { ROLES } from "@demo-panel/shared/roles";
 import { SCOPES } from "@demo-panel/shared/scopes";
+import { COMPANY_TIME_ZONE } from "@demo-panel/shared/attendance";
 import ShiftType from "../../models/ShiftType.js";
 import ShiftLocation from "../../models/ShiftLocation.js";
 import ShiftAssignment from "../../models/ShiftAssignment.js";
 import ShiftSchedule from "../../models/ShiftSchedule.js";
 import ShiftScheduleAssignment from "../../models/ShiftScheduleAssignment.js";
 import EmployeeCheckin from "../../models/EmployeeCheckin.js";
+import Employee from "../../models/Employee.js";
+import Attendance from "../../models/Attendance.js";
+import HolidayList from "../../models/HolidayList.js";
+import HolidayListAssignment from "../../models/HolidayListAssignment.js";
+import LeaveApplication from "../../models/LeaveApplication.js";
 
 const failure = (res, error) => {
   if (error.status === 400 || error.name === "ValidationError" || error.name === "CastError" || error.name === "RangeError" || error.code === 11000) {
@@ -373,6 +383,88 @@ export const deleteEmployeeCheckin = async (req, res) => {
     });
     await EmployeeCheckin.findByIdAndUpdate(doc._id, { isDeleted: true });
     return res.status(200).json({ isOk: true, status: 200, message: "Employee Checkin deleted successfully" });
+  } catch (error) { return failure(res, error); }
+};
+
+/**
+ * ADR-042: the Employee Checkin register — one employee, one month, one row
+ * per day, computed per request from Attendance, Shift Assignment, Holiday
+ * List, approved Leave Application and Employee Checkin, on the company's
+ * clock. Read-only and not a list of one collection, so there is no
+ * runListQuery here: the caller picks an employee, and that employee must sit
+ * inside the same row scope the check-in list applies
+ * (attendanceEmployeeScope). On anyone else's register, Attendance data
+ * (status, times, working hours) needs /attendance read and leave data
+ * (approved leave, leave names) needs /leave-application read, each within
+ * that menu's own row scope; without it those values stay blank. A caller's
+ * own register is always whole.
+ */
+export const CHECKIN_REGISTER_FIELDS = ["employeeId", "month"];
+export const getEmployeeCheckinRegister = async (req, res) => {
+  try {
+    const { employeeId, month } = req.body;
+    const employee = await Employee.findOne({ $and: [{ _id: employeeId }, await attendanceEmployeeScope(req)] })
+      .select("employeeName employeeCode companyId dateOfJoining relievingDate").lean();
+    if (!employee) return res.status(404).json({ isOk: false, status: 404, message: "Employee not found" });
+
+    const isSelf = String(employee._id) === String((await resolveRequestEmployee(req))?._id);
+    const sees = async (menuUrl, scopeOf) => {
+      if (isSelf) return true;
+      const dataScope = await menuDataScope(req, menuUrl, "read");
+      if (!dataScope) return false;
+      const reader = Object.assign(Object.create(req), { user: { ...req.user, dataScope } });
+      return Boolean(await Employee.exists({ $and: [{ _id: employee._id }, asEmployeeFilter((await scopeOf(reader)) ?? {})] }));
+    };
+    const [seesAttendance, seesLeave] = await Promise.all([
+      sees("/attendance", attendanceScope),
+      sees("/leave-application", leaveApplicationScope),
+    ]);
+
+    // Two days either side of the month: a punch belongs to its shift's day,
+    // which can be the day before its own date (a night shift).
+    const [year, monthNumber] = month.split("-").map(Number);
+    const from = new Date(Date.UTC(year, monthNumber - 1, 1) - 2 * DAY_MS);
+    const to = new Date(Date.UTC(year, monthNumber, 1) + 2 * DAY_MS);
+    const [attendance, assignments, holidayAssignments, leaves, checkins, settings] = await Promise.all([
+      seesAttendance
+        ? Attendance.find({ employeeId: employee._id, isActive: true, attendanceDate: { $gte: from, $lt: to } })
+          .populate("leaveTypeId", seesLeave ? "leaveTypeName isLwp" : "isLwp").lean()
+        : [],
+      ShiftAssignment.find({ employeeId: employee._id, status: "active", isActive: true, startDate: { $lt: to },
+        $or: [{ endDate: null }, { endDate: { $gte: from } }] }).populate("shiftTypeId").lean(),
+      HolidayListAssignment.find({ fromDate: { $lt: to }, $or: [
+        { applicableFor: "Employee", employeeId: employee._id },
+        { applicableFor: "Company", companyId: employee.companyId },
+      ] }).lean(),
+      seesLeave
+        ? LeaveApplication.find({ employeeId: employee._id, status: "approved", isActive: true, fromDate: { $lt: to }, toDate: { $gte: from } })
+          .populate("leaveTypeId", "leaveTypeName isLwp includeHoliday").lean()
+        : [],
+      EmployeeCheckin.find({ employeeId: employee._id, isActive: true, time: { $gte: from, $lt: to } }).sort({ time: 1 }).lean(),
+      seesAttendance ? getPayrollSettingsDoc() : null,
+    ]);
+    const holidayLists = await HolidayList.find({ _id: { $in: holidayAssignments.map(row => row.holidayListId) } }).select("holidays").lean();
+
+    const data = buildAttendanceRegister({ month, timeZone: COMPANY_TIME_ZONE, attendance, assignments, holidayLists, leaves, checkins,
+      unmarkedAs: settings?.payrollBasedOn === "Attendance" ? settings.considerUnmarkedAttendanceAs : null,
+      dateOfJoining: employee.dateOfJoining,
+      relievingDate: employee.relievingDate,
+      holidayAssignments: {
+        employee: holidayAssignments.filter(row => row.applicableFor === "Employee"),
+        company: holidayAssignments.filter(row => row.applicableFor === "Company"),
+      },
+    });
+    const { _id, employeeName, employeeCode } = employee;
+    return res.status(200).json({ isOk: true, status: 200, data: { employee: { _id, employeeName, employeeCode }, month, ...data } });
+  } catch (error) { return failure(res, error); }
+};
+/** The register's employee picker: everyone inside the caller's check-in scope, and which one is the caller. */
+export const listCheckinRegisterEmployees = async (req, res) => {
+  try {
+    const self = await resolveRequestEmployee(req);
+    const employees = await Employee.find({ $and: [{ isActive: true }, await attendanceEmployeeScope(req)] })
+      .select("employeeName employeeCode").sort({ employeeName: 1 }).lean();
+    return res.status(200).json({ isOk: true, status: 200, data: { selfId: self?._id ?? null, employees } });
   } catch (error) { return failure(res, error); }
 };
 

@@ -124,7 +124,7 @@ export const CONFIG_SCREENS = [
     "intro": "Give an employee one shift for a date range.",
     "when": "Use this screen when setting up shifts or recording attendance.",
     "gotchas": [
-        "Dates and times use UTC.",
+        "Start and end dates are India (Asia/Kolkata) calendar dates, the same clock the shift's times are read on.",
         "Active assignments cannot overlap. A location radius of zero disables location enforcement."
     ],
     "roles": "HR User and HR Manager manage records within their company. Employees can read shift types and their own assignments, and create/read their own checkins."
@@ -154,14 +154,16 @@ export const CONFIG_SCREENS = [
     "roles": "HR User and HR Manager manage records within their company. Employees can read shift types and their own assignments, and create/read their own checkins."
 },
     {
-    "key": "employee-checkin",
+    "key": "employee-checkin-all",
     "config": "employeeCheckinConfig",
     "source": "apps/admin/src/entities/advanced.jsx",
-    "path": "/employee-checkin",
-    "intro": "Record check-in and check-out times for your assigned shift.",
-    "when": "Use this screen when setting up shifts or recording attendance.",
+    "path": "/employee-checkin/all",
+    "intro": "Every check-in and check-out punch as one list, grouped by date — and the form used to add or change a punch.",
+    "when": "Open it from \"All punches\" on the Employee Checkin register when you want to search or filter punches across employees and dates, rather than read one employee's month.",
     "gotchas": [
-        "Records referenced elsewhere cannot be deleted."
+        "Records referenced elsewhere cannot be deleted.",
+        "Saving or cancelling the form takes you back to the Employee Checkin register, not to this list.",
+        "Times are entered and shown in India time (Asia/Kolkata), the same clock as the register, and punches are grouped by their India date."
     ],
     "roles": "HR User and HR Manager manage records within their company. Employees can read shift types and their own assignments, and create/read their own checkins."
 },
@@ -1641,6 +1643,77 @@ export const CUSTOM_SCREENS = [
             {
                 heading: "HR Manager only",
                 text: "Unlike most Shift & Attendance screens, this one is restricted to the HR Manager role.",
+            },
+        ],
+    },
+    {
+        key: "employee-checkin",
+        title: "Employee Checkin",
+        path: "/employee-checkin",
+        source: "apps/admin/src/pages/ShiftAttendance/EmployeeCheckinRegister.jsx",
+        intro:
+            "One employee's attendance for a whole month, a row per day: the shift they were on, when they came " +
+            "in and left, the day's status, and how many hours they worked.",
+        body: [
+            {
+                heading: "Choosing the employee and month",
+                text:
+                    "The register opens on the current month — use the arrows or the month list to move. If your role " +
+                    "lets you see other people's attendance, pick someone in the Employee box; it only offers the " +
+                    "people your role covers. Otherwise the register always shows your own attendance. On someone " +
+                    "else's register, the statuses and attendance times appear only if your role can also open " +
+                    "Attendance for them, and leave names only if it can open Leave Application for them; " +
+                    "otherwise those cells stay empty. Your own register always shows everything.",
+            },
+            {
+                heading: "The tiles at the top",
+                text:
+                    "Each tile counts the days in the month that carry that status, so you can see at a glance how " +
+                    "many days were present, absent, on leave or off.",
+            },
+            {
+                heading: "Status codes",
+                text:
+                    "PR Present · AB Absent · HD Half Day · WFH Work From Home · LV Leave · LWP Leave Without Pay · " +
+                    "WO Weekly Off · HO Holiday. A day's status comes from its attendance record first, then from " +
+                    "approved leave, then from the holiday list — so someone who worked on a holiday shows as present, " +
+                    "and a weekly off or holiday inside a leave stays WO or HO unless that leave type counts holidays. " +
+                    "When payroll is worked out from attendance, a past working day nobody marked shows the way " +
+                    "payroll treats it — AB, or PR if Payroll Settings counts unmarked days as present. Otherwise, and " +
+                    "for today and later days, an unmarked day stays blank. Holidays and weekly offs come from the " +
+                    "holiday list assigned to the employee, or else to their company.",
+            },
+            {
+                heading: "What the columns mean",
+                text:
+                    "In time and Out time are the day's first and last punch (or, with no punches, the times on the " +
+                    "attendance record). First half and Second half hold the status codes: a half day shows HD first " +
+                    "and the other half's status second. Portion is how much of the day the status covers — 1.00 a " +
+                    "whole day, 0.50 a half. Late in is how late the first punch was against the shift start, counted " +
+                    "only once past the shift's grace period. Gross hrs runs from In time to Out time; Net punch hrs " +
+                    "adds up each In-to-Out stretch; Break hrs is the time between an Out and the next In. Hours are " +
+                    "shown as hours:minutes. A column with nothing to show stays empty rather than guessed.",
+            },
+            {
+                heading: "A day's punches",
+                text:
+                    "Click a date to open that day's punches: the title shows the shift and its cut-off time — the " +
+                    "window in which a punch counts toward that day — then every punch with its time, " +
+                    "In or Out, the device and location it came from, and when it was recorded. Each punch can be " +
+                    "opened, edited or deleted from there, if your role allows it.",
+            },
+            {
+                heading: "Adding a punch, and the full list",
+                text:
+                    "\"Add Employee Checkin\" opens the punch form. \"All punches\" opens every punch as one list " +
+                    "grouped by date, with search and filters — the way this screen used to look.",
+            },
+            {
+                heading: "Times and night shifts",
+                text:
+                    "Every time is shown in India time (Asia/Kolkata), whatever your computer's time zone. A punch " +
+                    "counts toward the day of the shift it falls in, so a night shift's punches after midnight stay " +
+                    "on the day the shift started.",
             },
         ],
     },

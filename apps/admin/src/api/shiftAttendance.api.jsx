@@ -36,6 +36,8 @@ export const getEmployeeCheckinById = async (id) => api.get(ENDPOINTS.EMPLOYEE_C
 export const updateEmployeeCheckin = async (id, data) => api.put(ENDPOINTS.EMPLOYEE_CHECKINS.BY_ID(id), data);
 export const deleteEmployeeCheckin = async (id) => api.delete(ENDPOINTS.EMPLOYEE_CHECKINS.BY_ID(id));
 export const searchEmployeeCheckins = async (data) => api.post(ENDPOINTS.EMPLOYEE_CHECKINS.SEARCH, data);
+export const getEmployeeCheckinRegister = async (data) => api.post(ENDPOINTS.EMPLOYEE_CHECKINS.REGISTER, data);
+export const getCheckinRegisterEmployees = async () => api.get(ENDPOINTS.EMPLOYEE_CHECKINS.REGISTER_EMPLOYEES);
 export const generateShiftAssignments = async (id, data) => api.post(`${ENDPOINTS.SHIFT_SCHEDULE_ASSIGNMENTS.BY_ID(id)}/generate`, data);
 
 // ADR-025 (module complete — second/transactional fork).

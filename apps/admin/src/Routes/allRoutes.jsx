@@ -1,8 +1,8 @@
 import PayrollEntry from "../pages/Payroll/PayrollEntry";
 import { Navigate } from "react-router-dom";
-import { crudRoutes } from "@/components/crud";
+import { CrudList, crudRoutes } from "@/components/crud";
 import { UNIFORM_ENTITIES } from "@/entities";
-import { ADVANCED_ENTITIES, payrollEntryConfig } from "@/entities/advanced";
+import { ADVANCED_ENTITIES, employeeCheckinConfig, payrollEntryConfig } from "@/entities/advanced";
 
 import Login from "../pages/Authentication/Login";
 import UserProfile from "../pages/Authentication/user-profile";
@@ -16,6 +16,7 @@ import LeaveLedgerEntries from "../pages/Leaves/LeaveLedgerEntries";
 import LeaveControlPanel from "../pages/Leaves/LeaveControlPanel";
 import ShiftAssignmentTool from "../pages/ShiftAttendance/ShiftAssignmentTool";
 import EmployeeAttendanceTool from "../pages/ShiftAttendance/EmployeeAttendanceTool";
+import EmployeeCheckinRegister from "../pages/ShiftAttendance/EmployeeCheckinRegister";
 import BulkSalaryStructureAssignmentTool from "../pages/Payroll/BulkSalaryStructureAssignmentTool";
 import PayrollSettings from "../pages/Payroll/PayrollSettings";
 import Documentation from "../pages/Documentation";
@@ -55,6 +56,15 @@ const authProtectedRoutes = [
     // model — same reasoning as LeaveControlPanel above.
     { path: "/shift-assignment-tool", component: <ShiftAssignmentTool /> },
     { path: "/employee-attendance-tool", component: <EmployeeAttendanceTool /> },
+    // ADR-042: the Employee Checkin list route is the daily register; the
+    // check-in form/view keep their CRUD routes, and the flat list of every
+    // punch moves to /all (a static segment, so it outranks /:id).
+    { path: "/employee-checkin", component: <EmployeeCheckinRegister /> },
+    {
+        path: "/employee-checkin/all",
+        component: <CrudList key="employee-checkin-all" config={{ ...employeeCheckinConfig, plural: "All Punches", section: "Employee Checkin", sectionHref: "/employee-checkin" }} />,
+    },
+    ...crudRoutes(employeeCheckinConfig).slice(1),
     // ADR-026: stateless bulk-action form, no stored model — same reasoning
     // as ShiftAssignmentTool/LeaveControlPanel above.
     { path: "/bulk-salary-structure-assignment", component: <BulkSalaryStructureAssignmentTool /> },

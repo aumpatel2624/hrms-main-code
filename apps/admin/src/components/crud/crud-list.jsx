@@ -174,6 +174,7 @@ const CrudList = ({ config }) => {
             <PageHeader
                 title={config.plural}
                 pageTitle={config.section}
+                pageHref={config.sectionHref}
                 description={config.description}
                 filter={filter}
                 handleFilter={(e) => {

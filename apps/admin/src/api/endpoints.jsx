@@ -18,7 +18,7 @@ export const ENDPOINTS = {
     SHIFT_ASSIGNMENTS: { BASE: `${V1}/shift-assignments`, SEARCH: `${V1}/shift-assignments/search`, BY_ID: (id) => `${V1}/shift-assignments/${id}` },
     SHIFT_SCHEDULES: { BASE: `${V1}/shift-schedules`, SEARCH: `${V1}/shift-schedules/search`, BY_ID: (id) => `${V1}/shift-schedules/${id}` },
     SHIFT_SCHEDULE_ASSIGNMENTS: { BASE: `${V1}/shift-schedule-assignments`, SEARCH: `${V1}/shift-schedule-assignments/search`, BY_ID: (id) => `${V1}/shift-schedule-assignments/${id}` },
-    EMPLOYEE_CHECKINS: { BASE: `${V1}/employee-checkins`, SEARCH: `${V1}/employee-checkins/search`, BY_ID: (id) => `${V1}/employee-checkins/${id}` },
+    EMPLOYEE_CHECKINS: { BASE: `${V1}/employee-checkins`, SEARCH: `${V1}/employee-checkins/search`, BY_ID: (id) => `${V1}/employee-checkins/${id}`, REGISTER: `${V1}/employee-checkins/register`, REGISTER_EMPLOYEES: `${V1}/employee-checkins/register/employees` },
     SHIFT_REQUESTS: {
         BASE: `${V1}/shift-requests`, SEARCH: `${V1}/shift-requests/search`, BY_ID: (id) => `${V1}/shift-requests/${id}`,
         APPROVE: (id) => `${V1}/shift-requests/${id}/approve`, REJECT: (id) => `${V1}/shift-requests/${id}/reject`,

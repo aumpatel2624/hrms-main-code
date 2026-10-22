@@ -4348,3 +4348,76 @@ consumer; single-branch build
   maker–checker, "never on your own record", expiring grants, masked fields, tier-scoped Documentation, the
   Dashboard holiday widget. `GET /shift-types` (the dropdown) is now matrix-free like `GET /leave-types`, so
   forms still list the types with the setup page closed.
+
+### ADR-042 — Employee Checkin screen becomes a daily attendance register
+
+- **Date**: 2026-10-21
+- **Status**: accepted
+- **Context**: The owner shared two screenshots of another HR product — one employee's month as a daily
+  register (status count tiles; one row per date with shift, shift in/out, in/out, first/second half status,
+  portion, late in, gross / net punch / break hours) and a popup listing one day's punches — and asked for
+  the Employee Checkin screen to work like that. The screen was a flat list of punches grouped by date
+  (#43/#44).
+- **Decision**:
+  - `/employee-checkin` is now a custom page (`pages/ShiftAttendance/EmployeeCheckinRegister.jsx`, decision
+    tree step 4 — a report, not CRUD): one employee, one month (default the current one). The employee picker
+    lists everyone inside the caller's check-in row scope; a caller who can only see themself gets no picker.
+  - The register is computed server-side per request by `POST /employee-checkins/register` (read-only, guarded
+    by `checkPermission("/employee-checkin", "read")`, body allowlisted and validated). It is not a list of one
+    collection, so it does not go through `runListQuery`; the requested employee must match
+    `attendanceEmployeeScope` — the same row scope the check-in list applies, moved onto Employee rows — or the
+    answer is 404. `GET /employee-checkins/register/employees` feeds the picker from the same scope.
+  - **Other screens' data follows their own grants** (owner ruling, 2026-10-21). A caller's own register is
+    always whole. On anyone else's, Attendance values — the status columns, the Attendance row's in/out times
+    and working hours, and the unmarked-day fill below — need `/attendance` read, and leave values — approved
+    Leave Applications and leave type names — need `/leave-application` read, each within that menu's own row
+    scope (`attendanceScope` and `leaveApplicationScope`, the scopes those screens' lists apply, read through
+    `menuDataScope`). Without the grant, or with the employee outside its scope, those values stay blank;
+    punches, shifts and holidays are check-in register data and always show.
+  - The calculation is a pure, tested utility (`utils/attendanceRegister.js`). Sources: Attendance (status,
+    half-day other half, times when there are no punches), Shift Assignment + Shift Type (shift, shift times,
+    grace, check-in buffers, IN/OUT mode), Holiday List via Holiday List Assignment (employee, then company —
+    `holidayResolution.js`'s order, the one leave approval and payroll use; the Shift Type's own Holiday List
+    is not consulted, owner ruling 2026-10-21), approved Leave Application (LV/LWP from `LeaveType.isLwp`), Employee Checkin
+    (punches, in/out, net punch and break hours). Rules are RULES.md CALC-7. Nothing is stored. Approved
+    leave does not cover a holiday or weekly off unless its leave type `includeHoliday`, matching what leave
+    approval writes and deducts. When payroll runs on Attendance (`PayrollSettings.payrollBasedOn`), an
+    unmarked past day of employment that is not a holiday takes `considerUnmarkedAttendanceAs` (AB by
+    default), the way payroll counts it; on the Leave Application basis payroll ignores unmarked days and the
+    register leaves them blank (owner rulings, 2026-10-21). Today and later days stay blank. Status codes live
+    once, in `@demo-panel/shared/attendance`.
+  - **Time zone.** Shift times are wall-clock strings and punches are instants; the project stores no
+    business time zone setting. The register is computed and shown on the **company's clock**,
+    `COMPANY_TIME_ZONE` (`Asia/Kolkata`) in `@demo-panel/shared/attendance` (owner ruling, 2026-10-21: the
+    app setting if one exists, else India time). The client sends no zone; `@demo-panel/shared/zonedTime`
+    converts with the built-in Intl, no dependency. A punch belongs to the shift window (with buffers) of its own date or the
+    date before — ADR-025's matching order — else to its own calendar date. The day popup's title shows that
+    window, "as per cut-off time".
+  - **The shift matcher reads the same clock** (owner ruling, 2026-10-21, closing the matcher half of Q-34).
+    `shiftOccurrence.js`'s `shiftWindow` turns a Shift Type's start/end into instants on `COMPANY_TIME_ZONE`
+    (`zonedWallTime`), and an occurrence date is the company's calendar date (`companyDay`), not the UTC one.
+    That one window serves check-in validation (`shiftId`, `offshift`, the Shift Location radius check),
+    `processAutoAttendance` (grouping, late entry / early exit, standard hours, and its "today") and the
+    register, which no longer keeps its own copy. A 09:30 India-time IN on a 09:30–18:30 shift now resolves
+    to that shift, on shift.
+  - Every check-in capability stays: clicking a date opens the day's punches with view/edit/delete (matrix
+    flags as before, both delete-failure modals handled); Add opens the existing form; the old grouped list
+    moved to `/employee-checkin/all` ("All punches"), still `employeeCheckinConfig`, which left
+    `ADVANCED_ENTITIES` so its list route could be replaced (the `seoPageConfig` pattern, reversed). The form
+    and view routes are unchanged and return to the register. Punches are still stored as UTC instants, but
+    the check-in form, view and All punches list now enter, show and group them on the same company clock as
+    the register (owner ruling, 2026-10-21), so a time typed on the form is the time the register shows.
+- **Consequences**: Every viewer reads India time, wherever they are; a business outside India needs a time
+  zone setting first (Q-34). Check-ins saved before this change keep the `shiftId` and `offshift` flags they
+  were saved with (matched on UTC) and are not re-matched — no backfill, by owner ruling (2026-10-21): no
+  production data predates the change, only fictional dummy data. Those stale flags are not inert:
+  `processAutoAttendance` still picks up an unlinked pre-change punch by its stored `shiftId`, places it on the
+  India-time window, and creates or overwrites that day's Attendance row from it (only leave-backed rows are
+  skipped). Check-ins already linked to Attendance, and the rows they were marked into, are not revisited.
+  A manager with check-in read but no `/attendance` grant sees a report's punches and
+  shifts but blank statuses. The register counts unmarked days the way payroll does: as the setting says on
+  the Attendance basis, not at all on the Leave Application basis.
+  No `widgetSources` change: no model changed. Not built from the reference, by owner ruling (2026-10-21: no
+  schema changes): shift codes (Shift Type has none — the name is shown), IP address, swipe date and
+  approver remark (no such fields).
+- **Deviates from convention**: no — a page file for a report is decision-tree step 4.

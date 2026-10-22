@@ -22,7 +22,9 @@ import HolidayList from "../apps/server/models/HolidayList.js";
 import HolidayListAssignment from "../apps/server/models/HolidayListAssignment.js";
 import Department from "../apps/server/models/Department.js";
 import { processAutoAttendance } from "../apps/server/jobs/attendanceScheduler.js";
-import { dayStart, DAY_MS } from "../apps/server/utils/shiftOccurrence.js";
+import { companyDay, DAY_MS } from "../apps/server/utils/shiftOccurrence.js";
+import { COMPANY_TIME_ZONE } from "@demo-panel/shared/attendance";
+import { zonedWallTime } from "@demo-panel/shared/zonedTime";
 
 dotenv.config({ path: "apps/server/.env", quiet: true });
 if (process.env.RUN_SHIFT_TXN_VERIFY !== "1") throw new Error("Set RUN_SHIFT_TXN_VERIFY=1 to run this local fixture walk");
@@ -233,7 +235,7 @@ try {
   assert.equal(resolvedDoc.halfDayStatus, "Present");
 
   // =============================================================== processAutoAttendance --
-  const today = dayStart(new Date());
+  const today = companyDay(new Date());
   const yesterday = new Date(+today - DAY_MS);
   const autoShiftType = await create(ShiftType, "/shift-types", {
     companyId, shiftTypeName: prefix + " auto", startTime: "09:00", endTime: "17:00",
@@ -254,7 +256,7 @@ try {
   for (const emp of [presentEmp, absentEmp, halfDayAutoEmp, lateEarlyEmp, leaveSkipEmp, sweepEmp]) await makeAssignment(emp); // eslint-disable-line no-await-in-loop
 
   const punch = async (emp, hhmm) => {
-    const time = new Date(`${iso(yesterday)}T${hhmm}:00Z`);
+    const time = zonedWallTime(iso(yesterday), Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3)), COMPANY_TIME_ZONE);
     const doc = await call("POST", "/employee-checkins", { employeeId: String(emp._id), time: time.toISOString() }, 201);
     return tracked(EmployeeCheckin, doc.data);
   };

@@ -451,6 +451,13 @@ export const roleDashboardValidation = [
 ];
 
 
+// ADR-042: the Employee Checkin register — one employee, one month.
+export const checkinRegisterValidation = [
+    body('employeeId').isMongoId().withMessage('employeeId must be a valid ID'),
+    body('month').matches(/^\d{4}-(0[1-9]|1[0-2])$/).withMessage('month must be YYYY-MM'),
+    handleValidationErrors,
+];
+
 
 export default {
     handleValidationErrors,

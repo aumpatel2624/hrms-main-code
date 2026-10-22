@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/base/checkbox/checkbox";
 import { ComboBox } from "@/components/base/select/combobox";
 import { SelectItem } from "@/components/base/select/select-item";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
+import { normalizeOption } from "./select-options";
 
 // Untitled UI's inputs are React Aria, so they hand you the value directly
 // rather than a DOM event. Every page in this app has a
@@ -77,19 +78,9 @@ export const CheckField = ({ name, checked, onChange, label, ...rest }) => (
 /**
  * Searchable dropdown. Takes the react-select shape the pages already use
  * (options: [{ value, label }], onChange(option)) and renders Untitled UI's
- * ComboBox, which filters as you type - a plain Select does not.
- *
- * Many entity configs pass a plain enum array instead (`options: ["Open",
- * "Closed"]`, sometimes with a bare `null` for "unset") rather than the
- * `{ value, label }` shape above — normalise both here, once, rather than
- * rewriting every one of those config fields to the object shape.
+ * ComboBox, which filters as you type - a plain Select does not. Plain enum
+ * arrays are accepted too; see `normalizeOption`.
  */
-const normalizeOption = (o) =>
-    o === null || o === undefined
-        ? { value: null, label: "—" }
-        : typeof o === "object"
-          ? o
-          : { value: o, label: String(o) };
 
 export const SelectField = ({
     options = [],

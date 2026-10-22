@@ -170,7 +170,7 @@ import { FormSection, FullWidth } from "@/components/ui/form";
 import AdjustAllocationPanel from "@/components/crud/adjust-allocation-panel";
 import MarkEncashmentPaidPanel from "@/components/crud/mark-encashment-paid-panel";
 
-const ACTIVE = { name: "isActive", label: "Is Active", type: "checkbox", section: "status", default: false };
+const ACTIVE = { name: "isActive", label: "Is Active", type: "checkbox", section: "status" };
 
 /**
  * A "getAll"-style loader's rows, however its list controller shaped them.

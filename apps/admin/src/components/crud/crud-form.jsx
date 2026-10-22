@@ -5,6 +5,7 @@ import { MenuContext } from "../../context/MenuContext";
 import { Card, PageHeader } from "@/components/ui/page";
 import { FormActions, FormSection, FullWidth } from "@/components/ui/form";
 import { CheckField, EmailField, Field, PasswordField, SelectField, TextAreaField } from "@/components/ui/field";
+import { initialFormValues } from "./form-defaults.js";
 import IconPicker from "@/components/ui/icon-picker";
 import JoditEditor from "jodit-react";
 import { Label } from "@/components/base/input/label";
@@ -110,7 +111,7 @@ const CrudForm = ({ config, mode = "add" }) => {
     const { currentPagePermissions } = useContext(MenuContext);
 
     const initialState = useMemo(
-        () => Object.fromEntries(config.fields.map((f) => [f.name, f.type === "checkbox" ? Boolean(f.default) : (f.default ?? "")])),
+        () => initialFormValues(config.fields),
         [config.fields],
     );
 

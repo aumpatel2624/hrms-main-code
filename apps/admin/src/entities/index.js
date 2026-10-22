@@ -29,7 +29,7 @@ import { getAllSalaryStructures, getAllSalaryComponents } from "../api/payroll.a
 const asOptions = (loader, labelKey) => () =>
     loader().then((res) => (res.data?.data ?? []).map((x) => ({ value: x._id, label: x[labelKey] })));
 
-const ACTIVE = { name: "isActive", label: "Is Active", type: "checkbox", section: "status", default: false };
+const ACTIVE = { name: "isActive", label: "Is Active", type: "checkbox", section: "status" };
 
 export const countryConfig = {
     filterFields: [

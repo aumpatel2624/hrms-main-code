@@ -10,6 +10,7 @@ import { Button } from "@/components/base/buttons/button";
 import { Badge } from "@/components/base/badges/badges";
 import { LoadingIndicator } from "@/components/application/loading-indicator/loading-indicator";
 import { cx } from "@/utils/cx";
+import { normalizeOption } from "@/components/ui/select-options";
 
 const formatDate = (raw) => {
     const d = new Date(raw);
@@ -59,7 +60,9 @@ const renderValue = (field, raw, lookups) => {
         case "select":
         case "objectId": {
             const loaded = !field.optionsFrom || lookups[field.optionsFrom] !== undefined;
-            const options = field.optionsFrom ? (lookups[field.optionsFrom] ?? []) : (field.options ?? []);
+            // Configs may list plain strings or a bare `null` ("unset"); without
+            // normalising, `o.value` below throws on the null entry.
+            const options = (field.optionsFrom ? (lookups[field.optionsFrom] ?? []) : (field.options ?? [])).map(normalizeOption);
             const id = refId(raw);
             const match = options.find((o) => String(o.value) === String(id))?.label;
             // Lookup first (it is the canonical label), then the populated

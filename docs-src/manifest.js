@@ -1562,16 +1562,17 @@ export const CUSTOM_SCREENS = [
                 heading: "Whose balance you can see",
                 text:
                     "Everyone sees their own balance. A team lead or manager also gets an Employee picker " +
-                    "listing the people who report to them, and HR can pick anyone. Nobody else's balance is " +
-                    "shown.",
+                    "listing the people who report to them, and HR can pick anyone in your company. Nobody " +
+                    "else's balance is shown.",
             },
             {
                 heading: "Where the numbers come from",
                 text:
                     "Left is worked out from every leave movement recorded for you — allocations, approved " +
                     "leave, adjustments and encashments — so it changes as soon as a leave application is " +
-                    "approved or cancelled. Allocated includes days carried forward from the last period and " +
-                    "leave earned so far; used is what was allocated minus what is left. Pending " +
+                    "approved or cancelled. Used is the leave taken, encashed or taken back this period. " +
+                    "Allocated is everything given to you — new days, days carried forward, leave earned so " +
+                    "far and any extra days HR added — so allocated minus used is always what is left. Pending " +
                     "applications are not taken off until they are approved.",
             },
             {

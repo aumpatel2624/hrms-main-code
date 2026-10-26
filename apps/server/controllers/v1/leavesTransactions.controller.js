@@ -21,6 +21,7 @@ import { getLeaveBalance, getLeaveBalanceSnapshot } from "../../utils/leaveBalan
 import { resolveApprovers, getEmployeesApprovedBy } from "../../utils/approvers.js";
 import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
+import { attendanceEmployeeScope } from "../../utils/attendanceScope.js";
 import { buildScopeFilter } from "../../utils/scope.js";
 import { countLeaveDays, sameCalendarDay } from "../../utils/leaveDayCalculation.js";
 import { getHolidayDatesInRange, isEntireRangeHolidays, isHolidayForEmployee } from "../../utils/holidayResolution.js";
@@ -1466,38 +1467,28 @@ export const bulkAllocateLeaves = async (req, res) => {
 // ============================================================ My Leave Balance --
 
 /**
- * ADR-043: whose balance req.user may read on My Leave Balance — `null`
- * means anyone (HR's "all"). A team-scoped caller sees themself plus their
- * downward reporting chain; any other scope is their own balance only —
- * being someone's named leave approver does not open their balance.
- */
-const leaveBalanceViewerIds = async (req) => {
-  if (req.user.role === ROLES.ADMIN || (req.user.dataScope || SCOPES.ALL) === SCOPES.ALL) return null;
-  const employee = await resolveRequestEmployee(req);
-  const own = employee ? [String(employee._id)] : [];
-  if (req.user.dataScope === SCOPES.TEAM) return [...own, ...(await getSubordinateEmployeeIds(employee?._id))];
-  return own;
-};
-
-/**
- * Allocated / used / left per leave type for the current period — the same
- * snapshot a Salary Slip stores (`getLeaveBalanceSnapshot`). Defaults to the
- * caller's own balance; `employeeId` picks someone else, refused (403) unless
- * they are in the caller's reach. `people` is who the caller may pick.
+ * ADR-043: allocated / used / left per leave type for the current period —
+ * the same snapshot a Salary Slip stores (`getLeaveBalanceSnapshot`).
+ * Defaults to the caller's own balance; `employeeId` picks someone else,
+ * refused (403) unless they are in the caller's reach — the check-in
+ * register's (`attendanceEmployeeScope`): own, plus the downward reporting
+ * chain for "team", the whole company for "all", every company for ADMIN.
+ * Being someone's named leave approver adds nothing. `people` is who the
+ * caller may pick.
  */
 export const getMyLeaveBalance = async (req, res) => {
   try {
-    const allowedIds = await leaveBalanceViewerIds(req);
     const self = await resolveRequestEmployee(req);
     const employeeId = req.query.employeeId ? String(req.query.employeeId) : (self ? String(self._id) : null);
     if (employeeId && !mongoose.Types.ObjectId.isValid(employeeId)) {
       return res.status(400).json({ isOk: false, status: 400, message: "Invalid employeeId" });
     }
-    if (employeeId && allowedIds && !allowedIds.includes(employeeId)) {
+    const reach = await attendanceEmployeeScope(req);
+    if (employeeId && !(await Employee.findOne({ $and: [{ _id: employeeId }, reach] }).select("_id").lean())) {
       return res.status(403).json({ isOk: false, status: 403, message: "You can only view your own leave balance or your team's" });
     }
 
-    const people = await Employee.find(allowedIds ? { _id: { $in: allowedIds } } : {})
+    const people = await Employee.find(reach)
       .select("employeeName employeeCode").sort({ employeeName: 1 }).lean();
     const snapshot = employeeId ? await getLeaveBalanceSnapshot(employeeId, new Date()) : [];
     const leaveTypes = await LeaveType.find({ _id: { $in: snapshot.map((row) => row.leaveTypeId) } }).select("leaveTypeName").lean();

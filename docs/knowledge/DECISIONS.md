@@ -4441,15 +4441,20 @@ consumer; single-branch build
     slip's own employee name/code, company name, component and leave type names — nothing about other
     employees. Payroll Entry, Payroll Period, Payroll Settings and Salary Withholding stay HR-only. The
     Salary Slip dashboard source becomes `employeeOwned`, so a widget pinned to an employee's dashboard
-    shows their own rows, not the company's pay.
+    shows their own rows, not the company's pay — and only submitted ones: the submitted-only rule is the
+    source's `selfServiceFilter`, which `salarySlipReadScope` and dashboard widgets both apply
+    (`withSelfServiceFilter`), so the screen and the dashboard cannot drift apart.
   - **Leave balance.** A new read-only `GET /my-leave-balance`, guarded by its own menu row
     (`/my-leave-balance`, "My Leave Balance" under Leaves), never by Leave Ledger Entry. Default is the
     caller's own balance; another `employeeId` is answered only inside the caller's reach, else 403 (PERM-12).
-    Reach mirrors the Leave Application list: `approver` (Employee, Leave Approver) = own + named-approver-for
-    + reporting chain; `team` (managing tiers) = own + reporting chain; `all` (HR User/HR Manager, CEO, the
-    ledger-reading functional roles) = anyone. The numbers reuse the Salary Slip's leave snapshot, moved
-    from `payrollRun.controller.js` to `utils/leaveBalance.js` as `getLeaveBalanceSnapshot` (allocations
-    covering today; left = ledger sum, used = allocated − left). The screen is a page file
+    Reach is own + downward reporting chain for a `team` row (Employee and Leave Approver in the base
+    seed, the managing tiers), anyone for `all` (HR User/HR Manager, CEO, the ledger-reading functional
+    roles), and own only for anything else (the Employee tier is `own`). Being someone's named leave
+    approver adds no reach — the owner's call (2026-10-26): balances follow the reporting line, and Q-30
+    stays open. The numbers reuse the Salary Slip's leave snapshot, moved from `payrollRun.controller.js`
+    to `utils/leaveBalance.js` as `getLeaveBalanceSnapshot` (allocations covering today; allocated = their
+    `totalLeavesAllocated`, so carried-forward and earned days count; left = ledger sum; used = allocated −
+    left). The screen is a page file
     (`pages/Leaves/MyLeaveBalance.jsx`, decision-tree step 4 — a read-only summary, not CRUD) with an
     employee picker only when the caller can see more than themself. `GET /leave-balance` is unchanged.
   - **Applying it to an existing database.** Same as earlier grant changes: `npm run seed` (adds the menu

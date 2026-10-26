@@ -18,6 +18,8 @@
  * - filterable   `{ field: type }` allowlist for widget filters — exactly the
  *                runListQuery grammar (see 30-api.md)
  * - scopeable    ADR-002 scope dimensions, passed to buildScopeFilter at run
+ * - selfServiceFilter  optional match a caller narrower than "all" scope is
+ *                always held to (ADR-043) — see withSelfServiceFilter
  */
 export const WIDGET_SOURCES = Object.freeze({
   "shift-types": {
@@ -1172,8 +1174,10 @@ export const WIDGET_SOURCES = Object.freeze({
     scopeable: {},
     companyConfined: true,
     // ADR-043: Employees can read their own payslips, so a pinned widget must
-    // narrow to the viewer's own rows rather than the whole company's pay.
+    // narrow to the viewer's own rows rather than the whole company's pay —
+    // and, like the Salary Slip screen, to submitted ones only.
     employeeOwned: true,
+    selfServiceFilter: { status: "submitted" },
   },
 
   // ADR-028 (Payroll — Adjustments & Incentives, module 12).

@@ -560,9 +560,9 @@ else is ever trusted as a balance.
 
 **My Leave Balance** (ADR-043) — a read-only screen, not a collection: for each leave type with an
 allocation covering today, allocated / used / left, from the same `getLeaveBalanceSnapshot` a Salary
-Slip's `leaves[]` uses (`utils/leaveBalance.js`; left = the ledger sum, used = allocated − left).
-Everyone sees their own; managers, leave approvers and HR can pick the people in their reach
-(`RULES.md` PERM-12). Employees no longer learn their balance only from an "Insufficient leave
+Slip's `leaves[]` uses (`utils/leaveBalance.js`; allocated = the allocations' total, carried-forward
+and earned days included; left = the ledger sum; used = allocated − left). Everyone sees their own;
+managers can pick their reporting chain and HR anyone (`RULES.md` PERM-12). Employees no longer learn their balance only from an "Insufficient leave
 balance" error. The Leave Ledger itself stays HR-only.
 
 `Department` (ADR-017) gained `parentDepartmentId` (optional self-ref, depth-10-bounded walk, no

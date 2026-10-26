@@ -15,8 +15,8 @@ import { withWithholdingDisplay } from "../../utils/payrollWithholding.js";
  * singleton) so it never touches `attendanceScope`.
  */
 import { runListQuery } from "../../utils/listQuery.js";
-import { attendanceScope } from "../../utils/attendanceScope.js";
-import { SCOPES } from "@demo-panel/shared/scopes";
+import { attendanceScope, withSelfServiceFilter } from "../../utils/attendanceScope.js";
+import { WIDGET_SOURCES } from "../../config/widgetSources.js";
 import { getCurrentSalaryStructureAssignment } from "../../utils/payrollAssignment.js";
 import { calculateSalarySlipForEmployee } from "../../utils/salarySlipCalc.js";
 import { getLeaveBalanceSnapshot } from "../../utils/leaveBalance.js";
@@ -179,13 +179,11 @@ export const updatePayrollSettings = async (req, res) => {
  * ADR-043 (Q-22): reading Salary Slips. A caller whose `/salary-slip` scope is
  * narrower than "all" (an Employee, own-scoped) sees only finished payslips —
  * never a draft HR is still working on, never a cancelled one. HR's "all"
- * scope keeps every status.
+ * scope keeps every status. The rule is the Salary Slip widget source's
+ * `selfServiceFilter`, so dashboards apply the same one.
  */
-const salarySlipReadScope = async (req) => {
-  const scope = await attendanceScope(req, true);
-  if ((req.user.dataScope || SCOPES.ALL) === SCOPES.ALL) return scope;
-  return { $and: [scope, { status: "submitted" }] };
-};
+const salarySlipReadScope = async (req) =>
+  withSelfServiceFilter(req, await attendanceScope(req, true), WIDGET_SOURCES["salary-slips"].selfServiceFilter);
 
 export const createSalarySlipForEmployee = async ({ employeeId, startDate, endDate, salaryStructureAssignmentId }) => {
     

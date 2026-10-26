@@ -62,7 +62,7 @@ export const getLeaveBalanceSnapshot = async (employeeId, asOfDate = new Date())
   const byLeaveType = new Map();
   for (const allocation of allocations) {
     const key = String(allocation.leaveTypeId);
-    byLeaveType.set(key, (byLeaveType.get(key) || 0) + (allocation.newLeavesAllocated || 0));
+    byLeaveType.set(key, (byLeaveType.get(key) || 0) + (allocation.totalLeavesAllocated || 0));
   }
 
   const rows = [];

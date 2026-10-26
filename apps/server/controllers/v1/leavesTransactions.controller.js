@@ -1467,17 +1467,14 @@ export const bulkAllocateLeaves = async (req, res) => {
 
 /**
  * ADR-043: whose balance req.user may read on My Leave Balance — `null`
- * means anyone (HR's "all"). The same reach as the Leave Application list:
- * an approver-scoped caller (the Employee role) sees themself plus everyone
- * they approve leave for or who reports up to them; a team-scoped caller
- * (the org tiers) themself plus their reporting chain. Any other scope is
- * their own balance only.
+ * means anyone (HR's "all"). A team-scoped caller sees themself plus their
+ * downward reporting chain; any other scope is their own balance only —
+ * being someone's named leave approver does not open their balance.
  */
 const leaveBalanceViewerIds = async (req) => {
   if (req.user.role === ROLES.ADMIN || (req.user.dataScope || SCOPES.ALL) === SCOPES.ALL) return null;
   const employee = await resolveRequestEmployee(req);
   const own = employee ? [String(employee._id)] : [];
-  if (req.user.dataScope === SCOPES.APPROVER) return [...new Set([...own, ...(await resolveLeaveVisibilityIds(req))])];
   if (req.user.dataScope === SCOPES.TEAM) return [...own, ...(await getSubordinateEmployeeIds(employee?._id))];
   return own;
 };

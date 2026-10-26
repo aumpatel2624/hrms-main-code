@@ -1814,11 +1814,11 @@ const seedLeaveRoles = async () => {
       "HR User": full,
       "HR Manager": full,
     },
-    // ADR-043: read-only, same reach as Leave Application above — the
-    // controller resolves "approver" to own + approvees + reporting chain.
+    // ADR-043: read-only, own + reporting chain ("team") — unlike Leave
+    // Application above, a named leave approver gets no extra reach here.
     "/my-leave-balance": {
-      Employee: { ...readOnly, dataScope: SCOPES.APPROVER },
-      "Leave Approver": { ...readOnly, dataScope: SCOPES.APPROVER },
+      Employee: { ...readOnly, dataScope: SCOPES.TEAM },
+      "Leave Approver": { ...readOnly, dataScope: SCOPES.TEAM },
       "HR User": readOnly,
       "HR Manager": readOnly,
     },

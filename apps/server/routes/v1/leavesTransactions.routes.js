@@ -12,6 +12,7 @@ import {
   createLeaveEncashment, updateLeaveEncashment, getLeaveEncashmentById, listLeaveEncashmentByParams, markLeaveEncashmentPaid,
   createLeaveBlockList, updateLeaveBlockList, deleteLeaveBlockList, getLeaveBlockListById, listLeaveBlockListByParams,
   bulkCreatePolicyAssignments, bulkAllocateLeaves,
+  getMyLeaveBalance,
 } from "../../controllers/v1/leavesTransactions.controller.js";
 
 const router = express.Router();
@@ -157,5 +158,22 @@ router.post(
   checkPermission("/leave-control-panel", "edit"),
   bulkAllocateLeaves,
 );
+
+// ============================================================ My Leave Balance --
+/**
+ * @swagger
+ * /my-leave-balance:
+ *   get:
+ *     summary: Allocated / used / left per leave type for the current period — the caller's own, or (employeeId) someone in their reach (ADR-043)
+ *     tags: [Leaves]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: employeeId
+ *         required: false
+ *         schema: { type: string }
+ *     responses: { 200: { description: Leave balances }, 403: { description: Employee outside the caller's reach } }
+ */
+router.get("/my-leave-balance", authMiddleware(ANY_ROLE), checkPermission("/my-leave-balance", "read"), getMyLeaveBalance);
 
 export default router;

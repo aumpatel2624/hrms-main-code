@@ -1048,7 +1048,7 @@ export const CONFIG_SCREENS = [
             "Submit and Cancel are the two actions — there is no edit-in-place; get the period/structure right before creating it, since a slip is a point-in-time snapshot.",
             "Only one Salary Slip per employee per exact (Start Date, End Date) pair is allowed.",
         ],
-        roles: "HR User and HR Manager manage records within their company.",
+        roles: "HR User and HR Manager manage records within their company. An employee sees only their own payslips, and only once they are submitted — read-only, with no create, submit or cancel.",
     },
     {
         key: "additional-salary",
@@ -1546,6 +1546,38 @@ export const CUSTOM_SCREENS = [
                 text:
                     "Like the Audit Log, this is read-only for everyone, including administrators — " +
                     "there is no add, edit or delete button, because an editable ledger is not a ledger.",
+            },
+        ],
+    },
+    {
+        key: "my-leave-balance",
+        title: "My Leave Balance",
+        path: "/my-leave-balance",
+        source: "apps/admin/src/pages/Leaves/MyLeaveBalance.jsx",
+        intro:
+            "How much leave you have for the current period — for each leave type you hold an " +
+            "allocation for, what was allocated, what has been used and what is left.",
+        body: [
+            {
+                heading: "Whose balance you can see",
+                text:
+                    "Everyone sees their own balance. A team lead or manager also gets an Employee picker " +
+                    "listing the people who report to them (and anyone whose leave they approve), and HR can " +
+                    "pick anyone. Nobody else's balance is shown.",
+            },
+            {
+                heading: "Where the numbers come from",
+                text:
+                    "Left is worked out from every leave movement recorded for you — allocations, approved " +
+                    "leave, adjustments and encashments — so it changes as soon as a leave application is " +
+                    "approved or cancelled. Used is what was allocated minus what is left. Pending " +
+                    "applications are not taken off until they are approved.",
+            },
+            {
+                heading: "Nothing listed?",
+                text:
+                    "The table only shows leave types with an allocation covering today. If it is empty, " +
+                    "HR has not allocated leave to you for the current period yet.",
             },
         ],
     },

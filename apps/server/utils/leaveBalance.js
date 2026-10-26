@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import LeaveAllocation from "../models/LeaveAllocation.js";
 import LeaveLedgerEntry from "../models/LeaveLedgerEntry.js";
 
 /**
@@ -40,4 +41,34 @@ export const getLeaveBalance = async (employeeId, leaveTypeId, asOfDate = new Da
   ]);
 
   return result?.balance ?? 0;
+};
+
+/**
+ * One row per Leave Type the employee has an allocation covering `asOfDate`
+ * for — a deliberately scoped-down 3-field snapshot (allocated/used/
+ * available), see SalarySlip.js's file-level comment for why this isn't
+ * source's full 5-field `Salary Slip Leave` shape. Shared by the Salary
+ * Slip's `leaves[]` snapshot and the My Leave Balance screen (ADR-043).
+ */
+export const getLeaveBalanceSnapshot = async (employeeId, asOfDate = new Date()) => {
+  const allocations = await LeaveAllocation.find({
+    employeeId,
+    status: "active",
+    fromDate: { $lte: asOfDate },
+    toDate: { $gte: asOfDate },
+  }).lean();
+  if (!allocations.length) return [];
+
+  const byLeaveType = new Map();
+  for (const allocation of allocations) {
+    const key = String(allocation.leaveTypeId);
+    byLeaveType.set(key, (byLeaveType.get(key) || 0) + (allocation.newLeavesAllocated || 0));
+  }
+
+  const rows = [];
+  for (const [leaveTypeId, allocated] of byLeaveType.entries()) {
+    const available = await getLeaveBalance(employeeId, leaveTypeId, asOfDate); // eslint-disable-line no-await-in-loop
+    rows.push({ leaveTypeId, allocated, used: Math.max(0, allocated - available), available });
+  }
+  return rows;
 };

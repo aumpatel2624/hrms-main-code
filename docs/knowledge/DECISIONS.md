@@ -4421,3 +4421,45 @@ consumer; single-branch build
   schema changes): shift codes (Shift Type has none — the name is shown), IP address, swipe date and
   approver remark (no such fields).
 - **Deviates from convention**: no — a page file for a report is decision-tree step 4.
+
+### ADR-043 — Employee self-service: own payslips and My Leave Balance
+
+- **Date**: 2026-10-26
+- **Status**: accepted
+- **Context**: The owner asked why employees cannot see their own payslip or leave balance, and asked for
+  both. Payroll had been built HR-only (PERM-9; Q-22 left the payslip question open). The only balance
+  endpoint, `GET /leave-balance`, is gated by Leave Ledger Entry read and accepts any `employeeId` without
+  checking who asks, so granting it to employees would have shown everyone's balance to everyone; an
+  employee learnt their balance only when a leave application failed with "Insufficient leave balance".
+- **Decision**:
+  - **Payslips** (answers Q-22: yes). The Employee role gets read-only, own-scoped `/salary-slip`
+    (`seedPayrollRoles`); the org tiers already carried that row. The Salary Slip list, search and detail
+    endpoints add `status: "submitted"` for any caller whose scope is narrower than `all`
+    (`salarySlipReadScope`), so an employee never sees a draft HR is still working on or a cancelled slip.
+    HR's `all` scope keeps every status. No write/edit/delete grant: create, submit and cancel stay 403,
+    and the existing Salary Slip screen already hides those buttons. The detail response populates only the
+    slip's own employee name/code, company name, component and leave type names — nothing about other
+    employees. Payroll Entry, Payroll Period, Payroll Settings and Salary Withholding stay HR-only. The
+    Salary Slip dashboard source becomes `employeeOwned`, so a widget pinned to an employee's dashboard
+    shows their own rows, not the company's pay.
+  - **Leave balance.** A new read-only `GET /my-leave-balance`, guarded by its own menu row
+    (`/my-leave-balance`, "My Leave Balance" under Leaves), never by Leave Ledger Entry. Default is the
+    caller's own balance; another `employeeId` is answered only inside the caller's reach, else 403 (PERM-12).
+    Reach mirrors the Leave Application list: `approver` (Employee, Leave Approver) = own + named-approver-for
+    + reporting chain; `team` (managing tiers) = own + reporting chain; `all` (HR User/HR Manager, CEO, the
+    ledger-reading functional roles) = anyone. The numbers reuse the Salary Slip's leave snapshot, moved
+    from `payrollRun.controller.js` to `utils/leaveBalance.js` as `getLeaveBalanceSnapshot` (allocations
+    covering today; left = ledger sum, used = allocated − left). The screen is a page file
+    (`pages/Leaves/MyLeaveBalance.jsx`, decision-tree step 4 — a read-only summary, not CRUD) with an
+    employee picker only when the caller can see more than themself. `GET /leave-balance` is unchanged.
+  - **Applying it to an existing database.** Same as earlier grant changes: `npm run seed` (adds the menu
+    row and the new rows to Employee / Leave Approver / HR User / HR Manager; idempotent, never overwrites a
+    row that exists), then `npm run seed:tiers` (rewrites the tier and functional matrices wholesale, as it
+    always has). Grants are cached for up to a minute in a running server.
+- **Consequences**: An employee's payslip view is the HR Salary Slip screen in read-only form — HR wording,
+  no payslip PDF (out of scope). A pending leave application is not taken off "left" until approved (the
+  ledger is written on approval). The legacy Leave Application list still resolves a `team`-scoped caller to
+  their own rows only (it fills reach only for `approver`); My Leave Balance resolves `team` properly, so a
+  Team Lead can see a report's balance here but not that report's applications there — a pre-existing gap,
+  not changed here. No new collection, so no new `widgetSources` entry.
+- **Deviates from convention**: no.

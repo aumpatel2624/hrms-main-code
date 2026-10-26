@@ -14,6 +14,7 @@ import LoginAttemptLogs from "../pages/Master/LoginAttemptLogs";
 import AuditLog from "../pages/Master/AuditLog";
 import LeaveLedgerEntries from "../pages/Leaves/LeaveLedgerEntries";
 import LeaveControlPanel from "../pages/Leaves/LeaveControlPanel";
+import MyLeaveBalance from "../pages/Leaves/MyLeaveBalance";
 import ShiftAssignmentTool from "../pages/ShiftAttendance/ShiftAssignmentTool";
 import EmployeeAttendanceTool from "../pages/ShiftAttendance/EmployeeAttendanceTool";
 import EmployeeCheckinRegister from "../pages/ShiftAttendance/EmployeeCheckinRegister";
@@ -52,6 +53,8 @@ const authProtectedRoutes = [
     // ADR-024 (module complete): stateless bulk-action form, no stored model
     // — same reasoning as LeaveLedgerEntries above.
     { path: "/leave-control-panel", component: <LeaveControlPanel /> },
+    // ADR-043: a read-only balance summary, no stored model of its own.
+    { path: "/my-leave-balance", component: <MyLeaveBalance /> },
     // ADR-025 (module complete): stateless bulk-action forms, no stored
     // model — same reasoning as LeaveControlPanel above.
     { path: "/shift-assignment-tool", component: <ShiftAssignmentTool /> },

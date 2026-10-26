@@ -1171,7 +1171,9 @@ export const WIDGET_SOURCES = Object.freeze({
     },
     scopeable: {},
     companyConfined: true,
-    employeeOwned: false,
+    // ADR-043: Employees can read their own payslips, so a pinned widget must
+    // narrow to the viewer's own rows rather than the whole company's pay.
+    employeeOwned: true,
   },
 
   // ADR-028 (Payroll — Adjustments & Incentives, module 12).

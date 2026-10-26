@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import mongoose from "mongoose";
 
 /**
@@ -139,10 +140,22 @@ const hiddenPaths = (model) => {
  */
 export const employeeSearch = (field = "employeeId") => ({ field, model: "Employee", fields: ["employeeName", "employeeCode"] });
 
+/**
+ * A deadline (epoch ms) for the list queries run inside it. The global search
+ * sets one around each screen it replays (ADR-044), so MongoDB stops that
+ * screen's queries (`maxTimeMS`) when the search stops waiting for them.
+ */
+export const listQueryDeadline = new AsyncLocalStorage();
+
+const timeLeft = () => {
+    const deadline = listQueryDeadline.getStore();
+    return deadline ? { maxTimeMS: Math.max(1, deadline - Date.now()) } : undefined;
+};
+
 /** Ids of `model` documents whose `fields` contain `match`. */
 const matchingRefIds = async (model, fields, match) => {
     const docs = await mongoose.model(model)
-        .find({ $or: fields.map((field) => ({ [field]: { $regex: escapeRegex(match), $options: "i" } })) }, { _id: 1 })
+        .find({ $or: fields.map((field) => ({ [field]: { $regex: escapeRegex(match), $options: "i" } })) }, { _id: 1 }, timeLeft())
         .lean();
     return docs.map((doc) => doc._id);
 };
@@ -224,5 +237,5 @@ export const runListQuery = async (model, body = {}, { searchFields = [], search
     pipeline.push({ $unwind: { path: "$stage1" } });
     pipeline.push({ $project: { count: "$stage1.count", data: "$stage2" } });
 
-    return model.aggregate(pipeline);
+    return model.aggregate(pipeline, timeLeft());
 };

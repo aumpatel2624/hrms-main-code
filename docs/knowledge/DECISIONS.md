@@ -4437,8 +4437,8 @@ consumer; single-branch build
     "read")` → validators → controller — as the caller, with `{ match, per_page: 5 }`. The matrix gate, the
     menu row's data scope (own / team / approver / department / all), company confinement and the screen's
     search fields therefore come from the screen and cannot drift from it. A screen the role cannot read
-    answers 403 and contributes nothing; each replay gets its own `req.user`, so one screen's scope cannot
-    leak into the next.
+    answers 403 and contributes nothing; each replay gets its own copy of the body and its own `req.user`,
+    so neither a route's input sanitizers nor one screen's scope can leak into the next.
   - The route carries no `checkPermission` of its own — there is no "global search" screen to grant.
     `checkPermission` now tags its middleware with `{ menuUrl, action }` so `buildSearchTargets` can refuse,
     at first use and in the test, any registry route that lacks the screen's own read gate.
@@ -4467,10 +4467,12 @@ consumer; single-branch build
     Referral, whose list ignores the "own" data scope every tier role holds on it, so search would show
     every employee everyone's referred candidates — that gap predates search and is a separate fix, after
     which the screen can rejoin the registry. Results are capped at 5 rows per screen with the full count,
-    and screens are searched 8 at a time. A screen that fails, or has not answered within 5 seconds, is
-    skipped and counted (`failed`) rather than failing the search; a timed-out screen's query is not
-    cancelled and runs on in the background. Once the caller goes away — the box aborts a request a newer
-    keystroke has superseded — no further screen is started.
+    and screens are searched 8 at a time. Each screen gets 5 seconds: its list and name-lookup queries carry
+    a `maxTimeMS` for the time left (`listQueryDeadline` in `utils/listQuery.js`), so MongoDB stops them when
+    the search stops waiting, and a screen that fails or runs out of time is skipped and counted (`failed`)
+    rather than failing the search. The reads a route makes before its list query (the permission check, the
+    caller's employee record) carry no time limit. Once the caller goes away — the box aborts a request a
+    newer keystroke has superseded — no further screen is started; screens already running finish.
   - Rows are the screen's own list rows, so they carry nothing the list does not, and the app-wide
     `json replacer` drops `password` from the response as on every endpoint. Ref lookups search only name,
     code and title fields — never a secret.

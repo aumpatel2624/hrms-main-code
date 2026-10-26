@@ -51,7 +51,7 @@ let pipelines = [];
 let queries = [];
 
 mongoose.Query.prototype.exec = async function exec() {
-  queries.push(this.getFilter());
+  queries.push({ filter: this.getFilter(), maxTimeMS: this.getOptions().maxTimeMS });
   const rows = (db[this.model.modelName] ?? []).filter((doc) => matches(doc, this.getFilter()));
   if (this.op === "find") return rows;
   if (this.op === "countDocuments") return rows.length;
@@ -59,8 +59,8 @@ mongoose.Query.prototype.exec = async function exec() {
   throw new Error(`test stub: unsupported query ${this.op}`);
 };
 
-mongoose.Model.aggregate = async function aggregate(pipeline) {
-  pipelines.push(pipeline);
+mongoose.Model.aggregate = async function aggregate(pipeline, options) {
+  pipelines.push({ pipeline, maxTimeMS: options?.maxTimeMS });
   let rows = db[this.modelName] ?? [];
   for (const stage of pipeline) {
     if (stage.$match) rows = rows.filter((doc) => matches(doc, stage.$match));
@@ -162,7 +162,8 @@ const search = async (employee, term) => {
 const ids = (group) => (group?.rows ?? []).map((row) => String(row._id)).sort();
 const idsOf = (...docs) => docs.map((doc) => String(doc._id)).sort();
 
-// 1. The registry: every entry is a real, gated route that applies the term.
+// 1. The registry: every entry is a real, gated route that applies the term,
+// and its search queries carry the screen's 5-second deadline to MongoDB.
 assert.equal(new Set(GLOBAL_SEARCH_SCREENS.map(({ screen }) => screen)).size, GLOBAL_SEARCH_SCREENS.length, "no screen listed twice");
 const term = "zq-term";
 for (const target of targets) {
@@ -171,6 +172,8 @@ for (const target of targets) {
   const { status } = await replayRoute(target.handlers, requestAs(null), { match: term, skip: 0, per_page: 5 });
   assert.equal(status, 200, `${target.route} answers an admin`);
   assert.ok(JSON.stringify([pipelines, queries]).includes(term), `${target.route} must apply the search term (searchFields or searchRefs)`);
+  const searchRuns = [...pipelines, ...queries.filter((query) => JSON.stringify(query).includes(term))];
+  assert.ok(searchRuns.every(({ maxTimeMS }) => maxTimeMS > 0 && maxTimeMS <= 5000), `${target.route} search queries stop at the screen's deadline`);
 }
 assert.throws(() => buildSearchTargets(app._router, [{ screen: "/employee", route: "/employee-property-changes/search" }]), /not gated/,
   "a route without the screen's own read gate is refused");
@@ -246,6 +249,17 @@ pipelines = [];
 queries = [];
 assert.deepEqual(await runGlobalSearch(requestAs(null), "wedding", targets, gone.signal), { groups: [], failed: 0 });
 assert.equal(pipelines.length + queries.length, 0, "no list was queried");
+
+// 8. A route's sanitizers work on its own copy of the body: Salary Withholding
+// strips "<" from its term, and the next screen still searches it as typed.
+const sharedBody = { match: "zq<term", skip: 0, per_page: 5 };
+const replayScreen = (screen) => replayRoute(targets.find((target) => target.screen === screen).handlers, requestAs(null), sharedBody);
+assert.equal((await replayScreen("/salary-withholding")).status, 200);
+pipelines = [];
+queries = [];
+assert.equal((await replayScreen("/leave-application")).status, 200);
+const nextSearched = JSON.stringify([pipelines, queries]);
+assert.ok(nextSearched.includes("zq<term") && !nextSearched.includes("zqterm"), "the next screen searches the term as typed");
 
 console.log("globalSearch: all checks passed");
 process.exit(0);

@@ -1,4 +1,5 @@
 import { GLOBAL_SEARCH_SCREENS } from "../config/globalSearch.js";
+import { listQueryDeadline } from "./listQuery.js";
 
 /**
  * The header's global search (ADR-044).
@@ -69,12 +70,14 @@ const captureResponse = (done) => {
 
 /**
  * Run one route's handler chain against a request derived from the caller's.
- * Each run gets its own `user`/`employee` slots, so one screen's data scope
- * (written onto req.user by checkPermission) can never leak into the next.
+ * Each run gets its own `body` and `user`/`employee` slots, so neither a
+ * route's sanitizers nor one screen's data scope (written onto req.user by
+ * checkPermission) can leak into the next. Its list queries share its
+ * deadline, so MongoDB stops them when the run times out.
  */
 export const replayRoute = (handlers, req, body) => new Promise((resolve, reject) => {
   const sub = Object.create(req);
-  sub.body = body;
+  sub.body = { ...body };
   sub.params = {};
   sub.query = {};
   sub.user = undefined;
@@ -100,7 +103,7 @@ export const replayRoute = (handlers, req, body) => new Promise((resolve, reject
       fail(thrown);
     }
   };
-  next();
+  listQueryDeadline.run(Date.now() + SCREEN_TIMEOUT_MS, next);
 });
 
 /**

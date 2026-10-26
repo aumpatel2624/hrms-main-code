@@ -1,5 +1,5 @@
 /**
- * Global search API — the header search box (ADR-043).
+ * Global search API — the header search box (ADR-044).
  */
 import api from "./index";
 import { ENDPOINTS } from "./endpoints";

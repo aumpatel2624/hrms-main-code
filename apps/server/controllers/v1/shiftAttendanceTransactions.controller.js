@@ -16,7 +16,7 @@
  * the login User's own id, not the Employee id these two collections key
  * their `employeeId` field on.
  */
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { resolveApprovers } from "../../utils/approvers.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { buildScopeFilter } from "../../utils/scope.js";
@@ -258,6 +258,7 @@ export const listShiftRequestByParams = async (req, res) => {
   try {
     const scopeFilter = await employeeOwnScopeFilter(req);
     const list = await runListQuery(ShiftRequest, req.body, {
+      searchRefs: [employeeSearch()],
       searchFields: [],
       filterable: {
         employeeId: "objectId",
@@ -509,6 +510,7 @@ export const listAttendanceRequestByParams = async (req, res) => {
   try {
     const scopeFilter = await employeeOwnScopeFilter(req);
     const list = await runListQuery(AttendanceRequest, req.body, {
+      searchRefs: [employeeSearch()],
       searchFields: ["explanation"],
       filterable: {
         employeeId: "objectId",

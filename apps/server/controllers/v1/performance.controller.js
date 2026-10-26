@@ -28,7 +28,7 @@ import Goal from "../../models/Goal.js";
 import Employee from "../../models/Employee.js";
 import Designation from "../../models/Designation.js";
 import Company from "../../models/Company.js";
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
 import {
   validateWeightageSum,
@@ -729,7 +729,7 @@ export const listAppraisals = async (req, res) => {
 
 export const searchAppraisals = async (req, res) => {
   try {
-    const data = await runListQuery(Appraisal, req.body, { scopeFilter: await attendanceScope(req, true, { directReports: true }), filterable: APPRAISAL_FILTERABLE, stages: APPRAISAL_LOOKUP_STAGES });
+    const data = await runListQuery(Appraisal, req.body, { searchRefs: [employeeSearch()], scopeFilter: await attendanceScope(req, true, { directReports: true }), filterable: APPRAISAL_FILTERABLE, stages: APPRAISAL_LOOKUP_STAGES });
     return res.status(200).json({ isOk: true, status: 200, data });
   } catch (error) { return failure(res, error); }
 };

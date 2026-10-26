@@ -5,7 +5,7 @@ import { buildSearchTargets, runGlobalSearch } from "../../utils/globalSearch.js
 let targets = null;
 
 /**
- * POST /global-search — the header search box (ADR-043). Replays each
+ * POST /global-search — the header search box (ADR-044). Replays each
  * registered screen's own list search as the caller; see utils/globalSearch.js
  * for why that keeps every result inside what the caller's lists already show.
  *

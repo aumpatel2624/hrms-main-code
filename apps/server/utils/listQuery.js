@@ -134,18 +134,50 @@ const hiddenPaths = (model) => {
 };
 
 /**
+ * `searchRefs` entry for the usual case: the row's employee, matched by name or
+ * code (ADR-044). `field` is the row's Employee ref.
+ */
+export const employeeSearch = (field = "employeeId") => ({ field, model: "Employee", fields: ["employeeName", "employeeCode"] });
+
+const REF_CACHE_MS = 5000;
+const REF_CACHE_MAX = 200;
+const refCache = new Map();
+
+/**
+ * Ids of `model` documents whose `fields` contain `match`. Memoised for a few
+ * seconds: one global search replays dozens of lists with the same term, and
+ * they would otherwise each look up the same employees.
+ */
+const matchingRefIds = (model, fields, match) => {
+    const key = `${model}|${fields.join(",")}|${String(match).toLowerCase()}`;
+    const hit = refCache.get(key);
+    if (hit && Date.now() - hit.at <= REF_CACHE_MS) return hit.ids;
+    if (refCache.size >= REF_CACHE_MAX) refCache.clear();
+    const ids = mongoose.model(model)
+        .find({ $or: fields.map((field) => ({ [field]: { $regex: escapeRegex(match), $options: "i" } })) }, { _id: 1 })
+        .lean()
+        .then((docs) => docs.map((doc) => doc._id));
+    ids.catch(() => refCache.delete(key));
+    refCache.set(key, { at: Date.now(), ids });
+    return ids;
+};
+
+/**
  * Runs the standard list aggregation.
  *
  * @param model    mongoose model
  * @param body     req.body
  * @param options.searchFields fields the free-text `match` searches
+ * @param options.searchRefs   [{ field, model, fields }] — `match` also finds rows whose
+ *                             `field` references a `model` document with `match` in one of
+ *                             its `fields` (e.g. employeeSearch(): the employee's name or code)
  * @param options.filterable   allowlist of filterable fields -> type
  * @param options.stages       $lookup/$addFields to run before filtering
  * @param options.scopeFilter  match from buildScopeFilter() — server-set, never client input
  * @param options.project      extra `{ field: 0 }` exclusions on top of the schema's own
  * @returns the same [{ count, data }] shape the endpoints already returned
  */
-export const runListQuery = async (model, body = {}, { searchFields = [], filterable = {}, stages = [], scopeFilter = null, project = null } = {}) => {
+export const runListQuery = async (model, body = {}, { searchFields = [], searchRefs = [], filterable = {}, stages = [], scopeFilter = null, project = null } = {}) => {
     const { skip = 0, per_page = 100, sorton, sortdir, match, isActive, filters, matchType } = body;
 
     const pipeline = [];
@@ -161,10 +193,14 @@ export const runListQuery = async (model, body = {}, { searchFields = [], filter
     // target the derived names too (e.g. countryName on the state list).
     pipeline.push(...stages);
 
-    if (match && searchFields.length) {
+    if (match && (searchFields.length || searchRefs.length)) {
+        // The scope $match above has already narrowed the rows; a ref lookup
+        // only adds ids to match against, it never widens what is visible.
+        const refClauses = await Promise.all(searchRefs.map(async ({ field, model: refModel, fields }) =>
+            ({ [field]: { $in: await matchingRefIds(refModel, fields, match) } })));
         pipeline.push({
             $match: {
-                $or: searchFields.map((field) => ({ [field]: { $regex: escapeRegex(match), $options: "i" } })),
+                $or: [...searchFields.map((field) => ({ [field]: { $regex: escapeRegex(match), $options: "i" } })), ...refClauses],
             },
         });
     }

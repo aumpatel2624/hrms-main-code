@@ -642,7 +642,7 @@ export const ENDPOINTS = {
         RECORD_HISTORY: (model, documentId) => `${V1}/audit-logs/record/${model}/${documentId}`,
     },
 
-    // The header search box (ADR-043)
+    // The header search box (ADR-044)
     GLOBAL_SEARCH: `${V1}/global-search`,
 
     // Admin endpoints

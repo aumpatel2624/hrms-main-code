@@ -26,7 +26,7 @@ import EmployeePerformanceFeedback from "../../models/EmployeePerformanceFeedbac
 import Appraisal from "../../models/Appraisal.js";
 import AppraisalCycle from "../../models/AppraisalCycle.js";
 import Employee from "../../models/Employee.js";
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
 import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
@@ -249,6 +249,7 @@ export const searchGoals = async (req, res) => {
   try {
     const scopeFilter = await attendanceScope(req, true);
     const data = await runListQuery(Goal, req.body, {
+      searchRefs: [employeeSearch()],
       scopeFilter,
       searchFields: ["goalName"],
       filterable: GOAL_FILTERABLE,
@@ -654,6 +655,7 @@ export const listEmployeePerformanceFeedbacks = async (req, res) => {
 export const searchEmployeePerformanceFeedbacks = async (req, res) => {
   try {
     const data = await runListQuery(EmployeePerformanceFeedback, req.body, {
+      searchRefs: [employeeSearch()],
       scopeFilter: await feedbackScope(req),
       searchFields: ["feedback"],
       filterable: EMPLOYEE_PERFORMANCE_FEEDBACK_FILTERABLE,

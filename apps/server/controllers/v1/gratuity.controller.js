@@ -23,7 +23,7 @@ import Employee from "../../models/Employee.js";
 import Company from "../../models/Company.js";
 import SalaryComponent from "../../models/SalaryComponent.js";
 import SalarySlip from "../../models/SalarySlip.js";
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
 import { getPayrollSettingsDoc } from "./payrollRun.controller.js";
 import { countLwpDaysInRange, getWorkExperience, getGratuityAmount } from "../../utils/gratuityCalc.js";
@@ -333,6 +333,7 @@ export const searchGratuities = async (req, res) => {
   try {
     const scope = await attendanceScope(req, false);
     const data = await runListQuery(Gratuity, req.body, {
+      searchRefs: [employeeSearch()],
       scopeFilter: scope,
       filterable: GRATUITY_FILTERABLE,
       stages: [

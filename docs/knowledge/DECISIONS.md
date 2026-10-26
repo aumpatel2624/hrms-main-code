@@ -4422,42 +4422,61 @@ consumer; single-branch build
   approver remark (no such fields).
 - **Deviates from convention**: no — a page file for a report is decision-tree step 4.
 
-### ADR-043 — Global search in the top bar replays each screen's own list search
+### ADR-044 — Global search in the top bar replays each screen's own list search
 
 - **Date**: 2026-10-26
 - **Status**: accepted
 - **Context**: The owner asked for a search bar in the top bar, between the page title and the theme toggle,
   that searches all the data. Every signed-in user gets it whatever their role, so each person may only ever
-  find records they are already allowed to see.
+  find records they are already allowed to see. Numbered 044: ADR-043 was taken by the parallel payslip and
+  leave-balance work.
 - **Decision**:
   - One endpoint, `POST /global-search` (`{ match }`, 2–100 characters, body allowlisted). It queries no
     collection itself: for each screen in `config/globalSearch.js` it replays that screen's own
     `POST …/search` route in-process (`utils/globalSearch.js`) — authMiddleware → `checkPermission(screen,
     "read")` → validators → controller — as the caller, with `{ match, per_page: 5 }`. The matrix gate, the
     menu row's data scope (own / team / approver / department / all), company confinement and the screen's
-    `searchFields` therefore come from the screen and cannot drift from it. A screen the role cannot read
+    search fields therefore come from the screen and cannot drift from it. A screen the role cannot read
     answers 403 and contributes nothing; each replay gets its own `req.user`, so one screen's scope cannot
     leak into the next.
   - The route carries no `checkPermission` of its own — there is no "global search" screen to grant.
     `checkPermission` now tags its middleware with `{ menuUrl, action }` so `buildSearchTargets` can refuse,
     at first use and in the test, any registry route that lacks the screen's own read gate.
-  - The registry lists only screens whose list search matches text (52 of them); a list with
-    `searchFields: []` ignores the term and would return every row. System plumbing (menus, roles, email
-    setup and templates, dashboard widgets, audit log, admin users) is left out. Results are capped at 5 rows
-    per screen with the full count, screens are searched 6 at a time with a 5-second limit each, and a
-    failing screen is skipped and counted (`failed`) rather than failing the search.
+  - **Lists search by the people and records they point at** (owner ruling, 2026-10-26, closing Q-35).
+    `runListQuery` gains `searchRefs: [{ field, model, fields }]`: the term is first resolved to the ids of
+    `model` documents with the term in `fields`, and rows whose `field` is one of those ids match too, OR-ed
+    with `searchFields`. `employeeSearch(field = "employeeId")` is the common case — the row's employee by
+    name or code. The id lookup only narrows rows the scope `$match` has already limited, so it can never
+    widen what a caller sees; it is memoised per term for 5 seconds because one global search replays dozens
+    of lists with the same term. Every employee-owned list now matches its employee (leave applications,
+    allocations, adjustments, encashments, policy and holiday list assignments, attendance and requests,
+    check-ins, shift assignments and requests, salary slips and structure assignments, additional salary,
+    arrears, retention bonuses, incentives, other income, withholdings, payroll corrections, benefit
+    applications, claims and ledger, tax declarations and proofs, gratuity, expense claims, travel, grievances
+    by who raised them, transfers, promotions, separations, exit interviews, F&F statements, skill maps,
+    goals, appraisals, performance and training feedback); interview feedback matches its interviewer and job
+    requisitions their requester. Records keyed by something else match its name: interviews and job offers
+    the applicant, job requisitions the designation, holiday list assignments the holiday list, shift
+    schedules the shift type, staffing plans the department. Leave encashments also match their payment
+    reference and other income its source. This widens each of those screens' own list search box too —
+    accepted with the ruling.
+  - The registry lists every screen whose list search applies the term — 90 of them. Left out: system
+    plumbing (menus, roles, email setup and templates, dashboard widgets, audit log, admin users); Leave
+    Period, Payroll Period, Payroll Entry and Salary Structure, which carry nothing identifying (dates, a
+    company, amounts); Leave Ledger Entry, which has no view page to open. Results are capped at 5 rows per
+    screen with the full count, screens are searched 8 at a time with a 5-second limit each, and a failing
+    screen is skipped and counted (`failed`) rather than failing the search.
   - Rows are the screen's own list rows, so they carry nothing the list does not; credential, token and
-    lock keys are stripped again on the way out on top of the app-wide `json replacer`.
+    lock keys are stripped again on the way out on top of the app-wide `json replacer`. Ref lookups search
+    only name, code and title fields — never a secret.
   - The admin box (`components/ui/global-search.jsx`, in `Layouts/index.jsx`) debounces 300 ms, groups by
     screen with the entity config's `plural`, shows each row as its `recordTitle` plus one column value, and
     links to `${config.path}/${_id}` — the existing view page. Below the `sm` breakpoint it collapses to an
     icon that opens a full-width search row over the top bar.
-- **Consequences**: Search reaches exactly what each screen's own search box reaches. About 50 list screens
-  have no `searchFields` (salary slips, salary structure assignments, leave allocations, expense claims,
-  appraisals, check-ins, shift assignments, among others), so their records are not findable by text until
-  those screens' list search is given fields — which would change the list screens too, and is a separate
-  decision. Leave applications match their description only, not the employee's name, because that is what
-  their list searches. Adding a screen to global search is one registry line once its list search matches
-  text; `globalSearch.test.js` fails if a listed route stops applying the term or loses its read gate.
-  No `widgetSources` change: no model changed.
+- **Consequences**: Search reaches exactly what each screen's own search box reaches, and those boxes now
+  find records by employee name or code. Adding a screen is one registry line once its list search applies
+  the term; `globalSearch.test.js` fails if a listed route stops applying it or loses its read gate. The ref
+  join is one hop and by name only — a slip cannot be found by its department, say. `searchRefs` is a new
+  `runListQuery` option the Tier-1 `30-api.md` does not yet describe (it is frozen; documenting it there needs
+  the owner's go-ahead). No `widgetSources` change: no model changed.
 - **Deviates from convention**: no.

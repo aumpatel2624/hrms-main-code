@@ -47,8 +47,10 @@ const matches = (doc, filter = {}) => Object.entries(filter).every(([key, cond])
 
 let db = {};
 let pipelines = [];
+let queries = [];
 
 mongoose.Query.prototype.exec = async function exec() {
+  queries.push(this.getFilter());
   const rows = (db[this.model.modelName] ?? []).filter((doc) => matches(doc, this.getFilter()));
   if (this.op === "find") return rows;
   if (this.op === "countDocuments") return rows.length;
@@ -120,6 +122,14 @@ db = {
     { _id: oid(), raisedByEmployeeId: asha._id, subject: "Wedding leave refused", isActive: true },
     { _id: oid(), raisedByEmployeeId: ravi._id, subject: "Wedding bonus missing", isActive: true },
   ],
+  ExpenseClaim: [
+    { _id: oid(), employeeId: asha._id, companyId: acme, isActive: true },
+    { _id: oid(), employeeId: ravi._id, companyId: acme, isActive: true },
+  ],
+  SalarySlip: [
+    { _id: oid(), employeeId: asha._id, companyId: acme, isActive: true },
+    { _id: oid(), employeeId: ravi._id, companyId: acme, isActive: true },
+  ],
   SalaryComponent: [
     { _id: oid(), companyId: acme, salaryComponentName: "Wedding Allowance", abbreviation: "WA", isActive: true },
     { _id: oid(), companyId: globex, salaryComponentName: "Wedding Gift", abbreviation: "WG", isActive: true },
@@ -144,25 +154,36 @@ const idsOf = (...docs) => docs.map((doc) => String(doc._id)).sort();
 
 // 1. The registry: every entry is a real, gated route that applies the term.
 assert.equal(new Set(GLOBAL_SEARCH_SCREENS.map(({ screen }) => screen)).size, GLOBAL_SEARCH_SCREENS.length, "no screen listed twice");
-for (const target of targets) {
+for (const [index, target] of targets.entries()) {
+  // A fresh term each time: ref lookups are memoised per term.
+  const term = `zq-term-${index}`;
   pipelines = [];
-  const { status } = await replayRoute(target.handlers, requestAs(null), { match: "zq-term", skip: 0, per_page: 5 });
+  queries = [];
+  const { status } = await replayRoute(target.handlers, requestAs(null), { match: term, skip: 0, per_page: 5 });
   assert.equal(status, 200, `${target.route} answers an admin`);
-  assert.ok(JSON.stringify(pipelines).includes("zq-term"), `${target.route} must apply the search term (non-empty searchFields)`);
+  assert.ok(JSON.stringify([pipelines, queries]).includes(term), `${target.route} must apply the search term (searchFields or searchRefs)`);
 }
 assert.throws(() => buildSearchTargets(app._router, [{ screen: "/employee", route: "/employee-property-changes/search" }]), /not gated/,
   "a route without the screen's own read gate is refused");
 
 // 2. A plain Employee finds their own records and nobody else's.
 const asAsha = await search(asha, "wedding");
+const ownGroups = ["/employee", "/employee-grievance", "/expense-claim", "/leave-application", "/salary-slip"];
 assert.deepEqual(ids(asAsha["/leave-application"]), idsOf(db.LeaveApplication[0]), "own leave application only");
 assert.deepEqual(ids(asAsha["/employee-grievance"]), idsOf(db.EmployeeGrievance[0]), "own grievance only");
 assert.deepEqual(ids(asAsha["/employee"]), idsOf(asha), "own employee record only");
-assert.equal((await search(asha, "Ravi"))["/employee"], undefined, "a colleague's name finds nothing");
+assert.deepEqual(await search(asha, "Ravi"), {}, "a colleague's name finds nothing on any screen");
+
+// ...including the records found through the employee's name or code (ADR-044).
+const byOwnName = await search(asha, "asha");
+assert.deepEqual(ids(byOwnName["/expense-claim"]), idsOf(db.ExpenseClaim[0]), "own expense claim by own name");
+assert.deepEqual(ids(byOwnName["/salary-slip"]), idsOf(db.SalarySlip[0]), "own salary slip by own name");
+assert.deepEqual(ids(byOwnName["/leave-application"]), idsOf(db.LeaveApplication[0]), "own leave application by own name");
+assert.deepEqual(ids((await search(asha, "e-001"))["/salary-slip"]), idsOf(db.SalarySlip[0]), "own salary slip by own employee code");
 
 // 3. A screen the role cannot read never contributes, even when rows match.
 assert.equal(asAsha["/salary-component"], undefined, "Employee has no read on Salary Component");
-assert.deepEqual(Object.keys(asAsha).sort(), ["/employee", "/employee-grievance", "/leave-application"]);
+assert.deepEqual(Object.keys(asAsha).sort(), ownGroups);
 
 // 4. HR finds records across the company; company confinement still holds.
 const asHr = await search(hrExec, "wedding");
@@ -171,6 +192,11 @@ assert.deepEqual(ids(asHr["/employee-grievance"]), idsOf(...db.EmployeeGrievance
 assert.deepEqual(ids(asHr["/employee"]), idsOf(asha, ravi), "HR sees every matching employee");
 const asHrHead = await search(hrHead, "wedding");
 assert.deepEqual(ids(asHrHead["/salary-component"]), idsOf(db.SalaryComponent[0]), "only the caller's company's components");
+assert.deepEqual(ids(asHrHead["/expense-claim"]), idsOf(...db.ExpenseClaim), "HR finds every expense claim by name");
+assert.deepEqual(ids(asHrHead["/salary-slip"]), idsOf(...db.SalarySlip), "HR finds every salary slip by name");
+const ravisByHrExec = await search(hrExec, "ravi");
+assert.deepEqual(ids(ravisByHrExec["/leave-application"]), idsOf(db.LeaveApplication[1]), "HR Executive finds a colleague's leave by name");
+assert.equal(ravisByHrExec["/salary-slip"], undefined, "HR Executive's salary slip grant is own-only");
 
 // 5. Admin sees everything, as on the screens; results are capped per screen.
 db.LeaveApplication.push(...Array.from({ length: 6 }, (_, i) => ({ _id: oid(), employeeId: ravi._id, companyId: acme, description: `Wedding ${i}`, isActive: true })));
@@ -193,7 +219,7 @@ assert.equal((await replayRoute(handlers, requestAs(asha), { match: { $ne: "" } 
 assert.equal((await replayRoute(handlers, requestAs(asha), { match: "wedding", per_page: 500 })).status, 400, "no other body keys");
 const viaRoute = await replayRoute(handlers, requestAs(asha), { match: "  wedding " });
 assert.equal(viaRoute.status, 200);
-assert.deepEqual(viaRoute.body.data.map((group) => group.screen).sort(), ["/employee", "/employee-grievance", "/leave-application"]);
+assert.deepEqual(viaRoute.body.data.map((group) => group.screen).sort(), ownGroups);
 
 console.log("globalSearch: all checks passed");
 process.exit(0);

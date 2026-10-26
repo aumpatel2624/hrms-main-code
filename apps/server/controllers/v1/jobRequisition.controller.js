@@ -3,7 +3,7 @@
  * of the hiring funnel. `makeJobOpening` maps this into a draft Job Opening
  * payload for the client to review/save; it does not auto-create+save one.
  */
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import JobRequisition from "../../models/JobRequisition.js";
 import {
   getReferencingCounts,
@@ -140,6 +140,7 @@ export const listJobRequisitions = async (req, res) => {
 export const listJobRequisitionsByParams = async (req, res) => {
   try {
     const list = await runListQuery(JobRequisition, req.body, {
+      searchRefs: [{ field: "designationId", model: "Designation", fields: ["designationName"] }, employeeSearch("requestedById")],
       searchFields: [],
       filterable: {
         designationId: "objectId", departmentId: "objectId", companyId: "objectId",

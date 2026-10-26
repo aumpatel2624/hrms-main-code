@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { ROLES } from "@demo-panel/shared/roles";
@@ -294,6 +294,7 @@ export const searchAdditionalSalaries = async (req, res) => {
   try {
     const scope = await attendanceScope(req, false);
     const result = await runListQuery(AdditionalSalary, req.body, {
+      searchRefs: [employeeSearch()],
       scopeFilter: scope,
       filterable: ADDITIONAL_SALARY_FILTERABLE,
       stages: ADDITIONAL_SALARY_STAGES,
@@ -480,6 +481,7 @@ export const searchArrears = async (req, res) => {
   try {
     const scope = await attendanceScope(req, false);
     const result = await runListQuery(Arrear, req.body, {
+      searchRefs: [employeeSearch()],
       scopeFilter: scope,
       filterable: ARREAR_FILTERABLE,
       stages: ARREAR_STAGES,
@@ -700,6 +702,7 @@ export const searchRetentionBonuses = async (req, res) => {
   try {
     const scope = await attendanceScope(req, false);
     const result = await runListQuery(RetentionBonus, req.body, {
+      searchRefs: [employeeSearch()],
       scopeFilter: scope,
       filterable: RETENTION_BONUS_FILTERABLE,
       stages: RETENTION_BONUS_STAGES,
@@ -902,6 +905,7 @@ export const searchEmployeeIncentives = async (req, res) => {
   try {
     const scope = await attendanceScope(req, false);
     const result = await runListQuery(EmployeeIncentive, req.body, {
+      searchRefs: [employeeSearch()],
       scopeFilter: scope,
       filterable: EMPLOYEE_INCENTIVE_FILTERABLE,
       stages: EMPLOYEE_INCENTIVE_STAGES,
@@ -1107,6 +1111,7 @@ export const searchEmployeeOtherIncomes = async (req, res) => {
   try {
     const scope = await attendanceScope(req, true); // employeeOwned: true for self-service
     const result = await runListQuery(EmployeeOtherIncome, req.body, {
+      searchFields: ["source"], searchRefs: [employeeSearch()],
       scopeFilter: scope,
       filterable: EMPLOYEE_OTHER_INCOME_FILTERABLE,
       stages: EMPLOYEE_OTHER_INCOME_STAGES,

@@ -1,7 +1,7 @@
 import { GLOBAL_SEARCH_SCREENS } from "../config/globalSearch.js";
 
 /**
- * The header's global search (ADR-043).
+ * The header's global search (ADR-044).
  *
  * It does not query any collection itself. For every screen in the registry
  * it replays that screen's own `POST …/search` route in-process — the same
@@ -17,7 +17,7 @@ import { GLOBAL_SEARCH_SCREENS } from "../config/globalSearch.js";
 export const MIN_TERM = 2;
 export const MAX_TERM = 100;
 export const PER_SCREEN = 5;
-const CONCURRENCY = 6;
+const CONCURRENCY = 8;
 const SCREEN_TIMEOUT_MS = 5000;
 
 // Defence in depth on top of the app-wide `json replacer` and each list's

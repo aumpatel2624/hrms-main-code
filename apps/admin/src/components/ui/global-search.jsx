@@ -5,7 +5,7 @@ import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Input } from "@/components/base/input/input";
 import { LoadingIndicator } from "@/components/application/loading-indicator/loading-indicator";
 import { UNIFORM_ENTITIES } from "@/entities";
-import { ADVANCED_ENTITIES } from "@/entities/advanced";
+import { ADVANCED_ENTITIES, employeeCheckinConfig } from "@/entities/advanced";
 import { globalSearch } from "@/api/globalSearch.api";
 import { cx } from "@/utils/cx";
 
@@ -14,7 +14,9 @@ const DEBOUNCE_MS = 300;
 
 // The server answers with each screen's menuUrl, which is its entity config's
 // `path` — that config supplies the group label, the row title and the link.
-const CONFIG_BY_PATH = new Map([...UNIFORM_ENTITIES, ...ADVANCED_ENTITIES].map((config) => [config.path, config]));
+// Employee Checkin's list route is the register page, but its view route is
+// still the config's, so its punches open like any other record.
+const CONFIG_BY_PATH = new Map([...UNIFORM_ENTITIES, ...ADVANCED_ENTITIES, employeeCheckinConfig].map((config) => [config.path, config]));
 
 const asText = (value) => (typeof value === "string" || typeof value === "number" ? String(value).trim() : "");
 
@@ -39,7 +41,7 @@ const describe = (config, row) => {
 };
 
 /**
- * The search box in the layout's top bar (ADR-043). Searches every screen the
+ * The search box in the layout's top bar (ADR-044). Searches every screen the
  * signed-in user can read, through POST /global-search, and lists a few
  * matches per screen; picking one opens that record's view page.
  */

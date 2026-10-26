@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ChevronLeftDouble, ChevronRightDouble, Menu02, Moon01, Sun, X as XClose } from "@untitledui/icons";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { cx } from "@/utils/cx";
+import GlobalSearch from "@/components/ui/global-search";
 import SidebarNav from "./SidebarNav";
 import ProfileMenu from "./ProfileMenu";
 import Footer from "./Footer";
@@ -87,6 +88,7 @@ const Layout = ({ children }) => {
                         section with its own toolbar (the documentation) adds to
                         this bar rather than stacking a second one beneath it. */}
                     <div id="app-header-slot" className="flex min-w-0 flex-1 items-center gap-3" />
+                    <GlobalSearch />
                     <ButtonUtility
                         size="sm"
                         color="tertiary"

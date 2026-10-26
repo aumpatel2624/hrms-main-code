@@ -11,7 +11,7 @@
  * of this file's models — none of that is here.
  */
 import mongoose from "mongoose";
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import {
   getReferencingCounts,
   formatReferenceMessage,
@@ -522,6 +522,7 @@ export const listHolidayListAssignments = async (_req, res) => {
 export const listHolidayListAssignmentByParams = async (req, res) => {
   try {
     const list = await runListQuery(HolidayListAssignment, req.body, {
+      searchRefs: [employeeSearch(), { field: "holidayListId", model: "HolidayList", fields: ["holidayListName"] }],
       searchFields: [],
       filterable: {
         holidayListId: "objectId",
@@ -787,6 +788,7 @@ export const listLeavePolicyAssignments = async (_req, res) => {
 export const listLeavePolicyAssignmentByParams = async (req, res) => {
   try {
     const list = await runListQuery(LeavePolicyAssignment, req.body, {
+      searchRefs: [employeeSearch()],
       // The admin column shows employeeName; without this it fell back to the raw id.
       stages: [
         { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employee" } },
@@ -1136,6 +1138,7 @@ export const listLeaveAllocations = async (req, res) => {
 export const listLeaveAllocationByParams = async (req, res) => {
   try {
     const list = await runListQuery(LeaveAllocation, req.body, {
+      searchRefs: [employeeSearch()],
       scopeFilter: await attendanceScope(req, true),
       // The admin column shows employeeName; without this it fell back to the raw id.
       stages: [
@@ -1250,6 +1253,7 @@ export const getLeaveLedgerEntryById = async (req, res) => {
 export const listLeaveLedgerEntryByParams = async (req, res) => {
   try {
     const list = await runListQuery(LeaveLedgerEntry, req.body, {
+      searchRefs: [employeeSearch()],
       searchFields: [],
       filterable: {
         employeeId: "objectId",

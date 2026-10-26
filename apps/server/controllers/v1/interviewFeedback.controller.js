@@ -4,7 +4,7 @@
  * parent Interview, not before its scheduledOn date, one feedback per
  * interviewer per interview (also a DB unique index — belt and suspenders).
  */
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import InterviewFeedback from "../../models/InterviewFeedback.js";
 import Interview from "../../models/Interview.js";
 import {
@@ -143,6 +143,7 @@ export const listInterviewFeedbacks = async (req, res) => {
 export const listInterviewFeedbacksByParams = async (req, res) => {
   try {
     const list = await runListQuery(InterviewFeedback, req.body, {
+      searchRefs: [employeeSearch("interviewerId")],
       searchFields: [],
       filterable: {
         interviewId: "objectId", interviewerId: "objectId", result: "enum",

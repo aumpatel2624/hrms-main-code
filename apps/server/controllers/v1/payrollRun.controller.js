@@ -14,7 +14,7 @@ import { withWithholdingDisplay } from "../../utils/payrollWithholding.js";
  * `PayrollSettings` has no company dimension at all (a true global
  * singleton) so it never touches `attendanceScope`.
  */
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { attendanceScope, withSelfServiceFilter } from "../../utils/attendanceScope.js";
 import { WIDGET_SOURCES } from "../../config/widgetSources.js";
 import { getCurrentSalaryStructureAssignment } from "../../utils/payrollAssignment.js";
@@ -349,6 +349,7 @@ export const listSalarySlips = async (req, res) => {
 export const searchSalarySlips = async (req, res) => {
   try {
     const data = await runListQuery(SalarySlip, req.body, {
+      searchRefs: [employeeSearch()],
       scopeFilter: await salarySlipReadScope(req),
       searchFields: [],
       filterable: {

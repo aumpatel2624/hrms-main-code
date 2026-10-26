@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { SCOPES } from "@demo-panel/shared/scopes";
@@ -311,6 +311,7 @@ export const searchEmployeeBenefitApplications = async (req, res) => {
   try {
     const scope = await attendanceScope(req, true);
     const data = await runListQuery(EmployeeBenefitApplication, req.body, {
+      searchRefs: [employeeSearch()],
       scopeFilter: scope,
       filterable: EMPLOYEE_BENEFIT_APPLICATION_FILTERABLE,
       stages: [
@@ -699,6 +700,7 @@ export const searchEmployeeBenefitClaims = async (req, res) => {
   try {
     const scope = await attendanceScope(req, true);
     const data = await runListQuery(EmployeeBenefitClaim, req.body, {
+      searchRefs: [employeeSearch()],
       scopeFilter: scope,
       filterable: EMPLOYEE_BENEFIT_CLAIM_FILTERABLE,
       stages: [
@@ -868,6 +870,7 @@ export const searchEmployeeBenefitLedgers = async (req, res) => {
     const scope = await attendanceScope(req, true);
     const filter = { ...scope, isDeleted: { $ne: true } };
     const data = await runListQuery(EmployeeBenefitLedger, req.body, {
+      searchRefs: [employeeSearch()],
       scopeFilter: filter,
       filterable: EMPLOYEE_BENEFIT_LEDGER_FILTERABLE,
       stages: [
@@ -1115,6 +1118,7 @@ export const searchPayrollCorrections = async (req, res) => {
   try {
     const scope = await attendanceScope(req, false);
     const data = await runListQuery(PayrollCorrection, req.body, {
+      searchRefs: [employeeSearch()],
       scopeFilter: scope,
       filterable: PAYROLL_CORRECTION_FILTERABLE,
       stages: [

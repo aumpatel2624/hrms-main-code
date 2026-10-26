@@ -564,7 +564,7 @@ sum) — the same number a leave application is validated against. No allocated/
 issue, tracked as a follow-up: the allocation-expiry job expires an allocation's whole grant rather than
 what is left of it, so from the second leave period on a balance can come out short by the previous
 period's leave taken. Everyone sees their own; managers can pick their reporting chain and HR anyone in their company
-(`RULES.md` PERM-12). Employees no longer learn their balance only from an "Insufficient leave
+(`RULES.md` PERM-13). Employees no longer learn their balance only from an "Insufficient leave
 balance" error. The Leave Ledger itself stays HR-only.
 
 `Department` (ADR-017) gained `parentDepartmentId` (optional self-ref, depth-10-bounded walk, no

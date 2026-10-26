@@ -1,7 +1,7 @@
 // ponytail: one runnable check, no framework. `node apps/server/utils/listQuery.test.js`
 import assert from "node:assert/strict";
 import mongoose from "mongoose";
-import { buildFilterMatch, OPERATORS, runListQuery } from "./listQuery.js";
+import { buildFilterMatch, employeeSearch, OPERATORS, runListQuery } from "./listQuery.js";
 
 const allow = { countryName: "string", isActive: "boolean", sequence: "number", createdAt: "date", roleId: "objectId" };
 
@@ -84,5 +84,33 @@ HasIsActive.aggregate = async (stages) => {
 };
 await runListQuery(HasIsActive, { isActive: false });
 assert.deepEqual(pipeline[0], { $match: { isActive: false } });
+
+// searchRefs (ADR-044): the term also matches rows whose ref points at a
+// document with the term in its own fields — looked up by id, after scope.
+const RefTarget = mongoose.model("ListQueryRefTargetTest", new mongoose.Schema({ employeeName: String, employeeCode: String }));
+const asha = new mongoose.Types.ObjectId();
+let refFilter;
+RefTarget.find = (filter) => {
+    refFilter = filter;
+    return { lean: async () => [{ _id: asha }] };
+};
+const WithRef = mongoose.model("ListQueryWithRefTest", new mongoose.Schema({ remarks: String, employeeId: mongoose.Schema.Types.ObjectId }));
+WithRef.aggregate = async (stages) => {
+    pipeline = stages;
+    return [];
+};
+await runListQuery(WithRef, { match: "as.ha" }, {
+    searchFields: ["remarks"],
+    searchRefs: [{ ...employeeSearch(), model: "ListQueryRefTargetTest" }],
+    scopeFilter: { companyId: "c1" },
+});
+assert.deepEqual(refFilter, { $or: [{ employeeName: { $regex: "as\\.ha", $options: "i" } }, { employeeCode: { $regex: "as\\.ha", $options: "i" } }] });
+assert.deepEqual(pipeline[0], { $match: { companyId: "c1" } }, "scope stays first");
+assert.deepEqual(pipeline[1], { $match: { $or: [{ remarks: { $regex: "as\\.ha", $options: "i" } }, { employeeId: { $in: [asha] } }] } });
+
+// A ref-only search with no matching employee matches nothing, never everything.
+RefTarget.find = () => ({ lean: async () => [] });
+await runListQuery(WithRef, { match: "nobody" }, { searchRefs: [{ ...employeeSearch(), model: "ListQueryRefTargetTest" }] });
+assert.deepEqual(pipeline[1], { $match: { $or: [{ employeeId: { $in: [] } }] } });
 
 console.log("listQuery: all checks passed");

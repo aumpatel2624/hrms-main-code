@@ -8,7 +8,7 @@
  * every returned asset Returned) still gates markAsPaid, same as source's
  * real before_submit checks.
  */
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import FullAndFinalStatement from "../../models/FullAndFinalStatement.js";
 import Employee from "../../models/Employee.js";
 import Gratuity from "../../models/Gratuity.js";
@@ -190,6 +190,7 @@ export const listFullAndFinalStatements = async (req, res) => {
 export const listFullAndFinalStatementsByParams = async (req, res) => {
   try {
     const list = await runListQuery(FullAndFinalStatement, req.body, {
+      searchRefs: [employeeSearch()],
       searchFields: [],
       filterable: {
         employeeId: "objectId", companyId: "objectId", status: "enum",

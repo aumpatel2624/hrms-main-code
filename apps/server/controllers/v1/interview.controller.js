@@ -166,6 +166,7 @@ export const listInterviews = async (req, res) => {
 export const listInterviewsByParams = async (req, res) => {
   try {
     const list = await runListQuery(Interview, req.body, {
+      searchRefs: [{ field: "jobApplicantId", model: "JobApplicant", fields: ["applicantName"] }],
       searchFields: [],
       filterable: {
         interviewTypeId: "objectId", jobApplicantId: "objectId", designationId: "objectId",

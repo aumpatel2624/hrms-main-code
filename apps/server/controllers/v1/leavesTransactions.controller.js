@@ -15,7 +15,7 @@
  * project's universal soft-delete convention.
  */
 import mongoose from "mongoose";
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { getReferencingCounts, formatReferenceMessage } from "../../utils/referenceHelper.js";
 import { getLeaveBalance } from "../../utils/leaveBalance.js";
 import { resolveApprovers, getEmployeesApprovedBy } from "../../utils/approvers.js";
@@ -205,6 +205,7 @@ export const getLeaveAdjustmentById = async (req, res) => {
 export const listLeaveAdjustmentByParams = async (req, res) => {
   try {
     const list = await runListQuery(LeaveAdjustment, req.body, {
+      searchRefs: [employeeSearch()],
       stages: EMPLOYEE_NAME_STAGES,
       searchFields: [],
       filterable: {
@@ -378,6 +379,7 @@ export const listCompensatoryLeaveRequestByParams = async (req, res) => {
     const scopeFilter = buildScopeFilter(req.user, { owner: "employeeId", approverIds });
 
     const list = await runListQuery(CompensatoryLeaveRequest, req.body, {
+      searchRefs: [employeeSearch()],
       stages: EMPLOYEE_NAME_STAGES,
       searchFields: ["reason"],
       filterable: {
@@ -875,6 +877,7 @@ export const listLeaveApplicationByParams = async (req, res) => {
     const scopeFilter = await leaveApplicationScope(req);
 
     const list = await runListQuery(LeaveApplication, req.body, {
+      searchRefs: [employeeSearch()],
       searchFields: ["description"],
       filterable: {
         employeeId: "objectId",
@@ -1190,8 +1193,9 @@ export const getLeaveEncashmentById = async (req, res) => {
 export const listLeaveEncashmentByParams = async (req, res) => {
   try {
     const list = await runListQuery(LeaveEncashment, req.body, {
+      searchRefs: [employeeSearch()],
       stages: EMPLOYEE_NAME_STAGES,
-      searchFields: [],
+      searchFields: ["paymentReference"],
       filterable: {
         employeeId: "objectId",
         leaveTypeId: "objectId",

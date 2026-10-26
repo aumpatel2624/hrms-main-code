@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { SCOPES } from "@demo-panel/shared/scopes";
@@ -540,6 +540,7 @@ export const searchEmployeeTaxExemptionDeclarations = async (req, res) => {
   try {
     const scopeFilter = await attendanceScope(req, true);
     const data = await runListQuery(EmployeeTaxExemptionDeclaration, req.body, {
+      searchRefs: [employeeSearch()],
       scopeFilter,
       searchFields: [],
       filterable: {
@@ -836,6 +837,7 @@ export const searchEmployeeTaxExemptionProofSubmissions = async (req, res) => {
   try {
     const scopeFilter = await attendanceScope(req, true);
     const data = await runListQuery(EmployeeTaxExemptionProofSubmission, req.body, {
+      searchRefs: [employeeSearch()],
       scopeFilter,
       searchFields: [],
       filterable: {

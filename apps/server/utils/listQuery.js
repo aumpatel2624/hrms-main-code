@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import mongoose from "mongoose";
 
 /**
@@ -134,18 +135,47 @@ const hiddenPaths = (model) => {
 };
 
 /**
+ * `searchRefs` entry for the usual case: the row's employee, matched by name or
+ * code (ADR-044). `field` is the row's Employee ref.
+ */
+export const employeeSearch = (field = "employeeId") => ({ field, model: "Employee", fields: ["employeeName", "employeeCode"] });
+
+/**
+ * A deadline (epoch ms) for the list queries run inside it. The global search
+ * sets one around each screen it replays (ADR-044), so MongoDB stops that
+ * screen's queries (`maxTimeMS`) when the search stops waiting for them.
+ */
+export const listQueryDeadline = new AsyncLocalStorage();
+
+const timeLeft = () => {
+    const deadline = listQueryDeadline.getStore();
+    return deadline ? { maxTimeMS: Math.max(1, deadline - Date.now()) } : undefined;
+};
+
+/** Ids of `model` documents whose `fields` contain `match`. */
+const matchingRefIds = async (model, fields, match) => {
+    const docs = await mongoose.model(model)
+        .find({ $or: fields.map((field) => ({ [field]: { $regex: escapeRegex(match), $options: "i" } })) }, { _id: 1 }, timeLeft())
+        .lean();
+    return docs.map((doc) => doc._id);
+};
+
+/**
  * Runs the standard list aggregation.
  *
  * @param model    mongoose model
  * @param body     req.body
  * @param options.searchFields fields the free-text `match` searches
+ * @param options.searchRefs   [{ field, model, fields }] — `match` also finds rows whose
+ *                             `field` references a `model` document with `match` in one of
+ *                             its `fields` (e.g. employeeSearch(): the employee's name or code)
  * @param options.filterable   allowlist of filterable fields -> type
  * @param options.stages       $lookup/$addFields to run before filtering
  * @param options.scopeFilter  match from buildScopeFilter() — server-set, never client input
  * @param options.project      extra `{ field: 0 }` exclusions on top of the schema's own
  * @returns the same [{ count, data }] shape the endpoints already returned
  */
-export const runListQuery = async (model, body = {}, { searchFields = [], filterable = {}, stages = [], scopeFilter = null, project = null } = {}) => {
+export const runListQuery = async (model, body = {}, { searchFields = [], searchRefs = [], filterable = {}, stages = [], scopeFilter = null, project = null } = {}) => {
     const { skip = 0, per_page = 100, sorton, sortdir, match, isActive, filters, matchType } = body;
 
     const pipeline = [];
@@ -161,10 +191,14 @@ export const runListQuery = async (model, body = {}, { searchFields = [], filter
     // target the derived names too (e.g. countryName on the state list).
     pipeline.push(...stages);
 
-    if (match && searchFields.length) {
+    if (match && (searchFields.length || searchRefs.length)) {
+        // The scope $match above has already narrowed the rows; a ref lookup
+        // only adds ids to match against, it never widens what is visible.
+        const refClauses = await Promise.all(searchRefs.map(async ({ field, model: refModel, fields }) =>
+            ({ [field]: { $in: await matchingRefIds(refModel, fields, match) } })));
         pipeline.push({
             $match: {
-                $or: searchFields.map((field) => ({ [field]: { $regex: escapeRegex(match), $options: "i" } })),
+                $or: [...searchFields.map((field) => ({ [field]: { $regex: escapeRegex(match), $options: "i" } })), ...refClauses],
             },
         });
     }
@@ -203,5 +237,5 @@ export const runListQuery = async (model, body = {}, { searchFields = [], filter
     pipeline.push({ $unwind: { path: "$stage1" } });
     pipeline.push({ $project: { count: "$stage1.count", data: "$stage2" } });
 
-    return model.aggregate(pipeline);
+    return model.aggregate(pipeline, timeLeft());
 };

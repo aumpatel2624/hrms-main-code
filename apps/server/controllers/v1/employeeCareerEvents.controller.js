@@ -9,7 +9,7 @@ import EmployeeTransfer from "../../models/EmployeeTransfer.js";
 import EmployeePromotion from "../../models/EmployeePromotion.js";
 import EmployeePropertyChange from "../../models/EmployeePropertyChange.js";
 import Employee from "../../models/Employee.js";
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import {
   getReferencingCounts,
   formatReferenceMessage,
@@ -134,6 +134,7 @@ export const listEmployeeTransfers = async (_req, res) => {
 export const listEmployeeTransfersByParams = async (req, res) => {
   try {
     const list = await runListQuery(EmployeeTransfer, req.body, {
+      searchRefs: [employeeSearch()],
       searchFields: [],
       filterable: { employeeId: "objectId", transferDate: "date", isActive: "boolean", createdAt: "date" },
     });
@@ -241,6 +242,7 @@ export const listEmployeePromotions = async (_req, res) => {
 export const listEmployeePromotionsByParams = async (req, res) => {
   try {
     const list = await runListQuery(EmployeePromotion, req.body, {
+      searchRefs: [employeeSearch()],
       searchFields: [],
       filterable: { employeeId: "objectId", promotionDate: "date", isActive: "boolean", createdAt: "date" },
     });

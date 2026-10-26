@@ -4,7 +4,7 @@
  * This fork only establishes the collection so the second fork's Leave
  * Application/Compensatory Leave Request have something to reference.
  */
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { dayStart } from "../../utils/shiftOccurrence.js";
 import ShiftType from "../../models/ShiftType.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
@@ -126,6 +126,7 @@ export const listAttendances = async (req, res) => {
 export const listAttendanceByParams = async (req, res) => {
   try {
     const list = await runListQuery(Attendance, req.body, {
+      searchRefs: [employeeSearch()],
       scopeFilter: await attendanceScope(req),
       stages: [
         { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employee" } },

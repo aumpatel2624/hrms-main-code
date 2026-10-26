@@ -3,7 +3,7 @@
  * Document Type, Travel Request. Grouped in one file — a small module,
  * same reasoning as organizationSetup.controller.js.
  */
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import PurposeOfTravel from "../../models/PurposeOfTravel.js";
 import IdentificationDocumentType from "../../models/IdentificationDocumentType.js";
 import TravelRequest from "../../models/TravelRequest.js";
@@ -397,6 +397,7 @@ export const listTravelRequestByParams = async (req, res) => {
     const scopeFilter = buildScopeFilter({ ...req.user, id: ownEmployee?._id }, { owner: "employeeId" });
 
     const list = await runListQuery(TravelRequest, req.body, {
+      searchRefs: [employeeSearch()],
       searchFields: ["detailsOfSponsor", "description", "personalIdNumber"],
       filterable: {
         employeeId: "objectId",

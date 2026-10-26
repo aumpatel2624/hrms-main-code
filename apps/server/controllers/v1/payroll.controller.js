@@ -9,7 +9,7 @@
  * Employee-role access at all (HR-configuration data only), just a company
  * boundary between HR Users/Managers of different companies.
  */
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
 import { getReferencingCounts, formatReferenceMessage } from "../../utils/referenceHelper.js";
 import { deriveAbbreviation, dedupeAbbreviation } from "../../utils/payrollAbbreviation.js";
@@ -598,6 +598,7 @@ export const listSalaryStructureAssignments = async (req, res) => {
 export const searchSalaryStructureAssignments = async (req, res) => {
   try {
     const data = await runListQuery(SalaryStructureAssignment, req.body, {
+      searchRefs: [employeeSearch()],
       scopeFilter: await attendanceScope(req, false),
       searchFields: [],
       filterable: {

@@ -20,17 +20,6 @@ export const PER_SCREEN = 5;
 const CONCURRENCY = 8;
 const SCREEN_TIMEOUT_MS = 5000;
 
-// Defence in depth on top of the app-wide `json replacer` and each list's
-// own `select: false` exclusions: no credential, token or lock flag leaves
-// through search, however a controller assembled the row.
-const SECRET_KEY = /(password|token|secret)$|^(otp|lockUntil|loginAttempts|isLocked)$/i;
-
-export const stripSecrets = (value) => {
-  if (Array.isArray(value)) return value.map(stripSecrets);
-  if (!value || typeof value !== "object" || value.constructor !== Object) return value;
-  return Object.fromEntries(Object.entries(value).filter(([key]) => !SECRET_KEY.test(key)).map(([key, inner]) => [key, stripSecrets(inner)]));
-};
-
 /** Every POST route under an Express router: path → its handler functions. */
 const collectPostRoutes = (router, out = new Map()) => {
   for (const layer of router?.stack ?? []) {
@@ -114,12 +103,15 @@ export const replayRoute = (handlers, req, body) => new Promise((resolve, reject
   next();
 });
 
-/** Run `task` over `items`, at most `limit` at a time, keeping order. */
-const mapLimited = async (items, limit, task) => {
+/**
+ * Run `task` over `items`, at most `limit` at a time, keeping order. Once
+ * `signal` aborts no new item starts; those left out stay empty.
+ */
+const mapLimited = async (items, limit, task, signal) => {
   const results = new Array(items.length);
   let cursor = 0;
   const worker = async () => {
-    while (cursor < items.length) {
+    while (cursor < items.length && !signal?.aborted) {
       const index = cursor++;
       results[index] = await task(items[index]); // eslint-disable-line no-await-in-loop
     }
@@ -131,9 +123,10 @@ const mapLimited = async (items, limit, task) => {
 /**
  * Search every registered screen for `term` as the caller of `req`.
  * Returns `[{ screen, count, rows }]` — only screens that allowed the read and
- * matched something, in registry order — plus how many screens failed.
+ * matched something, in registry order — plus how many screens failed. Once
+ * `signal` aborts (the caller went away) no further screen is searched.
  */
-export const runGlobalSearch = async (req, term, targets) => {
+export const runGlobalSearch = async (req, term, targets, signal) => {
   const body = { match: term, skip: 0, per_page: PER_SCREEN };
   let failed = 0;
 
@@ -146,13 +139,13 @@ export const runGlobalSearch = async (req, term, targets) => {
       }
       const page = Array.isArray(payload?.data) ? payload.data[0] : null;
       if (!page?.count) return null;
-      return { screen, count: page.count, rows: stripSecrets(page.data ?? []) };
+      return { screen, count: page.count, rows: page.data ?? [] };
     } catch (error) {
       console.log(`globalSearch: ${screen} failed`, error?.message);
       failed += 1;
       return null;
     }
-  });
+  }, signal);
 
   return { groups: outcomes.filter(Boolean), failed };
 };

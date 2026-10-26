@@ -12,7 +12,8 @@ import mongoose from "mongoose";
 import { ROLES } from "@demo-panel/shared/roles";
 import { GLOBAL_SEARCH_SCREENS } from "../config/globalSearch.js";
 import { buildRoleRows } from "../seed/org-tiers.data.js";
-import { buildSearchTargets, replayRoute, runGlobalSearch, stripSecrets } from "./globalSearch.js";
+import { buildSearchTargets, replayRoute, runGlobalSearch } from "./globalSearch.js";
+import { stripCredentials } from "./jsonSecrets.js";
 
 const oid = () => new mongoose.Types.ObjectId();
 
@@ -76,6 +77,12 @@ mongoose.Model.aggregate = async function aggregate(pipeline) {
 // ── the real routes, mounted the way server.js mounts them ──
 
 const app = express();
+app.set("json replacer", stripCredentials);
+let session = null;
+app.use(express.json(), (req, _res, next) => {
+  req.session = session;
+  next();
+});
 const serverSource = fs.readFileSync(new URL("../server.js", import.meta.url), "utf8");
 for (const [, file] of serverSource.matchAll(/from "\.\/(routes\/v1\/[^"]+)"/g)) {
   const { default: router } = await import(new URL(`../${file}`, import.meta.url));
@@ -134,6 +141,9 @@ db = {
     { _id: oid(), companyId: acme, salaryComponentName: "Wedding Allowance", abbreviation: "WA", isActive: true },
     { _id: oid(), companyId: globex, salaryComponentName: "Wedding Gift", abbreviation: "WG", isActive: true },
   ],
+  EmployeeReferral: [
+    { _id: oid(), referrerId: ravi._id, fullName: "Wedding Planner", email: "planner@example.com", isActive: true },
+  ],
 };
 
 const requestAs = (employee) => Object.assign(Object.create(express.request), {
@@ -154,9 +164,8 @@ const idsOf = (...docs) => docs.map((doc) => String(doc._id)).sort();
 
 // 1. The registry: every entry is a real, gated route that applies the term.
 assert.equal(new Set(GLOBAL_SEARCH_SCREENS.map(({ screen }) => screen)).size, GLOBAL_SEARCH_SCREENS.length, "no screen listed twice");
-for (const [index, target] of targets.entries()) {
-  // A fresh term each time: ref lookups are memoised per term.
-  const term = `zq-term-${index}`;
+const term = "zq-term";
+for (const target of targets) {
   pipelines = [];
   queries = [];
   const { status } = await replayRoute(target.handlers, requestAs(null), { match: term, skip: 0, per_page: 5 });
@@ -172,6 +181,7 @@ const ownGroups = ["/employee", "/employee-grievance", "/expense-claim", "/leave
 assert.deepEqual(ids(asAsha["/leave-application"]), idsOf(db.LeaveApplication[0]), "own leave application only");
 assert.deepEqual(ids(asAsha["/employee-grievance"]), idsOf(db.EmployeeGrievance[0]), "own grievance only");
 assert.deepEqual(ids(asAsha["/employee"]), idsOf(asha), "own employee record only");
+assert.equal(asAsha["/employee-referral"], undefined, "a colleague's referral never surfaces");
 assert.deepEqual(await search(asha, "Ravi"), {}, "a colleague's name finds nothing on any screen");
 
 // ...including the records found through the employee's name or code (ADR-044).
@@ -205,21 +215,37 @@ assert.deepEqual(ids(asAdmin["/salary-component"]), idsOf(...db.SalaryComponent)
 assert.equal(asAdmin["/leave-application"].count, 8, "count is the full match count");
 assert.equal(asAdmin["/leave-application"].rows.length, 5, "rows are capped per screen");
 
-// 6. No credential or lock state comes back, and the scope of one screen
-// never leaks into the next (each replay gets its own req.user).
-assert.ok(asAdmin["/employee"].rows.every((row) => !("password" in row)), "no password on employee rows");
-assert.deepEqual(stripSecrets({ a: 1, password: "x", nested: [{ resetToken: "t", lockUntil: 1, otp: 2, name: "n" }] }), { a: 1, nested: [{ name: "n" }] });
-
-// 7. The endpoint's own validation: a term is 2-100 characters of text.
-const searchRoute = app._router.stack
-  .flatMap((layer) => layer.handle?.stack ?? []).find((layer) => layer.route?.path === "/global-search").route;
-const handlers = searchRoute.stack.map((layer) => layer.handle);
-assert.equal((await replayRoute(handlers, requestAs(asha), { match: "a" })).status, 400, "one character is refused");
-assert.equal((await replayRoute(handlers, requestAs(asha), { match: { $ne: "" } })).status, 400, "an object is refused");
-assert.equal((await replayRoute(handlers, requestAs(asha), { match: "wedding", per_page: 500 })).status, 400, "no other body keys");
-const viaRoute = await replayRoute(handlers, requestAs(asha), { match: "  wedding " });
+// 6. Over HTTP: no password comes back — the app-wide json replacer drops it,
+// as on every endpoint — and the endpoint's own validation holds: a term is
+// 2-100 characters of text.
+const server = app.listen(0);
+const post = async (employee, body) => {
+  session = requestAs(employee).session;
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/v1/global-search`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { status: response.status, body: await response.json() };
+};
+const viaHttp = await post(null, { match: "wedding" });
+assert.equal(viaHttp.status, 200);
+assert.ok(viaHttp.body.data.find((group) => group.screen === "/employee").rows.every((row) => !("password" in row)), "no password on employee rows");
+assert.equal((await post(asha, { match: "a" })).status, 400, "one character is refused");
+assert.equal((await post(asha, { match: { $ne: "" } })).status, 400, "an object is refused");
+assert.equal((await post(asha, { match: "wedding", per_page: 500 })).status, 400, "no other body keys");
+const viaRoute = await post(asha, { match: "  wedding " });
 assert.equal(viaRoute.status, 200);
 assert.deepEqual(viaRoute.body.data.map((group) => group.screen).sort(), ownGroups);
+server.close();
+
+// 7. Once the caller has gone away, no further screen is searched.
+const gone = new AbortController();
+gone.abort();
+pipelines = [];
+queries = [];
+assert.deepEqual(await runGlobalSearch(requestAs(null), "wedding", targets, gone.signal), { groups: [], failed: 0 });
+assert.equal(pipelines.length + queries.length, 0, "no list was queried");
 
 console.log("globalSearch: all checks passed");
 process.exit(0);

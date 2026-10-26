@@ -15,7 +15,9 @@ export const globalSearch = async (req, res) => {
   try {
     targets ??= buildSearchTargets(req.app._router);
     const term = String(req.body.match).trim();
-    const { groups, failed } = await runGlobalSearch(req, term, targets);
+    const stop = new AbortController();
+    res.on("close", () => stop.abort());
+    const { groups, failed } = await runGlobalSearch(req, term, targets, stop.signal);
     return res.status(200).json({ isOk: true, status: 200, data: groups, failed });
   } catch (error) {
     console.log("Error in globalSearch", error);

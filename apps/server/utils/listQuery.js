@@ -139,27 +139,12 @@ const hiddenPaths = (model) => {
  */
 export const employeeSearch = (field = "employeeId") => ({ field, model: "Employee", fields: ["employeeName", "employeeCode"] });
 
-const REF_CACHE_MS = 5000;
-const REF_CACHE_MAX = 200;
-const refCache = new Map();
-
-/**
- * Ids of `model` documents whose `fields` contain `match`. Memoised for a few
- * seconds: one global search replays dozens of lists with the same term, and
- * they would otherwise each look up the same employees.
- */
-const matchingRefIds = (model, fields, match) => {
-    const key = `${model}|${fields.join(",")}|${String(match).toLowerCase()}`;
-    const hit = refCache.get(key);
-    if (hit && Date.now() - hit.at <= REF_CACHE_MS) return hit.ids;
-    if (refCache.size >= REF_CACHE_MAX) refCache.clear();
-    const ids = mongoose.model(model)
+/** Ids of `model` documents whose `fields` contain `match`. */
+const matchingRefIds = async (model, fields, match) => {
+    const docs = await mongoose.model(model)
         .find({ $or: fields.map((field) => ({ [field]: { $regex: escapeRegex(match), $options: "i" } })) }, { _id: 1 })
-        .lean()
-        .then((docs) => docs.map((doc) => doc._id));
-    ids.catch(() => refCache.delete(key));
-    refCache.set(key, { at: Date.now(), ids });
-    return ids;
+        .lean();
+    return docs.map((doc) => doc._id);
 };
 
 /**

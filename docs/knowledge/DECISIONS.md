@@ -4447,10 +4447,10 @@ consumer; single-branch build
     `model` documents with the term in `fields`, and rows whose `field` is one of those ids match too, OR-ed
     with `searchFields`. `employeeSearch(field = "employeeId")` is the common case — the row's employee by
     name or code. The id lookup only narrows rows the scope `$match` has already limited, so it can never
-    widen what a caller sees; it is memoised per term for 5 seconds because one global search replays dozens
-    of lists with the same term. Every employee-owned list now matches its employee (leave applications,
-    allocations, adjustments, encashments, policy and holiday list assignments, attendance and requests,
-    check-ins, shift assignments and requests, salary slips and structure assignments, additional salary,
+    widen what a caller sees. Nothing is cached: each list resolves its own lookup, so a record created or
+    renamed a moment ago is found at once. Every employee-owned list now matches its employee (leave
+    applications, allocations, adjustments, encashments, policy and holiday list assignments, attendance and
+    requests, check-ins, shift assignments and requests, salary slips and structure assignments, additional salary,
     arrears, retention bonuses, incentives, other income, withholdings, payroll corrections, benefit
     applications, claims and ledger, tax declarations and proofs, gratuity, expense claims, travel, grievances
     by who raised them, transfers, promotions, separations, exit interviews, F&F statements, skill maps,
@@ -4460,19 +4460,24 @@ consumer; single-branch build
     schedules the shift type, staffing plans the department. Leave encashments also match their payment
     reference and other income its source. This widens each of those screens' own list search box too —
     accepted with the ruling.
-  - The registry lists every screen whose list search applies the term — 90 of them. Left out: system
-    plumbing (menus, roles, email setup and templates, dashboard widgets, audit log, admin users); Leave
-    Period, Payroll Period, Payroll Entry and Salary Structure, which carry nothing identifying (dates, a
-    company, amounts); Leave Ledger Entry, which has no view page to open. Results are capped at 5 rows per
-    screen with the full count, screens are searched 8 at a time with a 5-second limit each, and a failing
-    screen is skipped and counted (`failed`) rather than failing the search.
-  - Rows are the screen's own list rows, so they carry nothing the list does not; credential, token and
-    lock keys are stripped again on the way out on top of the app-wide `json replacer`. Ref lookups search
-    only name, code and title fields — never a secret.
-  - The admin box (`components/ui/global-search.jsx`, in `Layouts/index.jsx`) debounces 300 ms, groups by
-    screen with the entity config's `plural`, shows each row as its `recordTitle` plus one column value, and
-    links to `${config.path}/${_id}` — the existing view page. Below the `sm` breakpoint it collapses to an
-    icon that opens a full-width search row over the top bar.
+  - The registry lists every screen whose list search applies the term, bar the ones left out below — 89 of
+    them. Left out: system plumbing (menus, roles, email setup and templates, dashboard widgets, audit log,
+    admin users); Leave Period, Payroll Period, Payroll Entry and Salary Structure, which carry nothing
+    identifying (dates, a company, amounts); Leave Ledger Entry, which has no view page to open; Employee
+    Referral, whose list ignores the "own" data scope every tier role holds on it, so search would show
+    every employee everyone's referred candidates — that gap predates search and is a separate fix, after
+    which the screen can rejoin the registry. Results are capped at 5 rows per screen with the full count,
+    and screens are searched 8 at a time. A screen that fails, or has not answered within 5 seconds, is
+    skipped and counted (`failed`) rather than failing the search; a timed-out screen's query is not
+    cancelled and runs on in the background. Once the caller goes away — the box aborts a request a newer
+    keystroke has superseded — no further screen is started.
+  - Rows are the screen's own list rows, so they carry nothing the list does not, and the app-wide
+    `json replacer` drops `password` from the response as on every endpoint. Ref lookups search only name,
+    code and title fields — never a secret.
+  - The admin box (`components/ui/global-search.jsx`, in `Layouts/index.jsx`) takes at most 100 characters,
+    the endpoint's limit, debounces 300 ms, groups by screen with the entity config's `plural`, shows each row
+    as its `recordTitle` plus one column value, and links to `${config.path}/${_id}` — the existing view page.
+    Below the `sm` breakpoint it collapses to an icon that opens a full-width search row over the top bar.
 - **Consequences**: Search reaches exactly what each screen's own search box reaches, and those boxes now
   find records by employee name or code. Adding a screen is one registry line once its list search applies
   the term; `globalSearch.test.js` fails if a listed route stops applying it or loses its read gate. The ref

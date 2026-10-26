@@ -10,6 +10,7 @@ import { globalSearch } from "@/api/globalSearch.api";
 import { cx } from "@/utils/cx";
 
 const MIN_TERM = 2;
+const MAX_TERM = 100;
 const DEBOUNCE_MS = 300;
 
 // The server answers with each screen's menuUrl, which is its entity config's
@@ -142,6 +143,7 @@ const GlobalSearch = () => {
                     icon={SearchLg}
                     size="sm"
                     placeholder="Search records..."
+                    maxLength={MAX_TERM}
                     value={query}
                     onChange={(value) => {
                         setQuery(value);

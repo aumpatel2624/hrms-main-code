@@ -19,7 +19,9 @@
  * templates, dashboard widgets, audit log, admin users), which are not
  * business records; Leave Period, Payroll Period, Payroll Entry and Salary
  * Structure, which carry nothing identifying to match (dates, a company and
- * amounts); and Leave Ledger Entry, which has no view page to open.
+ * amounts); Leave Ledger Entry, which has no view page to open; and Employee
+ * Referral, whose list ignores the "own" data scope every tier role holds on
+ * it, so search would show each employee everyone's referred candidates.
  */
 export const GLOBAL_SEARCH_SCREENS = Object.freeze([
   // People and their own records
@@ -40,7 +42,6 @@ export const GLOBAL_SEARCH_SCREENS = Object.freeze([
   { screen: "/travel-request", route: "/travel-requests/search" },
   { screen: "/expense-claim", route: "/expense-claims/search" },
   { screen: "/employee-grievance", route: "/employee-grievances/search" },
-  { screen: "/employee-referral", route: "/employee-referrals/search" },
   { screen: "/employee-onboarding", route: "/employee-onboardings/search" },
   { screen: "/employee-transfer", route: "/employee-transfers/search" },
   { screen: "/employee-promotion", route: "/employee-promotions/search" },

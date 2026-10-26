@@ -4421,3 +4421,43 @@ consumer; single-branch build
   schema changes): shift codes (Shift Type has none — the name is shown), IP address, swipe date and
   approver remark (no such fields).
 - **Deviates from convention**: no — a page file for a report is decision-tree step 4.
+
+### ADR-043 — Global search in the top bar replays each screen's own list search
+
+- **Date**: 2026-10-26
+- **Status**: accepted
+- **Context**: The owner asked for a search bar in the top bar, between the page title and the theme toggle,
+  that searches all the data. Every signed-in user gets it whatever their role, so each person may only ever
+  find records they are already allowed to see.
+- **Decision**:
+  - One endpoint, `POST /global-search` (`{ match }`, 2–100 characters, body allowlisted). It queries no
+    collection itself: for each screen in `config/globalSearch.js` it replays that screen's own
+    `POST …/search` route in-process (`utils/globalSearch.js`) — authMiddleware → `checkPermission(screen,
+    "read")` → validators → controller — as the caller, with `{ match, per_page: 5 }`. The matrix gate, the
+    menu row's data scope (own / team / approver / department / all), company confinement and the screen's
+    `searchFields` therefore come from the screen and cannot drift from it. A screen the role cannot read
+    answers 403 and contributes nothing; each replay gets its own `req.user`, so one screen's scope cannot
+    leak into the next.
+  - The route carries no `checkPermission` of its own — there is no "global search" screen to grant.
+    `checkPermission` now tags its middleware with `{ menuUrl, action }` so `buildSearchTargets` can refuse,
+    at first use and in the test, any registry route that lacks the screen's own read gate.
+  - The registry lists only screens whose list search matches text (52 of them); a list with
+    `searchFields: []` ignores the term and would return every row. System plumbing (menus, roles, email
+    setup and templates, dashboard widgets, audit log, admin users) is left out. Results are capped at 5 rows
+    per screen with the full count, screens are searched 6 at a time with a 5-second limit each, and a
+    failing screen is skipped and counted (`failed`) rather than failing the search.
+  - Rows are the screen's own list rows, so they carry nothing the list does not; credential, token and
+    lock keys are stripped again on the way out on top of the app-wide `json replacer`.
+  - The admin box (`components/ui/global-search.jsx`, in `Layouts/index.jsx`) debounces 300 ms, groups by
+    screen with the entity config's `plural`, shows each row as its `recordTitle` plus one column value, and
+    links to `${config.path}/${_id}` — the existing view page. Below the `sm` breakpoint it collapses to an
+    icon that opens a full-width search row over the top bar.
+- **Consequences**: Search reaches exactly what each screen's own search box reaches. About 50 list screens
+  have no `searchFields` (salary slips, salary structure assignments, leave allocations, expense claims,
+  appraisals, check-ins, shift assignments, among others), so their records are not findable by text until
+  those screens' list search is given fields — which would change the list screens too, and is a separate
+  decision. Leave applications match their description only, not the employee's name, because that is what
+  their list searches. Adding a screen to global search is one registry line once its list search matches
+  text; `globalSearch.test.js` fails if a listed route stops applying the term or loses its read gate.
+  No `widgetSources` change: no model changed.
+- **Deviates from convention**: no.

@@ -129,7 +129,7 @@ export const checkPermission = (menuUrl, action) => {
     throw new Error(`checkPermission: unknown action "${action}" for ${menuUrl}`);
   }
 
-  return async (req, res, next) => {
+  const middleware = async (req, res, next) => {
     try {
       if (!req.user) {
         return res.status(401).json({
@@ -171,4 +171,8 @@ export const checkPermission = (menuUrl, action) => {
       });
     }
   };
+  // Lets the global search prove a route it replays carries this screen's
+  // own read gate (utils/globalSearch.js buildSearchTargets).
+  middleware.permission = { menuUrl, action };
+  return middleware;
 };

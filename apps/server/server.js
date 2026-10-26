@@ -276,6 +276,7 @@ import expensesRoutes from "./routes/v1/expenses.routes.js";
 import performanceRoutes from "./routes/v1/performance.routes.js";
 import performanceGoalsRoutes from "./routes/v1/performanceGoals.routes.js";
 import attendanceRoutes from "./routes/v1/attendance.routes.js";
+import globalSearchRoutes from "./routes/v1/globalSearch.routes.js";
 import jobsPublicRoutes from "./routes/v1/jobsPublic.routes.js";
 import { runDueJobs } from "./jobs/leaveScheduler.js";
 import { runDueJobs as runDueAttendanceJobs } from "./jobs/attendanceScheduler.js";
@@ -315,6 +316,7 @@ app.use("/api/v1", gratuityRoutes);
 app.use("/api/v1", expensesRoutes);
 app.use("/api/v1", performanceRoutes);
 app.use("/api/v1", performanceGoalsRoutes);
+app.use("/api/v1", globalSearchRoutes);
 app.use("/api/v1/otp", otpRoutes);
 
 // Unauthenticated on purpose — the public website has no session (ADR-019,

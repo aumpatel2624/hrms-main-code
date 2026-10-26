@@ -4,7 +4,7 @@
  * Employee must have a relievingDate set, and only one non-cancelled Exit
  * Interview may exist per Employee at a time.
  */
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import ExitInterview from "../../models/ExitInterview.js";
 import Employee from "../../models/Employee.js";
 import {
@@ -155,6 +155,7 @@ export const listExitInterviews = async (req, res) => {
 export const listExitInterviewsByParams = async (req, res) => {
   try {
     const list = await runListQuery(ExitInterview, req.body, {
+      searchRefs: [employeeSearch()],
       searchFields: [],
       filterable: { employeeId: "objectId", status: "enum", date: "date", isActive: "boolean", createdAt: "date" },
       stages: [

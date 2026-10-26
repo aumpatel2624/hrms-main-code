@@ -4421,3 +4421,69 @@ consumer; single-branch build
   schema changes): shift codes (Shift Type has none — the name is shown), IP address, swipe date and
   approver remark (no such fields).
 - **Deviates from convention**: no — a page file for a report is decision-tree step 4.
+
+### ADR-044 — Global search in the top bar replays each screen's own list search
+
+- **Date**: 2026-10-26
+- **Status**: accepted
+- **Context**: The owner asked for a search bar in the top bar, between the page title and the theme toggle,
+  that searches all the data. Every signed-in user gets it whatever their role, so each person may only ever
+  find records they are already allowed to see. Numbered 044: ADR-043 was taken by the parallel payslip and
+  leave-balance work.
+- **Decision**:
+  - One endpoint, `POST /global-search` (`{ match }`, 2–100 characters, body allowlisted). It queries no
+    collection itself: for each screen in `config/globalSearch.js` it replays that screen's own
+    `POST …/search` route in-process (`utils/globalSearch.js`) — authMiddleware → `checkPermission(screen,
+    "read")` → validators → controller — as the caller, with `{ match, per_page: 5 }`. The matrix gate, the
+    menu row's data scope (own / team / approver / department / all), company confinement and the screen's
+    search fields therefore come from the screen and cannot drift from it. A screen the role cannot read
+    answers 403 and contributes nothing; each replay gets its own copy of the body and its own `req.user`,
+    so neither a route's input sanitizers nor one screen's scope can leak into the next.
+  - The route carries no `checkPermission` of its own — there is no "global search" screen to grant.
+    `checkPermission` now tags its middleware with `{ menuUrl, action }` so `buildSearchTargets` can refuse,
+    at first use and in the test, any registry route that lacks the screen's own read gate.
+  - **Lists search by the people and records they point at** (owner ruling, 2026-10-26, closing Q-35).
+    `runListQuery` gains `searchRefs: [{ field, model, fields }]`: the term is first resolved to the ids of
+    `model` documents with the term in `fields`, and rows whose `field` is one of those ids match too, OR-ed
+    with `searchFields`. `employeeSearch(field = "employeeId")` is the common case — the row's employee by
+    name or code. The id lookup only narrows rows the scope `$match` has already limited, so it can never
+    widen what a caller sees. Nothing is cached: each list resolves its own lookup, so a record created or
+    renamed a moment ago is found at once. Every employee-owned list now matches its employee (leave
+    applications, allocations, adjustments, encashments, policy and holiday list assignments, attendance and
+    requests, check-ins, shift assignments and requests, salary slips and structure assignments, additional salary,
+    arrears, retention bonuses, incentives, other income, withholdings, payroll corrections, benefit
+    applications, claims and ledger, tax declarations and proofs, gratuity, expense claims, travel, grievances
+    by who raised them, transfers, promotions, separations, exit interviews, F&F statements, skill maps,
+    goals, appraisals, performance and training feedback); interview feedback matches its interviewer and job
+    requisitions their requester. Records keyed by something else match its name: interviews and job offers
+    the applicant, job requisitions the designation, holiday list assignments the holiday list, shift
+    schedules the shift type, staffing plans the department. Leave encashments also match their payment
+    reference and other income its source. This widens each of those screens' own list search box too —
+    accepted with the ruling.
+  - The registry lists every screen whose list search applies the term, bar the ones left out below — 89 of
+    them. Left out: system plumbing (menus, roles, email setup and templates, dashboard widgets, audit log,
+    admin users); Leave Period, Payroll Period, Payroll Entry and Salary Structure, which carry nothing
+    identifying (dates, a company, amounts); Leave Ledger Entry, which has no view page to open; Employee
+    Referral, whose list ignores the "own" data scope every tier role holds on it, so search would show
+    every employee everyone's referred candidates — that gap predates search and is a separate fix, after
+    which the screen can rejoin the registry. Results are capped at 5 rows per screen with the full count,
+    and screens are searched 8 at a time. Each screen gets 5 seconds: its list and name-lookup queries carry
+    a `maxTimeMS` for the time left (`listQueryDeadline` in `utils/listQuery.js`), so MongoDB stops them when
+    the search stops waiting, and a screen that fails or runs out of time is skipped and counted (`failed`)
+    rather than failing the search. The reads a route makes before its list query (the permission check, the
+    caller's employee record) carry no time limit. Once the caller goes away — the box aborts a request a
+    newer keystroke has superseded — no further screen is started; screens already running finish.
+  - Rows are the screen's own list rows, so they carry nothing the list does not, and the app-wide
+    `json replacer` drops `password` from the response as on every endpoint. Ref lookups search only name,
+    code and title fields — never a secret.
+  - The admin box (`components/ui/global-search.jsx`, in `Layouts/index.jsx`) takes at most 100 characters,
+    the endpoint's limit, debounces 300 ms, groups by screen with the entity config's `plural`, shows each row
+    as its `recordTitle` plus one column value, and links to `${config.path}/${_id}` — the existing view page.
+    Below the `sm` breakpoint it collapses to an icon that opens a full-width search row over the top bar.
+- **Consequences**: Search reaches exactly what each screen's own search box reaches, and those boxes now
+  find records by employee name or code. Adding a screen is one registry line once its list search applies
+  the term; `globalSearch.test.js` fails if a listed route stops applying it or loses its read gate. The ref
+  join is one hop and by name only — a slip cannot be found by its department, say. `searchRefs` is a new
+  `runListQuery` option the Tier-1 `30-api.md` does not yet describe (it is frozen; documenting it there needs
+  the owner's go-ahead). No `widgetSources` change: no model changed.
+- **Deviates from convention**: no.

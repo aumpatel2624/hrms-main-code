@@ -12,7 +12,7 @@ import Skill from "../../models/Skill.js";
 import EmployeeSkillMap from "../../models/EmployeeSkillMap.js";
 import Employee from "../../models/Employee.js";
 import Designation from "../../models/Designation.js";
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import {
   getReferencingCounts,
   formatReferenceMessage,
@@ -406,6 +406,7 @@ export const listTrainingFeedbacksByParams = async (req, res) => {
     const scopeFilter = buildScopeFilter({ ...req.user, id: ownEmployee?._id }, { owner: "employeeId" });
 
     const list = await runListQuery(TrainingFeedback, req.body, {
+      searchRefs: [employeeSearch()],
       searchFields: ["feedback"],
       filterable: { employeeId: "objectId", trainingEventId: "objectId", isActive: "boolean", createdAt: "date" },
       scopeFilter,
@@ -607,6 +608,7 @@ export const listEmployeeSkillMaps = async (_req, res) => {
 export const listEmployeeSkillMapsByParams = async (req, res) => {
   try {
     const list = await runListQuery(EmployeeSkillMap, req.body, {
+      searchRefs: [employeeSearch()],
       searchFields: [],
       filterable: { employeeId: "objectId", isActive: "boolean", createdAt: "date" },
       stages: [

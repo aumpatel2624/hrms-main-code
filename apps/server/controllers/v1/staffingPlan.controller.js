@@ -191,6 +191,7 @@ export const listStaffingPlans = async (_req, res) => {
 export const listStaffingPlansByParams = async (req, res) => {
   try {
     const list = await runListQuery(StaffingPlan, req.body, {
+      searchRefs: [{ field: "departmentId", model: "Department", fields: ["departmentName"] }],
       searchFields: [],
       filterable: {
         companyId: "objectId", departmentId: "objectId",

@@ -7,7 +7,7 @@
  * fetched from Employee — authoritative over the template, matching
  * source's own resolved inconsistency (Employee wins).
  */
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
 import EmployeeSeparation from "../../models/EmployeeSeparation.js";
 import EmployeeSeparationTemplate from "../../models/EmployeeSeparationTemplate.js";
@@ -156,6 +156,7 @@ export const listEmployeeSeparations = async (req, res) => {
 export const listEmployeeSeparationsByParams = async (req, res) => {
   try {
     const list = await runListQuery(EmployeeSeparation, req.body, {
+      searchRefs: [employeeSearch()],
       scopeFilter: await attendanceScope(req, true, { companyViaEmployee: true }),
       searchFields: [],
       filterable: {

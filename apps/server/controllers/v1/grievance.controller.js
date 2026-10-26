@@ -5,7 +5,7 @@
  * grievance when Investigated/Resolved, resolution fields when Resolved)
  * are enforced here, since Mongoose has no `mandatory_depends_on` primitive.
  */
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import GrievanceType from "../../models/GrievanceType.js";
 import EmployeeGrievance from "../../models/EmployeeGrievance.js";
 import {
@@ -290,6 +290,7 @@ export const listEmployeeGrievancesByParams = async (req, res) => {
   try {
     const scopeFilter = await employeeGrievanceScopeFilter(req);
     const list = await runListQuery(EmployeeGrievance, req.body, {
+      searchRefs: [employeeSearch("raisedByEmployeeId")],
       searchFields: ["subject"],
       filterable: {
         raisedByEmployeeId: "objectId", grievanceTypeId: "objectId", status: "enum",

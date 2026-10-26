@@ -1,5 +1,5 @@
 import { getReferencingCounts, formatReferenceMessage } from "../../utils/referenceHelper.js";
-import { runListQuery } from "../../utils/listQuery.js";
+import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
 import { getCurrentSalaryStructureAssignment } from "../../utils/payrollAssignment.js";
 import { getHolidayDatesInRange } from "../../utils/holidayResolution.js";
@@ -159,6 +159,7 @@ export const ENTRY_FILTERS = { companyId: "objectId", startDate: "date", endDate
 export const WITHHOLDING_FILTERS = { employeeId: "objectId", companyId: "objectId", fromDate: "date", payrollFrequency: "string", numberOfWithholdingCycles: "number", status: "string", createdAt: "date" };
 const search = (Model, filterable) => handle(async req => runListQuery(Model, req.body, {
   scopeFilter: await attendanceScope(req, false), searchFields: [], filterable,
+  searchRefs: Model === SalaryWithholding ? [employeeSearch()] : [],
   stages: [{ $lookup: { from: Model === PayrollEntry ? "companies" : "employees", localField: Model === PayrollEntry ? "companyId" : "employeeId", foreignField: "_id", as: "labelRow" } },
     { $addFields: { recordLabel: { $arrayElemAt: [Model === PayrollEntry ? "$labelRow.companyName" : "$labelRow.employeeName", 0] } } }, { $project: { labelRow: 0 } }],
 }));

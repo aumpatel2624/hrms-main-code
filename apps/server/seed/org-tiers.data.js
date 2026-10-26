@@ -63,6 +63,7 @@ export const TIER_PAGES = [
   ["/leave-allocation", "", "all team team team own"], // Leave Allocation
   ["/compensatory-leave-request", "wed", "all team team team own"], // Compensatory Leave Request
   ["/leave-application", "we", "all team team team own"], // Leave Application
+  ["/my-leave-balance", "", "all team team team own"], // My Leave Balance (ADR-043)
   ["/shift-assignment", "", "all team team team own"], // Shift Assignment
   ["/employee-checkin", "w", "all team team team own"], // Employee Checkin
   ["/attendance", "", "all team team team own"], // Attendance

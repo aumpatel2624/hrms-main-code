@@ -1,4 +1,4 @@
-import { attendanceScope } from "../../utils/attendanceScope.js";
+import { attendanceScope, withSelfServiceFilter } from "../../utils/attendanceScope.js";
 import { ROLES } from "@demo-panel/shared/roles";
 import DashboardWidget from "../../models/DashboardWidget.js";
 import RoleDashboard from "../../models/RoleDashboard.js";
@@ -241,9 +241,9 @@ const executeWidget = async (req, res, widget, cacheKey = null) => {
     await checkPermission(source.menuUrl, "read")(req, res, () => {});
     if (res.headersSent) return;
   }
-  const scopeFilter = source.companyConfined
+  const scopeFilter = withSelfServiceFilter(req, source.companyConfined
     ? await attendanceScope(req, source.employeeOwned)
-    : buildScopeFilter(req.user, source.scopeable);
+    : buildScopeFilter(req.user, source.scopeable), source.selfServiceFilter);
 
   const data = await (cacheKey ? getOrSet(cacheKey, 120, buildResult) : buildResult());
   return res.status(200).json({ isOk: true, status: 200, data });

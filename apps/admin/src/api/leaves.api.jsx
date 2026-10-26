@@ -63,6 +63,10 @@ export const searchLeaveLedgerEntries = async (params) => api.post(ENDPOINTS.LEA
 export const getLeaveBalance = async (employeeId, leaveTypeId) =>
     api.get(ENDPOINTS.LEAVE_BALANCE, { params: { employeeId, leaveTypeId } });
 
+// ADR-043: leave balance per leave type — own when employeeId is omitted.
+export const getMyLeaveBalance = async (employeeId) =>
+    api.get(ENDPOINTS.MY_LEAVE_BALANCE, { params: employeeId ? { employeeId } : {} });
+
 // ---- Transactional fork (ADR-024 module complete) -------------------------
 
 export const createLeaveAdjustment = async (data) => api.post(ENDPOINTS.LEAVE_ADJUSTMENTS.BASE, data);

@@ -19,6 +19,16 @@ assert.equal(rowFor("Employee", "/leave-application").dataScope, SCOPES.OWN);
 // Team Leads appraise direct reports only -> approver scope.
 assert.equal(rowFor("Team Lead", "/appraisal").dataScope, SCOPES.APPROVER);
 assert.equal(rowFor("Department Manager", "/appraisal").dataScope, SCOPES.TEAM);
+// ADR-043: My Leave Balance reads like Leave Application — own for an Employee,
+// the reporting chain for the managing tiers — and is read-only everywhere.
+assert.equal(rowFor("Employee", "/my-leave-balance").dataScope, SCOPES.OWN);
+assert.equal(rowFor("Team Lead", "/my-leave-balance").dataScope, SCOPES.TEAM);
+assert.equal(rowFor("CEO", "/my-leave-balance").dataScope, SCOPES.ALL);
+for (const role of TIER_ROLES) {
+  const row = rowFor(role, "/my-leave-balance");
+  assert.ok(row.read && !row.write && !row.edit && !row.delete, `${role}: leave balance is read-only`);
+  assert.equal(rowFor(role, "/salary-slip").dataScope, SCOPES.OWN, `${role}: own payslips only`);
+}
 // Reference data carries no row scope.
 // Setup pages are closed to every tier (the leave form reads leave types through the API).
 for (const role of TIER_ROLES) {
@@ -65,6 +75,7 @@ const menuOf = (role, menuUrl) => buildRoleRows(role).menuRows.find((row) => row
 assert.equal(menuOf("Auditor", "/salary-slip").edit, false, "Auditor cannot edit payslips");
 assert.equal(menuOf("HR Executive", "/leave-application").dataScope, SCOPES.ALL, "functional row wins over Employee row");
 assert.equal(menuOf("Payroll", "/salary-slip").write, true);
+assert.equal(menuOf("HR Executive", "/my-leave-balance").dataScope, SCOPES.ALL, "ledger readers see anyone's balance");
 assert.deepEqual(ALL_ROLE_NAMES, [...TIER_ROLES, ...Object.keys(FUNCTIONAL_ROLES)]);
 
 assert.throws(() => buildTierRows("Nobody"), /unknown tier role/);

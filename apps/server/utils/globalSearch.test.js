@@ -134,8 +134,9 @@ db = {
     { _id: oid(), employeeId: ravi._id, companyId: acme, isActive: true },
   ],
   SalarySlip: [
-    { _id: oid(), employeeId: asha._id, companyId: acme, isActive: true },
-    { _id: oid(), employeeId: ravi._id, companyId: acme, isActive: true },
+    { _id: oid(), employeeId: asha._id, companyId: acme, status: "submitted", isActive: true },
+    { _id: oid(), employeeId: ravi._id, companyId: acme, status: "submitted", isActive: true },
+    { _id: oid(), employeeId: asha._id, companyId: acme, status: "draft", isActive: true },
   ],
   SalaryComponent: [
     { _id: oid(), companyId: acme, salaryComponentName: "Wedding Allowance", abbreviation: "WA", isActive: true },
@@ -190,7 +191,7 @@ assert.deepEqual(await search(asha, "Ravi"), {}, "a colleague's name finds nothi
 // ...including the records found through the employee's name or code (ADR-044).
 const byOwnName = await search(asha, "asha");
 assert.deepEqual(ids(byOwnName["/expense-claim"]), idsOf(db.ExpenseClaim[0]), "own expense claim by own name");
-assert.deepEqual(ids(byOwnName["/salary-slip"]), idsOf(db.SalarySlip[0]), "own salary slip by own name");
+assert.deepEqual(ids(byOwnName["/salary-slip"]), idsOf(db.SalarySlip[0]), "own submitted salary slip by own name, never their draft (ADR-043)");
 assert.deepEqual(ids(byOwnName["/leave-application"]), idsOf(db.LeaveApplication[0]), "own leave application by own name");
 assert.deepEqual(ids((await search(asha, "e-001"))["/salary-slip"]), idsOf(db.SalarySlip[0]), "own salary slip by own employee code");
 

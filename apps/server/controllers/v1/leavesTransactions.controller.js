@@ -14,12 +14,14 @@
  * ADR-024's explicit deviation from source, for consistency with this
  * project's universal soft-delete convention.
  */
+import mongoose from "mongoose";
 import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { getReferencingCounts, formatReferenceMessage } from "../../utils/referenceHelper.js";
 import { getLeaveBalance } from "../../utils/leaveBalance.js";
 import { resolveApprovers, getEmployeesApprovedBy } from "../../utils/approvers.js";
 import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
+import { attendanceEmployeeScope } from "../../utils/attendanceScope.js";
 import { buildScopeFilter } from "../../utils/scope.js";
 import { countLeaveDays, sameCalendarDay } from "../../utils/leaveDayCalculation.js";
 import { getHolidayDatesInRange, isEntireRangeHolidays, isHolidayForEmployee } from "../../utils/holidayResolution.js";
@@ -1462,6 +1464,52 @@ export const bulkAllocateLeaves = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, message: "Bulk allocation run complete", data: { results } });
   } catch (error) {
     console.log("Error in bulkAllocateLeaves", error);
+    return failure(res, error);
+  }
+};
+
+// ============================================================ My Leave Balance --
+
+/**
+ * ADR-043: the leave balance per leave type the person holds an allocation
+ * covering today for — `getLeaveBalance`, the same number a leave
+ * application is validated against. Defaults to the caller's own balance; `employeeId` picks someone else,
+ * refused (403) unless they are in the caller's reach — the check-in
+ * register's (`attendanceEmployeeScope`): own, plus the downward reporting
+ * chain for "team", the whole company for "all", every company for ADMIN.
+ * Being someone's named leave approver adds nothing. `people` is who the
+ * caller may pick.
+ */
+export const getMyLeaveBalance = async (req, res) => {
+  try {
+    const self = await resolveRequestEmployee(req);
+    const employeeId = req.query.employeeId ? String(req.query.employeeId) : (self ? String(self._id) : null);
+    if (employeeId && !mongoose.Types.ObjectId.isValid(employeeId)) {
+      return res.status(400).json({ isOk: false, status: 400, message: "Invalid employeeId" });
+    }
+    const reach = await attendanceEmployeeScope(req);
+    if (employeeId && !(await Employee.findOne({ $and: [{ _id: employeeId }, reach] }).select("_id").lean())) {
+      return res.status(403).json({ isOk: false, status: 403, message: "You can only view your own leave balance or your team's" });
+    }
+
+    const people = await Employee.find(reach)
+      .select("employeeName employeeCode").sort({ employeeName: 1 }).lean();
+    const now = new Date();
+    const allocations = employeeId
+      ? await LeaveAllocation.find({ employeeId, status: "active", fromDate: { $lte: now }, toDate: { $gte: now } }).select("leaveTypeId").lean()
+      : [];
+    const leaveTypeIds = [...new Set(allocations.map((row) => String(row.leaveTypeId)))];
+    const leaveTypes = await LeaveType.find({ _id: { $in: leaveTypeIds } }).select("leaveTypeName").lean();
+    const nameById = new Map(leaveTypes.map((type) => [String(type._id), type.leaveTypeName]));
+    const balances = (await Promise.all(leaveTypeIds.map(async (leaveTypeId) => ({
+      leaveTypeId,
+      leaveTypeName: nameById.get(leaveTypeId) || "",
+      balance: await getLeaveBalance(employeeId, leaveTypeId, now),
+    })))).sort((a, b) => a.leaveTypeName.localeCompare(b.leaveTypeName));
+
+    return res.status(200).json({ isOk: true, status: 200, data: { employeeId, people, balances } });
+  } catch (error) {
+    console.log("Error in getMyLeaveBalance", error);
     return failure(res, error);
   }
 };

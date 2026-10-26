@@ -264,6 +264,8 @@ const MENU_GROUPS = [
       { menuName: "Leave Encashment", menuUrl: "/leave-encashment", icon: "ri-money-dollar-circle-line" },
       { menuName: "Leave Block List", menuUrl: "/leave-block-list", icon: "ri-forbid-2-line" },
       { menuName: "Leave Control Panel", menuUrl: "/leave-control-panel", icon: "ri-tools-line" },
+      // ADR-043: self-service balance view — own, plus the caller's team.
+      { menuName: "My Leave Balance", menuUrl: "/my-leave-balance", icon: "ri-scales-3-line" },
     ],
   },
   {
@@ -292,8 +294,9 @@ const MENU_GROUPS = [
       { menuName: "Salary Structure", menuUrl: "/salary-structure", icon: "ri-file-list-3-line" },
       { menuName: "Salary Structure Assignment", menuUrl: "/salary-structure-assignment", icon: "ri-file-user-line" },
       { menuName: "Bulk Salary Structure Assignment", menuUrl: "/bulk-salary-structure-assignment", icon: "ri-tools-line" },
-      // ADR-027 (module 11, foundation half — feat/payroll-run). Still no
-      // Employee-role self-service grants (see seedPayrollRoles below).
+      // ADR-027 (module 11, foundation half — feat/payroll-run). HR-only,
+      // except an Employee's own submitted Salary Slips (ADR-043, see
+      // seedPayrollRoles below).
       { menuName: "Payroll Period", menuUrl: "/payroll-period", icon: "ri-calendar-2-line" },
       { menuName: "Payroll Settings", menuUrl: "/payroll-settings", icon: "ri-settings-3-line" },
       { menuName: "Payroll Entry", menuUrl: "/payroll-entry", icon: "ri-play-list-line" },
@@ -1811,6 +1814,14 @@ const seedLeaveRoles = async () => {
       "HR User": full,
       "HR Manager": full,
     },
+    // ADR-043: read-only, own + reporting chain ("team") — unlike Leave
+    // Application above, a named leave approver gets no extra reach here.
+    "/my-leave-balance": {
+      Employee: { ...readOnly, dataScope: SCOPES.TEAM },
+      "Leave Approver": { ...readOnly, dataScope: SCOPES.TEAM },
+      "HR User": readOnly,
+      "HR Manager": readOnly,
+    },
   };
 
   const allMenuUrls = Object.keys(GRANTS);
@@ -1953,9 +1964,10 @@ const seedShiftAttendanceTransactionsRoles = async () => {
 
 /**
  * Payroll roles (ADR-026, module 10). HR-configuration data only — no
- * Employee-role grants at all, unlike Leaves/Shift & Attendance's
- * self-service screens (payroll structure/assignment is not something an
- * employee edits or even reads directly here). HR User and HR Manager both
+ * Employee-role grants on structure/assignment, unlike Leaves/Shift &
+ * Attendance's self-service screens (payroll structure/assignment is not
+ * something an employee edits or even reads directly here). Later modules
+ * add the Employee self-service rows below (own payslips: ADR-043). HR User and HR Manager both
  * get full CRUD on the three collections plus edit (the only permission
  * `checkPermission` gates the bulk-assign action on) on the bulk tool —
  * same "both roles get full access to an admin tool" default as Leave
@@ -1973,12 +1985,12 @@ const seedPayrollRoles = async () => {
     "/salary-structure-assignment": { "HR User": full, "HR Manager": full },
     "/bulk-salary-structure-assignment": { "HR User": full, "HR Manager": full },
     // ADR-027 (module 11, foundation half). Same "HR-configuration/
-    // transactional data, no self-service" shape — payslips are not
-    // employee-visible in this rebuild's scope (flagged as a real product
-    // question worth asking the client, see DECISIONS.md ADR-027 "As built").
+    // transactional data, no self-service" shape — except Salary Slip:
+    // ADR-043 (Q-22) lets an Employee read their own, submitted ones only
+    // (the controller drops drafts/cancelled for any non-"all" scope).
     "/payroll-period": { "HR User": full, "HR Manager": full },
     "/payroll-settings": { "HR User": full, "HR Manager": full },
-    "/salary-slip": { "HR User": full, "HR Manager": full },
+    "/salary-slip": { "HR User": full, "HR Manager": full, "Employee": readOnlyOwn },
     "/payroll-entry": { "HR User": full, "HR Manager": full },
     "/salary-withholding": { "HR User": full, "HR Manager": full },
     // ADR-028 (module 12, feat/payroll-adjustments).

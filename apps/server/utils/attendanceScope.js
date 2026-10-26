@@ -45,6 +45,12 @@ export const attendanceScope = async (req, employeeOwned = true, { directReports
   return row ? { $and: [company, row] } : company;
 };
 
+// ADR-043: a source's `selfServiceFilter` (config/widgetSources.js) narrows
+// any caller whose row scope is less than "all" — an Employee sees submitted
+// payslips only — on its screen and its dashboard widgets alike.
+export const withSelfServiceFilter = (req, scope, selfServiceFilter) =>
+  selfServiceFilter && (req.user.dataScope || SCOPES.ALL) !== SCOPES.ALL ? { $and: [scope, selfServiceFilter] } : scope;
+
 // ADR-042: an employee-owned row scope, applied to Employee rows themselves
 // — which employees' records it covers. The owner field `employeeId` becomes
 // the Employee's own `_id`; companyId is shared.

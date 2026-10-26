@@ -15,7 +15,8 @@ import { withWithholdingDisplay } from "../../utils/payrollWithholding.js";
  * singleton) so it never touches `attendanceScope`.
  */
 import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
-import { attendanceScope } from "../../utils/attendanceScope.js";
+import { attendanceScope, withSelfServiceFilter } from "../../utils/attendanceScope.js";
+import { WIDGET_SOURCES } from "../../config/widgetSources.js";
 import { getCurrentSalaryStructureAssignment } from "../../utils/payrollAssignment.js";
 import { calculateSalarySlipForEmployee } from "../../utils/salarySlipCalc.js";
 import { getLeaveBalance } from "../../utils/leaveBalance.js";
@@ -204,6 +205,16 @@ const buildLeaveSnapshot = async (employeeId, asOfDate) => {
   return rows;
 };
 
+/**
+ * ADR-043 (Q-22): reading Salary Slips. A caller whose `/salary-slip` scope is
+ * narrower than "all" (an Employee, own-scoped) sees only finished payslips —
+ * never a draft HR is still working on, never a cancelled one. HR's "all"
+ * scope keeps every status. The rule is the Salary Slip widget source's
+ * `selfServiceFilter`, so dashboards apply the same one.
+ */
+const salarySlipReadScope = async (req) =>
+  withSelfServiceFilter(req, await attendanceScope(req, true), WIDGET_SOURCES["salary-slips"].selfServiceFilter);
+
 export const createSalarySlipForEmployee = async ({ employeeId, startDate, endDate, salaryStructureAssignmentId }) => {
     
     if (!employeeId || !startDate || !endDate) {
@@ -315,7 +326,7 @@ export const updateSalarySlip = async (req, res) => {
 
 export const getSalarySlipById = async (req, res) => {
   try {
-    const doc = await SalarySlip.findOne({ $and: [{ _id: req.params.salarySlipId }, await attendanceScope(req, true)] })
+    const doc = await SalarySlip.findOne({ $and: [{ _id: req.params.salarySlipId }, await salarySlipReadScope(req)] })
       .populate("employeeId", "employeeName employeeCode")
       .populate("salaryStructureAssignmentId", "salaryStructureId")
       .populate("companyId", "companyName")
@@ -330,7 +341,7 @@ export const getSalarySlipById = async (req, res) => {
 
 export const listSalarySlips = async (req, res) => {
   try {
-    const docs = await SalarySlip.find(await attendanceScope(req, true));
+    const docs = await SalarySlip.find(await salarySlipReadScope(req));
     return res.status(200).json({ isOk: true, status: 200, data: await Promise.all(docs.map(withWithholdingDisplay)) });
   } catch (error) { return failure(res, error); }
 };
@@ -339,7 +350,7 @@ export const searchSalarySlips = async (req, res) => {
   try {
     const data = await runListQuery(SalarySlip, req.body, {
       searchRefs: [employeeSearch()],
-      scopeFilter: await attendanceScope(req, true),
+      scopeFilter: await salarySlipReadScope(req),
       searchFields: [],
       filterable: {
         employeeId: "objectId", companyId: "objectId", startDate: "date", endDate: "date",

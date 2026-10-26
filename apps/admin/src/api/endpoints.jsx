@@ -493,6 +493,7 @@ export const ENDPOINTS = {
         SEARCH: `${V1}/leave-ledger-entries/search`,
     },
     LEAVE_BALANCE: `${V1}/leave-balance`,
+    MY_LEAVE_BALANCE: `${V1}/my-leave-balance`,
 
     // HRMS module 8, transactional fork (ADR-024 module complete).
     LEAVE_ADJUSTMENTS: {

@@ -559,10 +559,11 @@ not a CRUD screen, same reasoning as Audit Log). Every balance-affecting action 
 else is ever trusted as a balance.
 
 **My Leave Balance** (ADR-043) — a read-only screen, not a collection: for each leave type with an
-allocation covering today, allocated / used / left, from the same `getLeaveBalanceSnapshot` a Salary
-Slip's `leaves[]` uses (`utils/leaveBalance.js`; left = the ledger sum; used = the period's ledger
-debits — leave taken, encashed or reduced, not expiry; allocated = left + used, so every credit counts).
-Everyone sees their own; managers can pick their reporting chain and HR anyone in their company
+allocation covering today, the balance `getLeaveBalance` returns (`utils/leaveBalance.js`, the ledger
+sum) — the same number a leave application is validated against. No allocated/used breakdown. Known
+issue, tracked as a follow-up: the allocation-expiry job expires an allocation's whole grant rather than
+what is left of it, so from the second leave period on a balance can come out short by the previous
+period's leave taken. Everyone sees their own; managers can pick their reporting chain and HR anyone in their company
 (`RULES.md` PERM-12). Employees no longer learn their balance only from an "Insufficient leave
 balance" error. The Leave Ledger itself stays HR-only.
 

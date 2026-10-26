@@ -1555,8 +1555,8 @@ export const CUSTOM_SCREENS = [
         path: "/my-leave-balance",
         source: "apps/admin/src/pages/Leaves/MyLeaveBalance.jsx",
         intro:
-            "How much leave you have for the current period — for each leave type you hold an " +
-            "allocation for, what was allocated, what has been used and what is left.",
+            "How much leave you have left — one balance for each leave type you hold an allocation " +
+            "for today.",
         body: [
             {
                 heading: "Whose balance you can see",
@@ -1566,14 +1566,12 @@ export const CUSTOM_SCREENS = [
                     "else's balance is shown.",
             },
             {
-                heading: "Where the numbers come from",
+                heading: "Where the balance comes from",
                 text:
-                    "Left is worked out from every leave movement recorded for you — allocations, approved " +
-                    "leave, adjustments and encashments — so it changes as soon as a leave application is " +
-                    "approved or cancelled. Used is the leave taken, encashed or taken back this period. " +
-                    "Allocated is everything given to you — new days, days carried forward, leave earned so " +
-                    "far and any extra days HR added — so allocated minus used is always what is left. Pending " +
-                    "applications are not taken off until they are approved.",
+                    "The balance is worked out from every leave movement recorded for you — allocations, " +
+                    "approved leave, adjustments and encashments — so it changes as soon as a leave " +
+                    "application is approved or cancelled. It is the same number a leave application is " +
+                    "checked against. Pending applications are not taken off until they are approved.",
             },
             {
                 heading: "Nothing listed?",

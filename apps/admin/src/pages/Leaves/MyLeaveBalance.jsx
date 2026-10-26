@@ -6,15 +6,15 @@ import { SelectField } from "@/components/ui/field";
 import { LoadingIndicator } from "@/components/application/loading-indicator/loading-indicator";
 
 /**
- * ADR-043. How much leave someone has for the current period: one row per
- * leave type they hold an allocation for — allocated, used, left — from
- * GET /my-leave-balance (the same snapshot a Salary Slip stores). Read-only,
+ * ADR-043. How much leave someone has left: one row per leave type they hold
+ * a current allocation for, with the balance from GET /my-leave-balance (the
+ * same number a leave application is checked against). Read-only,
  * so a page rather than an entity config. Opens on the signed-in person's own
  * balance; a manager or HR also gets a picker for the people they may see,
  * which the server decides.
  */
 
-const COLUMNS = ["Leave type", "Allocated", "Used", "Left"];
+const COLUMNS = ["Leave type", "Balance"];
 
 const MyLeaveBalance = () => {
     const [people, setPeople] = useState([]);
@@ -57,7 +57,7 @@ const MyLeaveBalance = () => {
             <PageHeader
                 title="My Leave Balance"
                 pageTitle="Leaves"
-                description="How much leave is allocated, used and left for the current period, per leave type."
+                description="How much leave is left, per leave type."
             />
 
             <Card className="p-5">
@@ -106,9 +106,7 @@ const MyLeaveBalance = () => {
                                 balances.map((row) => (
                                     <tr key={row.leaveTypeId} className="border-b border-secondary last:border-b-0">
                                         <td className="px-5 py-3 font-medium text-primary">{row.leaveTypeName || "—"}</td>
-                                        <td className="px-5 py-3 text-right text-secondary tabular-nums">{row.allocated}</td>
-                                        <td className="px-5 py-3 text-right text-secondary tabular-nums">{row.used}</td>
-                                        <td className="px-5 py-3 text-right font-semibold text-primary tabular-nums">{row.available}</td>
+                                        <td className="px-5 py-3 text-right font-semibold text-primary tabular-nums">{row.balance}</td>
                                     </tr>
                                 ))
                             )}

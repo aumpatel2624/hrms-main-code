@@ -28,7 +28,6 @@ const isOperators = (cond) => cond && typeof cond === "object" && !Array.isArray
 const OPERATORS = {
   $in: (value, arg) => arg.some((x) => same(value, x)),
   $ne: (value, arg) => !same(value, arg),
-  $lt: (value, arg) => value < arg,
   $lte: (value, arg) => value <= arg,
   $gte: (value, arg) => value >= arg,
 };
@@ -131,29 +130,17 @@ const sick = { _id: oid(), leaveTypeName: "Sick Leave" };
 stub(LeaveType, [casual, sick]);
 const period = { status: "active", fromDate: new Date("2026-01-01"), toDate: new Date("2099-12-31") };
 stub(LeaveAllocation, [
-  // 12 new days plus 3 carried forward from last period; HR's later Leave
-  // Adjustment "Allocate" of 2 is a ledger credit only, never on the allocation.
-  { ...period, _id: oid(), employeeId: asha._id, leaveTypeId: casual._id, newLeavesAllocated: 12, unusedLeaves: 3, totalLeavesAllocated: 15 },
-  // Earned leave: nothing up front, three monthly accruals of 1.5 since.
-  { ...period, _id: oid(), employeeId: asha._id, leaveTypeId: sick._id, newLeavesAllocated: 0, unusedLeaves: 0, totalLeavesAllocated: 4.5 },
-  { ...period, _id: oid(), employeeId: chen._id, leaveTypeId: casual._id, newLeavesAllocated: 10, unusedLeaves: 0, totalLeavesAllocated: 10 },
+  { ...period, _id: oid(), employeeId: asha._id, leaveTypeId: casual._id },
+  { ...period, _id: oid(), employeeId: asha._id, leaveTypeId: casual._id }, // a second one, e.g. compensatory leave
+  { ...period, _id: oid(), employeeId: asha._id, leaveTypeId: sick._id },
+  { ...period, _id: oid(), employeeId: chen._id, leaveTypeId: casual._id },
 ]);
-const on = (date) => ({ fromDate: new Date(date) });
 const ledger = [
-  // Last period: granted, then the rest expired — not this period's movement.
-  { employeeId: asha._id, leaveTypeId: casual._id, leaves: 5, ...on("2025-01-01") },
-  { employeeId: asha._id, leaveTypeId: casual._id, leaves: -5, isExpired: true, ...on("2025-12-31") },
-  { employeeId: asha._id, leaveTypeId: casual._id, leaves: 12, ...on("2026-01-01") },
-  { employeeId: asha._id, leaveTypeId: casual._id, leaves: 3, isCarryForward: true, ...on("2026-01-01") },
-  { employeeId: asha._id, leaveTypeId: casual._id, leaves: 2, ...on("2026-03-01") }, // Leave Adjustment "Allocate"
-  { employeeId: asha._id, leaveTypeId: casual._id, leaves: -3, ...on("2026-04-01") }, // leave taken
-  { employeeId: asha._id, leaveTypeId: casual._id, leaves: -1, ...on("2026-05-01") }, // Leave Adjustment "Reduce"
-  { employeeId: asha._id, leaveTypeId: casual._id, leaves: -2, isDeleted: true, ...on("2026-06-01") }, // a cancelled leave
-  { employeeId: asha._id, leaveTypeId: sick._id, leaves: 1.5, ...on("2026-01-31") },
-  { employeeId: asha._id, leaveTypeId: sick._id, leaves: 1.5, ...on("2026-02-28") },
-  { employeeId: asha._id, leaveTypeId: sick._id, leaves: 1.5, ...on("2026-03-31") },
-  { employeeId: asha._id, leaveTypeId: sick._id, leaves: -1, ...on("2026-04-10") },
-  { employeeId: chen._id, leaveTypeId: casual._id, leaves: 10, ...on("2026-01-01") },
+  { employeeId: asha._id, leaveTypeId: casual._id, leaves: 12 },
+  { employeeId: asha._id, leaveTypeId: casual._id, leaves: -3 },
+  { employeeId: asha._id, leaveTypeId: casual._id, leaves: -2, isDeleted: true }, // a cancelled leave
+  { employeeId: asha._id, leaveTypeId: sick._id, leaves: 6 },
+  { employeeId: chen._id, leaveTypeId: casual._id, leaves: 10 },
 ].map((row) => ({ ...row, createdAt: new Date("2026-02-01") }));
 LeaveLedgerEntry.aggregate = async ([{ $match }]) => {
   const rows = ledger.filter((row) => matches(row, $match));
@@ -229,16 +216,14 @@ const widget = async (employee, definition) => {
 
 // ----------------------------------------------------------- leave balance --
 {
-  // An employee reads their own balance: allocated / used / left per leave
-  // type, always adding up. Every credit counts as allocated — grant, carry-
-  // forward, earned accrual, an Allocate adjustment; leave taken and a Reduce
-  // adjustment count as used; last period's expiry and a cancelled leave as neither.
+  // An employee reads their own balance — the ledger sum, one row per leave
+  // type they hold a current allocation for.
   const own = await balance(asha);
   assert.equal(own.statusCode, 200);
   assert.equal(own.body.data.employeeId, String(asha._id));
-  assert.deepEqual(own.body.data.balances.map(({ leaveTypeName, allocated, used, available }) => ({ leaveTypeName, allocated, used, available })), [
-    { leaveTypeName: "Casual Leave", allocated: 17, used: 4, available: 13 },
-    { leaveTypeName: "Sick Leave", allocated: 4.5, used: 1, available: 3.5 },
+  assert.deepEqual(own.body.data.balances.map((row) => ({ leaveTypeName: row.leaveTypeName, balance: row.balance })), [
+    { leaveTypeName: "Casual Leave", balance: 9 },
+    { leaveTypeName: "Sick Leave", balance: 6 },
   ]);
   assert.deepEqual(own.body.data.people.map((row) => row.employeeName), ["asha"], "an employee can pick only themself");
   // … but not a colleague's.
@@ -261,7 +246,7 @@ const widget = async (employee, definition) => {
   // HR reads anyone's in their own company — not another company's.
   const anyone = await balance(hr, chen);
   assert.equal(anyone.statusCode, 200);
-  assert.deepEqual(anyone.body.data.balances.map((row) => row.available), [10]);
+  assert.deepEqual(anyone.body.data.balances.map((row) => row.balance), [10]);
   assert.equal(anyone.body.data.people.length, 8);
   assert.ok(!anyone.body.data.people.some((row) => same(row._id, zoe._id)), "another company's people are not offered");
   assert.equal((await balance(hr, zoe)).statusCode, 403, "another company's employee is refused");

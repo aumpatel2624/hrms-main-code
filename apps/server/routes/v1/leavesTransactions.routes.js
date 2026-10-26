@@ -164,7 +164,7 @@ router.post(
  * @swagger
  * /my-leave-balance:
  *   get:
- *     summary: Allocated / used / left per leave type for the current period — the caller's own, or (employeeId) someone in their reach (ADR-043)
+ *     summary: Leave balance per leave type the person holds a current allocation for — the caller's own, or (employeeId) someone in their reach (ADR-043)
  *     tags: [Leaves]
  *     security: [{ bearerAuth: [] }]
  *     parameters:

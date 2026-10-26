@@ -4452,12 +4452,10 @@ consumer; single-branch build
     ledger-reading functional roles; ADMIN is not confined), and own only for anything else (the Employee
     tier is `own`) — the check-in register's `attendanceEmployeeScope`, not a second copy of it. Being someone's named leave
     approver adds no reach — the owner's call (2026-10-26): balances follow the reporting line, and Q-30
-    stays open. The numbers reuse the Salary Slip's leave snapshot, moved from `payrollRun.controller.js`
-    to `utils/leaveBalance.js` as `getLeaveBalanceSnapshot` (allocations covering today). All three numbers
-    come from the ledger so a row always adds up: left = ledger sum; used = the period's debits (leave
-    taken, encashed or reduced — not expiry); allocated = left + used, so every credit counts — grant,
-    carry-forward, earned accrual, an Allocate adjustment — without `totalLeavesAllocated`, which does not
-    track all of them. The screen is a page file
+    stays open. The screen shows one number per leave type with an allocation covering today: the balance
+    `getLeaveBalance` returns, the same one a leave application is validated against. No allocated/used
+    breakdown — the owner's call (2026-10-26) after review showed neither figure can be derived reliably
+    from the ledger as it stands. The Salary Slip's `leaves[]` snapshot is unchanged. The screen is a page file
     (`pages/Leaves/MyLeaveBalance.jsx`, decision-tree step 4 — a read-only summary, not CRUD) with an
     employee picker only when the caller can see more than themself. `GET /leave-balance` is unchanged.
   - **Applying it to an existing database.** Same as earlier grant changes: `npm run seed` (adds the menu

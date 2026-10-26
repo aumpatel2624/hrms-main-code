@@ -19,7 +19,7 @@ import { attendanceScope, withSelfServiceFilter } from "../../utils/attendanceSc
 import { WIDGET_SOURCES } from "../../config/widgetSources.js";
 import { getCurrentSalaryStructureAssignment } from "../../utils/payrollAssignment.js";
 import { calculateSalarySlipForEmployee } from "../../utils/salarySlipCalc.js";
-import { getLeaveBalanceSnapshot } from "../../utils/leaveBalance.js";
+import { getLeaveBalance } from "../../utils/leaveBalance.js";
 import PayrollPeriod from "../../models/PayrollPeriod.js";
 import PayrollSettings from "../../models/PayrollSettings.js";
 import SalarySlip from "../../models/SalarySlip.js";
@@ -30,6 +30,7 @@ import AdditionalSalary from "../../models/AdditionalSalary.js";
 import EmployeeBenefitLedger from "../../models/EmployeeBenefitLedger.js";
 import Employee from "../../models/Employee.js";
 import LeaveType from "../../models/LeaveType.js";
+import LeaveAllocation from "../../models/LeaveAllocation.js";
 import {
   createBenefitLedgerEntry,
   getBenefitLedgerBalance,
@@ -176,6 +177,35 @@ export const updatePayrollSettings = async (req, res) => {
 // =================================================================== SalarySlip --
 
 /**
+ * One row per Leave Type the employee has an allocation covering `asOfDate`
+ * for — a deliberately scoped-down 3-field snapshot (allocated/used/
+ * available), see SalarySlip.js's file-level comment for why this isn't
+ * source's full 5-field `Salary Slip Leave` shape.
+ */
+const buildLeaveSnapshot = async (employeeId, asOfDate) => {
+  const allocations = await LeaveAllocation.find({
+    employeeId,
+    status: "active",
+    fromDate: { $lte: asOfDate },
+    toDate: { $gte: asOfDate },
+  }).lean();
+  if (!allocations.length) return [];
+
+  const byLeaveType = new Map();
+  for (const allocation of allocations) {
+    const key = String(allocation.leaveTypeId);
+    byLeaveType.set(key, (byLeaveType.get(key) || 0) + (allocation.newLeavesAllocated || 0));
+  }
+
+  const rows = [];
+  for (const [leaveTypeId, allocated] of byLeaveType.entries()) {
+    const available = await getLeaveBalance(employeeId, leaveTypeId, asOfDate); // eslint-disable-line no-await-in-loop
+    rows.push({ leaveTypeId, allocated, used: Math.max(0, allocated - available), available });
+  }
+  return rows;
+};
+
+/**
  * ADR-043 (Q-22): reading Salary Slips. A caller whose `/salary-slip` scope is
  * narrower than "all" (an Employee, own-scoped) sees only finished payslips —
  * never a draft HR is still working on, never a cancelled one. HR's "all"
@@ -240,7 +270,7 @@ export const createSalarySlipForEmployee = async ({ employeeId, startDate, endDa
 
     const calc = await calculateSalarySlipForEmployee({ employeeId, startDate: start, endDate: end, settings, structure, assignment });
 
-    const leaves = settings.showLeaveBalancesInSalarySlip ? await getLeaveBalanceSnapshot(employeeId, end) : [];
+    const leaves = settings.showLeaveBalancesInSalarySlip ? await buildLeaveSnapshot(employeeId, end) : [];
 
     const doc = await SalarySlip.create({
       employeeId,

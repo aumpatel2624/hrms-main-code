@@ -17,7 +17,7 @@
 import mongoose from "mongoose";
 import { runListQuery } from "../../utils/listQuery.js";
 import { getReferencingCounts, formatReferenceMessage } from "../../utils/referenceHelper.js";
-import { getLeaveBalance, getLeaveBalanceSnapshot } from "../../utils/leaveBalance.js";
+import { getLeaveBalance } from "../../utils/leaveBalance.js";
 import { resolveApprovers, getEmployeesApprovedBy } from "../../utils/approvers.js";
 import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
@@ -1467,9 +1467,9 @@ export const bulkAllocateLeaves = async (req, res) => {
 // ============================================================ My Leave Balance --
 
 /**
- * ADR-043: allocated / used / left per leave type for the current period —
- * the same snapshot a Salary Slip stores (`getLeaveBalanceSnapshot`).
- * Defaults to the caller's own balance; `employeeId` picks someone else,
+ * ADR-043: the leave balance per leave type the person holds an allocation
+ * covering today for — `getLeaveBalance`, the same number a leave
+ * application is validated against. Defaults to the caller's own balance; `employeeId` picks someone else,
  * refused (403) unless they are in the caller's reach — the check-in
  * register's (`attendanceEmployeeScope`): own, plus the downward reporting
  * chain for "team", the whole company for "all", every company for ADMIN.
@@ -1490,12 +1490,18 @@ export const getMyLeaveBalance = async (req, res) => {
 
     const people = await Employee.find(reach)
       .select("employeeName employeeCode").sort({ employeeName: 1 }).lean();
-    const snapshot = employeeId ? await getLeaveBalanceSnapshot(employeeId, new Date()) : [];
-    const leaveTypes = await LeaveType.find({ _id: { $in: snapshot.map((row) => row.leaveTypeId) } }).select("leaveTypeName").lean();
+    const now = new Date();
+    const allocations = employeeId
+      ? await LeaveAllocation.find({ employeeId, status: "active", fromDate: { $lte: now }, toDate: { $gte: now } }).select("leaveTypeId").lean()
+      : [];
+    const leaveTypeIds = [...new Set(allocations.map((row) => String(row.leaveTypeId)))];
+    const leaveTypes = await LeaveType.find({ _id: { $in: leaveTypeIds } }).select("leaveTypeName").lean();
     const nameById = new Map(leaveTypes.map((type) => [String(type._id), type.leaveTypeName]));
-    const balances = snapshot
-      .map((row) => ({ ...row, leaveTypeName: nameById.get(String(row.leaveTypeId)) || "" }))
-      .sort((a, b) => a.leaveTypeName.localeCompare(b.leaveTypeName));
+    const balances = (await Promise.all(leaveTypeIds.map(async (leaveTypeId) => ({
+      leaveTypeId,
+      leaveTypeName: nameById.get(leaveTypeId) || "",
+      balance: await getLeaveBalance(employeeId, leaveTypeId, now),
+    })))).sort((a, b) => a.leaveTypeName.localeCompare(b.leaveTypeName));
 
     return res.status(200).json({ isOk: true, status: 200, data: { employeeId, people, balances } });
   } catch (error) {

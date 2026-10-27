@@ -4967,7 +4967,33 @@ consumer; single-branch build
   `tax-declaration-payload` tests.
 - **Deviates from convention**: no.
 
-### ADR-055 — A period's leftover leave is encashed or expired, never both
+### ADR-055 — "Own department" scope on the six employee-owned request screens
+
+- **Date**: 2026-10-27
+- **Status**: accepted
+- **Context**: ADR-054 applied "Own department" scope (F3) to the Employee list and record by id. Leave
+  Applications, Expense Claims, Travel Requests, Employee Grievances, Shift Requests and Attendance Requests still
+  read it as company-wide (or group-wide). No seeded role uses department scope there, but the User Roles screen
+  offers it for a custom role.
+- **Decision**:
+  - On those six screens a department-scoped row reaches, in the list and by id, the records of employees in the
+    caller's current department and company — the caller's own among them. A caller with no department reaches
+    nothing (fail closed, as `utils/scope.js` does for a missing attribute). Other scopes are unchanged.
+  - One rule, one home: `departmentEmployeeIds` / `inCallerDepartment` in `utils/attendanceScope.js`, extracted from
+    `attendanceScope`'s existing department branch, which now calls it. Expense Claims reach it through
+    `attendanceScope` itself.
+  - **Grievances**: department scope covers grievances *raised by* someone in the department, but never one raised
+    against the caller by someone else — that would name the complainant to the person accused.
+  - The same by-id checks also guard edits on Travel Requests, Grievances, Shift and Attendance Requests and
+    Leave Applications, so a department-scoped role can no longer edit another department's record by id.
+    Compensatory Leave Request shares Leave Application's by-id check, so its list takes the department rule too.
+  - The Check-in Register's "may see leave" test, which reuses `leaveApplicationScope`, follows the same rule.
+  - The header badge shows the role's own name (e.g. "HR Manager") instead of the session tier ("USER").
+- **Consequences**: no re-seed or data change. A department-scoped create on Travel Requests and Grievances still
+  trusts the employee named in the form (only "own" forces the caller's own). Tested by section 7 of
+  `controllers/v1/accessLifecycle.test.js` (each of the five controllers reverted in turn makes it fail).
+
+### ADR-056 — A period's leftover leave is encashed or expired, never both
 
 - **Date**: 2026-10-27
 - **Status**: accepted

@@ -37,7 +37,7 @@ import { allocateEarnedLeaves } from "./allocateEarnedLeaves.js";
  * `runDueJobs`).
  *
  * **Ordering matters here** (see the comment on `JOBS` below): this runs
- * BEFORE `processExpiredAllocations` in the same pass (ADR-055), so a
+ * BEFORE `processExpiredAllocations` in the same pass (ADR-056), so a
  * period's leftover is encashed first and expiry writes off only what is
  * left after the encashment debit (`leavesLeftToExpire` counts it) — never
  * both. An allocation that ended yesterday is usually still `active` here,
@@ -137,7 +137,7 @@ export const generateLeaveEncashments = async () => {
 
 // Fixed order (ADR-016/ADR-024) — later jobs in a run can depend on side
 // effects of earlier ones in the SAME run. Encashment runs before expiry
-// (ADR-055): expiry then writes off only what encashment left, where the
+// (ADR-056): expiry then writes off only what encashment left, where the
 // other way round the same leftover was both expired and encashed.
 const JOBS = [
   { name: "generateLeaveEncashments", fn: generateLeaveEncashments },

@@ -21,7 +21,7 @@ import { getLeaveBalance } from "../../utils/leaveBalance.js";
 import { resolveApprovers, getEmployeesApprovedBy } from "../../utils/approvers.js";
 import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
-import { attendanceEmployeeScope } from "../../utils/attendanceScope.js";
+import { attendanceEmployeeScope, departmentEmployeeIds, inCallerDepartment } from "../../utils/attendanceScope.js";
 import { buildScopeFilter } from "../../utils/scope.js";
 import { companyMismatch } from "../../utils/companyMatch.js";
 import { countLeaveDays, sameCalendarDay } from "../../utils/leaveDayCalculation.js";
@@ -391,7 +391,10 @@ export const listCompensatoryLeaveRequestByParams = async (req, res) => {
     await resolveRequestEmployee(req);
     let approverIds = [];
     if (req.user?.dataScope === SCOPES.APPROVER) approverIds = await resolveLeaveVisibilityIds(req);
-    const scopeFilter = buildScopeFilter(req.user, { owner: "employeeId", approverIds });
+    // "Own department": as by id, which shares Leave Application's check.
+    const scopeFilter = req.user?.dataScope === SCOPES.DEPARTMENT
+      ? { employeeId: { $in: await departmentEmployeeIds(req) } }
+      : buildScopeFilter(req.user, { owner: "employeeId", approverIds });
 
     const list = await runListQuery(CompensatoryLeaveRequest, req.body, {
       searchRefs: [employeeSearch()],
@@ -841,16 +844,17 @@ export const updateLeaveApplication = async (req, res) => {
 
 /**
  * Whether req.user may see/act on this specific Leave Application. On an
- * own / team / approver row: the applicant, its named Leave Approver and,
- * beyond "own", the people the caller approves for or manages. Any other
- * scope reaches what its list shows.
+ * own / team / approver / department row: the applicant, its named Leave
+ * Approver and, beyond "own", the people the caller approves for, manages
+ * or shares a department with. Any other scope reaches what its list shows.
  */
 const canAccessLeaveApplication = async (req, doc) => {
   if (!req.user || req.user.role === ROLES.ADMIN) return true;
   const scope = req.user.dataScope;
-  if (![SCOPES.OWN, SCOPES.TEAM, SCOPES.APPROVER].includes(scope)) return true;
+  if (![SCOPES.OWN, SCOPES.TEAM, SCOPES.APPROVER, SCOPES.DEPARTMENT].includes(scope)) return true;
   if ([String(doc.employeeId), String(doc.leaveApproverId || "")].includes(String(req.user.id))) return true;
   if (scope === SCOPES.OWN) return false;
+  if (scope === SCOPES.DEPARTMENT) return inCallerDepartment(req, doc.employeeId);
   await resolveRequestEmployee(req);
   return (await resolveLeaveVisibilityIds(req)).includes(String(doc.employeeId));
 };
@@ -898,6 +902,8 @@ export const leaveApplicationScope = async (req) => {
   if (req.user?.dataScope === SCOPES.APPROVER) approverIds = await resolveLeaveVisibilityIds(req);
   // "team": the caller's own plus their reportsToId chain, as by id.
   if (req.user?.dataScope === SCOPES.TEAM) teamIds = await getSubordinateEmployeeIds(req.user.employeeId);
+  // "Own department" (F3): the caller's current department, as on Employee.
+  if (req.user?.dataScope === SCOPES.DEPARTMENT) return { employeeId: { $in: await departmentEmployeeIds(req) } };
   return buildScopeFilter(req.user, { owner: "employeeId", approverIds, teamIds });
 };
 

@@ -64,7 +64,7 @@ assert.equal(expiryCorrection(allocation, rows), null);
 rows = [own(12), expiry(-12), expiry(-12)];
 assert.deepEqual(expiryCorrection(allocation, rows), { skip: "2 expiry rows" });
 
-// 9. Expired and encashed both (the job order before ADR-055): 8 granted,
+// 9. Expired and encashed both (the job order before ADR-056): 8 granted,
 //    3 taken, all 5 left expired, then 3 encashed on the last day → the
 //    expiry is lowered to the 2 encashment left; the encashment stays.
 const doubled = expiry(-5);

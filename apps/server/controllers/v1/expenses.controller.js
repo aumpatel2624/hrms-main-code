@@ -3,6 +3,7 @@ import ExpenseClaim from "../../models/ExpenseClaim.js";
 import Employee from "../../models/Employee.js";
 import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
+import { namesOnlyList } from "../../utils/lookupOptions.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { resolveApprovers, getEmployeesApprovedBy } from "../../utils/approvers.js";
 import { buildScopeFilter } from "../../utils/scope.js";
@@ -82,6 +83,8 @@ const normalizeRows = async (expenses = [], taxes = []) => {
 
 export const createExpenseClaimType = async (req, res) => { try { const doc = await ExpenseClaimType.create(req.body); return res.status(201).json({ isOk: true, status: 201, data: doc }); } catch (error) { return failure(res, error); } };
 export const listExpenseClaimTypes = async (req, res) => { try { const data = await ExpenseClaimType.find().sort({ name: 1 }); return res.json({ isOk: true, status: 200, data }); } catch (error) { return failure(res, error); } };
+// Expense Claim / Travel Request rows pick from this; any employee may file one (ADR-051).
+export const listExpenseClaimTypeOptions = namesOnlyList(ExpenseClaimType, "name", { sort: { name: 1 } });
 export const searchExpenseClaimTypes = async (req, res) => { try { const data = await runListQuery(ExpenseClaimType, req.body, { searchFields: ["name", "description"], filterable: TYPE_FILTERABLE }); return res.json({ isOk: true, status: 200, data }); } catch (error) { return failure(res, error); } };
 export const getExpenseClaimTypeById = async (req, res) => { try { const data = await ExpenseClaimType.findById(req.params.id); if (!data) throwError(404, "Expense Claim Type not found"); return res.json({ isOk: true, status: 200, data }); } catch (error) { return failure(res, error); } };
 export const updateExpenseClaimType = async (req, res) => { try { const data = await ExpenseClaimType.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }); if (!data) throwError(404, "Expense Claim Type not found"); return res.json({ isOk: true, status: 200, data }); } catch (error) { return failure(res, error); } };

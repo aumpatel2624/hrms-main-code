@@ -22,6 +22,14 @@ export const jobOfferLabel = (row) =>
 export const interviewLabel = (row) =>
     `${row.jobApplicantId?.applicantName ?? "Interview"} — ${day(row.scheduledOn)} (${row.status})`;
 
+/**
+ * A master record's own name plus its company — "Basic (Apidel)" — for row
+ * dropdowns over designations, salary components and employees. `companyId`
+ * may arrive as an id or populated.
+ */
+export const nameWithCompany = (key) => (row, names) =>
+    withCompany(row[key], names.get(String(row.companyId?._id ?? row.companyId)));
+
 export const companyNames = (companies = []) => new Map(companies.map((c) => [String(c._id), c.companyName]));
 
 /** A select loader: `loadRows`' rows, each labelled by `labelOf(row, companyNames)`. */

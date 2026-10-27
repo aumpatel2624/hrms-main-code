@@ -5,6 +5,7 @@ import { ENDPOINTS } from "./endpoints";
 // ---- KRA --------------------------------------------------------------------
 export const createKRA = async (data) => api.post(ENDPOINTS.KRAS.BASE, data);
 export const getAllKRAs = async () => api.get(ENDPOINTS.KRAS.BASE);
+export const getKRAOptions = async () => api.get(ENDPOINTS.KRAS.OPTIONS);
 export const getKRAById = async (id) => api.get(ENDPOINTS.KRAS.BY_ID(id));
 export const updateKRA = async (id, data) => api.put(ENDPOINTS.KRAS.BY_ID(id), data);
 export const searchKRAs = async (data) => api.post(ENDPOINTS.KRAS.SEARCH, data);
@@ -13,6 +14,7 @@ export const deleteKRA = async (id) => api.delete(ENDPOINTS.KRAS.BY_ID(id));
 // ---- Employee Feedback Criteria ----------------------------------------------
 export const createEmployeeFeedbackCriteria = async (data) => api.post(ENDPOINTS.EMPLOYEE_FEEDBACK_CRITERIA.BASE, data);
 export const getAllEmployeeFeedbackCriteria = async () => api.get(ENDPOINTS.EMPLOYEE_FEEDBACK_CRITERIA.BASE);
+export const getEmployeeFeedbackCriteriaOptions = async () => api.get(ENDPOINTS.EMPLOYEE_FEEDBACK_CRITERIA.OPTIONS);
 export const getEmployeeFeedbackCriteriaById = async (id) => api.get(ENDPOINTS.EMPLOYEE_FEEDBACK_CRITERIA.BY_ID(id));
 export const updateEmployeeFeedbackCriteria = async (id, data) => api.put(ENDPOINTS.EMPLOYEE_FEEDBACK_CRITERIA.BY_ID(id), data);
 export const searchEmployeeFeedbackCriteria = async (data) => api.post(ENDPOINTS.EMPLOYEE_FEEDBACK_CRITERIA.SEARCH, data);

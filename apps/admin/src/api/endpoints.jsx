@@ -34,7 +34,7 @@ export const ENDPOINTS = {
         PROCESS_REQUESTS: `${V1}/shift-assignment-tool/process-requests`,
     },
     // ADR-026 (Payroll — Structure & Assignment).
-    SALARY_COMPONENTS: { BASE: `${V1}/salary-components`, SEARCH: `${V1}/salary-components/search`, BY_ID: (id) => `${V1}/salary-components/${id}` },
+    SALARY_COMPONENTS: { BASE: `${V1}/salary-components`, OPTIONS: `${V1}/salary-components/options`, SEARCH: `${V1}/salary-components/search`, BY_ID: (id) => `${V1}/salary-components/${id}` },
     SALARY_STRUCTURES: { BASE: `${V1}/salary-structures`, SEARCH: `${V1}/salary-structures/search`, BY_ID: (id) => `${V1}/salary-structures/${id}` },
     SALARY_STRUCTURE_ASSIGNMENTS: { BASE: `${V1}/salary-structure-assignments`, SEARCH: `${V1}/salary-structure-assignments/search`, BY_ID: (id) => `${V1}/salary-structure-assignments/${id}` },
     BULK_SALARY_STRUCTURE_ASSIGNMENT: {
@@ -130,6 +130,7 @@ export const ENDPOINTS = {
     },
     EMPLOYEE_TAX_EXEMPTION_SUB_CATEGORIES: {
         BASE: `${V1}/employee-tax-exemption-sub-categories`,
+        OPTIONS: `${V1}/employee-tax-exemption-sub-categories/options`,
         SEARCH: `${V1}/employee-tax-exemption-sub-categories/search`,
         BY_ID: (id) => `${V1}/employee-tax-exemption-sub-categories/${id}`,
     },
@@ -167,11 +168,13 @@ export const ENDPOINTS = {
     // ADR-032 (Performance, module 16, foundation half).
     KRAS: {
         BASE: `${V1}/kras`,
+        OPTIONS: `${V1}/kras/options`,
         SEARCH: `${V1}/kras/search`,
         BY_ID: (id) => `${V1}/kras/${id}`,
     },
     EMPLOYEE_FEEDBACK_CRITERIA: {
         BASE: `${V1}/employee-feedback-criteria`,
+        OPTIONS: `${V1}/employee-feedback-criteria/options`,
         SEARCH: `${V1}/employee-feedback-criteria/search`,
         BY_ID: (id) => `${V1}/employee-feedback-criteria/${id}`,
     },
@@ -537,7 +540,7 @@ export const ENDPOINTS = {
         BY_ID: (id) => `${V1}/attendances/${id}`,
         SEARCH: `${V1}/attendances/search`,
     },
-    EXPENSE_CLAIM_TYPES: { BASE: `${V1}/expense-claim-types`, SEARCH: `${V1}/expense-claim-types/search`, BY_ID: (id) => `${V1}/expense-claim-types/${id}` },
+    EXPENSE_CLAIM_TYPES: { BASE: `${V1}/expense-claim-types`, OPTIONS: `${V1}/expense-claim-types/options`, SEARCH: `${V1}/expense-claim-types/search`, BY_ID: (id) => `${V1}/expense-claim-types/${id}` },
     EXPENSE_CLAIMS: { BASE: `${V1}/expense-claims`, SEARCH: `${V1}/expense-claims/search`, BY_ID: (id) => `${V1}/expense-claims/${id}`,
         APPROVE: (id) => `${V1}/expense-claims/${id}/approve`, REJECT: (id) => `${V1}/expense-claims/${id}/reject`, SUBMIT: (id) => `${V1}/expense-claims/${id}/submit`, CANCEL: (id) => `${V1}/expense-claims/${id}/cancel`, MARK_PAID: (id) => `${V1}/expense-claims/${id}/mark-paid` },
 

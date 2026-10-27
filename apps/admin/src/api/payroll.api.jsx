@@ -4,6 +4,8 @@ import { ENDPOINTS } from "./endpoints";
 // ADR-026 (Payroll — Structure & Assignment).
 export const createSalaryComponent = async (data) => api.post(ENDPOINTS.SALARY_COMPONENTS.BASE, data);
 export const getAllSalaryComponents = async () => api.get(ENDPOINTS.SALARY_COMPONENTS.BASE);
+// Id, name and company only, readable by any signed-in user — for the row dropdowns.
+export const getSalaryComponentOptions = async () => api.get(ENDPOINTS.SALARY_COMPONENTS.OPTIONS);
 export const getSalaryComponentById = async (id) => api.get(ENDPOINTS.SALARY_COMPONENTS.BY_ID(id));
 export const updateSalaryComponent = async (id, data) => api.put(ENDPOINTS.SALARY_COMPONENTS.BY_ID(id), data);
 export const deleteSalaryComponent = async (id) => api.delete(ENDPOINTS.SALARY_COMPONENTS.BY_ID(id));

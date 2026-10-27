@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
+import { namesOnlyList } from "../../utils/lookupOptions.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { SCOPES } from "@demo-panel/shared/scopes";
 import IncomeTaxSlab from "../../models/IncomeTaxSlab.js";
@@ -342,6 +343,9 @@ export const listEmployeeTaxExemptionSubCategories = async (req, res) => {
     return failure(res, error);
   }
 };
+
+// Declaration and Proof Submission rows pick from this; employees file both (ADR-051).
+export const listEmployeeTaxExemptionSubCategoryOptions = namesOnlyList(EmployeeTaxExemptionSubCategory, "name", { sort: { name: 1 } });
 
 export const searchEmployeeTaxExemptionSubCategories = async (req, res) => {
   try {

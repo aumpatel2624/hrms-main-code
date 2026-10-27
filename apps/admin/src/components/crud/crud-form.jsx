@@ -285,7 +285,7 @@ const CrudForm = ({ config, mode = "add" }) => {
                             );
                         })}
 
-                        {config.renderExtra?.({ mode, id, values, setValues })}
+                        {config.renderExtra?.({ mode, id, values, setValues, lookups })}
 
                         <FormActions
                             onSubmit={handleSubmit}

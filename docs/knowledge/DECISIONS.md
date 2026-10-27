@@ -4821,3 +4821,38 @@ consumer; single-branch build
   on existing databases, and is left as a decision. Supersedes ADR-027's named formula-row gap. Tested by
   `utils/salarySlipCalc.test.js` (Scenario C2) and `controllers/v1/payrollIntegrity.test.js`.
 - **Deviates from convention**: no.
+
+### ADR-051 — Row editors pick records by name; self-service forms read names-only lists
+
+- **Date**: 2026-10-27
+- **Status**: accepted
+- **Context**: The pre-production simulation (report section 4; 23 Oct report F6) watched HR copy a
+  Salary Component's id from the address bar into a Salary Structure row. Fourteen screens' row editors
+  (`SimpleArrayField`) took a raw MongoDB id in a text box: Salary Structure, Leave Policy, Expense
+  Claim, Travel Request costings, Staffing Plan, Training Event attendees, Employee Skill Map, Leave
+  Block List, Gratuity Rule, Appraisal Template, Appraisal, Employee Performance Feedback, Employee
+  Benefit Application, and Tax Exemption Declaration / Proof Submission. An ordinary Employee could not
+  even look the ids up: the Expense Type, Salary Component, KRA, Feedback Criteria and Tax Exemption
+  Sub-Category lists are gated on master screens their role does not hold.
+- **Decision**:
+  - **Rows are dropdowns.** A `SimpleArrayField` column may be `type: "select"` with `optionsFrom`, a key
+    of the form's `lookups` (crud-form now hands `lookups` to `renderExtra`), the same `{ value, label }`
+    lists single-record selects use. Row lookup keys start with `row` so they never collide with a header
+    field's. Saved rows store the same ids as before; this is a form change, not a data change.
+  - **Company in the label** (ADR-049's convention): Designation, Employee and Salary Component rows read
+    "Name (Company)" via `picker-labels.js` `nameWithCompany`. `GET /employees` now also sends `companyId`
+    for that label.
+  - **Names-only lists** (`utils/lookupOptions.js` `namesOnlyList`): `GET /expense-claim-types/options`,
+    `/salary-components/options`, `/kras/options`, `/employee-feedback-criteria/options` and
+    `/employee-tax-exemption-sub-categories/options` answer any signed-in user with the id and name only
+    (Salary Components add `companyId`, are active only, and are the caller's own company below ADMIN —
+    never the formula or amount). This follows the existing ungated reference lists (`/leave-types`,
+    `/skills`, `/designations`, `/companies`) rather than granting the master screens, which would also
+    show the screen in the sidebar and send whole records. No role rows change, so no seed is needed.
+- **Consequences**: the master screens' own lists stay gated. The Leave Type row picker lists active
+  leave types only (`/leave-types`), so a policy row pointing at a deactivated type shows blank until
+  re-picked. Payroll Correction's single Salary Slip field still takes a pasted id; it is not a row
+  editor and is left for a follow-up. Tested by `apps/admin/src/entities/row-pickers.test.js` (no `…Id`
+  text field left; every row lookup defined) and `controllers/v1/lookupOptions.test.js` (an Employee
+  reads each names-only list and still gets 403 on the master lists).
+- **Deviates from convention**: no.

@@ -9,14 +9,22 @@ import { FormSection, FullWidth } from "@/components/ui/form";
  * are central to those screens, not optional flavor text, so this builds
  * the smallest reusable version rather than punting again.
  *
- * `columns`: [{ name, label, type: "text"|"number"|"select"|"checkbox", options? }]
+ * `columns`: [{ name, label, type: "text"|"number"|"select"|"checkbox", options?, optionsFrom? }]
  * Reads/writes `values[fieldName]` as a plain array of row objects via the
  * same `setValues` updater `renderExtra` already receives from crud-form.jsx.
+ *
+ * A row that points at another record (a Salary Component, an Expense Type…)
+ * is a "select" with `optionsFrom`, a key of the form's `lookups` — the same
+ * `{ value, label }` lists single-record selects use — so nobody types an id.
  */
+const optionOf = (opt) => (typeof opt === "object" ? opt : { value: opt, label: opt });
+// A populated ref (getById) still selects its own row.
+const idOf = (value) => (value && typeof value === "object" ? (value._id ?? value.id) : value);
+
 const emptyRow = (columns) =>
     Object.fromEntries(columns.map((c) => [c.name, c.type === "checkbox" ? false : ""]));
 
-const SimpleArrayField = ({ title, description, fieldName, columns, values, setValues }) => {
+const SimpleArrayField = ({ title, description, fieldName, columns, values, setValues, lookups = {} }) => {
     const rows = values[fieldName] ?? [];
 
     const updateRow = (idx, colName, val) => {
@@ -50,12 +58,12 @@ const SimpleArrayField = ({ title, description, fieldName, columns, values, setV
                                     {col.type === "select" ? (
                                         <select
                                             className="rounded-md border border-primary bg-primary px-2 py-1 text-sm text-primary"
-                                            value={row[col.name] ?? ""}
+                                            value={idOf(row[col.name]) ?? ""}
                                             onChange={(e) => updateRow(idx, col.name, e.target.value)}
                                         >
                                             <option value="">—</option>
-                                            {col.options.map((opt) => (
-                                                <option key={opt} value={opt}>{opt}</option>
+                                            {(col.optionsFrom ? (lookups[col.optionsFrom] ?? []) : col.options).map(optionOf).map((opt) => (
+                                                <option key={opt.value} value={opt.value}>{opt.label}</option>
                                             ))}
                                         </select>
                                     ) : col.type === "checkbox" ? (

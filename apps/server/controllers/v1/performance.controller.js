@@ -30,6 +30,7 @@ import Designation from "../../models/Designation.js";
 import Company from "../../models/Company.js";
 import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
+import { namesOnlyList } from "../../utils/lookupOptions.js";
 import {
   validateWeightageSum,
   calculateAutomatedGoalScore,
@@ -80,6 +81,9 @@ export const listKRAs = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) { return failure(res, error); }
 };
+
+// Appraisal and Appraisal Template rows pick from these two (ADR-051).
+export const listKRAOptions = namesOnlyList(KRA, "name", { sort: { name: 1 } });
 
 export const searchKRAs = async (req, res) => {
   try {
@@ -142,6 +146,8 @@ export const listEmployeeFeedbackCriteria = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) { return failure(res, error); }
 };
+
+export const listEmployeeFeedbackCriteriaOptions = namesOnlyList(EmployeeFeedbackCriteria, "criteria", { sort: { criteria: 1 } });
 
 export const searchEmployeeFeedbackCriteria = async (req, res) => {
   try {

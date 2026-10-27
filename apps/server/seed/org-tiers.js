@@ -12,8 +12,9 @@
  *
  * For each of those roles the WHOLE matrix is replaced, not merged: the
  * proposal lists exactly which pages a role can open, and a leftover grant from
- * an earlier seed would silently contradict it. The older HR User / HR Manager /
- * Leave Approver / Expense Approver / Interviewer roles are not touched.
+ * an earlier seed would silently contradict it. The older HR User / HR Manager
+ * roles are not touched; Leave Approver / Expense Approver / Interviewer only gain
+ * the new Employee matrix's self-service (seed/approver-self-service.js).
  */
 // Must stay the first two imports — see seed/index.js.
 import "../models/softDelete.js";
@@ -30,6 +31,7 @@ import MenuGroupMaster from "../models/MenuGroupMaster.js";
 import RoleDashboard from "../models/RoleDashboard.js";
 import { ALL_ROLE_NAMES, LINK_PAGES, TIER_PAGES, buildRoleRows } from "./org-tiers.data.js";
 import { FUNCTIONAL_ROLES } from "./org-functional-roles.data.js";
+import { seedApproverSelfService } from "./approver-self-service.js";
 
 dotenv.config();
 
@@ -106,6 +108,7 @@ const run = async () => {
   console.log("✅ DB connected");
 
   await seedTierRoles();
+  await seedApproverSelfService();
 
   await mongoose.disconnect();
   console.log("✅ Tier seeding complete");

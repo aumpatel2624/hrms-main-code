@@ -6,7 +6,7 @@
  */
 import bcrypt from "bcrypt";
 import { runListQuery } from "../../utils/listQuery.js";
-import Employee from "../../models/Employee.js";
+import Employee, { NO_ACCESS_STATUSES } from "../../models/Employee.js";
 import JobApplicant from "../../models/JobApplicant.js";
 import JobOffer from "../../models/JobOffer.js";
 import {
@@ -220,6 +220,10 @@ export const listEmployees = async (req, res) => {
     const filter = { isActive: true };
     if (req.query.companyId) filter.companyId = req.query.companyId;
     if (req.query.departmentId) filter.departmentId = req.query.departmentId;
+    // ?current=true: approver / reviewer / interviewer pickers — someone who
+    // has left cannot decide anything. Other pickers (Full and Final, Exit
+    // Interview…) still need the leavers.
+    if (req.query.current === "true") filter.status = { $nin: NO_ACCESS_STATUSES };
     const groupWide = (await menuDataScope(req, "/employee", "read")) === SCOPES.ALL;
     const company = groupWide ? {} : { companyId: (await resolveRequestEmployee(req))?.companyId ?? { $in: [] } };
     const employees = await Employee.find({ $and: [filter, company] }).select("employeeCode employeeName departmentId designationId");

@@ -169,6 +169,7 @@ import SimpleActionButton from "@/components/crud/simple-action-button";
 import { FormSection, FullWidth } from "@/components/ui/form";
 import AdjustAllocationPanel from "@/components/crud/adjust-allocation-panel";
 import MarkEncashmentPaidPanel from "@/components/crud/mark-encashment-paid-panel";
+import { employeePayload } from "./employee-payload";
 
 const ACTIVE = { name: "isActive", label: "Is Active", type: "checkbox", section: "status" };
 
@@ -699,16 +700,7 @@ export const employeeConfig = {
         cityId: refId(data.cityId),
         password: "",
     }),
-    // Password is set on create; changes after that go through the reset
-    // section below, never a general profile update (matches the server's
-    // own createEmployee/updateEmployee split, ADR-040).
-    toPayload: (values, mode) => {
-        if (mode === "edit") {
-            const { password, ...rest } = values;
-            return rest;
-        }
-        return values;
-    },
+    toPayload: employeePayload,
     renderExtra: ({ mode, id }) => (mode === "edit" ? <PasswordResetSection id={id} resetApi={resetEmployeePassword} /> : null),
 };
 

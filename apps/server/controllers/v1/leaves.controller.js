@@ -1275,6 +1275,7 @@ export const listLeaveLedgerEntryByParams = async (req, res) => {
             leaveTypeName: { $ifNull: ["$leaveType.leaveTypeName", ""] },
           },
         },
+        { $project: { employee: 0 } },
       ],
     });
     return res.status(200).json({ isOk: true, status: 200, data: list });

@@ -161,6 +161,7 @@ export const listExitInterviewsByParams = async (req, res) => {
       stages: [
         { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employee" } },
         { $addFields: { employeeName: { $arrayElemAt: ["$employee.employeeName", 0] } } },
+        { $project: { employee: 0 } },
       ],
     });
     return res.status(200).json({ isOk: true, status: 200, data: list });

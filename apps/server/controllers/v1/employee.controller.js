@@ -17,6 +17,7 @@ import { ROLES } from "@demo-panel/shared/roles";
 import { SCOPES } from "@demo-panel/shared/scopes";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { buildScopeFilter } from "../../utils/scope.js";
+import { employeeFieldsFor } from "../../utils/employeeFields.js";
 import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
 
 // Pre-launch, org-chart manager visibility (SCOPES.TEAM): a plain Employee
@@ -191,11 +192,11 @@ export const getEmployeeById = async (req, res) => {
   try {
     const { employeeId } = req.params;
     const scopeFilter = await employeeTeamScopeFilter(req);
-    const employee = await Employee.findOne({ $and: [{ _id: employeeId }, scopeFilter ?? {}] }).select("-password");
+    const employee = await Employee.findOne({ $and: [{ _id: employeeId }, scopeFilter ?? {}] }).select("-password").lean();
     if (!employee) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee not found" });
     }
-    return res.status(200).json({ isOk: true, status: 200, data: employee });
+    return res.status(200).json({ isOk: true, status: 200, data: employeeFieldsFor(req.user, employee) });
   } catch (error) {
     console.log("Error in getEmployeeById", error);
     return failure(res, error);
@@ -251,8 +252,11 @@ export const listEmployeeByParams = async (req, res) => {
           },
         },
       ],
-      project: { password: 0 },
+      // reportsTo is the manager's whole joined document — only its name
+      // (reportsToName above) is for the browser.
+      project: { password: 0, reportsTo: 0 },
     });
+    for (const page of list) page.data = page.data.map((row) => employeeFieldsFor(req.user, row));
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
     console.log(error);

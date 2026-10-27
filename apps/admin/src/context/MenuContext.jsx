@@ -93,7 +93,7 @@ const MenuProvider = ({ children }) => {
         if (menuId) updateCurrentPagePermissions(menuId);
     }, [pathname, loading, menuData, userRoles, isAdmin]);
 
-    return <MenuContext.Provider value={{ menuData, loading, error: error?.message ?? null, fetchMenus, isAdmin, userRoles, invalidateMenuCache, currentPagePermissions, updateCurrentPagePermissions, getPermissionsForMenu, findMenuIdByUrl, findMenuIdForPath }}>{children}</MenuContext.Provider>;
+    return <MenuContext.Provider value={{ menuData, currentUserId: user?._id ?? null, loading, error: error?.message ?? null, fetchMenus, isAdmin, userRoles, invalidateMenuCache, currentPagePermissions, updateCurrentPagePermissions, getPermissionsForMenu, findMenuIdByUrl, findMenuIdForPath }}>{children}</MenuContext.Provider>;
 };
 
 export { MenuContext, MenuProvider };

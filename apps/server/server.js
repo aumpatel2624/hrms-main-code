@@ -4,6 +4,8 @@ import "./models/softDelete.js";
 // Second, for the same reason: the audit plugin only reaches models compiled
 // after it, and both files throw on boot rather than silently skipping a model.
 import "./models/auditPlugin.js";
+// Third: the required-field message is fixed when a schema compiles.
+import "./models/validationMessages.js";
 
 import express from "express";
 import { stripCredentials } from "./utils/jsonSecrets.js";

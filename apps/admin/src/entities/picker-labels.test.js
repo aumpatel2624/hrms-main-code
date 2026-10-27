@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { companyLabelledOptions, interviewLabel, jobOfferLabel, leavePeriodLabel, nameWithCompany, ofChosenCompany, salarySlipLabel, salaryStructureLabel } from "./picker-labels.js";
+import { companyLabelledOptions, interviewLabel, jobOfferLabel, leavePeriodLabel, nameWithCompany, ofChosenCompany, salarySlipLabel, salaryStructureLabel, withSavedLeavers } from "./picker-labels.js";
 
 const companies = { data: { data: [{ _id: "c-apd", companyName: "Apidel" }, { _id: "c-nuv", companyName: "Nuva" }] } };
 const periods = { data: { data: [
@@ -57,5 +57,14 @@ const slipNames = new Map([["e1", "Asha"]]);
 assert.equal(salarySlipLabel({ employeeId: "e1", startDate: "2026-09-01T00:00:00.000Z", endDate: "2026-09-30T00:00:00.000Z" }, slipNames),
     "Asha — 2026-09-01 – 2026-09-30");
 assert.equal(salarySlipLabel({ employeeId: { _id: "e1" }, startDate: "2026-10-01", endDate: "2026-10-31" }, slipNames), "Asha — 2026-10-01 – 2026-10-31");
+
+// Approver pickers: a saved approver who has left stays, labelled, not blank.
+const currentStaff = [{ _id: "e1", employeeName: "Asha" }];
+const everyone = [...currentStaff, { _id: "e9", employeeName: "Varun" }];
+assert.deepEqual(withSavedLeavers(currentStaff, ["e9"], everyone), [
+    { value: "e1", label: "Asha" }, { value: "e9", label: "Varun (left)" },
+]);
+assert.deepEqual(withSavedLeavers(currentStaff, ["e1"], everyone), [{ value: "e1", label: "Asha" }], "a current approver is not repeated");
+assert.deepEqual(withSavedLeavers(currentStaff, [], []), [{ value: "e1", label: "Asha" }], "new forms offer only current employees");
 
 console.log("picker-labels: all assertions passed");

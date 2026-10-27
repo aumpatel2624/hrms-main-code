@@ -73,7 +73,7 @@ import {
     resetEmployeePassword,
 } from "../api/employees.api";
 import { getAllRoles } from "../api/roles.api";
-import { companyLabelledOptions, interviewLabel, jobOfferLabel, leavePeriodLabel, nameWithCompany, ofChosenCompany, salarySlipLabel, salaryStructureLabel } from "./picker-labels";
+import { companyLabelledOptions, interviewLabel, jobOfferLabel, leavePeriodLabel, nameWithCompany, ofChosenCompany, salarySlipLabel, salaryStructureLabel, withSavedLeavers } from "./picker-labels";
 import { getAllCountries, getStatesByCountry, getCitiesByState } from "../api/locations.api";
 import {
     createAdminUser, deleteAdminUser, getAdminUserById, updateAdminUser, searchAdminUsers, resetAdminUserPassword,
@@ -174,7 +174,7 @@ import MarkEncashmentPaidPanel from "@/components/crud/mark-encashment-paid-pane
 import { employeePayload } from "./employee-payload";
 import { holidayListAssignmentPayload } from "./holiday-list-assignment-payload";
 import { salaryStructureAssignmentPayload } from "./salary-structure-assignment-payload";
-import { taxDeclarationPayload } from "./tax-declaration-payload";
+import { taxDeclarationPayload, taxProofSubmissionPayload } from "./tax-declaration-payload";
 
 const ACTIVE = { name: "isActive", label: "Is Active", type: "checkbox", section: "status" };
 
@@ -203,6 +203,14 @@ const asOptions = (loader, labelKey) => () =>
 // Approver / reviewer / interviewer pickers: nobody who has left, is inactive
 // or is suspended (the server filters on ?current=true).
 const getCurrentEmployees = () => getAllEmployees({ current: true });
+// …but an edit form keeps showing the approver it saved who has since left,
+// labelled so, instead of a blank picker (the config lists the field in
+// `lookupDeps`, so this reruns once the record has loaded).
+const currentEmployeeOptions = (field) => (values) => {
+    const saved = [].concat(values?.[field] ?? []).filter(Boolean).map((value) => String(value._id ?? value));
+    return Promise.all([getCurrentEmployees(), saved.length ? getAllEmployees() : null]).then(([current, all]) =>
+        withSavedLeavers(unwrapListRows(current.data?.data), saved, unwrapListRows(all?.data?.data)));
+};
 
 // Row dropdowns (SimpleArrayField `optionsFrom`). Masters every company keeps
 // its own copy of carry the company in the label (picker-labels.js).
@@ -1064,9 +1072,10 @@ export const interviewFeedbackConfig = {
     plural: "Interview Feedback",
     description: "A per-interviewer scorecard for one Interview.",
     api: { search: searchInterviewFeedbacks, getById: getInterviewFeedbackById, create: createInterviewFeedback, update: updateInterviewFeedback, remove: deleteInterviewFeedback },
+    lookupDeps: ["interviewerId"],
     lookups: {
         interviewId: interviewOptionsLoader,
-        interviewerId: asOptions(getCurrentEmployees, "employeeName"),
+        interviewerId: currentEmployeeOptions("interviewerId"),
     },
     sections: [{ id: "details", title: "Details" }, { id: "status", title: "Status" }],
     fields: [
@@ -2718,10 +2727,11 @@ export const leaveApplicationConfig = {
         search: searchLeaveApplications, getById: getLeaveApplicationById,
         create: createLeaveApplication, update: updateLeaveApplication,
     },
+    lookupDeps: ["leaveApproverId"],
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
         leaveTypeId: asOptions(getAllLeaveTypes, "leaveTypeName"),
-        leaveApproverId: asOptions(getCurrentEmployees, "employeeName"),
+        leaveApproverId: currentEmployeeOptions("leaveApproverId"),
     },
     sections: [{ id: "details", title: "Details" }, { id: "approval", title: "Approval" }, { id: "status", title: "Status" }, { id: "actions", title: "Actions" }],
     fields: [
@@ -3006,8 +3016,8 @@ export const shiftAssignmentConfig = {
     columns: [
         { name: "Employee", selector: (row) => row.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
         { name: "Shift type", selector: (row) => row.shiftTypeIdLabel || "—", sortable: true, sortField: "shiftTypeId" },
-        { name: "Start date", selector: (row) => String(row.startDate ?? "—"), sortable: true, sortField: "startDate" },
-        { name: "End date", selector: (row) => String(row.endDate ?? "—"), sortable: true, sortField: "endDate" },
+        { name: "Start date", selector: (row) => String(row.startDate ?? "—").slice(0, 10), sortable: true, sortField: "startDate" },
+        { name: "End date", selector: (row) => String(row.endDate ?? "—").slice(0, 10), sortable: true, sortField: "endDate" },
         { name: "Status", selector: (row) => String(row.status ?? "—"), sortable: true, sortField: "status" },
     ],
     recordTitle: employeeTitle("Shift Assignment"),
@@ -3160,10 +3170,11 @@ export const shiftRequestConfig = {
     key: "shift-request", path: "/shift-request", section: "Shift & Attendance", singular: "Shift Request", plural: "Shift Requests",
     description: "Request a shift change for a date range. The Shift Approver is resolved automatically (your own Shift Approver, else your Department's) unless you set one explicitly. Approving creates the real Shift Assignment; rejecting has no side effects.",
     api: { search: searchShiftRequests, getById: getShiftRequestById, create: createShiftRequest, update: updateShiftRequest },
+    lookupDeps: ["approverId"],
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
         shiftTypeId: asOptions(getAllShiftTypes, "shiftTypeName"),
-        approverId: asOptions(getCurrentEmployees, "employeeName"),
+        approverId: currentEmployeeOptions("approverId"),
     },
     sections: [{ id: "details", title: "Details" }, { id: "status", title: "Status" }],
     fields: [
@@ -3205,8 +3216,8 @@ export const shiftRequestConfig = {
     columns: [
         { name: "Employee", selector: (row) => row.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
         { name: "Shift type", selector: (row) => row.shiftTypeIdLabel || "—", sortable: true, sortField: "shiftTypeId" },
-        { name: "From date", selector: (row) => String(row.fromDate ?? "—"), sortable: true, sortField: "fromDate" },
-        { name: "To date", selector: (row) => row.toDate ? String(row.toDate) : "open-ended", sortable: true, sortField: "toDate" },
+        { name: "From date", selector: (row) => String(row.fromDate ?? "—").slice(0, 10), sortable: true, sortField: "fromDate" },
+        { name: "To date", selector: (row) => row.toDate ? String(row.toDate).slice(0, 10) : "open-ended", sortable: true, sortField: "toDate" },
         { name: "Status", selector: (row) => String(row.status ?? "—"), sortable: true, sortField: "status" },
     ],
     recordTitle: employeeTitle("Shift Request"),
@@ -3274,8 +3285,8 @@ export const attendanceRequestConfig = {
     ],
     columns: [
         { name: "Employee", selector: (row) => row.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
-        { name: "From date", selector: (row) => String(row.fromDate ?? "—"), sortable: true, sortField: "fromDate" },
-        { name: "To date", selector: (row) => String(row.toDate ?? "—"), sortable: true, sortField: "toDate" },
+        { name: "From date", selector: (row) => String(row.fromDate ?? "—").slice(0, 10), sortable: true, sortField: "fromDate" },
+        { name: "To date", selector: (row) => String(row.toDate ?? "—").slice(0, 10), sortable: true, sortField: "toDate" },
         { name: "Reason", selector: (row) => String(row.reason ?? "—"), sortable: true, sortField: "reason" },
         { name: "Status", selector: (row) => String(row.status ?? "—"), sortable: true, sortField: "status" },
     ],
@@ -3471,7 +3482,7 @@ export const salaryStructureAssignmentConfig = {
     ],
     columns: [
         { name: "Employee", selector: (row) => row.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
-        { name: "From date", selector: (row) => String(row.fromDate ?? "—"), sortable: true, sortField: "fromDate" },
+        { name: "From date", selector: (row) => String(row.fromDate ?? "—").slice(0, 10), sortable: true, sortField: "fromDate" },
         { name: "CTC", selector: (row) => row.ctc ?? "—" },
     ],
     recordTitle: employeeTitle("Salary Structure Assignment"),
@@ -4369,17 +4380,21 @@ export const expenseClaimTypeConfig = {
 };
 export const expenseClaimConfig = {
     key: "expense-claim", path: "/expense-claim", section: "Expenses", singular: "Expense Claim", plural: "Expense Claims", description: "Record a reimbursable expense claim, have it approved, submit it, and mark it paid after reimbursement.",
-    api: { search: searchExpenseClaims, getById: getExpenseClaimById, create: createExpenseClaim, update: updateExpenseClaim, remove: deleteExpenseClaim }, lookups: { employeeId: asOptions(getAllEmployees, "employeeName"), expenseApproverId: asOptions(getCurrentEmployees, "employeeName") },
+    api: { search: searchExpenseClaims, getById: getExpenseClaimById, create: createExpenseClaim, update: updateExpenseClaim, remove: deleteExpenseClaim },
+    lookupDeps: ["expenseApproverId"],
     lookups: {
+        employeeId: asOptions(getAllEmployees, "employeeName"),
+        expenseApproverId: currentEmployeeOptions("expenseApproverId"),
         rowExpenseTypeId: expenseTypeRowOptions,
     },
     sections: [{ id: "details", title: "Claim details" }, { id: "expenses", title: "Expenses" }, { id: "taxes", title: "Taxes and charges" }, { id: "totals", title: "Totals" }, { id: "status", title: "Status" }],
     fields: [{ name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" }, { name: "postingDate", label: "Posting Date", section: "details", type: "date" }, { name: "expenseApproverId", label: "Expense Approver", section: "details", type: "select", optionsFrom: "expenseApproverId", hint: "Leave blank to use the employee or department approver." }, { name: "totalClaimedAmount", label: "Total Claimed", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "totalSanctionedAmount", label: "Total Sanctioned", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "totalTaxesAndCharges", label: "Total Taxes", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "grandTotal", label: "Grand Total", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "status", label: "Status", section: "status", type: "text", disabled: () => true, hideIn: ["add"] }, { name: "isPaid", label: "Paid", section: "status", type: "checkbox", disabled: () => true, hideIn: ["add"] }],
-    renderExtra: ({ mode, id, values, setValues, lookups }) => (
+    // Nobody approves their own claim (the server refuses it), so the applicant is not offered the buttons.
+    renderExtra: ({ mode, id, values, setValues, lookups, currentUserId }) => (
         <>
             <SimpleArrayField title="Expenses" fieldName="expenses" columns={EXPENSE_COLUMNS} values={values} setValues={setValues} lookups={lookups} />
             <SimpleArrayField title="Taxes and Charges" fieldName="taxes" columns={EXPENSE_TAX_COLUMNS} values={values} setValues={setValues} />
-            {mode === "edit" && id && values.status === "draft" && <><SimpleActionButton label="Approve" description="Approve this claim and its sanctioned amounts." onRun={() => approveExpenseClaim(id)} onResult={() => window.location.reload()} /><SimpleActionButton label="Reject" description="Reject this claim and set every sanctioned amount to zero." onRun={() => rejectExpenseClaim(id)} onResult={() => window.location.reload()} /></>}
+            {mode === "edit" && id && values.status === "draft" && String(values.employeeId) !== String(currentUserId) && <><SimpleActionButton label="Approve" description="Approve this claim and its sanctioned amounts." onRun={() => approveExpenseClaim(id)} onResult={() => window.location.reload()} /><SimpleActionButton label="Reject" description="Reject this claim and set every sanctioned amount to zero." onRun={() => rejectExpenseClaim(id)} onResult={() => window.location.reload()} /></>}
             {mode === "edit" && id && values.status === "approved" && <SimpleActionButton label="Submit" description="Lock this approved claim for reimbursement." onRun={() => submitExpenseClaim(id)} onResult={() => window.location.reload()} />}
             {mode === "edit" && id && values.status === "submitted" && <><SimpleActionButton label="Cancel" description="Cancel this submitted claim." onRun={() => cancelExpenseClaim(id)} onResult={() => window.location.reload()} />{!values.isPaid && <SimpleActionButton label="Mark as Paid" description="Record that this submitted claim has been reimbursed." onRun={() => markExpenseClaimAsPaid(id)} onResult={() => window.location.reload()} />}</>}
         </>
@@ -4986,10 +5001,11 @@ export const employeePerformanceFeedbackConfig = {
     // ADR-047: only the reviewer (or HR) may change feedback; the server sends
     // that verdict on each row and enforces it.
     canEditRow: (row) => row.canEdit !== false,
+    lookupDeps: ["reviewerId"],
     lookups: {
         rowCriteriaId: criteriaRowOptions,
         employeeId: asOptions(getAllEmployees, "employeeName"),
-        reviewerId: asOptions(getCurrentEmployees, "employeeName"),
+        reviewerId: currentEmployeeOptions("reviewerId"),
         // The appraisals the caller may give feedback on — their reports', or (HR) their company's.
         appraisalId: () => getFeedbackAppraisalOptions().then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: `Appraisal — ${row.employeeIdLabel}${row.appraisalCycleIdLabel ? ` · ${row.appraisalCycleIdLabel}` : ""} (${row.status})` }))),
     },
@@ -5767,6 +5783,7 @@ export const employeeTaxExemptionProofSubmissionConfig = {
         rentedTo: data.rentedTo?.slice(0, 10) || "",
         taxExemptionProofs: (data.taxExemptionProofs ?? []).map((row) => ({ ...row, exemptionSubCategoryId: refId(row.exemptionSubCategoryId) })),
     }),
+    toPayload: taxProofSubmissionPayload,
 };
 
 export const ADVANCED_ENTITIES = [

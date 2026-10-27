@@ -333,6 +333,15 @@ resetWrites();
   expectStatus(await view(lena), 403, "a Leave Approver who approves for someone else");
   expectStatus(await view(hema), 200, "HR");
 
+  // The list agrees with by id: a Team Lead's team-scope list has their reports' leave.
+  const listLeaves = async (caller) => {
+    const res = await call(leaveRoutes, "post", "/leave-applications/search", caller, { body: {} });
+    expectStatus(res, 200, `${caller.employeeName} lists leave applications`);
+    return listedIds(res);
+  };
+  assert.deepEqual(await listLeaves(manju), [open, approved].map((doc) => String(doc._id)).sort(), "the Team Lead lists their report's leave");
+  assert.deepEqual(await listLeaves(bilal), [], "another employee lists none of it");
+
   expectStatus(await applyLeave(bilal, asha), 201, "an employee applies naming someone else");
   assert.ok(same(createdLeaves.at(-1).employeeId, bilal._id), "the application is the caller's own");
 

@@ -1,9 +1,10 @@
-const CHOICE_TYPES = ["select", "enum", "date"];
+const CHOICE_TYPES = ["select", "enum", "date", "number"];
 
 /**
  * The last step before a form is saved. A dropdown or date left blank holds
  * "", which the server cannot cast to an ObjectId, an enum value or a Date
- * ("Cast to ObjectId failed"). On create a blank one is left out, so the
+ * ("Cast to ObjectId failed"), and a blank number becomes null, not the
+ * field's default (0 leaves allocated, a Variable of 0). On create a blank one is left out, so the
  * server's own default (a starting status, today's posting date) applies;
  * on edit it goes as null, so clearing a field really clears it. Required
  * fields never get here blank — the form's validation stops them first.

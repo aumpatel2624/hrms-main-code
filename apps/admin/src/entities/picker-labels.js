@@ -53,3 +53,17 @@ export const ofChosenCompany = (load, labelOf) => (values) => {
     if (!companyId) return Promise.resolve([]);
     return load(companyId).then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: labelOf(row) })));
 };
+
+/**
+ * Approver pickers: the current employees, plus any saved choice who is no
+ * longer among them, found in `allRows` (the plain list, which keeps leavers)
+ * and labelled "(left)".
+ */
+export const withSavedLeavers = (currentRows, savedIds, allRows) => {
+    const options = currentRows.map((row) => ({ value: row._id, label: row.employeeName }));
+    savedIds.filter((savedId) => !options.some((option) => String(option.value) === savedId)).forEach((savedId) => {
+        const leaver = allRows.find((row) => String(row._id) === savedId);
+        if (leaver) options.push({ value: leaver._id, label: `${leaver.employeeName} (left)` });
+    });
+    return options;
+};

@@ -894,8 +894,11 @@ export const getLeaveApplicationById = async (req, res) => {
 export const leaveApplicationScope = async (req) => {
   await resolveRequestEmployee(req);
   let approverIds = [];
+  let teamIds = [];
   if (req.user?.dataScope === SCOPES.APPROVER) approverIds = await resolveLeaveVisibilityIds(req);
-  return buildScopeFilter(req.user, { owner: "employeeId", approverIds });
+  // "team": the caller's own plus their reportsToId chain, as by id.
+  if (req.user?.dataScope === SCOPES.TEAM) teamIds = await getSubordinateEmployeeIds(req.user.employeeId);
+  return buildScopeFilter(req.user, { owner: "employeeId", approverIds, teamIds });
 };
 
 export const listLeaveApplicationByParams = async (req, res) => {

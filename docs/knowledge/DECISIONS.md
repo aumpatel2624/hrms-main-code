@@ -4535,3 +4535,39 @@ consumer; single-branch build
   `runListQuery` option the Tier-1 `30-api.md` does not yet describe (it is frozen; documenting it there needs
   the owner's go-ahead). No `widgetSources` change: no model changed.
 - **Deviates from convention**: no.
+
+### ADR-045 — Employee records: managers and colleagues get the work directory, not the personal record
+
+- **Date**: 2026-10-27
+- **Status**: accepted
+- **Context**: The pre-production simulation found that an ordinary employee opening the Employee screen
+  received her manager's full personal record in the API response — PAN, IFSC, PF account, address, date of
+  birth, phone, insurance number, CTC — though the screen showed none of it. Two paths: `POST
+  /employees/search` joins each row's Reports To manager as a whole document (`reportsTo`) to derive
+  `reportsToName`, and sent that array to the browser (the app-wide JSON replacer already dropped its
+  `password`, nothing else); and `GET /employees/:id` returned every field but the password to any caller
+  whose row scope let them see the record, so a team lead got each team member's full record. Row scope
+  (ADR-002) decides which employees a caller sees; nothing decided how much of each.
+- **Decision**:
+  - One server-side helper, `employeeFieldsFor(req.user, employee)` in `utils/employeeFields.js`, applied to
+    every Employee read that returns records: the detail endpoint and the list/search endpoint (which the
+    top-bar global search replays, ADR-044). The full record goes to ADMIN, to a caller whose `/employee`
+    data scope is `all`, and to the employee themself; anyone else gets only `EMPLOYEE_DIRECTORY_FIELDS`.
+  - An **allowlist**, not a denylist, so a personal field added to the model later stays hidden from
+    managers until someone adds it on purpose. It holds the work directory — code, name, work (login) email,
+    company, department, designation, branch, reports-to, status — plus date of joining, the active flag,
+    timestamps and the list's display names. Role, grade, employment type, work mode, shift, approvers and
+    relieving date are withheld too; widening is a one-line change if a manager screen needs one.
+  - The list excludes the joined `reportsTo` document for everyone, HR included — only `reportsToName` is
+    used.
+  - HR and admin access is unchanged: the captain confirmed on 2026-10-27 that HR is group-wide by design.
+  - The `GET /employees` dropdown source already selects only code, name, department and designation, so it
+    is untouched.
+- **Consequences**: a team lead viewing a team member's form sees the personal and banking fields empty.
+  No seeded role below `all` can edit an Employee. If one is ever granted edit, saving such a form could
+  blank fields it never received, so that grant needs a server-side guard first. Several other screens' list
+  endpoints still send a whole joined employee document (travel, training feedback, skill map, leave ledger,
+  separation, exit interview, full and final, job requisition); that is a separate fix. No `widgetSources`
+  change: no model changed.
+- **Deviates from convention**: no.
+

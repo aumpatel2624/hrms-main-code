@@ -9,6 +9,7 @@ import { Button } from "@/components/base/buttons/button";
 import { NativeSelect } from "@/components/base/select/select-native";
 import { Input } from "@/components/base/input/input";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
+import { ConfirmModal } from "@/components/ui/modal";
 
 // The standard CRUD list links here; processing a stored batch needs its own layout.
 export default function PayrollEntry() {
@@ -18,6 +19,7 @@ export default function PayrollEntry() {
     const [companies, setCompanies] = useState([]);
     const [entry, setEntry] = useState(null);
     const [busy, setBusy] = useState(false);
+    const [confirmCancel, setConfirmCancel] = useState(false);
     const [form, setForm] = useState({ companyId: "", startDate: "", endDate: "", payrollFrequency: "Monthly", validateAttendance: false });
     const change = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
     useEffect(() => {
@@ -56,12 +58,13 @@ export default function PayrollEntry() {
             {entry && <>
                 <p className="text-sm text-primary">{companies.find(row => row._id === entry.companyId)?.companyName} · {entry.payrollFrequency} · {entry.startDate.slice(0, 10)} to {entry.endDate.slice(0, 10)} · {entry.status}</p>
                 <p className="text-sm text-tertiary">{entry.employeeDetails.length} employees. Failed rows are final for this entry; read the reason before starting another run.</p>
+                {entry.status === "failed" && <p className="text-sm text-error-primary">No slip in this entry could be submitted, so nobody was paid. Read each reason below and correct it. Then cancel this entry, delete its cancelled slips from Salary Slips, and start another run.</p>}
                 {permissions.edit && <div className="flex flex-wrap gap-3">
                     {entry.status === "draft" && <>
                         <Button isDisabled={busy || !entry.employeeDetails.some(row => row.status === "pending")} onClick={() => run(() => createPayrollSlips(id))}>Create slips</Button>
                         <Button isDisabled={busy || entry.employeeDetails.some(row => row.status === "pending")} onClick={() => run(() => submitPayrollSlips(id))}>Submit slips</Button>
                     </>}
-                    {entry.status !== "cancelled" && <Button color="secondary" isDisabled={busy} onClick={() => run(() => cancelPayrollEntry(id))}>Cancel entry and linked slips</Button>}
+                    {entry.status !== "cancelled" && <Button color="secondary" isDisabled={busy} onClick={() => setConfirmCancel(true)}>Cancel entry and linked slips</Button>}
                 </div>}
                 <div className="overflow-x-auto"><table className="w-full text-left text-sm text-primary">
                     <thead><tr>{["Employee", "Outcome", "Salary withheld", "Detail", "Slip"].map(label => <th key={label} className="border-b border-secondary p-2">{label}</th>)}</tr></thead>
@@ -72,5 +75,13 @@ export default function PayrollEntry() {
                 </table></div>
             </>}
         </Card>
+        <ConfirmModal
+            isOpen={confirmCancel}
+            onClose={() => setConfirmCancel(false)}
+            onConfirm={() => { setConfirmCancel(false); run(() => cancelPayrollEntry(id)); }}
+            title="Cancel this payroll entry?"
+            description={`Every salary slip it created (${entry?.employeeDetails.filter(row => row.salarySlipId).length ?? 0}) is cancelled too, including submitted ones. This cannot be undone.`}
+            confirmLabel="Cancel entry and slips"
+        />
     </>;
 }

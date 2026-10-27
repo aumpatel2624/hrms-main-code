@@ -164,6 +164,62 @@ console.log("salarySlipCalc: LWP-reduced payment days passed (gross 38000, netPa
 }
 console.log("salarySlipCalc: zero-totalWorkingDays guard passed (no divide-by-zero)");
 
+// Scenario C2 (F10): formula rows flagged dependsOnPaymentDays are prorated
+// exactly like flat ones. The simulation's shape: everything is a formula on
+// `base`, so before this fix 25 of 30 payment days still paid 45,000 of
+// 45,000. Professional Tax is a flat, unflagged deduction and stays 200.
+{
+  const formulaStructure = {
+    earnings: [
+      { salaryComponentId: COMP_BS, abbreviation: "BS", dependsOnPaymentDays: true, amountBasedOnFormula: true, formula: "base * 0.5" },
+      // Flagged, and reads a flagged row: prorated once, not twice.
+      { salaryComponentId: COMP_HRA, abbreviation: "HRA", dependsOnPaymentDays: true, amountBasedOnFormula: true, formula: "BS * 0.4" },
+      { salaryComponentId: COMP_SPL, abbreviation: "SA", dependsOnPaymentDays: true, amountBasedOnFormula: true, formula: "base - BS - HRA" },
+    ],
+    deductions: [
+      { salaryComponentId: COMP_PT, abbreviation: "PT", dependsOnPaymentDays: false, amountBasedOnFormula: false, amount: 200 },
+    ],
+    employerContributions: [],
+  };
+  const slip = (paymentDays) => calculateSalarySlip({
+    structure: formulaStructure,
+    assignment: { base: 45000, variable: 0 },
+    paymentDaysResult: { paymentDays, totalWorkingDays: 30 },
+  });
+  const byAbbr = (rows, abbr) => rows.find((r) => r.abbreviation === abbr).defaultAmount;
+
+  const full = slip(30);
+  assert.deepEqual([byAbbr(full.earnings, "BS"), byAbbr(full.earnings, "HRA"), byAbbr(full.earnings, "SA")], [22500, 9000, 13500]);
+  assert.equal(full.grossPay, 45000);
+  assert.equal(full.netPay, 44800);
+
+  const short = slip(25);
+  assert.equal(byAbbr(short.earnings, "BS"), 18750); // 22500 * 25/30
+  assert.equal(byAbbr(short.earnings, "HRA"), 7500); // 9000 * 25/30, not 18750 * 0.4 * 25/30
+  assert.equal(byAbbr(short.earnings, "SA"), 11250); // 13500 * 25/30
+  assert.equal(short.grossPay, 37500); // 45000 * 25/30
+  assert.equal(byAbbr(short.deductions, "PT"), 200);
+  assert.equal(short.netPay, 37300);
+  assert.equal(short.earnings[0].amountBasedOnFormula, true, "the slip still records the row as a formula row");
+
+  // An unflagged formula over a flagged one keeps inheriting its proration (ADR-027).
+  const inherited = calculateSalarySlip({
+    structure: { ...formulaStructure, earnings: [formulaStructure.earnings[0], { ...formulaStructure.earnings[1], dependsOnPaymentDays: false }] },
+    assignment: { base: 45000, variable: 0 },
+    paymentDaysResult: { paymentDays: 25, totalWorkingDays: 30 },
+  });
+  assert.equal(byAbbr(inherited.earnings, "HRA"), 7500); // 18750 * 0.4
+
+  // A flagged deduction formula on grossPay is taken from the full-period gross, then prorated.
+  const esi = calculateSalarySlip({
+    structure: { ...formulaStructure, deductions: [{ salaryComponentId: COMP_PF, abbreviation: "ESI", dependsOnPaymentDays: true, amountBasedOnFormula: true, formula: "grossPay * 0.01" }] },
+    assignment: { base: 45000, variable: 0 },
+    paymentDaysResult: { paymentDays: 25, totalWorkingDays: 30 },
+  });
+  assert.equal(byAbbr(esi.deductions, "ESI"), 375); // 45000 * 0.01 * 25/30
+}
+console.log("salarySlipCalc: formula rows prorated by payment days passed (25 of 30 days: gross 37500, netPay 37300)");
+
 // ============================================================================
 // ADR-028 Scenarios: AdditionalSalary Integration Tests
 // ============================================================================

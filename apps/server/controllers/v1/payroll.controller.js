@@ -20,6 +20,7 @@ import SalaryStructure from "../../models/SalaryStructure.js";
 import SalaryStructureAssignment from "../../models/SalaryStructureAssignment.js";
 import IncomeTaxSlab from "../../models/IncomeTaxSlab.js";
 import Employee from "../../models/Employee.js";
+import EmployeeGrade from "../../models/EmployeeGrade.js";
 
 const failure = (res, error) => {
   if (error.status) return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
@@ -403,6 +404,26 @@ export const SALARYSTRUCTUREASSIGNMENT_FIELDS = [
   "maxBenefits", "employeeBenefits", "incomeTaxSlabId", "taxDeductedTillDate", "taxableEarningsTillDate",
 ];
 
+const isBlank = (value) => value === undefined || value === null || value === "";
+const usesBase = (structure) => [...structure.earnings, ...structure.deductions, ...structure.employerContributions]
+  .some((row) => /\bbase\b/.test(`${row.amountBasedOnFormula ? row.formula : ""} ${row.condition || ""}`));
+
+/**
+ * A blank Base saved as null, and every formula on `base` then paid 0 (the
+ * simulation's September run: gross 0, net -200). Blank means the employee's
+ * grade default base — the figure the bulk tool shows beside each employee —
+ * and with no default, a structure whose formulas use base is refused.
+ */
+const resolveAssignmentBase = async (base, employee, structure) => {
+  if (!isBlank(base)) return base;
+  const grade = employee?.gradeId ? await EmployeeGrade.findById(employee.gradeId).lean() : null;
+  if (grade?.defaultBasePay) return grade.defaultBasePay;
+  if (usesBase(structure)) {
+    throwError(400, `Enter a Base for ${employee?.employeeName ?? "this employee"}: the Salary Structure's formulas use base, and their grade has no default base pay`);
+  }
+  return null;
+};
+
 export const createSalaryStructureAssignmentCore = async ({
   employeeId,
   salaryStructureId,
@@ -439,6 +460,7 @@ export const createSalaryStructureAssignmentCore = async ({
   if (String(structure.companyId) !== String(employee.companyId)) {
     throwError(400, "Salary Structure does not belong to the employee's company");
   }
+  base = await resolveAssignmentBase(base, employee, structure);
 
   // ADR-030: If structure has tax deduction component, incomeTaxSlabId is required
   const hasTaxComponent = (structure.deductions || []).some((d) => d.variableBasedOnTaxableSalary);
@@ -559,6 +581,7 @@ export const updateSalaryStructureAssignment = async (req, res) => {
 
     const structure = await SalaryStructure.findById(doc.salaryStructureId);
     if (!structure) return res.status(400).json({ isOk: false, status: 400, message: "Salary Structure not found" });
+    if (isBlank(doc.base)) doc.base = await resolveAssignmentBase(doc.base, await Employee.findById(doc.employeeId).lean(), structure);
 
     // ADR-030: If structure has tax deduction component, incomeTaxSlabId is required
     const hasTaxComponent = (structure.deductions || []).some((d) => d.variableBasedOnTaxableSalary);

@@ -33,7 +33,8 @@ const dayKey = date => new Date(date).toISOString().slice(0, 10);
 export const resolveEligiblePayrollEmployees = async ({ companyId, payrollFrequency, startDate, endDate, validateAttendance = false }) => {
   const employees = await Employee.find({ companyId, status: { $ne: "Inactive" }, dateOfJoining: { $lte: endDate, $ne: null },
     $or: [{ relievingDate: null }, { relievingDate: { $gte: startDate } }] }).lean();
-  const existing = new Set((await SalarySlip.find({ companyId, startDate, endDate }).select("employeeId").lean()).map(row => String(row.employeeId)));
+  // A cancelled slip pays nothing, so it does not stop the month being run again (source's `docstatus != 2`).
+  const existing = new Set((await SalarySlip.find({ companyId, startDate, endDate, status: { $ne: "cancelled" } }).select("employeeId").lean()).map(row => String(row.employeeId)));
   const rows = [];
   for (const employee of employees) {
     if (existing.has(String(employee._id))) continue;
@@ -113,7 +114,8 @@ const bulk = action => handle(async req => {
       await doc.save(); // Persist each outcome before attempting the next employee.
       summary.results.push(row.toObject());
     }
-    if (action === "submit") doc.status = "submitted";
+    // An entry with no slip submitted has paid nobody, so it is not "submitted"; its rows say why.
+    if (action === "submit") doc.status = doc.employeeDetails.some(row => row.status === "submitted") ? "submitted" : "failed";
     if (action === "cancel" && summary.failed === 0) doc.status = "cancelled";
     await doc.save();
     return summary;

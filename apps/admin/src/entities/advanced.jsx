@@ -173,6 +173,7 @@ import AdjustAllocationPanel from "@/components/crud/adjust-allocation-panel";
 import MarkEncashmentPaidPanel from "@/components/crud/mark-encashment-paid-panel";
 import { employeePayload } from "./employee-payload";
 import { holidayListAssignmentPayload } from "./holiday-list-assignment-payload";
+import { salaryStructureAssignmentPayload } from "./salary-structure-assignment-payload";
 
 const ACTIVE = { name: "isActive", label: "Is Active", type: "checkbox", section: "status" };
 
@@ -3416,11 +3417,11 @@ export const salaryStructureAssignmentConfig = {
     },
     sections: [{ id: "details", title: "Assignment details" }, { id: "computed", title: "Computed (read-only)" }],
     fields: [
-        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
-        { name: "salaryStructureId", label: "Salary Structure", section: "details", type: "select", optionsFrom: "salaryStructureId", required: true, error: "Salary Structure is required" },
-        { name: "fromDate", label: "From date", section: "details", type: "date", required: true, error: "From date is required" },
+        { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required", disabled: (v) => Boolean(v._id) },
+        { name: "salaryStructureId", label: "Salary Structure", section: "details", type: "select", optionsFrom: "salaryStructureId", required: true, error: "Salary Structure is required", disabled: (v) => Boolean(v._id) },
+        { name: "fromDate", label: "From date", section: "details", type: "date", required: true, error: "From date is required", disabled: (v) => Boolean(v._id) },
         { name: "incomeTaxSlabId", label: "Income Tax Slab", section: "details", type: "select", optionsFrom: "incomeTaxSlabId", hint: "Required if structure contains a tax deduction component." },
-        { name: "base", label: "Base", section: "details", type: "number", hint: "Used by any formula referencing \"base\"." },
+        { name: "base", label: "Base", section: "details", type: "number", hint: "Used by any formula referencing \"base\". Leave blank to use the employee's grade default base pay." },
         { name: "variable", label: "Variable", section: "details", type: "number", hint: "Used by any formula referencing \"variable\"." },
         { name: "taxDeductedTillDate", label: "Tax Deducted Till Date", section: "details", type: "number", hint: "Opening balance of tax paid this fiscal year." },
         { name: "taxableEarningsTillDate", label: "Taxable Earnings Till Date", section: "details", type: "number", hint: "Opening balance of taxable earnings this fiscal year." },
@@ -3455,6 +3456,7 @@ export const salaryStructureAssignmentConfig = {
     ],
     recordTitle: employeeTitle("Salary Structure Assignment"),
     toForm: (data) => ({ ...data, fromDate: data.fromDate?.slice(0, 10) || "", employeeId: refId(data.employeeId), salaryStructureId: refId(data.salaryStructureId), incomeTaxSlabId: refId(data.incomeTaxSlabId) }),
+    toPayload: salaryStructureAssignmentPayload,
 };
 
 // ---------------------------------------------------------------------------

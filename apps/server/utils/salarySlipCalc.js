@@ -139,19 +139,35 @@ export const mergeAdditionalSalaries = ({ earnings = [], deductions = [], additi
  * Scales `rows` (plain SalaryDetail-shaped objects or Mongoose subdocuments)
  * by `paymentDays / totalWorkingDays` for any row flagged `dependsOnPaymentDays`,
  * then evaluates the table against `context` via the unchanged
- * `evaluateComponentTable`. Mutates nothing; returns the evaluated rows.
+ * `evaluateComponentTable`. Mutates nothing but the two contexts; returns the
+ * evaluated rows and, as `fullRows`, the same table for the full period.
+ *
+ * A flagged row is its full-period value times the ratio, whether that value
+ * is a flat amount or a formula (source's `default_amount * payment_days /
+ * total_working_days`, Salary Slip.md section I). The full-period value comes
+ * from `fullContext`, which holds every earlier row unprorated, so a flagged
+ * `HRA = BS * 0.4` under a flagged BS is prorated once, not twice. An
+ * unflagged formula still reads `context` and inherits its inputs' proration.
  */
-const scaleAndEvaluate = (rows, context, paymentDays, totalWorkingDays) => {
+const scaleAndEvaluate = (rows, context, fullContext, paymentDays, totalWorkingDays) => {
   const ratio = totalWorkingDays > 0 ? paymentDays / totalWorkingDays : 0;
-  const scaledRows = (rows || []).map((row) => {
-    const plain = typeof row.toObject === "function" ? row.toObject() : { ...row };
-    if (plain.dependsOnPaymentDays) {
-      plain.amount = round2((Number(plain.amount) || 0) * ratio);
-    }
-    return plain;
-  });
-  return evaluateComponentTable(scaledRows, context);
+  const plainRows = (rows || []).map((row) => (typeof row.toObject === "function" ? row.toObject() : { ...row }));
+  const fullRows = evaluateComponentTable(plainRows, fullContext);
+  const scaledRows = plainRows.map((plain, i) => (plain.dependsOnPaymentDays
+    ? { ...plain, amountBasedOnFormula: false, amount: round2(fullRows[i].defaultAmount * ratio) }
+    : plain));
+  const evaluated = evaluateComponentTable(scaledRows, context)
+    .map((row, i) => ({ ...row, amountBasedOnFormula: plainRows[i].amountBasedOnFormula }));
+  return { rows: evaluated, fullRows };
 };
+
+const earningsTotal = (rows) => round2(rows
+  .filter((r) => !r._skipped && !r.statisticalComponent && !r.doNotIncludeInTotal)
+  .reduce((sum, r) => sum + r.defaultAmount, 0));
+
+const deductionsTotal = (rows) => round2(rows
+  .filter((r) => !r._skipped)
+  .reduce((sum, r) => sum + r.defaultAmount, 0));
 
 /**
  * Computes the full Salary Slip calculation: payment days + the three
@@ -175,7 +191,7 @@ export const calculateSalarySlip = ({
   taxBreakup,
 }) => {
   const { paymentDays = 0, totalWorkingDays = 0 } = paymentDaysResult || {};
-  const context = {
+  const inputs = {
     base: Number(assignment?.base) || 0,
     variable: Number(assignment?.variable) || 0,
     paymentDays,
@@ -183,27 +199,26 @@ export const calculateSalarySlip = ({
     grossPay: 0,
     netPay: 0,
   };
+  const context = { ...inputs };
+  // The same period worked in full: what a flagged row is prorated from.
+  const fullContext = { ...inputs, paymentDays: totalWorkingDays };
 
-  let earnings = scaleAndEvaluate(structure.earnings, context, paymentDays, totalWorkingDays);
-  let grossPay = round2(
-    earnings
-      .filter((r) => !r._skipped && !r.statisticalComponent && !r.doNotIncludeInTotal)
-      .reduce((sum, r) => sum + r.defaultAmount, 0),
-  );
+  const earningsPass = scaleAndEvaluate(structure.earnings, context, fullContext, paymentDays, totalWorkingDays);
+  let earnings = earningsPass.rows;
+  let grossPay = earningsTotal(earnings);
   context.grossPay = grossPay; // updated in context after earnings, before deductions (ADR-026/027 ordering)
+  fullContext.grossPay = earningsTotal(earningsPass.fullRows);
 
-  let deductions = scaleAndEvaluate(structure.deductions, context, paymentDays, totalWorkingDays);
-  let totalDeduction = round2(
-    deductions
-      .filter((r) => !r._skipped)
-      .reduce((sum, r) => sum + r.defaultAmount, 0),
-  );
+  const deductionsPass = scaleAndEvaluate(structure.deductions, context, fullContext, paymentDays, totalWorkingDays);
+  let deductions = deductionsPass.rows;
+  let totalDeduction = deductionsTotal(deductions);
 
   let netPay = round2(grossPay - totalDeduction);
   context.netPay = netPay;
+  fullContext.netPay = round2(fullContext.grossPay - deductionsTotal(deductionsPass.fullRows));
 
   // Employer contributions: computed and displayed but never included in gross/deduction/net pay
-  const employerContributions = scaleAndEvaluate(structure.employerContributions, context, paymentDays, totalWorkingDays);
+  const employerContributions = scaleAndEvaluate(structure.employerContributions, context, fullContext, paymentDays, totalWorkingDays).rows;
 
   // ADR-028: Merge AdditionalSalary rows if any exist
   if (additionalSalaries && additionalSalaries.length > 0) {
@@ -333,8 +348,8 @@ export const calculateSalarySlipForEmployee = async ({
       grossPay: 0,
       netPay: 0,
     };
-    const unscaledEarnings = scaleAndEvaluate(structure.earnings, unproratedContext, 30, 30);
-    const unscaledDeductions = scaleAndEvaluate(structure.deductions, unproratedContext, 30, 30);
+    const unscaledEarnings = scaleAndEvaluate(structure.earnings, unproratedContext, { ...unproratedContext }, 30, 30).rows;
+    const unscaledDeductions = scaleAndEvaluate(structure.deductions, unproratedContext, { ...unproratedContext }, 30, 30).rows;
     const currentUnproratedTaxableEarnings = Math.max(
       0,
       unscaledEarnings

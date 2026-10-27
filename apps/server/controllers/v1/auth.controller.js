@@ -66,15 +66,18 @@ export const login = async (req, res) => {
       });
     }
 
+    // ADR-047: an unknown email and a wrong password get the same answer, so
+    // the login form cannot be used to find out which accounts exist.
+    const invalidCredentials = () => res.status(401).json({
+      isOk: false,
+      message: "Invalid email or password",
+      error: "Invalid credentials",
+      status: 401,
+    });
+
     const found = await findAccountByEmail(email);
 
-    if (!found) {
-      return res.status(404).json({
-        isOk: false,
-        message: "User not found",
-        status: 404,
-      });
-    }
+    if (!found) return invalidCredentials();
 
     const { account, role } = found;
     const userId = account._id;
@@ -113,17 +116,7 @@ export const login = async (req, res) => {
         });
       }
 
-      return res.status(401).json({
-        isOk: false,
-        message: "Invalid email or password",
-        error: "Invalid credentials",
-        attemptsRemaining: attempt.attemptsRemaining,
-        warning:
-          attempt.attemptsRemaining <= 1
-            ? "Warning: One more failed attempt will lock your account"
-            : null,
-        status: 401,
-      });
+      return invalidCredentials();
     }
 
     // An offboarded employee keeps their record (payroll, full-and-final) but
@@ -273,7 +266,8 @@ export const getLoginStatus = async (req, res) => {
 };
 
 /**
- * POST /auth/login-status-by-email
+ * POST /auth/login-status-by-email — admin only (ADR-047): it reports any
+ * account's failed attempts and lock state.
  */
 export const getLoginStatusByEmail = async (req, res) => {
   try {

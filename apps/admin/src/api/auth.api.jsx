@@ -83,19 +83,6 @@ export const resetPassword = async (data) => {
 };
 
 /**
- * Get login attempt status by email
- * @param {string} email
- * @returns {Promise}
- */
-export const getLoginStatusByEmail = async (email) => {
-    return api.post(ENDPOINTS.AUTH.LOGIN_STATUS_BY_EMAIL, { email }, {
-        validateStatus: function (status) {
-            return status >= 200 && status <= 500;
-        },
-    });
-};
-
-/**
  * Logout - invalidates the session on the server and clears local storage
  */
 export const logout = async () => {
@@ -119,6 +106,5 @@ export default {
     sendOtp,
     verifyOtp,
     resetPassword,
-    getLoginStatusByEmail,
     logout,
 };

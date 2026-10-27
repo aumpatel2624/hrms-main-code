@@ -135,7 +135,7 @@ const CrudList = ({ config }) => {
             minWidth: "130px",
             selector: (row) => (
                 <RowActions
-                    canEdit={currentPagePermissions.edit}
+                    canEdit={currentPagePermissions.edit && (config.canEditRow?.(row) ?? true)}
                     canDelete={currentPagePermissions.delete}
                     onView={() => navigate(`${config.path}/${row._id}`)}
                     onEdit={() => navigate(`${config.path}/${row._id}/edit`)}

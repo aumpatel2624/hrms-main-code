@@ -16,6 +16,7 @@ import {
 import { ROLES } from "@demo-panel/shared/roles";
 import { SCOPES } from "@demo-panel/shared/scopes";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
+import { menuDataScope, resolveUserScope } from "../../middlewares/checkPermission.js";
 import { buildScopeFilter } from "../../utils/scope.js";
 import { employeeFieldsFor } from "../../utils/employeeFields.js";
 import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
@@ -203,14 +204,25 @@ export const getEmployeeById = async (req, res) => {
   }
 };
 
-// Dropdown source (reports-to picker, and any other form embedding an
-// employee select) — matrix-free like the other module-1 list GETs.
+// Dropdown source (reports-to picker, approver pickers, and any other form
+// embedding an employee select). Not tied to the Employee screen's grant —
+// roles without that screen (Leave/Expense Approver, Interviewer) fill their
+// pickers from it too — but it is the whole staff list, so (ADR-047) the
+// session must still resolve to a live account, and only ADMIN and a caller
+// whose Employee-screen scope is "all" (HR) get every company; anyone else
+// gets their own company's people.
 export const listEmployees = async (req, res) => {
   try {
+    if (!(await resolveUserScope(req))) {
+      res.clearCookie("sessionId");
+      return res.status(401).json({ isOk: false, status: 401, message: "Session invalid or expired" });
+    }
     const filter = { isActive: true };
     if (req.query.companyId) filter.companyId = req.query.companyId;
     if (req.query.departmentId) filter.departmentId = req.query.departmentId;
-    const employees = await Employee.find(filter).select("employeeCode employeeName departmentId designationId");
+    const groupWide = (await menuDataScope(req, "/employee", "read")) === SCOPES.ALL;
+    const company = groupWide ? {} : { companyId: (await resolveRequestEmployee(req))?.companyId ?? { $in: [] } };
+    const employees = await Employee.find({ $and: [filter, company] }).select("employeeCode employeeName departmentId designationId");
     return res.status(200).json({ isOk: true, status: 200, data: employees });
   } catch (error) {
     console.log("Error in listEmployees", error);

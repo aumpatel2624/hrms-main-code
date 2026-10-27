@@ -14,12 +14,12 @@
  * client-side).
  *
  * `EmployeePerformanceFeedback`: a folded-docstatus (draft/submitted/
- * cancelled) doctype, no SCOPES.OWN — source grants Employee/HR Manager
- * broad create/read/write/submit/cancel (no `if_owner` restriction) and
- * HR User read-only; ported faithfully, matching `Employee Performance
- * Feedback.md`'s own permission table exactly rather than inventing a
- * scoping rule the spec/ADR-032 never asked for. Submitting or cancelling
- * one recomputes the target `Appraisal`'s `avgFeedbackScore`/`finalScore`.
+ * cancelled) doctype. Confidential (ADR-047): below an "all" data scope a
+ * caller sees only feedback they are the subject or the named reviewer of,
+ * and changes only feedback they reviewed — source's unrestricted Employee
+ * grant let any employee read and edit every colleague's review.
+ * Submitting or cancelling one recomputes the target `Appraisal`'s
+ * `avgFeedbackScore`/`finalScore`.
  */
 import Goal from "../../models/Goal.js";
 import EmployeePerformanceFeedback from "../../models/EmployeePerformanceFeedback.js";
@@ -31,6 +31,7 @@ import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
 import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
 import { SCOPES } from "@demo-panel/shared/scopes";
+import { ROLES } from "@demo-panel/shared/roles";
 import { assertCycleNotCompleted } from "./performance.controller.js";
 import {
   validateWeightageSum,
@@ -587,6 +588,30 @@ export const recomputeAppraisalFeedbackScore = async (appraisalId) => {
   await appraisal.save();
 };
 
+// ADR-047: feedback is confidential. A caller whose data scope on this
+// screen is "all" (HR, ADMIN) sees every row of their company as before;
+// anyone else sees only feedback they are the subject or the named reviewer
+// of — a manager's team scope does not widen it — and may change only
+// feedback they reviewed.
+const isAllScoped = (req) => req.user?.role === ROLES.ADMIN || req.user?.dataScope === SCOPES.ALL;
+
+const feedbackScope = async (req, { reviewerOnly = false } = {}) => {
+  if (isAllScoped(req)) return attendanceScope(req, true);
+  const me = await resolveRequestEmployee(req);
+  if (!me) return { _id: { $in: [] } };
+  return reviewerOnly ? { reviewerId: me._id } : { $or: [{ employeeId: me._id }, { reviewerId: me._id }] };
+};
+
+const feedbackEditScope = (req) => feedbackScope(req, { reviewerOnly: true });
+
+// `canEdit` on each row tells the screen whether to offer Edit — the same
+// rule feedbackEditScope enforces.
+const canEditStage = async (req) => {
+  if (isAllScoped(req)) return { $addFields: { canEdit: true } };
+  const me = await resolveRequestEmployee(req);
+  return { $addFields: { canEdit: { $eq: ["$reviewerId", me?._id ?? null] } } };
+};
+
 export const createEmployeePerformanceFeedback = async (req, res) => {
   try {
     const { employeeId, reviewerId, appraisalId, feedback } = req.body;
@@ -596,6 +621,10 @@ export const createEmployeePerformanceFeedback = async (req, res) => {
     if (!feedback) throwError(400, "Feedback is required");
     if (String(employeeId) === String(reviewerId)) {
       throwError(400, "Employees cannot give feedback to themselves. Use Self Appraisal on the Appraisal record instead.");
+    }
+    if (!isAllScoped(req)) {
+      const me = await resolveRequestEmployee(req);
+      if (!me || String(reviewerId) !== String(me._id)) throwError(403, "You can only give feedback as its reviewer");
     }
 
     const employee = await Employee.findById(employeeId).lean();
@@ -632,21 +661,12 @@ export const createEmployeePerformanceFeedback = async (req, res) => {
   } catch (error) { return failure(res, error); }
 };
 
-// Feedback is visible to the person it is about (per the caller's row scope) and
-// to its named reviewer, whoever they report to.
-const feedbackScope = async (req) => {
-  const scope = await attendanceScope(req, true);
-  if (req.user?.role === "ADMIN") return scope;
-  const me = await resolveRequestEmployee(req);
-  return { $or: [scope, { reviewerId: me?._id }] };
-};
-
 export const listEmployeePerformanceFeedbacks = async (req, res) => {
   try {
     const data = await runListQuery(EmployeePerformanceFeedback, req.query, {
       scopeFilter: await feedbackScope(req),
       filterable: EMPLOYEE_PERFORMANCE_FEEDBACK_FILTERABLE,
-      stages: FEEDBACK_LOOKUP_STAGES,
+      stages: [...FEEDBACK_LOOKUP_STAGES, await canEditStage(req)],
     });
     return res.status(200).json({ isOk: true, status: 200, data });
   } catch (error) { return failure(res, error); }
@@ -659,7 +679,7 @@ export const searchEmployeePerformanceFeedbacks = async (req, res) => {
       scopeFilter: await feedbackScope(req),
       searchFields: ["feedback"],
       filterable: EMPLOYEE_PERFORMANCE_FEEDBACK_FILTERABLE,
-      stages: FEEDBACK_LOOKUP_STAGES,
+      stages: [...FEEDBACK_LOOKUP_STAGES, await canEditStage(req)],
     });
     return res.status(200).json({ isOk: true, status: 200, data });
   } catch (error) { return failure(res, error); }
@@ -675,13 +695,15 @@ export const getEmployeePerformanceFeedbackById = async (req, res) => {
       .populate("appraisalId", "employeeId status")
       .populate("feedbackRatings.criteriaId", "criteria");
     if (!doc) throwError(404, "Employee Performance Feedback not found");
-    return res.status(200).json({ isOk: true, status: 200, data: doc });
+    const me = isAllScoped(req) ? null : await resolveRequestEmployee(req);
+    const canEdit = isAllScoped(req) || String(doc.reviewerId?._id) === String(me?._id);
+    return res.status(200).json({ isOk: true, status: 200, data: { ...doc.toObject(), canEdit } });
   } catch (error) { return failure(res, error); }
 };
 
 export const updateEmployeePerformanceFeedback = async (req, res) => {
   try {
-    const doc = await EmployeePerformanceFeedback.findOne({ $and: [{ _id: req.params.id }, await feedbackScope(req)] });
+    const doc = await EmployeePerformanceFeedback.findOne({ $and: [{ _id: req.params.id }, await feedbackEditScope(req)] });
     if (!doc) throwError(404, "Employee Performance Feedback not found");
     if (doc.status !== "draft") throwError(400, "Only draft feedback can be updated");
 
@@ -702,7 +724,7 @@ export const updateEmployeePerformanceFeedback = async (req, res) => {
 
 export const submitEmployeePerformanceFeedback = async (req, res) => {
   try {
-    const doc = await EmployeePerformanceFeedback.findOne({ $and: [{ _id: req.params.id }, await feedbackScope(req)] });
+    const doc = await EmployeePerformanceFeedback.findOne({ $and: [{ _id: req.params.id }, await feedbackEditScope(req)] });
     if (!doc) throwError(404, "Employee Performance Feedback not found");
     if (doc.status !== "draft") throwError(400, "Only draft feedback can be submitted");
 
@@ -721,7 +743,7 @@ export const submitEmployeePerformanceFeedback = async (req, res) => {
 
 export const cancelEmployeePerformanceFeedback = async (req, res) => {
   try {
-    const doc = await EmployeePerformanceFeedback.findOne({ $and: [{ _id: req.params.id }, await feedbackScope(req)] });
+    const doc = await EmployeePerformanceFeedback.findOne({ $and: [{ _id: req.params.id }, await feedbackEditScope(req)] });
     if (!doc) throwError(404, "Employee Performance Feedback not found");
     if (doc.status !== "submitted") throwError(400, "Only submitted feedback can be cancelled");
 
@@ -736,7 +758,7 @@ export const cancelEmployeePerformanceFeedback = async (req, res) => {
 
 export const deleteEmployeePerformanceFeedback = async (req, res) => {
   try {
-    const doc = await EmployeePerformanceFeedback.findOne({ $and: [{ _id: req.params.id }, await feedbackScope(req)] });
+    const doc = await EmployeePerformanceFeedback.findOne({ $and: [{ _id: req.params.id }, await feedbackEditScope(req)] });
     if (!doc) throwError(404, "Employee Performance Feedback not found");
     if (doc.status === "submitted") throwError(400, "Submitted documents must be cancelled before deletion");
     doc.isDeleted = true;

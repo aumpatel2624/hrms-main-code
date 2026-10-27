@@ -80,6 +80,12 @@ const renderValue = (field, raw, lookups) => {
                 </span>
             );
         }
+        case "multiselect": {
+            const options = (field.optionsFrom ? (lookups[field.optionsFrom] ?? []) : (field.options ?? [])).map(normalizeOption);
+            const labels = [].concat(raw).map((item) =>
+                options.find((o) => String(o.value) === String(refId(item)))?.label ?? refLabel(item)).filter(Boolean);
+            return labels.length ? labels.join(", ") : null;
+        }
         case "date":
             return formatDate(raw);
         case "icon":
@@ -204,7 +210,7 @@ const CrudView = ({ config }) => {
                             <Button color="secondary" iconLeading={ArrowLeft} onClick={() => navigate(config.path)}>
                                 Back
                             </Button>
-                            {currentPagePermissions.edit && (
+                            {currentPagePermissions.edit && (config.canEditRow?.(record) ?? true) && (
                                 <Button iconLeading={Edit01} onClick={() => navigate(`${config.path}/${id}/edit`)}>
                                     Edit
                                 </Button>

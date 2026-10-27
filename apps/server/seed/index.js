@@ -1174,8 +1174,10 @@ const seedRecruitmentMasters = async () => {
  * whole funnel EXCEPT Interview Feedback, where — matching source's own
  * permission table exactly — both are read-only and only Interviewer
  * writes. Interviewer gets full CRUD on Interview and Interview Feedback
- * only, same as source (no if_owner-style "only my assigned interviews"
- * restriction at the permission-table level — see ADR-019 point 9).
+ * only, same as source, with `dataScope: SCOPES.OWN` (ADR-047): the
+ * controllers narrow it to the interviews the caller is assigned to and
+ * their own feedback. Unscoped, it fell through to the role's "all" and
+ * sent every interviewer every company's interviews.
  */
 const seedRecruitmentRoles = async () => {
   const FULL_ACCESS_ROLES = ["HR User", "HR Manager"];
@@ -1197,6 +1199,7 @@ const seedRecruitmentRoles = async () => {
 
   const fullPerm = Object.fromEntries(PERMISSION_KEYS.map((key) => [key, key === "read" || key === "write" || key === "edit" || key === "delete"]));
   const readOnlyPerm = Object.fromEntries(PERMISSION_KEYS.map((key) => [key, key === "read"]));
+  const interviewerPerm = { ...fullPerm, dataScope: SCOPES.OWN };
 
   const addRow = (userRoles, menu, perm) => {
     const hasRow = userRoles.roles.some((r) => String(r.menuId) === String(menu._id));
@@ -1229,7 +1232,12 @@ const seedRecruitmentRoles = async () => {
     if (userRoles) {
       let changed = false;
       for (const url of INTERVIEWER_MENU_URLS) {
-        if (addRow(userRoles, menuByUrl[url], fullPerm)) { matrixRowsAdded += 1; changed = true; }
+        if (addRow(userRoles, menuByUrl[url], interviewerPerm)) { matrixRowsAdded += 1; changed = true; continue; }
+        // A missing dataScope here is a visibility gap, not an admin
+        // customisation to preserve — correct it in place on re-seed (same
+        // targeted-exception pattern as issue #34's fixDataScope).
+        const row = userRoles.roles.find((r) => String(r.menuId) === String(menuByUrl[url]._id));
+        if (row.dataScope !== SCOPES.OWN) { row.dataScope = SCOPES.OWN; changed = true; }
       }
       if (changed) await userRoles.save();
     }
@@ -2085,16 +2093,17 @@ const seedPayrollRoles = async () => {
  * their own goal tree, and a manager's own reports' too, per
  * Employee.reportsToId — degrades to exactly "own" with no reports). The
  * real per-action pattern this matches is `EmployeeTaxExemptionDeclaration`'s
- * `fullNoDelete`, ADR-030. `/employee-performance-feedback` is NOT scoped at
- * all — `Employee Performance Feedback.md`'s own permission table grants
- * Employee/HR Manager broad create/read/write/submit/cancel (no `if_owner`
- * row-level restriction) and HR User read-only; ported faithfully rather
- * than inventing a scoping rule ADR-032 never asked for on this doctype.
+ * `fullNoDelete`, ADR-030. `/employee-performance-feedback` gives Employee
+ * `dataScope: SCOPES.OWN` (ADR-047): source's unscoped grant fell through to
+ * the role's "all" and let any employee read and edit every colleague's
+ * review. The controller narrows anything below "all" to feedback the caller
+ * is the subject or reviewer of; HR User read-only and HR Manager unchanged.
  */
 const seedPerformanceRoles = async () => {
   const full = { write: true, read: true, edit: true, delete: true, print: true, mail: true };
   const fullNoDelete = { write: true, read: true, edit: true, delete: false, print: true, mail: true };
   const teamFullNoDelete = { ...fullNoDelete, dataScope: SCOPES.TEAM };
+  const ownFullNoDelete = { ...fullNoDelete, dataScope: SCOPES.OWN };
   const readOnly = { write: false, read: true, edit: false, delete: false, print: true, mail: false };
 
   const GRANTS = {
@@ -2105,7 +2114,7 @@ const seedPerformanceRoles = async () => {
     "/appraisal": { "HR User": full, "HR Manager": full },
     // ADR-032 (transactional half, feat/performance-goals).
     "/goal": { "HR User": full, "HR Manager": full, "Employee": teamFullNoDelete },
-    "/employee-performance-feedback": { "HR User": readOnly, "HR Manager": fullNoDelete, "Employee": fullNoDelete },
+    "/employee-performance-feedback": { "HR User": readOnly, "HR Manager": fullNoDelete, "Employee": ownFullNoDelete },
   };
 
   const allMenuUrls = Object.keys(GRANTS);
@@ -2122,7 +2131,8 @@ const seedPerformanceRoles = async () => {
     return true;
   };
 
-  // dataScope: SCOPES.TEAM on `/goal` was SCOPES.OWN — a wrong/stale
+  // dataScope: SCOPES.TEAM on `/goal` was SCOPES.OWN, and Employee's
+  // `/employee-performance-feedback` row had none (ADR-047) — a wrong/stale
   // dataScope is a security/visibility gap, not an admin customisation to
   // preserve, so correct it in place on re-seed (same targeted-exception
   // pattern as issue #34's fixDataScope in seedTravelRoles).

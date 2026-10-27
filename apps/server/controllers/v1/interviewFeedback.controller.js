@@ -3,8 +3,14 @@
  * Three server-side guards on create: interviewer must be assigned to the
  * parent Interview, not before its scheduledOn date, one feedback per
  * interviewer per interview (also a DB unique index — belt and suspenders).
+ *
+ * ADR-047: below an "all" data scope (HR, ADMIN) a caller — the Interviewer
+ * role — reaches only their own feedback and submits only as themselves.
  */
+import { ROLES } from "@demo-panel/shared/roles";
+import { SCOPES } from "@demo-panel/shared/scopes";
 import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
+import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import InterviewFeedback from "../../models/InterviewFeedback.js";
 import Interview from "../../models/Interview.js";
 import {
@@ -27,11 +33,21 @@ const failure = (res, error) => {
   return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
 };
 
+const feedbackScope = async (req) => {
+  if (req.user?.role === ROLES.ADMIN || req.user?.dataScope === SCOPES.ALL) return {};
+  const me = await resolveRequestEmployee(req);
+  return me ? { interviewerId: me._id } : { _id: { $in: [] } };
+};
+
 export const createInterviewFeedback = async (req, res) => {
   try {
     const { interviewId, interviewerId, result, feedback, skillAssessment } = req.body;
     if (!interviewId || !interviewerId || !result) {
       return res.status(400).json({ isOk: false, status: 400, message: "interviewId, interviewerId and result are required" });
+    }
+    const scope = await feedbackScope(req);
+    if (Object.keys(scope).length && String(scope.interviewerId) !== String(interviewerId)) {
+      return res.status(403).json({ isOk: false, status: 403, message: "You can only submit your own interview feedback" });
     }
 
     const interview = await Interview.findById(interviewId);
@@ -78,7 +94,7 @@ export const createInterviewFeedback = async (req, res) => {
 export const updateInterviewFeedback = async (req, res) => {
   try {
     const { feedbackId } = req.params;
-    const doc = await InterviewFeedback.findById(feedbackId);
+    const doc = await InterviewFeedback.findOne({ $and: [{ _id: feedbackId }, await feedbackScope(req)] });
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Interview Feedback not found" });
     }
@@ -95,7 +111,7 @@ export const updateInterviewFeedback = async (req, res) => {
 export const deleteInterviewFeedback = async (req, res) => {
   try {
     const { feedbackId } = req.params;
-    const doc = await InterviewFeedback.findById(feedbackId);
+    const doc = await InterviewFeedback.findOne({ $and: [{ _id: feedbackId }, await feedbackScope(req)] });
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Interview Feedback not found" });
     }
@@ -117,7 +133,7 @@ export const deleteInterviewFeedback = async (req, res) => {
 
 export const getInterviewFeedbackById = async (req, res) => {
   try {
-    const doc = await InterviewFeedback.findById(req.params.feedbackId);
+    const doc = await InterviewFeedback.findOne({ $and: [{ _id: req.params.feedbackId }, await feedbackScope(req)] });
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Interview Feedback not found" });
     }
@@ -130,7 +146,7 @@ export const getInterviewFeedbackById = async (req, res) => {
 
 export const listInterviewFeedbacks = async (req, res) => {
   try {
-    const filter = { isActive: true };
+    const filter = { isActive: true, ...(await feedbackScope(req)) };
     if (req.query.interviewId) filter.interviewId = req.query.interviewId;
     const docs = await InterviewFeedback.find(filter).select("interviewId interviewerId result");
     return res.status(200).json({ isOk: true, status: 200, data: docs });
@@ -143,6 +159,7 @@ export const listInterviewFeedbacks = async (req, res) => {
 export const listInterviewFeedbacksByParams = async (req, res) => {
   try {
     const list = await runListQuery(InterviewFeedback, req.body, {
+      scopeFilter: await feedbackScope(req),
       searchRefs: [employeeSearch("interviewerId")],
       searchFields: [],
       filterable: {

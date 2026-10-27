@@ -16,10 +16,14 @@ const findAccountByEmail = async (email) => {
   const admin = await AdminUser.findOne({ email, isActive: true });
   if (admin) return { account: admin, role: ROLES.ADMIN };
 
-  // Employee.email is stored lowercase (schema transform) — an employee
-  // logging in with their Employee Code (e.g. "A005", ADR-040's default
-  // credential) must match regardless of the case they typed it in.
-  const employee = await Employee.findOne({ email: String(email || "").toLowerCase(), isActive: true })
+  // Employee.email is stored lowercase (schema transform). The login field
+  // also takes the Employee Code (e.g. "A005", ADR-040's default credential),
+  // matched in either case, for employees whose email is a real address.
+  const typed = String(email || "").trim();
+  const employee = await Employee.findOne({
+    $or: [{ email: typed.toLowerCase() }, { employeeCode: { $in: [typed, typed.toUpperCase()] } }],
+    isActive: true,
+  })
     .populate("departmentId")
     .populate("roleId")
     .populate("countryId")

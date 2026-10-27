@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { companyLabelledOptions, interviewLabel, jobOfferLabel, leavePeriodLabel, nameWithCompany, ofChosenCompany, salaryStructureLabel } from "./picker-labels.js";
+import { companyLabelledOptions, interviewLabel, jobOfferLabel, leavePeriodLabel, nameWithCompany, ofChosenCompany, salarySlipLabel, salaryStructureLabel, withSavedLeavers } from "./picker-labels.js";
 
 const companies = { data: { data: [{ _id: "c-apd", companyName: "Apidel" }, { _id: "c-nuv", companyName: "Nuva" }] } };
 const periods = { data: { data: [
@@ -18,6 +18,9 @@ assert.deepEqual(periodOptions, [
 const structures = { data: { data: [{ _id: "s1", companyId: "c-nuv", payrollFrequency: "Monthly", currency: "INR" }] } };
 const structureOptions = await companyLabelledOptions(async () => structures, async () => companies, salaryStructureLabel)();
 assert.equal(structureOptions[0].label, "Monthly — INR (Nuva)");
+// A named structure leads with its name; an unnamed (older) one reads as before.
+assert.equal(salaryStructureLabel({ salaryStructureName: "Interns", payrollFrequency: "Monthly", currency: "INR", companyId: "c-nuv" }, new Map([["c-nuv", "Nuva"]])),
+    "Interns — Monthly — INR (Nuva)");
 
 // A company the list does not know leaves the label as it was.
 assert.equal(salaryStructureLabel({ payrollFrequency: "Monthly", currency: "INR", companyId: "gone" }, new Map()), "Monthly — INR");
@@ -51,5 +54,20 @@ assert.deepEqual(await departments({ companyId: "" }), [], "no company chosen: n
 assert.deepEqual(await departments({ companyId: "c-apd" }), [{ value: "d1", label: "Engineering" }]);
 await departments({ companyId: { _id: "c-nuv", companyName: "Nuva" } }); // an edit form's populated company
 assert.deepEqual(asked, ["c-apd", "c-nuv"], "only the chosen company is requested");
+
+// Payroll Correction's slip: employee name and period, not a pasted id.
+const slipNames = new Map([["e1", "Asha"]]);
+assert.equal(salarySlipLabel({ employeeId: "e1", startDate: "2026-09-01T00:00:00.000Z", endDate: "2026-09-30T00:00:00.000Z" }, slipNames),
+    "Asha — 2026-09-01 – 2026-09-30");
+assert.equal(salarySlipLabel({ employeeId: { _id: "e1" }, startDate: "2026-10-01", endDate: "2026-10-31" }, slipNames), "Asha — 2026-10-01 – 2026-10-31");
+
+// Approver pickers: a saved approver who has left stays, labelled, not blank.
+const currentStaff = [{ _id: "e1", employeeName: "Asha" }];
+const everyone = [...currentStaff, { _id: "e9", employeeName: "Varun" }];
+assert.deepEqual(withSavedLeavers(currentStaff, ["e9"], everyone), [
+    { value: "e1", label: "Asha" }, { value: "e9", label: "Varun (left)" },
+]);
+assert.deepEqual(withSavedLeavers(currentStaff, ["e1"], everyone), [{ value: "e1", label: "Asha" }], "a current approver is not repeated");
+assert.deepEqual(withSavedLeavers(currentStaff, [], []), [{ value: "e1", label: "Asha" }], "new forms offer only current employees");
 
 console.log("picker-labels: all assertions passed");

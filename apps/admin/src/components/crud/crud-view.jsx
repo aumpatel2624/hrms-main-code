@@ -86,8 +86,12 @@ const renderValue = (field, raw, lookups) => {
                 options.find((o) => String(o.value) === String(refId(item)))?.label ?? refLabel(item)).filter(Boolean);
             return labels.length ? labels.join(", ") : null;
         }
-        case "date":
-            return formatDate(raw);
+        case "date": {
+            // A date field is stored as midnight UTC; show the day only, in the
+            // reader's format, not "10/1/2026, 5:30:00 AM".
+            const d = new Date(raw);
+            return Number.isNaN(d.getTime()) ? raw : d.toLocaleDateString(undefined, { timeZone: "UTC" });
+        }
         case "icon":
             return (
                 <span className="flex items-center gap-2">

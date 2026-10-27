@@ -1,7 +1,7 @@
 import express from "express";
 import { authMiddleware } from "../../middlewares/authMiddleware.js";
-import { checkPermission } from "../../middlewares/checkPermission.js";
-import { ANY_ROLE } from "@demo-panel/shared/roles";
+import { checkPermission, resolveUserScope } from "../../middlewares/checkPermission.js";
+import { ANY_ROLE, ROLES } from "@demo-panel/shared/roles";
 import {
   createUserRoles,
   getUserRoles,
@@ -9,6 +9,19 @@ import {
 } from "../../controllers/v1/userRoles.controller.js";
 
 const router = express.Router();
+
+// Every signed-in user reads their own role's matrix (the menu is built from
+// it); any other role's matrix needs read on the User Roles screen.
+const readRoleGate = checkPermission("/user-roles", "read");
+const ownRoleOrUserRolesRead = async (req, res, next) => {
+  try {
+    if (req.user?.role === ROLES.USER && (await resolveUserScope(req))
+      && String(req.user.roleId) === String(req.params.roleId)) return next();
+  } catch (error) {
+    console.error("Error in ownRoleOrUserRolesRead:", error);
+  }
+  return readRoleGate(req, res, next);
+};
 
 /**
  * @swagger
@@ -46,7 +59,7 @@ router.post("/user-roles", authMiddleware(ANY_ROLE), checkPermission("/user-role
  *       200:
  *         description: Permissions for the role (empty array if none assigned)
  */
-router.get("/user-roles/:roleId", authMiddleware(ANY_ROLE), getUserRoles);
+router.get("/user-roles/:roleId", authMiddleware(ANY_ROLE), ownRoleOrUserRolesRead, getUserRoles);
 
 /**
  * @swagger

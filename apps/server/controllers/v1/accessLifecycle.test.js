@@ -259,6 +259,15 @@ resetWrites();
   expectStatus(res, 403, "Suspended employee signs in");
   assert.equal(req.session.user, undefined, "Suspended: no session");
   expectStatus((await signIn(asha)).res, 200, "an active employee still signs in");
+  // The field says "Email or Employee Code": the code works too, in either case.
+  asha.employeeCode = "DMY008";
+  for (const code of ["DMY008", "dmy008"]) {
+    const res = fakeRes();
+    const req = { body: { email: code, password, locationConsent: true, ipConsent: true }, headers: {}, ip: "127.0.0.1", session: {} };
+    await login(req, res);
+    expectStatus(res, 200, `sign in with Employee Code ${code}`);
+    assert.ok(same(req.session.user.id, asha._id), "as the employee with that code");
+  }
 }
 
 // ------------------------------------------------------------- 3. pickers --
@@ -324,6 +333,15 @@ resetWrites();
   expectStatus(await view(lena), 403, "a Leave Approver who approves for someone else");
   expectStatus(await view(hema), 200, "HR");
 
+  // The list agrees with by id: a Team Lead's team-scope list has their reports' leave.
+  const listLeaves = async (caller) => {
+    const res = await call(leaveRoutes, "post", "/leave-applications/search", caller, { body: {} });
+    expectStatus(res, 200, `${caller.employeeName} lists leave applications`);
+    return listedIds(res);
+  };
+  assert.deepEqual(await listLeaves(manju), [open, approved].map((doc) => String(doc._id)).sort(), "the Team Lead lists their report's leave");
+  assert.deepEqual(await listLeaves(bilal), [], "another employee lists none of it");
+
   expectStatus(await applyLeave(bilal, asha), 201, "an employee applies naming someone else");
   assert.ok(same(createdLeaves.at(-1).employeeId, bilal._id), "the application is the caller's own");
 
@@ -332,6 +350,24 @@ resetWrites();
   const viewComp = (caller) => call(leaveRoutes, "get", "/compensatory-leave-requests/:compensatoryLeaveRequestId", caller, { params: { compensatoryLeaveRequestId: String(comp._id) } });
   expectStatus(await viewComp(bilal), 403, "another employee opens asha's compensatory leave by id");
   expectStatus(await viewComp(asha), 200, "the applicant's compensatory leave");
+}
+
+// ------------------------------- 6. a department-scoped role's employee list --
+{
+  // F3: a custom role whose Employee screen is "Own department" listed everyone.
+  const deptRoleId = oid();
+  const softwareDev = oid();
+  const viewer = person("dina", "Employee", { roleId: deptRoleId, departmentId: softwareDev });
+  const colleague = person("colin", "Employee", { departmentId: softwareDev });
+  people.push(asDoc(viewer), asDoc(colleague));
+  stub(UserRoles, [...tierMatrices, { roleId: deptRoleId, isActive: true, dataScope: SCOPES.ALL, roles: [row("/employee", {}, SCOPES.DEPARTMENT)] }]);
+  invalidateRoleCache();
+  const res = await call(employeeRoutes, "post", "/employees/search", viewer);
+  expectStatus(res, 200, "department-scoped role lists employees");
+  assert.deepEqual(listedIds(res), [viewer, colleague].map((p) => String(p._id)).sort(), "only their own department");
+  const byId = (employee) => call(employeeRoutes, "get", "/employees/:employeeId", viewer, { params: { employeeId: String(employee._id) } });
+  expectStatus(await byId(colleague), 200, "a colleague in the department by id");
+  expectStatus(await byId(asha), 404, "someone in another department by id");
 }
 
 console.log("accessLifecycle.test.js passed");

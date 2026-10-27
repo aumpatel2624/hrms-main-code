@@ -755,6 +755,8 @@ export const updateLeavePolicyAssignment = async (req, res) => {
     for (const field of LEAVE_POLICY_ASSIGNMENT_FIELDS) if (req.body[field] !== undefined) doc[field] = req.body[field];
     doc.effectiveFrom = dates.effectiveFrom;
     doc.effectiveTo = dates.effectiveTo;
+    // Like create: the company is the employee's, which an edit may have changed.
+    doc.companyId = (await Employee.findById(merged.employeeId).select("companyId").lean()).companyId;
     await doc.save();
     return res.status(200).json({ isOk: true, status: 200, message: "Leave Policy Assignment updated successfully" });
   } catch (error) {

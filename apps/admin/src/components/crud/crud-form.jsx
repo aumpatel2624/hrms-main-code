@@ -6,6 +6,7 @@ import { Card, PageHeader } from "@/components/ui/page";
 import { FormActions, FormSection, FullWidth } from "@/components/ui/form";
 import { CheckField, EmailField, Field, MultiSelectField, PasswordField, SelectField, TextAreaField } from "@/components/ui/field";
 import { initialFormValues } from "./form-defaults.js";
+import { formPayload } from "./form-payload.js";
 import IconPicker from "@/components/ui/icon-picker";
 import JoditEditor from "jodit-react";
 import { Label } from "@/components/base/input/label";
@@ -204,7 +205,7 @@ const CrudForm = ({ config, mode = "add" }) => {
         if (Object.keys(found).length) return;
 
         setIsSaving(true);
-        const payload = config.toPayload ? config.toPayload(values, mode) : values;
+        const payload = formPayload(config.fields, config.toPayload ? config.toPayload(values, mode) : values, mode);
         try {
             const res = isEdit ? await config.api.update(id, payload) : await config.api.create(payload);
             if (res?.data && res.data.isOk === false) {

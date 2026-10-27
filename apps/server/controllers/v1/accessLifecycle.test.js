@@ -259,6 +259,15 @@ resetWrites();
   expectStatus(res, 403, "Suspended employee signs in");
   assert.equal(req.session.user, undefined, "Suspended: no session");
   expectStatus((await signIn(asha)).res, 200, "an active employee still signs in");
+  // The field says "Email or Employee Code": the code works too, in either case.
+  asha.employeeCode = "DMY008";
+  for (const code of ["DMY008", "dmy008"]) {
+    const res = fakeRes();
+    const req = { body: { email: code, password, locationConsent: true, ipConsent: true }, headers: {}, ip: "127.0.0.1", session: {} };
+    await login(req, res);
+    expectStatus(res, 200, `sign in with Employee Code ${code}`);
+    assert.ok(same(req.session.user.id, asha._id), "as the employee with that code");
+  }
 }
 
 // ------------------------------------------------------------- 3. pickers --

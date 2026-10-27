@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { companyLabelledOptions, interviewLabel, jobOfferLabel, leavePeriodLabel, nameWithCompany, ofChosenCompany, salaryStructureLabel } from "./picker-labels.js";
+import { companyLabelledOptions, interviewLabel, jobOfferLabel, leavePeriodLabel, nameWithCompany, ofChosenCompany, salarySlipLabel, salaryStructureLabel } from "./picker-labels.js";
 
 const companies = { data: { data: [{ _id: "c-apd", companyName: "Apidel" }, { _id: "c-nuv", companyName: "Nuva" }] } };
 const periods = { data: { data: [
@@ -51,5 +51,11 @@ assert.deepEqual(await departments({ companyId: "" }), [], "no company chosen: n
 assert.deepEqual(await departments({ companyId: "c-apd" }), [{ value: "d1", label: "Engineering" }]);
 await departments({ companyId: { _id: "c-nuv", companyName: "Nuva" } }); // an edit form's populated company
 assert.deepEqual(asked, ["c-apd", "c-nuv"], "only the chosen company is requested");
+
+// Payroll Correction's slip: employee name and period, not a pasted id.
+const slipNames = new Map([["e1", "Asha"]]);
+assert.equal(salarySlipLabel({ employeeId: "e1", startDate: "2026-09-01T00:00:00.000Z", endDate: "2026-09-30T00:00:00.000Z" }, slipNames),
+    "Asha — 2026-09-01 – 2026-09-30");
+assert.equal(salarySlipLabel({ employeeId: { _id: "e1" }, startDate: "2026-10-01", endDate: "2026-10-31" }, slipNames), "Asha — 2026-10-01 – 2026-10-31");
 
 console.log("picker-labels: all assertions passed");

@@ -73,7 +73,7 @@ import {
     resetEmployeePassword,
 } from "../api/employees.api";
 import { getAllRoles } from "../api/roles.api";
-import { companyLabelledOptions, interviewLabel, jobOfferLabel, leavePeriodLabel, nameWithCompany, ofChosenCompany, salaryStructureLabel } from "./picker-labels";
+import { companyLabelledOptions, interviewLabel, jobOfferLabel, leavePeriodLabel, nameWithCompany, ofChosenCompany, salarySlipLabel, salaryStructureLabel } from "./picker-labels";
 import { getAllCountries, getStatesByCountry, getCitiesByState } from "../api/locations.api";
 import {
     createAdminUser, deleteAdminUser, getAdminUserById, updateAdminUser, searchAdminUsers, resetAdminUserPassword,
@@ -1351,7 +1351,10 @@ export const employeeSeparationConfig = {
     },
     sections: [{ id: "details", title: "Details" }, { id: "activities", title: "Activities" }],
     fields: [
-        { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
+        {
+            name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId",
+            hint: "Set the Relieving Date on this employee's record first: the Exit Interview and the Full and Final Statement cannot be created without it.",
+        },
         { name: "employeeSeparationTemplateId", label: "Template", type: "select", section: "details", optionsFrom: "employeeSeparationTemplateId" },
         { name: "boardingBeginsOn", label: "Separation Begins On", type: "date", required: true, section: "details", error: "Separation Begins On is required!" },
         { name: "exitInterviewSummary", label: "Exit Interview Summary (notes only — not linked to Exit Interview records)", type: "textarea", section: "details" },
@@ -5322,14 +5325,20 @@ export const payrollCorrectionConfig = {
         remove: deletePayrollCorrection,
     },
     lookups: {
-        salarySlipId: asOptions(getAllSalarySlips, "employeeId"),
+        // Only a submitted or withheld slip can be corrected (the server refuses others).
+        salarySlipId: () => Promise.all([getAllSalarySlips(), getAllEmployees()]).then(([slips, employees]) => {
+            const names = new Map(unwrapListRows(employees.data?.data).map((row) => [String(row._id), row.employeeName]));
+            return unwrapListRows(slips.data?.data)
+                .filter((row) => ["submitted", "withheld"].includes(row.status))
+                .map((row) => ({ value: row._id, label: salarySlipLabel(row, names) }));
+        }),
     },
     sections: [
         { id: "details", title: "Correction Details" },
         { id: "status", title: "Status" },
     ],
     fields: [
-        { name: "salarySlipId", label: "Salary Slip ID", section: "details", type: "text", required: true, error: "Salary Slip ID is required", placeholder: "Paste target submitted SalarySlip ObjectId" },
+        { name: "salarySlipId", label: "Salary Slip", section: "details", type: "select", optionsFrom: "salarySlipId", required: true, error: "Salary Slip is required", disabled: (values) => Boolean(values._id) },
         { name: "daysToReverse", label: "Days to Reverse", section: "details", type: "number", required: true, error: "Days to reverse is required" },
         { name: "remarks", label: "Remarks", section: "details", type: "text" },
     ],

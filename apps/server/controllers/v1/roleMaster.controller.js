@@ -23,6 +23,9 @@ export const createRole = async (req, res) => {
     await newRole.save();
     res.status(201).json({ isOk: true, data: newRole });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({ isOk: false, message: "A role with this name already exists" });
+    }
     console.error("Error creating role:", error);
     res.status(500).json({ isOk: false, message: "Internal server error" });
   }
@@ -61,6 +64,9 @@ export const updateRole = async (req, res) => {
 
     res.status(200).json({ isOk: true, data: updatedRole });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({ isOk: false, message: "A role with this name already exists" });
+    }
     console.error("Error updating role:", error);
     res.status(500).json({ isOk: false, message: "Internal server error" });
   }

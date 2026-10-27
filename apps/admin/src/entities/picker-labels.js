@@ -30,6 +30,10 @@ export const interviewLabel = (row) =>
 export const nameWithCompany = (key) => (row, names) =>
     withCompany(row[key], names.get(String(row.companyId?._id ?? row.companyId)));
 
+// Payroll Correction's slip: whose it is and which period, never its raw id.
+export const salarySlipLabel = (row, employeeNames) =>
+    `${employeeNames.get(String(row.employeeId?._id ?? row.employeeId)) ?? "Unknown employee"} — ${day(row.startDate)} – ${day(row.endDate)}`;
+
 export const companyNames = (companies = []) => new Map(companies.map((c) => [String(c._id), c.companyName]));
 
 /** A select loader: `loadRows`' rows, each labelled by `labelOf(row, companyNames)`. */

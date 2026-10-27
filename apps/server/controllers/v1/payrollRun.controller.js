@@ -377,6 +377,8 @@ export const deleteSalarySlip = async (req, res) => {
   try {
     const doc = await SalarySlip.findOne({ $and: [{ _id: req.params.salarySlipId }, await attendanceScope(req, true)] });
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Salary Slip not found" });
+    // A submitted (or withheld) slip is a record of pay; it is cancelled, never deleted.
+    if (!["draft", "cancelled"].includes(doc.status)) return res.status(409).json({ isOk: false, status: 409, message: "A submitted Salary Slip cannot be deleted. Cancel it first." });
     const references = await getReferencingCounts("SalarySlip", doc._id);
     // A cancelled entry keeps its link to each slip it cancelled, as its record;
     // that link alone does not keep a cancelled slip from being deleted.

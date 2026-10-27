@@ -9,6 +9,10 @@ import { runListQuery } from "../../utils/listQuery.js";
 import Employee, { NO_ACCESS_STATUSES } from "../../models/Employee.js";
 import JobApplicant from "../../models/JobApplicant.js";
 import JobOffer from "../../models/JobOffer.js";
+import Department from "../../models/Department.js";
+import Designation from "../../models/Designation.js";
+import Branch from "../../models/Branch.js";
+import { companyMismatch } from "../../utils/companyMatch.js";
 import {
   getReferencingCounts,
   formatReferenceMessage,
@@ -89,6 +93,13 @@ const syncJobApplicantAndOffer = async (jobApplicantId) => {
   }
 };
 
+// Department, Designation and Branch are the employee's own company's.
+const organizationMismatch = (fields) => companyMismatch(fields.companyId, [
+  { Model: Department, id: fields.departmentId, label: "Department" },
+  { Model: Designation, id: fields.designationId, label: "Designation" },
+  { Model: Branch, id: fields.branchId, label: "Branch" },
+]);
+
 const pickFields = (body) =>
   Object.fromEntries(
     [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS]
@@ -116,6 +127,8 @@ export const createEmployee = async (req, res) => {
     }
 
     const fields = pickFields(req.body);
+    const mismatch = await organizationMismatch(fields);
+    if (mismatch) return res.status(400).json({ isOk: false, status: 400, message: mismatch });
     fields.password = await bcrypt.hash(fields.password, 10);
     await Employee.create(fields);
     await syncJobApplicantAndOffer(fields.jobApplicantId);
@@ -151,6 +164,9 @@ export const updateEmployee = async (req, res) => {
     // never silently accepted on a general profile update.
     const fields = pickFields(req.body);
     delete fields.password;
+    const { companyId, departmentId, designationId, branchId } = employee;
+    const mismatch = await organizationMismatch({ companyId, departmentId, designationId, branchId, ...fields });
+    if (mismatch) return res.status(400).json({ isOk: false, status: 400, message: mismatch });
     Object.assign(employee, fields);
     await employee.save();
 

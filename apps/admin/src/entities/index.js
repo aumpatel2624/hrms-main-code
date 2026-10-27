@@ -12,7 +12,7 @@ import {
 import { createCurrency, deleteCurrency, getCurrencyById, updateCurrency, searchCurrencies } from "../api/currencies.api";
 import { createRole, getRoleById, deleteRole, updateRole, searchRoles } from "../api/roles.api";
 import {
-    createCompany, deleteCompany, getCompanyById, updateCompany, searchCompanies,
+    createCompany, deleteCompany, getCompanyById, updateCompany, searchCompanies, getAllCompanies,
     createEmploymentType, deleteEmploymentType, getEmploymentTypeById, updateEmploymentType, searchEmploymentTypes,
     createEmployeeGrade, deleteEmployeeGrade, getEmployeeGradeById, updateEmployeeGrade, searchEmployeeGrades,
     createEmployeeHealthInsurance, deleteEmployeeHealthInsurance, getEmployeeHealthInsuranceById,
@@ -24,6 +24,7 @@ import {
 } from "../api/emails.api";
 import { createMenuGroup, deleteMenuGroup, getMenuGroupById, updateMenuGroup, searchMenuGroups } from "../api/menus.api";
 import { getAllSalaryStructures, getAllSalaryComponents } from "../api/payroll.api";
+import { companyLabelledOptions, salaryStructureLabel } from "./picker-labels";
 
 /** Maps an API list response to the { value, label } shape SelectField wants. */
 const asOptions = (loader, labelKey) => () =>
@@ -286,7 +287,7 @@ export const employeeGradeConfig = {
     // ADR-026 (Payroll — Structure & Assignment): these two fields exist now
     // that SalaryStructure does — see EmployeeGrade.js's own comment on why
     // they weren't modelled speculatively before this module.
-    lookups: { defaultSalaryStructureId: asOptions(getAllSalaryStructures, "currency") },
+    lookups: { defaultSalaryStructureId: companyLabelledOptions(getAllSalaryStructures, getAllCompanies, salaryStructureLabel) },
     sections: [
         { id: "details", title: "Employee grade details" },
         { id: "defaults", title: "Payroll defaults" },

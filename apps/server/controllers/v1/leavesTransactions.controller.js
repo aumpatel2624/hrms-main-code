@@ -23,6 +23,7 @@ import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { attendanceEmployeeScope } from "../../utils/attendanceScope.js";
 import { buildScopeFilter } from "../../utils/scope.js";
+import { companyMismatch } from "../../utils/companyMatch.js";
 import { countLeaveDays, sameCalendarDay } from "../../utils/leaveDayCalculation.js";
 import { getHolidayDatesInRange, isEntireRangeHolidays, isHolidayForEmployee } from "../../utils/holidayResolution.js";
 import { getBlockedDatesInRange } from "../../utils/leaveBlockList.js";
@@ -83,9 +84,10 @@ const resolveLeaveVisibilityIds = async (req) => {
   return [...new Set([...approverIds, ...teamIds])];
 };
 
-// A self-service row (own, or approver = own + the people they approve):
-// whatever the body says, the caller applies for themselves only.
-const isSelfService = (req) => [SCOPES.OWN, SCOPES.APPROVER].includes(req.user?.dataScope);
+// Any row below "all" (own, team, approver = own + the people they approve):
+// whatever the body says, the caller applies for themselves only. Only "all"
+// (HR) files on someone else's behalf.
+const isSelfService = (req) => Boolean(req.user?.dataScope) && req.user.dataScope !== SCOPES.ALL;
 
 const referenceGuardedDelete = async (Model, modelName, id, label) => {
   const referenceInfo = await getReferencingCounts(modelName, id);
@@ -762,8 +764,8 @@ const runLeaveApplicationValidation = async (data, { excludeId = null, actingUse
 
 export const createLeaveApplication = async (req, res) => {
   try {
-    // Issue #34 security fix: a self-service caller (dataScope own or
-    // approver on this menu — isSelfService) can only ever apply for themselves.
+    // Issue #34 security fix: a self-service caller (any scope below all on
+    // this menu — isSelfService) can only ever apply for themselves.
     // The client-supplied employeeId is trusted only for HR User/HR
     // Manager, who legitimately create on behalf of any employee.
     let employeeId = req.body.employeeId;
@@ -1398,6 +1400,8 @@ const createOnePolicyAssignment = async (item) => {
   if (!employeeId || !leavePolicyId) throw new Error("Employee and Leave Policy are required");
   const employee = await Employee.findById(employeeId).lean();
   if (!employee) throw new Error("Employee not found");
+  const mismatch = await companyMismatch(employee.companyId, [{ Model: LeavePeriod, id: item.leavePeriodId, label: "Leave Period" }]);
+  if (mismatch) throw new Error(mismatch);
 
   let effectiveFrom = item.effectiveFrom;
   let effectiveTo = item.effectiveTo;

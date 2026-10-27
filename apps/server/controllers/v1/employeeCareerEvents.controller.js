@@ -9,6 +9,10 @@ import EmployeeTransfer from "../../models/EmployeeTransfer.js";
 import EmployeePromotion from "../../models/EmployeePromotion.js";
 import EmployeePropertyChange from "../../models/EmployeePropertyChange.js";
 import Employee from "../../models/Employee.js";
+import Department from "../../models/Department.js";
+import Designation from "../../models/Designation.js";
+import Branch from "../../models/Branch.js";
+import { companyMismatch } from "../../utils/companyMatch.js";
 import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import {
   getReferencingCounts,
@@ -64,6 +68,13 @@ export const createEmployeeTransfer = async (req, res) => {
     if (employee.status !== "Active") {
       return res.status(400).json({ isOk: false, status: 400, message: "Employee Transfer can only be created for an Active employee" });
     }
+    // A transfer stays inside the employee's company (no inter-company path, ADR-021).
+    const mismatch = await companyMismatch(employee.companyId, [
+      { Model: Department, id: newDepartmentId, label: "New Department" },
+      { Model: Designation, id: newDesignationId, label: "New Designation" },
+      { Model: Branch, id: newBranchId, label: "New Branch" },
+    ]);
+    if (mismatch) return res.status(400).json({ isOk: false, status: 400, message: mismatch });
 
     const doc = await EmployeeTransfer.create({ employeeId, transferDate, newDepartmentId, newDesignationId, newBranchId });
 
@@ -161,6 +172,11 @@ export const createEmployeePromotion = async (req, res) => {
     if (employee.status === "Inactive") {
       return res.status(400).json({ isOk: false, status: 400, message: `Transactions cannot be created for an Inactive Employee ${employee.employeeName}` });
     }
+    const mismatch = await companyMismatch(employee.companyId, [
+      { Model: Department, id: newDepartmentId, label: "New Department" },
+      { Model: Designation, id: newDesignationId, label: "New Designation" },
+    ]);
+    if (mismatch) return res.status(400).json({ isOk: false, status: 400, message: mismatch });
 
     // fetch_if_empty semantic — only fetched here, at create time, when the
     // caller didn't already supply one.

@@ -4713,3 +4713,65 @@ consumer; single-branch build
   employee can still sign in, and a leaver's open session lasts until it expires." Tested by
   `controllers/v1/accessLifecycle.test.js`.
 - **Deviates from convention**: no.
+
+### ADR-049 — Saves stay inside one company; Team Lead files for themselves; leaver approvers are skipped
+
+- **Date**: 2026-10-27
+- **Status**: accepted
+- **Context**: The pre-production simulation (report section 5, U1–U4, and the dropdown findings in
+  section 4) saved records that mixed companies through the screens. HR is group-wide by design, so
+  every picker lists all five companies, and nothing on the server checked the mix. An Employee Transfer
+  moved an Apidel intern into Nuva's department, designation and branch while leaving him in Apidel. An
+  Apidel onboarding was linked to Nuva's job offer for a different applicant, because the Job Offer picker
+  showed only "Accepted". 56 employees of four companies were given Shreeraj Traders' leave period,
+  because five identical "2026-01-01 – 2026-12-31" entries were listed. All 30 grades defaulted to Apidel's
+  salary structure, because every structure showed as "INR". ADR-048 also left two items open: a Team
+  Lead (`team` scope) could still apply leave or file an expense claim naming anyone, and an employee's
+  stored leave or expense approver could be someone who has left.
+- **Decision**:
+  - **Company checks on save** (`utils/companyMatch.js` `companyMismatch`, RULES INV-50). The save is
+    refused with a message naming the field, for example "New Department must belong to the employee's
+    company":
+    - Employee Transfer: new department, designation and branch.
+    - Employee Promotion: new department and designation.
+    - Employee create and edit: department, designation and branch.
+    - Employee Onboarding (create and edit): the job offer must be the same applicant's. Company,
+      department and designation must be the offer's company, and a blank company takes the offer's.
+    - Leave Policy Assignment (create, edit, and the Leave Control Panel's bulk tools, per employee):
+      the leave period must be the employee's company's.
+    - Leave Allocation (create and edit): the company and the leave period must be the employee's.
+  - **No inter-company transfer.** The model has no field for it, and ADR-021 deferred it, so a transfer
+    stays inside the employee's company. To move someone to another company, HR edits the Employee and
+    sets the company together with that company's department, designation and branch. Building a real
+    inter-company transfer (new employee id, history, payroll cut-over) is a product decision, not taken
+    here.
+  - **Labels.** Pickers that list several companies' records now show the company. Leave periods read
+    "2026-01-01 – 2026-12-31 (Nuva)" on Leave Policy Assignment, Leave Allocation and the Leave Control
+    Panel. Salary structures read "Monthly — INR (Apidel)" on Employee Grade, Salary Structure Assignment
+    and the Bulk tool. Job offers read "Accepted — Kiran (Apidel)": `GET /job-offers` now returns the
+    applicant's and the company's names. Interviews read "Kiran — 2026-10-14 (Pending)": `GET /interviews`
+    now returns the applicant's name. Each of those two lists has only that picker as a consumer. The
+    Employee form's Department, Designation, Branch and Reports To list only the chosen company's records,
+    stay disabled until a company is chosen, and are cleared when it changes. The label builders are in
+    `apps/admin/src/entities/picker-labels.js`.
+  - **Below `all` scope, a leave application, compensatory leave request or expense claim is the
+    caller's own.** ADR-048's pinning (`own`, `approver`) is extended to `team` (and `department`). Only
+    `all` (HR, CEO tier, admin) files on someone's behalf.
+  - **Approver resolvers skip leavers** (`utils/approvers.js` `resolveApprovers`). An approver whose status
+    is in `NO_ACCESS_STATUSES` (Left, Inactive, Suspended), whose Is Active is unticked, or whose record is
+    gone is skipped. A direct approver who has left falls through to the department chain, and the
+    department lists drop such people too. With nobody left, a leave application asks for an approver,
+    as it already did for an employee with none, and an expense claim has no named approver, so HR decides it.
+- **Consequences**: existing wrong records are not migrated. Editing one is refused until the mixed field
+  is corrected, and the refusal names the field. HR can find them through:
+  - **Employee Transfer**: the employees whose department, designation or branch is another company's.
+    The Employee list shows Department; the record shows Company.
+  - **Employee Onboarding**: open each onboarding. An edit that is refused names the problem. Pick the
+    applicant's own offer.
+  - **Leave Policy Assignment**: filter by Leave Period. The picker now names each period's company.
+  - **Employee Grade**: the Default Salary Structure now shows the company.
+  Reports To is filtered on the form but not checked on the server, since a group executive may manage
+  people in more than one company. The onboarding form's own Department and Designation pickers still
+  list every company; the server refuses a mix. Grades have no company field. Tested by
+  `controllers/v1/companyIntegrity.test.js` and `apps/admin/src/entities/picker-labels.test.js`.
+- **Deviates from convention**: no.

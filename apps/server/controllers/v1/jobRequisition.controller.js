@@ -157,6 +157,7 @@ export const listJobRequisitionsByParams = async (req, res) => {
             requestedByName: { $arrayElemAt: ["$requestedBy.employeeName", 0] },
           },
         },
+        { $project: { requestedBy: 0 } },
       ],
     });
     return res.status(200).json({ isOk: true, status: 200, data: list });

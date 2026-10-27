@@ -421,6 +421,7 @@ export const listTrainingFeedbacksByParams = async (req, res) => {
             trainingEventName: { $ifNull: ["$trainingEvent.eventName", ""] },
           },
         },
+        { $project: { employee: 0 } },
       ],
     });
     return res.status(200).json({ isOk: true, status: 200, data: list });
@@ -615,6 +616,7 @@ export const listEmployeeSkillMapsByParams = async (req, res) => {
         { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employee" } },
         { $unwind: { path: "$employee", preserveNullAndEmptyArrays: true } },
         { $addFields: { employeeName: { $ifNull: ["$employee.employeeName", ""] } } },
+        { $project: { employee: 0 } },
       ],
     });
     return res.status(200).json({ isOk: true, status: 200, data: list });

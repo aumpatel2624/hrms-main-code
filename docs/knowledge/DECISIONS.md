@@ -4565,9 +4565,11 @@ consumer; single-branch build
     is untouched.
 - **Consequences**: a team lead viewing a team member's form sees the personal and banking fields empty.
   No seeded role below `all` can edit an Employee. If one is ever granted edit, saving such a form could
-  blank fields it never received, so that grant needs a server-side guard first. Several other screens' list
-  endpoints still send a whole joined employee document (travel, training feedback, skill map, leave ledger,
-  separation, exit interview, full and final, job requisition); that is a separate fix. No `widgetSources`
-  change: no model changed.
+  blank fields it never received, so that grant needs a server-side guard first. Eight other screens' list
+  endpoints sent a whole joined employee document (travel, training feedback, skill map, leave ledger,
+  separation, exit interview, full and final, job requisition); the follow-up fix (2026-10-27) drops it with
+  the same `{ $project: { <as>: 0 } }` stage the other controllers use, keeping only the display name, tested
+  by `controllers/v1/joinedEmployeePrivacy.test.js`. Their detail endpoints already populated only name and
+  code. No `widgetSources` change: no model changed.
 - **Deviates from convention**: no.
 

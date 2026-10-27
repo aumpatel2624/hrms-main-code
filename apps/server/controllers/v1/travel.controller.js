@@ -410,6 +410,7 @@ export const listTravelRequestByParams = async (req, res) => {
         { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employee" } },
         { $unwind: { path: "$employee", preserveNullAndEmptyArrays: true } },
         { $addFields: { employeeName: { $ifNull: ["$employee.employeeName", ""] } } },
+        { $project: { employee: 0 } },
       ],
       scopeFilter,
     });

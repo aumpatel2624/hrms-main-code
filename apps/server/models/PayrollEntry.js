@@ -17,7 +17,7 @@ const schema = new mongoose.Schema({
   endDate: { type: Date, required: true, index: true },
   payrollFrequency: { type: String, enum: PAYROLL_FREQUENCIES, required: true, index: true },
   validateAttendance: { type: Boolean, default: false },
-  status: { type: String, enum: ["draft", "submitted", "cancelled"], default: "draft", index: true },
+  status: { type: String, enum: ["draft", "submitted", "failed", "cancelled"], default: "draft", index: true },
   employeeDetails: { type: [EmployeeDetailSchema], default: [] },
 }, { timestamps: true, optimisticConcurrency: true });
 schema.index({ createdAt: -1 });

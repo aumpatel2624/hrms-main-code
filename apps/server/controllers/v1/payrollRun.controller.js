@@ -23,6 +23,7 @@ import { getLeaveBalance } from "../../utils/leaveBalance.js";
 import PayrollPeriod from "../../models/PayrollPeriod.js";
 import PayrollSettings from "../../models/PayrollSettings.js";
 import SalarySlip from "../../models/SalarySlip.js";
+import PayrollEntry from "../../models/PayrollEntry.js";
 import SalaryStructure from "../../models/SalaryStructure.js";
 import SalaryStructureAssignment from "../../models/SalaryStructureAssignment.js";
 import SalaryComponent from "../../models/SalaryComponent.js";
@@ -245,7 +246,9 @@ export const createSalarySlipForEmployee = async ({ employeeId, startDate, endDa
     // ahead of the real unique index backing it (source's `check_existing()`).
     const duplicate = await SalarySlip.findOne({ employeeId, startDate: start, endDate: end });
     if (duplicate) {
-      throwError(400, `Salary Slip of employee ${employee.employeeName} already created for this period`);
+      throwError(400, duplicate.status === "cancelled"
+        ? `Salary Slip of employee ${employee.employeeName} for this period is cancelled; delete it before creating a new one`
+        : `Salary Slip of employee ${employee.employeeName} already created for this period`);
     }
 
     let assignment;
@@ -375,6 +378,15 @@ export const deleteSalarySlip = async (req, res) => {
     const doc = await SalarySlip.findOne({ $and: [{ _id: req.params.salarySlipId }, await attendanceScope(req, true)] });
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Salary Slip not found" });
     const references = await getReferencingCounts("SalarySlip", doc._id);
+    // A cancelled entry keeps its link to each slip it cancelled, as its record;
+    // that link alone does not keep a cancelled slip from being deleted.
+    if (doc.status === "cancelled") {
+      const released = await PayrollEntry.countDocuments({ status: "cancelled", "employeeDetails.salarySlipId": doc._id });
+      references.details = references.details
+        .map((row) => (row.model === "PayrollEntry" ? { ...row, count: row.count - released } : row))
+        .filter((row) => row.count > 0);
+      references.totalReferences = references.details.reduce((sum, row) => sum + row.count, 0);
+    }
     if (references.totalReferences) return res.status(409).json({ isOk: false, status: 409, message: "Salary Slip is linked to other records", totalReferences: references.totalReferences, references: references.details, formattedMessage: formatReferenceMessage(references.details) });
     await SalarySlip.findByIdAndUpdate(doc._id, { isDeleted: true });
     return res.status(200).json({ isOk: true, status: 200, message: "Salary Slip deleted successfully" });

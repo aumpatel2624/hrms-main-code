@@ -4713,3 +4713,50 @@ consumer; single-branch build
   employee can still sign in, and a leaver's open session lasts until it expires." Tested by
   `controllers/v1/accessLifecycle.test.js`.
 - **Deviates from convention**: no.
+
+### ADR-049 — Payroll pays what the month earned: a real base, prorated formula rows, re-runnable cancelled months
+
+- **Date**: 2026-10-27
+- **Status**: accepted
+- **Context**: The pre-production simulation (report section 4; 23 Oct report F10, F15) ran September
+  payroll for Apidel. The Bulk Salary Structure Assignment tool showed each employee's grade default base
+  but sent no base when its Base box was empty, so 14 assignments saved `base: null`. Their slips came out
+  at gross 0 with Professional Tax 200 (net -200). Every row then failed with "Net Pay cannot be less
+  than 0", yet the entry was marked "submitted". HR could not correct a base, because editing an
+  assignment sent the whole record back and the update refused it ("Unexpected fields in request
+  body"). After cancelling the run, the month could not be run again: the cancelled slips still counted
+  as existing, so a new entry selected nobody, and they could not be deleted while the cancelled entry
+  linked them (409). Cancel ran on one click. And absences did not reduce pay: 25 of 30 payment days
+  still paid 45,000 of 45,000, because only flat-amount rows were scaled. ADR-027 had named that last gap
+  ("a formula-based row that is itself flagged `dependsOnPaymentDays` is not separately re-scaled").
+- **Decision**:
+  - **Base**: a blank Base means the employee's grade `defaultBasePay` (the figure the bulk tool shows),
+    in the shared create path, so single and bulk assignment both get it, and on edit when the base is
+    cleared. With no grade default, the assignment is refused when the structure's formulas or conditions
+    use `base`. A structure that never reads base still saves with none.
+  - **Edit**: the edit screen sends only the six fields the update accepts
+    (`entities/salary-structure-assignment-payload.js`). Employee, Salary Structure and From Date are
+    greyed out once saved, since a new From Date is a new assignment.
+  - **Proration** (`utils/salarySlipCalc.js`): a row flagged `dependsOnPaymentDays` is its full-period
+    value × `paymentDays / totalWorkingDays`, for a formula row as for a flat one. This is source's
+    `default_amount * payment_days / total_working_days` (Salary Slip.md section I). The full-period value
+    is evaluated against a second context holding every earlier row unprorated (and `paymentDays =
+    totalWorkingDays`), so a flagged `HRA = BS * 0.4` under a flagged BS is prorated once. Unflagged rows
+    are unchanged: an unflagged formula still inherits its inputs' proration, and an unflagged flat row
+    (Professional Tax) keeps its full value. The slip still records a formula row as a formula row.
+  - **Re-running a month**: selecting employees for a new Payroll Entry ignores cancelled slips (source's
+    `docstatus != 2`). A cancelled slip linked only from cancelled entries can be deleted; the link from
+    the cancelled entry stays as its record. A slip for an exact period is still unique (the index is not
+    changed), so a new slip needs the cancelled one deleted first, and the creation error now says so.
+  - **All slips fail on submit**: the entry becomes `failed` (new `PayrollEntry.status` value, source has
+    `Failed` too) when Submit slips leaves no row submitted. A partly submitted entry is still
+    `submitted`, as before. The entry screen explains what to do.
+  - **Cancel confirmation**: "Cancel entry and linked slips" asks first, with the number of slips.
+- **Consequences**: existing slips are not recalculated. Proration reaches only components whose
+  "Depends on payment days" box is ticked (the flag is copied onto a structure row when the row is added,
+  CALC-3), so a structure built from unticked components still pays the full month. Re-running a
+  cancelled month means deleting its cancelled slips one at a time from Salary Slips; there is no bulk
+  delete. Making a new slip supersede a cancelled one automatically would need the unique index changed
+  on existing databases, and is left as a decision. Supersedes ADR-027's named formula-row gap. Tested by
+  `utils/salarySlipCalc.test.js` (Scenario C2) and `controllers/v1/payrollIntegrity.test.js`.
+- **Deviates from convention**: no.

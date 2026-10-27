@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { companyLabelledOptions, interviewLabel, jobOfferLabel, leavePeriodLabel, ofChosenCompany, salaryStructureLabel } from "./picker-labels.js";
+import { companyLabelledOptions, interviewLabel, jobOfferLabel, leavePeriodLabel, nameWithCompany, ofChosenCompany, salaryStructureLabel } from "./picker-labels.js";
 
 const companies = { data: { data: [{ _id: "c-apd", companyName: "Apidel" }, { _id: "c-nuv", companyName: "Nuva" }] } };
 const periods = { data: { data: [
@@ -31,6 +31,15 @@ assert.equal(
     interviewLabel({ jobApplicantId: { applicantName: "Kiran" }, scheduledOn: "2026-10-14T05:30:00.000Z", status: "Pending" }),
     "Kiran — 2026-10-14 (Pending)",
 );
+
+// Row dropdowns (ADR-051): two companies' "Basic" components are told apart,
+// whether companyId arrives as an id or populated.
+const components = { data: { data: [
+    { _id: "sc1", salaryComponentName: "Basic", companyId: "c-apd" },
+    { _id: "sc2", salaryComponentName: "Basic", companyId: { _id: "c-nuv", companyName: "Nuva" } },
+] } };
+const componentOptions = await companyLabelledOptions(async () => components, async () => companies, nameWithCompany("salaryComponentName"))();
+assert.deepEqual(componentOptions.map((o) => o.label), ["Basic (Apidel)", "Basic (Nuva)"]);
 
 // Employee form: the organization pickers ask for the chosen company only.
 const asked = [];

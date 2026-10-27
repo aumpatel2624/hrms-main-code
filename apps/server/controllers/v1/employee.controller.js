@@ -242,7 +242,7 @@ export const listEmployees = async (req, res) => {
     if (req.query.current === "true") filter.status = { $nin: NO_ACCESS_STATUSES };
     const groupWide = (await menuDataScope(req, "/employee", "read")) === SCOPES.ALL;
     const company = groupWide ? {} : { companyId: (await resolveRequestEmployee(req))?.companyId ?? { $in: [] } };
-    const employees = await Employee.find({ $and: [filter, company] }).select("employeeCode employeeName departmentId designationId");
+    const employees = await Employee.find({ $and: [filter, company] }).select("employeeCode employeeName companyId departmentId designationId");
     return res.status(200).json({ isOk: true, status: 200, data: employees });
   } catch (error) {
     console.log("Error in listEmployees", error);

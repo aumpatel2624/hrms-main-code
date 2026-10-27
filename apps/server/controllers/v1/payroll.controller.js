@@ -11,6 +11,7 @@
  */
 import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
+import { namesOnlyList } from "../../utils/lookupOptions.js";
 import { getReferencingCounts, formatReferenceMessage } from "../../utils/referenceHelper.js";
 import { deriveAbbreviation, dedupeAbbreviation } from "../../utils/payrollAbbreviation.js";
 import { computeStructureTotals, computeCtcAndGross } from "../../utils/payrollCtc.js";
@@ -132,6 +133,13 @@ export const listSalaryComponents = async (req, res) => {
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) { return failure(res, error); }
 };
+
+// Row dropdowns (Benefit Application, Salary Structure, Gratuity Rule): names
+// and company only, the caller's company below ADMIN — never the formulas (ADR-051).
+export const listSalaryComponentOptions = namesOnlyList(SalaryComponent, "salaryComponentName companyId", {
+  sort: { salaryComponentName: 1 },
+  scope: async (req) => ({ $and: [{ isActive: true }, await attendanceScope(req, false)] }),
+});
 
 export const searchSalaryComponents = async (req, res) => {
   try {

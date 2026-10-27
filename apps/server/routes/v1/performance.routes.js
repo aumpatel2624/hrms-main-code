@@ -30,6 +30,18 @@ router.post("/kras", authMiddleware(ANY_ROLE), checkPermission("/kra", "write"),
  *     security: [{ bearerAuth: [] }]
  */
 router.get("/kras", authMiddleware(ANY_ROLE), checkPermission("/kra", "read"), controller.listKRAs);
+/**
+ * @swagger
+ * /kras/options:
+ *   get:
+ *     summary: listKRAOptions
+ *     description: Id and name only, for a form's dropdown. Any signed-in user.
+ *     tags: [Performance]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Successful operation }
+ */
+router.get("/kras/options", authMiddleware(ANY_ROLE), controller.listKRAOptions);
 
 /**
  * @swagger
@@ -105,6 +117,19 @@ router.get(
   checkPermission("/employee-feedback-criteria", "read"),
   controller.listEmployeeFeedbackCriteria,
 );
+
+/**
+ * @swagger
+ * /employee-feedback-criteria/options:
+ *   get:
+ *     summary: listEmployeeFeedbackCriteriaOptions
+ *     description: Id and name only, for a form's dropdown. Any signed-in user.
+ *     tags: [Performance]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Successful operation }
+ */
+router.get("/employee-feedback-criteria/options", authMiddleware(ANY_ROLE), controller.listEmployeeFeedbackCriteriaOptions);
 
 /**
  * @swagger

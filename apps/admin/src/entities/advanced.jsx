@@ -8,7 +8,7 @@ import {
     createSalaryComponent, getSalaryComponentById, updateSalaryComponent, deleteSalaryComponent, searchSalaryComponents, getAllSalaryComponents,
     createSalaryStructure, getSalaryStructureById, updateSalaryStructure, deleteSalaryStructure, searchSalaryStructures, getAllSalaryStructures,
     createSalaryStructureAssignment, getSalaryStructureAssignmentById, updateSalaryStructureAssignment, deleteSalaryStructureAssignment, searchSalaryStructureAssignments,
-    getAllSalaryStructureAssignments,
+    getAllSalaryStructureAssignments, getSalaryComponentOptions,
 } from "../api/payroll.api";
 import {
     createPayrollPeriod, getPayrollPeriodById, updatePayrollPeriod, deletePayrollPeriod, searchPayrollPeriods, getAllPayrollPeriods,
@@ -31,7 +31,7 @@ import {
 import {
     createIncomeTaxSlab, getIncomeTaxSlabById, updateIncomeTaxSlab, deleteIncomeTaxSlab, searchIncomeTaxSlabs, getAllIncomeTaxSlabs,
     createEmployeeTaxExemptionCategory, getEmployeeTaxExemptionCategoryById, updateEmployeeTaxExemptionCategory, deleteEmployeeTaxExemptionCategory, searchEmployeeTaxExemptionCategories, getAllEmployeeTaxExemptionCategories,
-    createEmployeeTaxExemptionSubCategory, getEmployeeTaxExemptionSubCategoryById, updateEmployeeTaxExemptionSubCategory, deleteEmployeeTaxExemptionSubCategory, searchEmployeeTaxExemptionSubCategories, getAllEmployeeTaxExemptionSubCategories,
+    createEmployeeTaxExemptionSubCategory, getEmployeeTaxExemptionSubCategoryById, updateEmployeeTaxExemptionSubCategory, deleteEmployeeTaxExemptionSubCategory, searchEmployeeTaxExemptionSubCategories, getAllEmployeeTaxExemptionSubCategories, getEmployeeTaxExemptionSubCategoryOptions,
     createEmployeeTaxExemptionDeclaration, getEmployeeTaxExemptionDeclarationById, updateEmployeeTaxExemptionDeclaration, deleteEmployeeTaxExemptionDeclaration, searchEmployeeTaxExemptionDeclarations, submitEmployeeTaxExemptionDeclaration, cancelEmployeeTaxExemptionDeclaration,
     createEmployeeTaxExemptionProofSubmission, getEmployeeTaxExemptionProofSubmissionById, updateEmployeeTaxExemptionProofSubmission, deleteEmployeeTaxExemptionProofSubmission, searchEmployeeTaxExemptionProofSubmissions, submitEmployeeTaxExemptionProofSubmission, cancelEmployeeTaxExemptionProofSubmission,
 } from "../api/payrollTax.api";
@@ -39,10 +39,10 @@ import {
     createGratuityRule, getGratuityRuleById, updateGratuityRule, deleteGratuityRule, searchGratuityRules, getAllGratuityRules,
     createGratuity, getGratuityById, updateGratuity, deleteGratuity, searchGratuities, submitGratuity, cancelGratuity,
 } from "../api/gratuity.api";
-import { createExpenseClaimType, getExpenseClaimTypeById, updateExpenseClaimType, deleteExpenseClaimType, searchExpenseClaimTypes, getAllExpenseClaimTypes, createExpenseClaim, getExpenseClaimById, updateExpenseClaim, deleteExpenseClaim, searchExpenseClaims, approveExpenseClaim, rejectExpenseClaim, submitExpenseClaim, cancelExpenseClaim, markExpenseClaimAsPaid } from "../api/expenses.api";
+import { createExpenseClaimType, getExpenseClaimTypeById, updateExpenseClaimType, deleteExpenseClaimType, searchExpenseClaimTypes, getAllExpenseClaimTypes, getExpenseClaimTypeOptions, createExpenseClaim, getExpenseClaimById, updateExpenseClaim, deleteExpenseClaim, searchExpenseClaims, approveExpenseClaim, rejectExpenseClaim, submitExpenseClaim, cancelExpenseClaim, markExpenseClaimAsPaid } from "../api/expenses.api";
 import {
-    createKRA, getKRAById, updateKRA, deleteKRA, searchKRAs, getAllKRAs,
-    createEmployeeFeedbackCriteria, getEmployeeFeedbackCriteriaById, updateEmployeeFeedbackCriteria, deleteEmployeeFeedbackCriteria, searchEmployeeFeedbackCriteria, getAllEmployeeFeedbackCriteria,
+    createKRA, getKRAById, updateKRA, deleteKRA, searchKRAs, getAllKRAs, getKRAOptions,
+    createEmployeeFeedbackCriteria, getEmployeeFeedbackCriteriaById, updateEmployeeFeedbackCriteria, deleteEmployeeFeedbackCriteria, searchEmployeeFeedbackCriteria, getAllEmployeeFeedbackCriteria, getEmployeeFeedbackCriteriaOptions,
     createAppraisalTemplate, getAppraisalTemplateById, updateAppraisalTemplate, deleteAppraisalTemplate, searchAppraisalTemplates, getAllAppraisalTemplates,
     createAppraisalCycle, getAppraisalCycleById, updateAppraisalCycle, deleteAppraisalCycle, searchAppraisalCycles, getAllAppraisalCycles,
     getEligibleEmployeesForCycle, createAppraisalsForCycle, completeAppraisalCycle,
@@ -73,7 +73,7 @@ import {
     resetEmployeePassword,
 } from "../api/employees.api";
 import { getAllRoles } from "../api/roles.api";
-import { companyLabelledOptions, interviewLabel, jobOfferLabel, leavePeriodLabel, ofChosenCompany, salaryStructureLabel } from "./picker-labels";
+import { companyLabelledOptions, interviewLabel, jobOfferLabel, leavePeriodLabel, nameWithCompany, ofChosenCompany, salaryStructureLabel } from "./picker-labels";
 import { getAllCountries, getStatesByCountry, getCitiesByState } from "../api/locations.api";
 import {
     createAdminUser, deleteAdminUser, getAdminUserById, updateAdminUser, searchAdminUsers, resetAdminUserPassword,
@@ -202,6 +202,15 @@ const asOptions = (loader, labelKey) => () =>
 // Approver / reviewer / interviewer pickers: nobody who has left, is inactive
 // or is suspended (the server filters on ?current=true).
 const getCurrentEmployees = () => getAllEmployees({ current: true });
+
+// Row dropdowns (SimpleArrayField `optionsFrom`). Masters every company keeps
+// its own copy of carry the company in the label (picker-labels.js).
+const designationRowOptions = companyLabelledOptions(getAllDesignations, getAllCompanies, nameWithCompany("designationName"));
+const employeeRowOptions = companyLabelledOptions(getAllEmployees, getAllCompanies, nameWithCompany("employeeName"));
+const salaryComponentRowOptions = companyLabelledOptions(getSalaryComponentOptions, getAllCompanies, nameWithCompany("salaryComponentName"));
+const expenseTypeRowOptions = asOptions(getExpenseClaimTypeOptions, "name");
+const kraRowOptions = asOptions(getKRAOptions, "name");
+const criteriaRowOptions = asOptions(getEmployeeFeedbackCriteriaOptions, "criteria");
 
 /**
  * The id of a relation, however it arrived.
@@ -1702,7 +1711,7 @@ export const employeeReferralConfig = {
 };
 
 const STAFFING_DETAIL_COLUMNS = [
-    { name: "designationId", label: "Designation (id)", type: "text" },
+    { name: "designationId", label: "Designation", type: "select", optionsFrom: "rowDesignationId" },
     { name: "vacancies", label: "Vacancies", type: "number" },
     { name: "estimatedCostPerPosition", label: "Est. Cost / Position", type: "number" },
 ];
@@ -1721,12 +1730,13 @@ export const staffingPlanConfig = {
     section: "Employee Career Events",
     singular: "Staffing Plan",
     plural: "Staffing Plans",
-    description: "Blocks a second active plan for the same company + designation in an overlapping date range. Designation rows use the Designation's id (no company-hierarchy validation — this project's companies are a flat list, not a tree, per ADR-021).",
+    description: "Blocks a second active plan for the same company + designation in an overlapping date range. Each row picks a Designation (no company-hierarchy validation — this project's companies are a flat list, not a tree, per ADR-021).",
     api: {
         search: searchStaffingPlans, getById: getStaffingPlanById,
         create: createStaffingPlan, update: updateStaffingPlan, remove: deleteStaffingPlan,
     },
     lookups: {
+        rowDesignationId: designationRowOptions,
         companyId: asOptions(getAllCompanies, "companyName"),
         departmentId: asOptions(getAllDepartments, "departmentName"),
     },
@@ -1737,10 +1747,10 @@ export const staffingPlanConfig = {
         { name: "toDate", label: "To Date", type: "date", required: true, section: "details", error: "To Date is required!" },
         ACTIVE,
     ],
-    renderExtra: ({ values, setValues }) => (
+    renderExtra: ({ values, setValues, lookups }) => (
         <SimpleArrayField
-            title="Staffing Details" description={`Total estimated budget: ${values.totalEstimatedBudget ?? 0}. Paste a Designation's id into each row — current count/openings/positions/cost are computed on save.`}
-            fieldName="staffingDetails" columns={STAFFING_DETAIL_COLUMNS} values={values} setValues={setValues}
+            title="Staffing Details" description={`Total estimated budget: ${values.totalEstimatedBudget ?? 0}. Pick a Designation for each row — current count/openings/positions/cost are computed on save.`}
+            fieldName="staffingDetails" columns={STAFFING_DETAIL_COLUMNS} values={values} setValues={setValues} lookups={lookups}
         />
     ),
     columns: [
@@ -1763,7 +1773,7 @@ export const staffingPlanConfig = {
 // ---------------------------------------------------------------------------
 
 const TRAINING_EVENT_ATTENDEE_COLUMNS = [
-    { name: "employeeId", label: "Employee id", type: "text" },
+    { name: "employeeId", label: "Employee", type: "select", optionsFrom: "rowEmployeeId" },
     { name: "isMandatory", label: "Mandatory", type: "checkbox" },
     { name: "attendance", label: "Attendance", type: "select", options: ["Present", "Absent"] },
     { name: "status", label: "Status", type: "select", options: ["Open", "Completed", "Feedback Submitted"] },
@@ -1830,6 +1840,7 @@ export const trainingEventConfig = {
         create: createTrainingEvent, update: updateTrainingEvent, remove: deleteTrainingEvent,
     },
     lookups: {
+        rowEmployeeId: employeeRowOptions,
         companyId: asOptions(getAllCompanies, "companyName"),
         trainingProgramId: asOptions(getAllTrainingPrograms, "trainingProgramName"),
     },
@@ -1852,11 +1863,11 @@ export const trainingEventConfig = {
         ACTIVE,
     ],
     sections: [{ id: "details", title: "Details" }, { id: "attendees", title: "Attendees" }, { id: "actions", title: "Actions" }],
-    renderExtra: ({ mode, id, values, setValues }) => (
+    renderExtra: ({ mode, id, values, setValues, lookups }) => (
         <>
             <SimpleArrayField
-                title="Attendees" description="Paste an Employee's id into each row."
-                fieldName="employees" columns={TRAINING_EVENT_ATTENDEE_COLUMNS} values={values} setValues={setValues}
+                title="Attendees" description="One row per attendee."
+                fieldName="employees" columns={TRAINING_EVENT_ATTENDEE_COLUMNS} values={values} setValues={setValues} lookups={lookups}
             />
             {mode === "edit" && id && (
                 <>
@@ -1957,22 +1968,22 @@ export const employeeSkillMapConfig = {
         search: searchEmployeeSkillMaps, getById: getEmployeeSkillMapById,
         create: createEmployeeSkillMap, update: updateEmployeeSkillMap, remove: deleteEmployeeSkillMap,
     },
-    lookups: { employeeId: asOptions(getAllEmployees, "employeeName") },
+    lookups: { employeeId: asOptions(getAllEmployees, "employeeName"), rowSkillId: asOptions(getAllSkills, "skillName") },
     fields: [
         { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
         ACTIVE,
     ],
     sections: [{ id: "details", title: "Details" }, { id: "skills", title: "Skills" }, { id: "actions", title: "Actions" }],
-    renderExtra: ({ mode, id, values, setValues }) => (
+    renderExtra: ({ mode, id, values, setValues, lookups }) => (
         <>
             <SimpleArrayField
-                title="Employee Skills" description="Paste a Skill's id into each row; proficiency is 1-5."
+                title="Employee Skills" description="Pick a Skill for each row; proficiency is 1-5."
                 fieldName="employeeSkills"
                 columns={[
-                    { name: "skillId", label: "Skill id", type: "text" },
+                    { name: "skillId", label: "Skill", type: "select", optionsFrom: "rowSkillId" },
                     { name: "proficiency", label: "Proficiency (1-5)", type: "number" },
                 ]}
-                values={values} setValues={setValues}
+                values={values} setValues={setValues} lookups={lookups}
             />
             {mode === "edit" && id && (
                 <SimpleActionButton
@@ -2013,7 +2024,7 @@ const TRAVEL_ITINERARY_COLUMNS = [
 ];
 
 const TRAVEL_COSTING_COLUMNS = [
-    { name: "expenseTypeId", label: "Expense Type ID", type: "text" },
+    { name: "expenseTypeId", label: "Expense Type", type: "select", optionsFrom: "rowExpenseTypeId" },
     { name: "sponsoredAmount", label: "Sponsored Amount", type: "number" },
     { name: "fundedAmount", label: "Funded Amount", type: "number" },
     { name: "totalAmount", label: "Total Amount", type: "number" },
@@ -2085,6 +2096,7 @@ export const travelRequestConfig = {
         create: createTravelRequest, update: updateTravelRequest, remove: deleteTravelRequest,
     },
     lookups: {
+        rowExpenseTypeId: expenseTypeRowOptions,
         employeeId: asOptions(getAllEmployees, "employeeName"),
         purposeOfTravelId: asOptions(getAllPurposeOfTravels, "purposeOfTravelName"),
         personalIdTypeId: asOptions(getAllIdentificationDocumentTypes, "identificationDocumentTypeName"),
@@ -2104,7 +2116,7 @@ export const travelRequestConfig = {
         ACTIVE,
     ],
     sections: [{ id: "details", title: "Details" }, { id: "itinerary", title: "Itinerary" }, { id: "costings", title: "Costings" }],
-    renderExtra: ({ values, setValues }) => (
+    renderExtra: ({ values, setValues, lookups }) => (
         <>
             <SimpleArrayField
                 title="Itinerary" description="One row per travel leg."
@@ -2112,7 +2124,7 @@ export const travelRequestConfig = {
             />
             <SimpleArrayField
                 title="Costings" description="Total Amount is entered manually, not computed."
-                fieldName="costings" columns={TRAVEL_COSTING_COLUMNS} values={values} setValues={setValues}
+                fieldName="costings" columns={TRAVEL_COSTING_COLUMNS} values={values} setValues={setValues} lookups={lookups}
             />
         </>
     ),
@@ -2146,7 +2158,7 @@ const HOLIDAY_COLUMNS = [
 ];
 
 const LEAVE_POLICY_DETAIL_COLUMNS = [
-    { name: "leaveTypeId", label: "Leave Type (id)", type: "text" },
+    { name: "leaveTypeId", label: "Leave Type", type: "select", optionsFrom: "rowLeaveTypeId" },
     { name: "annualAllocation", label: "Annual Allocation", type: "number" },
 ];
 
@@ -2338,14 +2350,17 @@ export const leavePolicyConfig = {
     plural: "Leave Policies",
     description: "A named bundle of (Leave Type, annual allocation) pairs, assigned to employees via Leave Policy Assignment.",
     api: { search: searchLeavePolicies, getById: getLeavePolicyById, create: createLeavePolicy, update: updateLeavePolicy, remove: deleteLeavePolicy },
+    lookups: {
+        rowLeaveTypeId: asOptions(getAllLeaveTypes, "leaveTypeName"),
+    },
     fields: [
         { name: "title", icon: Tag01, label: "Title", required: true, section: "details", error: "Title is required!" },
         ACTIVE,
     ],
-    renderExtra: ({ values, setValues }) => (
+    renderExtra: ({ values, setValues, lookups }) => (
         <SimpleArrayField
-            title="Leave Policy Details" description="One row per Leave Type this policy covers. Paste a Leave Type's id into each row; annual allocation is capped at that Leave Type's own Maximum Leave Allocation Allowed, when set."
-            fieldName="leavePolicyDetails" columns={LEAVE_POLICY_DETAIL_COLUMNS} values={values} setValues={setValues}
+            title="Leave Policy Details" description="One row per Leave Type this policy covers. Pick its Leave Type; annual allocation is capped at that Leave Type's own Maximum Leave Allocation Allowed, when set."
+            fieldName="leavePolicyDetails" columns={LEAVE_POLICY_DETAIL_COLUMNS} values={values} setValues={setValues} lookups={lookups}
         />
     ),
     columns: [
@@ -2572,7 +2587,7 @@ const BLOCK_DATE_COLUMNS = [
     { name: "reason", label: "Reason", type: "text" },
 ];
 const ALLOW_LIST_COLUMNS = [
-    { name: "allowUserId", label: "Allowed Employee (id)", type: "text" },
+    { name: "allowUserId", label: "Allowed Employee", type: "select", optionsFrom: "rowEmployeeId" },
 ];
 
 export const leaveAdjustmentConfig = {
@@ -2835,6 +2850,7 @@ export const leaveBlockListConfig = {
         create: createLeaveBlockList, update: updateLeaveBlockList, remove: deleteLeaveBlockList,
     },
     lookups: {
+        rowEmployeeId: employeeRowOptions,
         companyId: asOptions(getAllCompanies, "companyName"),
         departmentId: asOptions(getAllDepartments, "departmentName"),
         leaveTypeId: asOptions(getAllLeaveTypes, "leaveTypeName"),
@@ -2848,15 +2864,15 @@ export const leaveBlockListConfig = {
         { name: "leaveTypeId", label: "Leave Type (blank = blocks every type)", type: "select", section: "details", optionsFrom: "leaveTypeId" },
         ACTIVE,
     ],
-    renderExtra: ({ values, setValues }) => (
+    renderExtra: ({ values, setValues, lookups }) => (
         <>
             <SimpleArrayField
                 title="Block Dates" description="At least one row is required. Stop users from making Leave Applications on these dates."
                 fieldName="blockDates" columns={BLOCK_DATE_COLUMNS} values={values} setValues={setValues}
             />
             <SimpleArrayField
-                title="Allow Users" description="Paste an Employee's id into each row — these employees may still approve/apply for leave on the block dates above."
-                fieldName="allowList" columns={ALLOW_LIST_COLUMNS} values={values} setValues={setValues}
+                title="Allow Users" description="One row per employee — these employees may still approve/apply for leave on the block dates above."
+                fieldName="allowList" columns={ALLOW_LIST_COLUMNS} values={values} setValues={setValues} lookups={lookups}
             />
         </>
     ),
@@ -3283,7 +3299,7 @@ export const attendanceRequestConfig = {
 // ---------------------------------------------------------------------------
 
 const SALARY_DETAIL_COLUMNS = [
-    { name: "salaryComponentId", label: "Salary Component id", type: "text" },
+    { name: "salaryComponentId", label: "Salary Component", type: "select", optionsFrom: "rowSalaryComponentId" },
     { name: "amount", label: "Amount", type: "number" },
     { name: "amountBasedOnFormula", label: "Amount based on formula", type: "checkbox" },
     { name: "formula", label: "Formula", type: "text" },
@@ -3344,7 +3360,7 @@ export const salaryStructureConfig = {
     plural: "Salary Structures",
     description: "A pay template — earnings, deductions and employer contributions — assignable to employees.",
     api: { search: searchSalaryStructures, getById: getSalaryStructureById, create: createSalaryStructure, update: updateSalaryStructure, remove: deleteSalaryStructure },
-    lookups: { companyId: asOptions(getAllCompanies, "companyName") },
+    lookups: { companyId: asOptions(getAllCompanies, "companyName"), rowSalaryComponentId: salaryComponentRowOptions },
     sections: [
         { id: "details", title: "Structure details" },
         { id: "earnings", title: "Earnings" },
@@ -3370,11 +3386,11 @@ export const salaryStructureConfig = {
         { name: "netPay", label: "Net pay", section: "totals", type: "number" },
         ACTIVE,
     ],
-    renderExtra: ({ values, setValues }) => (
+    renderExtra: ({ values, setValues, lookups }) => (
         <>
-            <SimpleArrayField title="Earnings" description="Paste a Salary Component's id into each row." fieldName="earnings" columns={SALARY_DETAIL_COLUMNS} values={values} setValues={setValues} />
-            <SimpleArrayField title="Deductions" description="Paste a Salary Component's id into each row." fieldName="deductions" columns={SALARY_DETAIL_COLUMNS} values={values} setValues={setValues} />
-            <SimpleArrayField title="Employer Contributions" description="Paste a Salary Component's id into each row." fieldName="employerContributions" columns={SALARY_DETAIL_COLUMNS} values={values} setValues={setValues} />
+            <SimpleArrayField title="Earnings" description="Pick a Salary Component for each row." fieldName="earnings" columns={SALARY_DETAIL_COLUMNS} values={values} setValues={setValues} lookups={lookups} />
+            <SimpleArrayField title="Deductions" description="Pick a Salary Component for each row." fieldName="deductions" columns={SALARY_DETAIL_COLUMNS} values={values} setValues={setValues} lookups={lookups} />
+            <SimpleArrayField title="Employer Contributions" description="Pick a Salary Component for each row." fieldName="employerContributions" columns={SALARY_DETAIL_COLUMNS} values={values} setValues={setValues} lookups={lookups} />
         </>
     ),
     filterFields: [
@@ -4143,7 +4159,7 @@ export const employeeOtherIncomeConfig = {
 // ============================================================================
 
 const GRATUITY_APPLICABLE_COMPONENT_COLUMNS = [
-    { name: "salaryComponentId", label: "Salary Component ID", type: "text", placeholder: "Component ObjectId" },
+    { name: "salaryComponentId", label: "Salary Component", type: "select", optionsFrom: "rowSalaryComponentId" },
 ];
 
 const GRATUITY_RULE_SLAB_COLUMNS = [
@@ -4165,6 +4181,9 @@ export const gratuityRuleConfig = {
         create: createGratuityRule,
         update: updateGratuityRule,
         remove: deleteGratuityRule,
+    },
+    lookups: {
+        rowSalaryComponentId: salaryComponentRowOptions,
     },
     sections: [
         { id: "details", title: "Rule Details" },
@@ -4191,7 +4210,7 @@ export const gratuityRuleConfig = {
         },
         { name: "minimumYearForGratuity", label: "Minimum Year for Gratuity", section: "details", type: "number" },
     ],
-    renderExtra: ({ values, setValues }) => (
+    renderExtra: ({ values, setValues, lookups }) => (
         <>
             <SimpleArrayField
                 title="Applicable Earnings Components"
@@ -4199,7 +4218,7 @@ export const gratuityRuleConfig = {
                 fieldName="applicableEarningsComponent"
                 columns={GRATUITY_APPLICABLE_COMPONENT_COLUMNS}
                 values={values}
-                setValues={setValues}
+                setValues={setValues} lookups={lookups}
             />
             <SimpleArrayField
                 title="Gratuity Rule Slabs"
@@ -4335,7 +4354,7 @@ export const gratuityConfig = {
 };
 
 const EXPENSE_COLUMNS = [
-    { name: "expenseDate", label: "Expense Date", type: "date" }, { name: "expenseTypeId", label: "Expense Type ID", type: "text" }, { name: "description", label: "Description", type: "text" }, { name: "amount", label: "Claimed Amount", type: "number" }, { name: "sanctionedAmount", label: "Sanctioned Amount", type: "number" },
+    { name: "expenseDate", label: "Expense Date", type: "date" }, { name: "expenseTypeId", label: "Expense Type", type: "select", optionsFrom: "rowExpenseTypeId" }, { name: "description", label: "Description", type: "text" }, { name: "amount", label: "Claimed Amount", type: "number" }, { name: "sanctionedAmount", label: "Sanctioned Amount", type: "number" },
 ];
 const EXPENSE_TAX_COLUMNS = [{ name: "description", label: "Description", type: "text" }, { name: "rate", label: "Rate (%)", type: "number" }, { name: "taxAmount", label: "Tax Amount", type: "number" }];
 export const expenseClaimTypeConfig = {
@@ -4347,11 +4366,14 @@ export const expenseClaimTypeConfig = {
 export const expenseClaimConfig = {
     key: "expense-claim", path: "/expense-claim", section: "Expenses", singular: "Expense Claim", plural: "Expense Claims", description: "Record a reimbursable expense claim, have it approved, submit it, and mark it paid after reimbursement.",
     api: { search: searchExpenseClaims, getById: getExpenseClaimById, create: createExpenseClaim, update: updateExpenseClaim, remove: deleteExpenseClaim }, lookups: { employeeId: asOptions(getAllEmployees, "employeeName"), expenseApproverId: asOptions(getCurrentEmployees, "employeeName") },
+    lookups: {
+        rowExpenseTypeId: expenseTypeRowOptions,
+    },
     sections: [{ id: "details", title: "Claim details" }, { id: "expenses", title: "Expenses" }, { id: "taxes", title: "Taxes and charges" }, { id: "totals", title: "Totals" }, { id: "status", title: "Status" }],
     fields: [{ name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" }, { name: "postingDate", label: "Posting Date", section: "details", type: "date" }, { name: "expenseApproverId", label: "Expense Approver", section: "details", type: "select", optionsFrom: "expenseApproverId", hint: "Leave blank to use the employee or department approver." }, { name: "totalClaimedAmount", label: "Total Claimed", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "totalSanctionedAmount", label: "Total Sanctioned", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "totalTaxesAndCharges", label: "Total Taxes", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "grandTotal", label: "Grand Total", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "status", label: "Status", section: "status", type: "text", disabled: () => true, hideIn: ["add"] }, { name: "isPaid", label: "Paid", section: "status", type: "checkbox", disabled: () => true, hideIn: ["add"] }],
-    renderExtra: ({ mode, id, values, setValues }) => (
+    renderExtra: ({ mode, id, values, setValues, lookups }) => (
         <>
-            <SimpleArrayField title="Expenses" fieldName="expenses" columns={EXPENSE_COLUMNS} values={values} setValues={setValues} />
+            <SimpleArrayField title="Expenses" fieldName="expenses" columns={EXPENSE_COLUMNS} values={values} setValues={setValues} lookups={lookups} />
             <SimpleArrayField title="Taxes and Charges" fieldName="taxes" columns={EXPENSE_TAX_COLUMNS} values={values} setValues={setValues} />
             {mode === "edit" && id && values.status === "draft" && <><SimpleActionButton label="Approve" description="Approve this claim and its sanctioned amounts." onRun={() => approveExpenseClaim(id)} onResult={() => window.location.reload()} /><SimpleActionButton label="Reject" description="Reject this claim and set every sanctioned amount to zero." onRun={() => rejectExpenseClaim(id)} onResult={() => window.location.reload()} /></>}
             {mode === "edit" && id && values.status === "approved" && <SimpleActionButton label="Submit" description="Lock this approved claim for reimbursement." onRun={() => submitExpenseClaim(id)} onResult={() => window.location.reload()} />}
@@ -4419,11 +4441,11 @@ export const employeeFeedbackCriteriaConfig = {
 };
 
 const APPRAISAL_TEMPLATE_GOAL_COLUMNS = [
-    { name: "kraId", label: "KRA ID", type: "text", placeholder: "KRA ObjectId" },
+    { name: "kraId", label: "KRA", type: "select", optionsFrom: "rowKraId" },
     { name: "weightage", label: "Weightage (%)", type: "number", placeholder: "e.g. 40" },
 ];
 const APPRAISAL_TEMPLATE_RATING_CRITERIA_COLUMNS = [
-    { name: "criteriaId", label: "Criteria ID", type: "text", placeholder: "Employee Feedback Criteria ObjectId" },
+    { name: "criteriaId", label: "Criteria", type: "select", optionsFrom: "rowCriteriaId" },
     { name: "weightage", label: "Weightage (%)", type: "number", placeholder: "e.g. 50" },
 ];
 
@@ -4441,28 +4463,32 @@ export const appraisalTemplateConfig = {
         update: updateAppraisalTemplate,
         remove: deleteAppraisalTemplate,
     },
+    lookups: {
+        rowKraId: kraRowOptions,
+        rowCriteriaId: criteriaRowOptions,
+    },
     sections: [{ id: "details", title: "Template Details" }],
     fields: [
         { name: "templateTitle", label: "Template Title", section: "details", type: "text", required: true, error: "Template Title is required" },
         { name: "description", label: "Description", section: "details", type: "text" },
     ],
-    renderExtra: ({ values, setValues }) => (
+    renderExtra: ({ values, setValues, lookups }) => (
         <>
             <SimpleArrayField
                 title="Goals (KRAs)"
-                description="Look up the KRA's ObjectId from the KRA screen. Weightages must sum to exactly 100."
+                description="Pick a KRA for each row. Weightages must sum to exactly 100."
                 fieldName="goals"
                 columns={APPRAISAL_TEMPLATE_GOAL_COLUMNS}
                 values={values}
-                setValues={setValues}
+                setValues={setValues} lookups={lookups}
             />
             <SimpleArrayField
                 title="Rating Criteria"
-                description="Look up the criteria's ObjectId from the Employee Feedback Criteria screen. Weightages must sum to exactly 100."
+                description="Pick a criterion for each row. Weightages must sum to exactly 100."
                 fieldName="ratingCriteria"
                 columns={APPRAISAL_TEMPLATE_RATING_CRITERIA_COLUMNS}
                 values={values}
-                setValues={setValues}
+                setValues={setValues} lookups={lookups}
             />
         </>
     ),
@@ -4629,7 +4655,7 @@ export const appraisalCycleConfig = {
 };
 
 const APPRAISAL_KRA_COLUMNS = [
-    { name: "kraId", label: "KRA ID", type: "text", placeholder: "KRA ObjectId" },
+    { name: "kraId", label: "KRA", type: "select", optionsFrom: "rowKraId" },
     { name: "weightage", label: "Weightage (%)", type: "number", placeholder: "e.g. 40" },
 ];
 const APPRAISAL_GOAL_COLUMNS = [
@@ -4638,7 +4664,7 @@ const APPRAISAL_GOAL_COLUMNS = [
     { name: "score", label: "Score (0-5)", type: "number", placeholder: "0-5" },
 ];
 const APPRAISAL_SELF_RATING_COLUMNS = [
-    { name: "criteriaId", label: "Criteria ID", type: "text", placeholder: "Employee Feedback Criteria ObjectId" },
+    { name: "criteriaId", label: "Criteria", type: "select", optionsFrom: "rowCriteriaId" },
     { name: "weightage", label: "Weightage (%)", type: "number", placeholder: "e.g. 50" },
     { name: "rating", label: "Rating (0-1 fraction)", type: "number", placeholder: "e.g. 0.8" },
 ];
@@ -4658,6 +4684,8 @@ export const appraisalConfig = {
         remove: deleteAppraisal,
     },
     lookups: {
+        rowKraId: kraRowOptions,
+        rowCriteriaId: criteriaRowOptions,
         employeeId: asOptions(getAllEmployees, "employeeName"),
         appraisalCycleId: asOptions(getAllAppraisalCycles, "cycleName"),
         appraisalTemplateId: asOptions(getAllAppraisalTemplates, "templateTitle"),
@@ -4685,7 +4713,7 @@ export const appraisalConfig = {
         { name: "remarks", label: "Remarks", section: "notes", type: "text" },
         { name: "reflections", label: "Reflections", section: "notes", type: "text" },
     ],
-    renderExtra: ({ mode, id, values, setValues }) => (
+    renderExtra: ({ mode, id, values, setValues, lookups }) => (
         <>
             {values.rateGoalsManually ? (
                 <SimpleArrayField
@@ -4703,7 +4731,7 @@ export const appraisalConfig = {
                     fieldName="appraisalKra"
                     columns={APPRAISAL_KRA_COLUMNS}
                     values={values}
-                    setValues={setValues}
+                    setValues={setValues} lookups={lookups}
                 />
             )}
             <SimpleArrayField
@@ -4712,7 +4740,7 @@ export const appraisalConfig = {
                 fieldName="selfRatings"
                 columns={APPRAISAL_SELF_RATING_COLUMNS}
                 values={values}
-                setValues={setValues}
+                setValues={setValues} lookups={lookups}
             />
             {mode === "edit" && id && values.status === "draft" && (
                 <SimpleActionButton
@@ -4932,7 +4960,7 @@ export const goalConfig = {
 };
 
 const EMPLOYEE_PERFORMANCE_FEEDBACK_RATING_COLUMNS = [
-    { name: "criteriaId", label: "Criteria ID", type: "text", placeholder: "Employee Feedback Criteria ObjectId" },
+    { name: "criteriaId", label: "Criteria", type: "select", optionsFrom: "rowCriteriaId" },
     { name: "weightage", label: "Weightage (%)", type: "number", placeholder: "e.g. 50" },
     { name: "rating", label: "Rating (0-1 fraction)", type: "number", placeholder: "e.g. 0.8" },
 ];
@@ -4955,6 +4983,7 @@ export const employeePerformanceFeedbackConfig = {
     // that verdict on each row and enforces it.
     canEditRow: (row) => row.canEdit !== false,
     lookups: {
+        rowCriteriaId: criteriaRowOptions,
         employeeId: asOptions(getAllEmployees, "employeeName"),
         reviewerId: asOptions(getCurrentEmployees, "employeeName"),
         appraisalId: () => getAllAppraisals().then((res) => unwrapListRows(res.data?.data).map((row) => ({ value: row._id, label: `Appraisal — ${row.employeeIdLabel || row.employeeId?.employeeName || row.employeeId} (${row.status})` }))),
@@ -4977,7 +5006,7 @@ export const employeePerformanceFeedbackConfig = {
         { name: "totalScore", label: "Total Score", section: "details", type: "number" },
         { name: "feedback", label: "Feedback", section: "text", type: "text" },
     ],
-    renderExtra: ({ mode, id, values, setValues }) => (
+    renderExtra: ({ mode, id, values, setValues, lookups }) => (
         <>
             <SimpleArrayField
                 title="Feedback Ratings"
@@ -4985,7 +5014,7 @@ export const employeePerformanceFeedbackConfig = {
                 fieldName="feedbackRatings"
                 columns={EMPLOYEE_PERFORMANCE_FEEDBACK_RATING_COLUMNS}
                 values={values}
-                setValues={setValues}
+                setValues={setValues} lookups={lookups}
             />
             {mode === "edit" && id && values.status === "draft" && (
                 <SimpleActionButton
@@ -5048,7 +5077,7 @@ export const employeePerformanceFeedbackConfig = {
 };
 
 const EMPLOYEE_BENEFIT_DETAIL_COLUMNS = [
-    { name: "salaryComponentId", label: "Salary Component ID", type: "text", placeholder: "Component ObjectId" },
+    { name: "salaryComponentId", label: "Salary Component", type: "select", optionsFrom: "rowSalaryComponentId" },
     { name: "amount", label: "Amount", type: "number", placeholder: "0.00" },
 ];
 
@@ -5067,6 +5096,7 @@ export const employeeBenefitApplicationConfig = {
         remove: deleteEmployeeBenefitApplication,
     },
     lookups: {
+        rowSalaryComponentId: salaryComponentRowOptions,
         employeeId: asOptions(getAllEmployees, "employeeName"),
         payrollPeriodId: payrollPeriodOptions,
     },
@@ -5090,15 +5120,15 @@ export const employeeBenefitApplicationConfig = {
         { name: "status", label: "Status", section: "status", type: "text" },
         { name: "date", label: "Date", section: "details", type: "date" },
     ],
-    renderExtra: ({ mode, id, values, setValues }) => (
+    renderExtra: ({ mode, id, values, setValues, lookups }) => (
         <>
             <SimpleArrayField
                 title="Benefit Components"
-                description="Specify salary component ID and elected amount for each flexible benefit."
+                description="Pick a salary component and the elected amount for each flexible benefit."
                 fieldName="employeeBenefits"
                 columns={EMPLOYEE_BENEFIT_DETAIL_COLUMNS}
                 values={values}
-                setValues={setValues}
+                setValues={setValues} lookups={lookups}
             />
             {mode === "edit" && id && values.status === "draft" && (
                 <SimpleActionButton
@@ -5536,7 +5566,7 @@ export const employeeTaxExemptionSubCategoryConfig = {
 };
 
 const EXEMPTION_DECLARATION_COLUMNS = [
-    { name: "exemptionSubCategoryId", label: "Sub-Category ID", type: "text", placeholder: "Sub-Category ObjectId" },
+    { name: "exemptionSubCategoryId", label: "Sub-Category", type: "select", optionsFrom: "rowExemptionSubCategoryId" },
     { name: "amount", label: "Declared Amount", type: "number", placeholder: "0.00" },
 ];
 
@@ -5555,6 +5585,7 @@ export const employeeTaxExemptionDeclarationConfig = {
         remove: deleteEmployeeTaxExemptionDeclaration,
     },
     lookups: {
+        rowExemptionSubCategoryId: asOptions(getEmployeeTaxExemptionSubCategoryOptions, "name"),
         employeeId: asOptions(getAllEmployees, "employeeName"),
         payrollPeriodId: () => getAllPayrollPeriods().then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: `${row.startDate?.slice?.(0, 10)} – ${row.endDate?.slice?.(0, 10)}` }))),
     },
@@ -5575,7 +5606,7 @@ export const employeeTaxExemptionDeclarationConfig = {
         { name: "totalExemptionAmount", label: "Total Exemption Amount", section: "details", type: "number", disabled: () => true },
         { name: "status", label: "Status", section: "status", type: "text", disabled: () => true },
     ],
-    renderExtra: ({ mode, id, values, setValues }) => (
+    renderExtra: ({ mode, id, values, setValues, lookups }) => (
         <>
             <SimpleArrayField
                 title="Declarations"
@@ -5583,7 +5614,7 @@ export const employeeTaxExemptionDeclarationConfig = {
                 fieldName="declarations"
                 columns={EXEMPTION_DECLARATION_COLUMNS}
                 values={values}
-                setValues={setValues}
+                setValues={setValues} lookups={lookups}
             />
             {mode === "edit" && id && values.status === "draft" && (
                 <SimpleActionButton
@@ -5627,7 +5658,7 @@ export const employeeTaxExemptionDeclarationConfig = {
 };
 
 const EXEMPTION_PROOF_COLUMNS = [
-    { name: "exemptionSubCategoryId", label: "Sub-Category ID", type: "text", placeholder: "Sub-Category ObjectId" },
+    { name: "exemptionSubCategoryId", label: "Sub-Category", type: "select", optionsFrom: "rowExemptionSubCategoryId" },
     { name: "typeOfProof", label: "Type of Proof", type: "text", placeholder: "Receipt, Statement, etc." },
     { name: "amount", label: "Actual Amount", type: "number", placeholder: "0.00" },
 ];
@@ -5647,6 +5678,7 @@ export const employeeTaxExemptionProofSubmissionConfig = {
         remove: deleteEmployeeTaxExemptionProofSubmission,
     },
     lookups: {
+        rowExemptionSubCategoryId: asOptions(getEmployeeTaxExemptionSubCategoryOptions, "name"),
         employeeId: asOptions(getAllEmployees, "employeeName"),
         payrollPeriodId: () => getAllPayrollPeriods().then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: `${row.startDate?.slice?.(0, 10)} – ${row.endDate?.slice?.(0, 10)}` }))),
     },
@@ -5671,7 +5703,7 @@ export const employeeTaxExemptionProofSubmissionConfig = {
         { name: "attachments", label: "Attachments", section: "details", type: "text" },
         { name: "status", label: "Status", section: "status", type: "text", disabled: () => true },
     ],
-    renderExtra: ({ mode, id, values, setValues }) => (
+    renderExtra: ({ mode, id, values, setValues, lookups }) => (
         <>
             <SimpleArrayField
                 title="Proof Details"
@@ -5679,7 +5711,7 @@ export const employeeTaxExemptionProofSubmissionConfig = {
                 fieldName="taxExemptionProofs"
                 columns={EXEMPTION_PROOF_COLUMNS}
                 values={values}
-                setValues={setValues}
+                setValues={setValues} lookups={lookups}
             />
             {mode === "edit" && id && values.status === "draft" && (
                 <SimpleActionButton

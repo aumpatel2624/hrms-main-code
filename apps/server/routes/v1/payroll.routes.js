@@ -34,6 +34,18 @@ router.post("/salary-components", authMiddleware(ANY_ROLE), checkPermission("/sa
 router.get("/salary-components", authMiddleware(ANY_ROLE), checkPermission("/salary-component", "read"), controller.listSalaryComponents);
 /**
  * @swagger
+ * /salary-components/options:
+ *   get:
+ *     summary: listSalaryComponentOptions
+ *     description: Id and name only, for a form's dropdown. Any signed-in user.
+ *     tags: [Payroll]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Successful operation }
+ */
+router.get("/salary-components/options", authMiddleware(ANY_ROLE), controller.listSalaryComponentOptions);
+/**
+ * @swagger
  * /salary-components/search:
  *   post:
  *     summary: searchSalaryComponents

@@ -22,6 +22,7 @@ export const deleteEmployeeTaxExemptionCategory = async (id) => api.delete(ENDPO
 // 3. Employee Tax Exemption Sub Category
 export const createEmployeeTaxExemptionSubCategory = async (data) => api.post(ENDPOINTS.EMPLOYEE_TAX_EXEMPTION_SUB_CATEGORIES.BASE, data);
 export const getAllEmployeeTaxExemptionSubCategories = async () => api.get(ENDPOINTS.EMPLOYEE_TAX_EXEMPTION_SUB_CATEGORIES.BASE);
+export const getEmployeeTaxExemptionSubCategoryOptions = async () => api.get(ENDPOINTS.EMPLOYEE_TAX_EXEMPTION_SUB_CATEGORIES.OPTIONS);
 export const getEmployeeTaxExemptionSubCategoryById = async (id) => api.get(ENDPOINTS.EMPLOYEE_TAX_EXEMPTION_SUB_CATEGORIES.BY_ID(id));
 export const updateEmployeeTaxExemptionSubCategory = async (id, data) => api.put(ENDPOINTS.EMPLOYEE_TAX_EXEMPTION_SUB_CATEGORIES.BY_ID(id), data);
 export const searchEmployeeTaxExemptionSubCategories = async (data) => api.post(ENDPOINTS.EMPLOYEE_TAX_EXEMPTION_SUB_CATEGORIES.SEARCH, data);

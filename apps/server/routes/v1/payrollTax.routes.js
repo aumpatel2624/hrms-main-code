@@ -236,6 +236,19 @@ router.get(
 
 /**
  * @swagger
+ * /employee-tax-exemption-sub-categories/options:
+ *   get:
+ *     summary: listEmployeeTaxExemptionSubCategoryOptions
+ *     description: Id and name only, for a form's dropdown. Any signed-in user.
+ *     tags: [Payroll Tax]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Successful operation }
+ */
+router.get("/employee-tax-exemption-sub-categories/options", authMiddleware(ANY_ROLE), controller.listEmployeeTaxExemptionSubCategoryOptions);
+
+/**
+ * @swagger
  * /employee-tax-exemption-sub-categories/search:
  *   post:
  *     summary: searchEmployeeTaxExemptionSubCategories

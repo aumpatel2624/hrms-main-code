@@ -10,6 +10,18 @@ const router = express.Router();
 router.post("/expense-claim-types", authMiddleware(ANY_ROLE), checkPermission("/expense-claim-type", "write"), allowOnlyFields(controller.EXPENSE_CLAIM_TYPE_FIELDS), controller.createExpenseClaimType);
 /** @swagger */
 router.get("/expense-claim-types", authMiddleware(ANY_ROLE), checkPermission("/expense-claim-type", "read"), controller.listExpenseClaimTypes);
+/**
+ * @swagger
+ * /expense-claim-types/options:
+ *   get:
+ *     summary: listExpenseClaimTypeOptions
+ *     description: Id and name only, for a form's dropdown. Any signed-in user.
+ *     tags: [Expenses]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Successful operation }
+ */
+router.get("/expense-claim-types/options", authMiddleware(ANY_ROLE), controller.listExpenseClaimTypeOptions);
 /** @swagger */
 router.post("/expense-claim-types/search", authMiddleware(ANY_ROLE), checkPermission("/expense-claim-type", "read"), controller.searchExpenseClaimTypes);
 /** @swagger */

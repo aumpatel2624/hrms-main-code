@@ -58,7 +58,7 @@ export default function PayrollEntry() {
             {entry && <>
                 <p className="text-sm text-primary">{companies.find(row => row._id === entry.companyId)?.companyName} · {entry.payrollFrequency} · {entry.startDate.slice(0, 10)} to {entry.endDate.slice(0, 10)} · {entry.status}</p>
                 <p className="text-sm text-tertiary">{entry.employeeDetails.length} employees. Failed rows are final for this entry; read the reason before starting another run.</p>
-                {entry.status === "failed" && <p className="text-sm text-error-primary">No slip in this entry could be submitted, so nobody was paid. Read each reason below and correct it. Then cancel this entry, delete its cancelled slips from Salary Slips, and start another run.</p>}
+                {entry.status === "failed" && <p className="text-sm text-error-primary">No slip in this entry could be submitted, so nobody was paid. Read each reason below and correct it. Then cancel this entry, delete it from Payroll Entries (its cancelled slips are deleted with it), and start another run.</p>}
                 {permissions.edit && <div className="flex flex-wrap gap-3">
                     {entry.status === "draft" && <>
                         <Button isDisabled={busy || !entry.employeeDetails.some(row => row.status === "pending")} onClick={() => run(() => createPayrollSlips(id))}>Create slips</Button>

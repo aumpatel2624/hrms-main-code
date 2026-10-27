@@ -181,5 +181,15 @@ const remove = Model => async (req, res) => {
     return res.json({ isOk: true, status: 200 });
   } catch (error) { return res.status(error.status || 500).json({ isOk: false, message: error.status ? error.message : "Unable to delete record" }); }
 };
-export const deletePayrollEntry = remove(PayrollEntry);
+// A cancelled entry takes its cancelled slips with it, so the month can be run
+// again without deleting each slip by hand. A submitted slip is never touched.
+export const deletePayrollEntry = handle(async req => {
+  const doc = await getDoc(PayrollEntry, req);
+  if (doc.status !== "cancelled") fail(400, "Cancel this record before deleting it");
+  const slips = await SalarySlip.find({ _id: { $in: doc.employeeDetails.map(row => row.salarySlipId).filter(Boolean) } }).select("status").lean();
+  if (slips.some(slip => slip.status !== "cancelled")) fail(409, "This payroll entry links a salary slip that is not cancelled; cancel that slip first");
+  for (const slip of slips) await SalarySlip.findByIdAndUpdate(slip._id, { isDeleted: true });
+  await PayrollEntry.findByIdAndUpdate(doc._id, { isDeleted: true });
+  return { deletedSalarySlips: slips.length };
+});
 export const deleteSalaryWithholding = remove(SalaryWithholding);

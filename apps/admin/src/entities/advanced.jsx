@@ -3667,6 +3667,11 @@ export const payrollEntryConfig = {
     key: "payroll-entry", path: "/payroll-entry", section: "Payroll", singular: "Payroll Entry", plural: "Payroll Entries",
     description: "Stored payroll batches with an outcome for every employee.",
     api: { search: searchPayrollEntries, remove: deletePayrollEntry },
+    // The server deletes a cancelled entry's cancelled slips with it; say how many.
+    deleteDescription: (row) => {
+        const slips = row?.employeeDetails?.filter(detail => detail.salarySlipId).length ?? 0;
+        return `Are you sure you want to remove this payroll entry?${slips ? ` Its ${slips} cancelled salary slip${slips === 1 ? "" : "s"} will be deleted with it.` : ""}`;
+    },
     columns: [
         { name: "Company", selector: row => row.recordLabel },
         { name: "Start date", selector: row => row.startDate?.slice(0, 10), sortable: true, sortField: "startDate" },

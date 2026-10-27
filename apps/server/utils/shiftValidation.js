@@ -11,7 +11,9 @@ import { dayStart, isAssignmentCurrentlyActive, resolveShiftOccurrence } from ".
 import { haversineDistance } from "./geofence.js";
 
 export const invalidShift = message => { throw Object.assign(new Error(message), { status: 400 }); };
-export const validateShiftRecord = async (doc, previous, req) => {
+// `onBehalf`: the write follows a decision the caller was entitled to make (a
+// Shift Request approval), so the own-records rule below does not apply to it.
+export const validateShiftRecord = async (doc, previous, req, { onBehalf = false } = {}) => {
   const name = doc.constructor.modelName;
   if (doc.employeeId) {
     const employee = await Employee.findOne({ $and: [{ _id: doc.employeeId }, await attendanceScope(req, false)] }).lean();
@@ -21,7 +23,7 @@ export const validateShiftRecord = async (doc, previous, req) => {
     // Own-scope users must never create or reassign another employee's records.
     await attendanceScope(req);
     const own = req.user.dataScope === "own" || req.user.dataScope === "approver";
-    if (own && String(req.user.employeeId) !== String(doc.employeeId)) invalidShift("You can only manage your own records");
+    if (own && !onBehalf && String(req.user.employeeId) !== String(doc.employeeId)) invalidShift("You can only manage your own records");
     if (req.user.dataScope === "department" && String(employee.departmentId) !== String(req.employee?.departmentId || req.user.departmentId)) invalidShift("Employee is outside your department");
   }
   if (!doc.companyId || !await Company.exists({ _id: doc.companyId })) invalidShift("Company is required and must exist");

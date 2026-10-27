@@ -5,7 +5,7 @@ import { MenuContext } from "../../context/MenuContext";
 import { Card, PageHeader } from "@/components/ui/page";
 import { FormActions, FormSection, FullWidth } from "@/components/ui/form";
 import { CheckField, EmailField, Field, MultiSelectField, PasswordField, SelectField, TextAreaField } from "@/components/ui/field";
-import { initialFormValues } from "./form-defaults.js";
+import { initialFormValues, storedFormValues } from "./form-defaults.js";
 import { formPayload } from "./form-payload.js";
 import IconPicker from "@/components/ui/icon-picker";
 import JoditEditor from "jodit-react";
@@ -160,16 +160,19 @@ const CrudForm = ({ config, mode = "add" }) => {
                 // the id, and the save payload must send the id — so flatten
                 // any populated ref back to its _id as it enters the form.
                 setValues(
-                    config.toForm
-                        ? config.toForm(data)
-                        : Object.fromEntries(
-                              config.fields.map((f) => {
-                                  const raw = data[f.name];
-                                  const value =
-                                      raw && typeof raw === "object" && !Array.isArray(raw) && raw._id ? raw._id : raw;
-                                  return [f.name, value ?? initialState[f.name]];
-                              }),
-                          ),
+                    storedFormValues(
+                        config.fields,
+                        config.toForm
+                            ? config.toForm(data)
+                            : Object.fromEntries(
+                                  config.fields.map((f) => {
+                                      const raw = data[f.name];
+                                      const value =
+                                          raw && typeof raw === "object" && !Array.isArray(raw) && raw._id ? raw._id : raw;
+                                      return [f.name, value ?? initialState[f.name]];
+                                  }),
+                              ),
+                    ),
                 );
             })
             .catch((err) => {

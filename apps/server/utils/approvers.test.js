@@ -55,9 +55,12 @@ const run = async () => {
     });
 
   try {
-    const grandparentApprover = oid();
-    const parentApprover = oid();
-    const directApprover = oid();
+    // Approvers are real, current employees: the resolver drops anyone who
+    // cannot act (left, inactive, suspended, or no record at all).
+    const approverDept = await makeDept("Approvers");
+    const grandparentApprover = (await makeEmployee("GPApprover", approverDept._id))._id;
+    const parentApprover = (await makeEmployee("PApprover", approverDept._id))._id;
+    const directApprover = (await makeEmployee("DApprover", approverDept._id))._id;
 
     const grandparentDept = await makeDept("GP", null, { leaveApprovers: [grandparentApprover] });
     const parentDept = await makeDept("P", grandparentDept._id, { leaveApprovers: [parentApprover] });

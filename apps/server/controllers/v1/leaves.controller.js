@@ -29,6 +29,7 @@ import LeaveAllocation from "../../models/LeaveAllocation.js";
 import LeaveLedgerEntry from "../../models/LeaveLedgerEntry.js";
 import Employee from "../../models/Employee.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
+import { companyMismatch } from "../../utils/companyMatch.js";
 
 const failure = (res, error) => {
   if (error.status) {
@@ -680,6 +681,18 @@ const applyAssignmentDates = async (data) => {
   return { effectiveFrom: data.effectiveFrom, effectiveTo: data.effectiveTo };
 };
 
+/**
+ * A Leave Period (and, on an allocation, the Company) must be the employee's
+ * company — the period picker lists every company's identical-looking
+ * periods (pre-production simulation U3). Returns an error message or null.
+ */
+const employeeCompanyError = async ({ employeeId, companyId, leavePeriodId }) => {
+  const employee = await Employee.findById(employeeId).select("companyId").lean();
+  if (!employee) return "Employee not found";
+  if (companyId && String(companyId) !== String(employee.companyId)) return "Company must be the employee's company";
+  return companyMismatch(employee.companyId, [{ Model: LeavePeriod, id: leavePeriodId, label: "Leave Period" }]);
+};
+
 /** Leave Policy Assignment.md Validation Rule #2 — overlap per employee, against OTHER assignments. */
 const assertNoAssignmentOverlap = async (employeeId, effectiveFrom, effectiveTo, excludeId) => {
   const overlap = await LeavePolicyAssignment.findOne({
@@ -702,6 +715,8 @@ export const createLeavePolicyAssignment = async (req, res) => {
     }
     const employee = await Employee.findById(employeeId).lean();
     if (!employee) return res.status(404).json({ isOk: false, status: 404, message: "Employee not found" });
+    const companyError = await employeeCompanyError({ employeeId, leavePeriodId: req.body.leavePeriodId });
+    if (companyError) return res.status(400).json({ isOk: false, status: 400, message: companyError });
 
     const dates = await applyAssignmentDates(req.body);
     if (dates.error) return res.status(400).json({ isOk: false, status: 400, message: dates.error });
@@ -730,6 +745,8 @@ export const updateLeavePolicyAssignment = async (req, res) => {
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Leave Policy Assignment not found" });
 
     const merged = { ...doc.toObject(), ...req.body };
+    const companyError = await employeeCompanyError({ employeeId: merged.employeeId, leavePeriodId: merged.leavePeriodId });
+    if (companyError) return res.status(400).json({ isOk: false, status: 400, message: companyError });
     const dates = await applyAssignmentDates(merged);
     if (dates.error) return res.status(400).json({ isOk: false, status: 400, message: dates.error });
     const overlapError = await assertNoAssignmentOverlap(merged.employeeId, dates.effectiveFrom, dates.effectiveTo, leavePolicyAssignmentId);
@@ -1016,6 +1033,8 @@ export const createLeaveAllocation = async (req, res) => {
     if (new Date(fromDate) >= new Date(toDate)) {
       return res.status(400).json({ isOk: false, status: 400, message: "To date cannot be before from date" });
     }
+    const companyError = await employeeCompanyError(req.body);
+    if (companyError) return res.status(400).json({ isOk: false, status: 400, message: companyError });
     const leaveType = await LeaveType.findById(leaveTypeId).lean();
     if (!leaveType) return res.status(404).json({ isOk: false, status: 404, message: "Leave Type not found" });
     if (leaveType.isLwp) {
@@ -1078,6 +1097,9 @@ export const updateLeaveAllocation = async (req, res) => {
         message: "newLeavesAllocated cannot be changed directly on an active allocation — use POST /leave-allocations/:id/adjust",
       });
     }
+
+    const companyError = await employeeCompanyError({ ...doc.toObject(), ...req.body });
+    if (companyError) return res.status(400).json({ isOk: false, status: 400, message: companyError });
 
     for (const field of LEAVE_ALLOCATION_FIELDS) if (req.body[field] !== undefined) doc[field] = req.body[field];
     await doc.save();

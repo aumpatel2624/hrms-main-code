@@ -3,6 +3,8 @@ import { toast } from "react-toastify";
 import { MenuContext } from "../../context/MenuContext";
 import { getAllEmployees } from "../../api/employees.api";
 import { getAllLeavePolicies, getAllLeavePeriods, bulkCreatePolicyAssignments, bulkAllocateLeaves } from "../../api/leaves.api";
+import { getAllCompanies } from "../../api/organizationSetup.api";
+import { companyLabelledOptions, leavePeriodLabel } from "../../entities/picker-labels";
 import { Card, PageHeader } from "@/components/ui/page";
 import { Button } from "@/components/base/buttons/button";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
@@ -38,12 +40,12 @@ const LeaveControlPanel = () => {
     useEffect(() => {
         const load = async () => {
             try {
-                const [employeesRes, policiesRes, periodsRes] = await Promise.all([
-                    getAllEmployees(), getAllLeavePolicies(), getAllLeavePeriods(),
+                const [employeesRes, policiesRes, periodOptions] = await Promise.all([
+                    getAllEmployees(), getAllLeavePolicies(), companyLabelledOptions(getAllLeavePeriods, getAllCompanies, leavePeriodLabel)(),
                 ]);
                 setEmployees(employeesRes.data?.data ?? []);
                 setPolicies(policiesRes.data?.data ?? []);
-                setPeriods(periodsRes.data?.data ?? []);
+                setPeriods(periodOptions);
             } catch (error) {
                 console.error("Error loading Leave Control Panel data:", error);
                 toast.error("Could not load employees/policies/periods");
@@ -143,7 +145,7 @@ const LeaveControlPanel = () => {
                             onChange={(e) => setLeavePeriodId(e.target.value)}
                             options={[
                                 { value: "", label: "Use effective dates instead…" },
-                                ...periods.map((p) => ({ value: p._id, label: `${p.fromDate?.slice?.(0, 10)} – ${p.toDate?.slice?.(0, 10)}` })),
+                                ...periods,
                             ]}
                         />
                     </div>

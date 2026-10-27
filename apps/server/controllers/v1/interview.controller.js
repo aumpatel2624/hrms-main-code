@@ -167,7 +167,9 @@ export const listInterviews = async (req, res) => {
   try {
     const filter = { isActive: true, ...(await interviewScope(req)) };
     if (req.query.jobApplicantId) filter.jobApplicantId = req.query.jobApplicantId;
-    const docs = await Interview.find(filter).select("interviewTypeId jobApplicantId status scheduledOn");
+    // The feedback picker names the applicant, not just a date.
+    const docs = await Interview.find(filter).select("interviewTypeId jobApplicantId status scheduledOn")
+      .populate("jobApplicantId", "applicantName");
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listInterviews", error);

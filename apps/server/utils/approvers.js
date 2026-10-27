@@ -1,4 +1,4 @@
-import Employee from "../models/Employee.js";
+import Employee, { NO_ACCESS_STATUSES } from "../models/Employee.js";
 import Department from "../models/Department.js";
 
 /**
@@ -29,10 +29,25 @@ const assertApproverType = (approverType) => {
 };
 
 /**
+ * The ids, in order, of approvers who can still act. Someone Left, Inactive
+ * or Suspended, or whose Is Active is unticked, cannot sign in (ADR-048), so
+ * a request routed to them would wait forever.
+ */
+const currentApprovers = async (ids) => {
+  if (ids.length === 0) return [];
+  const current = await Employee.find({ _id: { $in: ids }, isActive: { $ne: false }, status: { $nin: NO_ACCESS_STATUSES } })
+    .select("_id")
+    .lean();
+  const keep = new Set(current.map((e) => String(e._id)));
+  return ids.filter((id) => keep.has(String(id)));
+};
+
+/**
  * Resolve the approver(s) for one employee.
  *
- * If the Employee's own direct approver field is set, that's the answer,
- * full stop — no department walk. Otherwise walk `parentDepartmentId`
+ * If the Employee's own direct approver field is set to someone who can
+ * still act, that's the answer, full stop — no department walk. Otherwise
+ * (unset, or the approver has left) walk `parentDepartmentId`
  * upward from the employee's department, collecting every ancestor level's
  * matching approver array — union across the WHOLE chain, not just the
  * nearest non-empty level (matches source's own dedup-across-ancestors
@@ -49,7 +64,8 @@ export const resolveApprovers = async (employeeId, approverType) => {
   if (!employee) return [];
 
   if (employee[employeeField]) {
-    return [String(employee[employeeField])];
+    const [direct] = await currentApprovers([String(employee[employeeField])]);
+    if (direct) return [direct];
   }
 
   const found = new Set();
@@ -63,7 +79,7 @@ export const resolveApprovers = async (employeeId, approverType) => {
     depth += 1;
   }
 
-  return [...found];
+  return currentApprovers([...found]);
 };
 
 /**

@@ -5,6 +5,7 @@ import { getAllSalaryStructures } from "../../api/payroll.api";
 import { getEligibleEmployeesForBulkAssignment, bulkAssignSalaryStructure } from "../../api/payroll.api";
 import { getAllCompanies, getAllEmploymentTypes, getAllEmployeeGrades } from "../../api/organizationSetup.api";
 import { getAllDepartments } from "../../api/departments.api";
+import { companyNames, salaryStructureLabel } from "../../entities/picker-labels";
 import { Card, PageHeader } from "@/components/ui/page";
 import { Button } from "@/components/base/buttons/button";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
@@ -184,7 +185,7 @@ const BulkSalaryStructureAssignmentTool = () => {
                             <div className="flex flex-col gap-1">
                                 <label className="text-sm font-medium text-secondary" htmlFor="bssa-structure">Salary Structure</label>
                                 <NativeSelect id="bssa-structure" value={salaryStructureId} onChange={(e) => setSalaryStructureId(e.target.value)}
-                                    options={[{ value: "", label: "Select a Salary Structure…" }, ...structures.map((s) => ({ value: s._id, label: `${s.payrollFrequency} — ${s.currency}` }))]} />
+                                    options={[{ value: "", label: "Select a Salary Structure…" }, ...structures.map((s) => ({ value: s._id, label: salaryStructureLabel(s, companyNames(companies)) }))]} />
                             </div>
                             <div className="flex flex-col gap-1">
                                 <label className="text-sm font-medium text-secondary" htmlFor="bssa-base">Base (optional, applied to every selected employee)</label>

@@ -10,7 +10,11 @@ import { runListQuery } from "../../utils/listQuery.js";
 import EmployeeOnboarding from "../../models/EmployeeOnboarding.js";
 import EmployeeOnboardingTemplate from "../../models/EmployeeOnboardingTemplate.js";
 import JobApplicant from "../../models/JobApplicant.js";
+import JobOffer from "../../models/JobOffer.js";
 import Employee from "../../models/Employee.js";
+import Department from "../../models/Department.js";
+import Designation from "../../models/Designation.js";
+import { companyMismatch } from "../../utils/companyMatch.js";
 import {
   getReferencingCounts,
   formatReferenceMessage,
@@ -49,6 +53,21 @@ const pickFields = (body) =>
     [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS].filter((k) => body[k] !== undefined).map((k) => [k, body[k]]),
   );
 
+// The Job Offer is this applicant's, and the onboarding's company, department
+// and designation are the offer's company. A blank company takes the offer's.
+// Returns an error message or null; fills `fields.companyId`.
+const checkOffer = async (fields) => {
+  const offer = await JobOffer.findById(fields.jobOfferId).select("jobApplicantId companyId").lean();
+  if (!offer) return "Job Offer not found";
+  if (String(offer.jobApplicantId) !== String(fields.jobApplicantId)) return "Job Offer must be for the same Job Applicant";
+  if (!fields.companyId) fields.companyId = offer.companyId;
+  if (String(fields.companyId) !== String(offer.companyId)) return "Company must be the Job Offer's company";
+  return companyMismatch(offer.companyId, [
+    { Model: Department, id: fields.departmentId, label: "Department" },
+    { Model: Designation, id: fields.designationId, label: "Designation" },
+  ], "the Job Offer's company");
+};
+
 // ------------------------------------------------------------ Employee Onboarding --
 
 export const createEmployeeOnboarding = async (req, res) => {
@@ -86,6 +105,9 @@ export const createEmployeeOnboarding = async (req, res) => {
       }
     }
 
+    const offerError = await checkOffer(fields);
+    if (offerError) return res.status(400).json({ isOk: false, status: 400, message: offerError });
+
     const applicant = await JobApplicant.findById(jobApplicantId);
     if (applicant) fields.employeeName = applicant.applicantName;
 
@@ -111,7 +133,10 @@ export const updateEmployeeOnboarding = async (req, res) => {
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee Onboarding not found" });
     }
-    Object.assign(doc, pickFields(req.body));
+    const fields = { ...doc.toObject(), ...pickFields(req.body) };
+    const offerError = await checkOffer(fields);
+    if (offerError) return res.status(400).json({ isOk: false, status: 400, message: offerError });
+    Object.assign(doc, pickFields(req.body), { companyId: fields.companyId });
     doc.boardingStatus = deriveBoardingStatus(doc.activities);
     await doc.save();
     return res.status(200).json({ isOk: true, status: 200, message: "Employee Onboarding updated successfully" });

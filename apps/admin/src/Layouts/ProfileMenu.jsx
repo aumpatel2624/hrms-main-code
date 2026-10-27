@@ -11,6 +11,8 @@ const ProfileMenu = () => {
     const navigate = useNavigate();
     const { adminData, setAdminData, role } = useContext(AuthContext);
     const name = adminData?.adminName || adminData?.employeeName;
+    // The role's own name (HR Manager), not the session's coarse tier (USER).
+    const roleLabel = adminData?.roleId?.roleName || role;
 
     const handleAction = async (key) => {
         if (key === "profile") return navigate("/profile");
@@ -27,7 +29,7 @@ const ProfileMenu = () => {
                 className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 outline-focus-ring transition hover:bg-primary_hover focus-visible:outline-2 focus-visible:outline-offset-2"
             >
                 <Avatar size="sm" alt={name || "Account"} initials={(name || role || "A").slice(0, 1).toUpperCase()} />
-                <span className="hidden text-sm font-medium text-secondary xl:inline">{role}</span>
+                <span className="hidden text-sm font-medium text-secondary xl:inline">{roleLabel}</span>
                 <ChevronDown className="size-4 text-fg-quaternary" />
             </AriaButton>
 

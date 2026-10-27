@@ -22,6 +22,7 @@ import { resolveApprovers } from "../../utils/approvers.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { buildScopeFilter } from "../../utils/scope.js";
 import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
+import { departmentEmployeeIds, inCallerDepartment } from "../../utils/attendanceScope.js";
 import { sameCalendarDay } from "../../utils/leaveDayCalculation.js";
 import { isHolidayForEmployee } from "../../utils/holidayResolution.js";
 import { saveShiftRecord } from "../../utils/shiftAssignmentWrite.js";
@@ -55,6 +56,8 @@ const shiftFailure = (res, error) => {
  * mechanism as Leave/Goal/Employee-records TEAM scoping this session.
  */
 const employeeOwnScopeFilter = async (req) => {
+  // "Own department" (F3): the caller's current department, as on Employee.
+  if (req.user?.dataScope === SCOPES.DEPARTMENT) return { employeeId: { $in: await departmentEmployeeIds(req) } };
   const employee = await resolveRequestEmployee(req);
   const teamIds = req.user?.dataScope === SCOPES.TEAM ? await getSubordinateEmployeeIds(employee?._id) : undefined;
   return buildScopeFilter({ ...req.user, id: employee?._id }, { owner: "employeeId", teamIds });
@@ -68,6 +71,7 @@ const employeeOwnScopeFilter = async (req) => {
  */
 const canAccessOwnRecord = async (req, doc) => {
   if (!req.user || req.user.role === ROLES.ADMIN) return true;
+  if (req.user.dataScope === SCOPES.DEPARTMENT) return inCallerDepartment(req, doc.employeeId);
   if (req.user.dataScope !== SCOPES.OWN && req.user.dataScope !== SCOPES.TEAM) return true;
   await resolveRequestEmployee(req);
   return String(req.user.employeeId) === String(doc.employeeId);
@@ -106,6 +110,7 @@ const decisionRefusal = (req, doc) => {
 const canViewRecord = async (req, doc) => {
   if (!req.user || req.user.role === ROLES.ADMIN) return true;
   if (String(doc.approverId || "") === String(req.user.id)) return true;
+  if (req.user.dataScope === SCOPES.DEPARTMENT) return inCallerDepartment(req, doc.employeeId);
   if (req.user.dataScope !== SCOPES.OWN && req.user.dataScope !== SCOPES.TEAM) return true;
   const employee = await resolveRequestEmployee(req);
   if (!employee) return false;

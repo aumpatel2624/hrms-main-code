@@ -161,7 +161,9 @@ export const listJobOffers = async (req, res) => {
   try {
     const filter = { isActive: true };
     if (req.query.jobApplicantId) filter.jobApplicantId = req.query.jobApplicantId;
-    const docs = await JobOffer.find(filter).select("jobApplicantId status offerDate companyId");
+    // Named for the onboarding picker: "Accepted — Kiran (Apidel)", not a bare status.
+    const docs = await JobOffer.find(filter).select("jobApplicantId status offerDate companyId")
+      .populate("jobApplicantId", "applicantName").populate("companyId", "companyName");
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listJobOffers", error);

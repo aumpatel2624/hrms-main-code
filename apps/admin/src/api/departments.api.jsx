@@ -22,8 +22,8 @@ export const createDepartment = async (data) => {
  * Get all departments
  * @returns {Promise}
  */
-export const getAllDepartments = async () => {
-    return cachedQuery(departmentKey, () => api.get(ENDPOINTS.DEPARTMENTS.BASE));
+export const getAllDepartments = async (companyId) => {
+    return cachedQuery([...departmentKey, companyId ?? "all"], () => api.get(ENDPOINTS.DEPARTMENTS.BASE, { params: companyId ? { companyId } : {} }));
 };
 
 /**

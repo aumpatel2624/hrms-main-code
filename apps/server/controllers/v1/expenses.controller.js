@@ -89,8 +89,8 @@ export const deleteExpenseClaimType = async (req, res) => { try { const doc = aw
 
 export const createExpenseClaim = async (req, res) => { try {
   let employeeId = req.body.employeeId;
-  // Self-service (own, or approver = own + the claims they approve) files for the caller only.
-  if ([SCOPES.OWN, SCOPES.APPROVER].includes(req.user?.dataScope)) { const employee = await resolveRequestEmployee(req); if (!employee) throwError(403, "No employee record linked to this user"); employeeId = employee._id; }
+  // Below "all" (own, team, approver = own + the claims they approve) files for the caller only.
+  if (req.user?.dataScope && req.user.dataScope !== SCOPES.ALL) { const employee = await resolveRequestEmployee(req); if (!employee) throwError(403, "No employee record linked to this user"); employeeId = employee._id; }
   if (!employeeId) throwError(400, "Employee is required");
   const employee = await Employee.findById(employeeId).lean(); if (!employee) throwError(404, "Employee not found");
   const { expenses, taxes, totals } = await normalizeRows(req.body.expenses, req.body.taxes);

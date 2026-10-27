@@ -73,6 +73,7 @@ import {
     resetEmployeePassword,
 } from "../api/employees.api";
 import { getAllRoles } from "../api/roles.api";
+import { companyLabelledOptions, interviewLabel, jobOfferLabel, leavePeriodLabel, ofChosenCompany, salaryStructureLabel } from "./picker-labels";
 import { getAllCountries, getStatesByCountry, getCitiesByState } from "../api/locations.api";
 import {
     createAdminUser, deleteAdminUser, getAdminUserById, updateAdminUser, searchAdminUsers, resetAdminUserPassword,
@@ -578,9 +579,9 @@ export const designationConfig = {
 
 // Reports-to needs a combined "code — name" label, unlike asOptions' single
 // labelKey — a small custom loader instead of reusing that helper.
+const employeeLabel = (x) => `${x.employeeCode} — ${x.employeeName}`;
 const employeeOptionsLoader = () =>
-    getAllEmployees().then((res) =>
-        (res.data?.data ?? []).map((x) => ({ value: x._id, label: `${x.employeeCode} — ${x.employeeName}` })));
+    getAllEmployees().then((res) => (res.data?.data ?? []).map((x) => ({ value: x._id, label: employeeLabel(x) })));
 
 export const employeeConfig = {
     filterFields: [
@@ -608,10 +609,11 @@ export const employeeConfig = {
     api: { search: searchEmployees, getById: getEmployeeById, create: createEmployee, update: updateEmployee, remove: deleteEmployee },
     lookups: {
         companyId: asOptions(getAllCompanies, "companyName"),
-        departmentId: asOptions(getAllDepartments, "departmentName"),
-        designationId: asOptions(getAllDesignations, "designationName"),
-        branchId: asOptions(getAllBranches, "branchName"),
-        reportsToId: employeeOptionsLoader,
+        // Only the chosen company's — HR sees every company, so the full lists mixed them.
+        departmentId: ofChosenCompany(getAllDepartments, (x) => x.departmentName),
+        designationId: ofChosenCompany(getAllDesignations, (x) => x.designationName),
+        branchId: ofChosenCompany(getAllBranches, (x) => x.branchName),
+        reportsToId: ofChosenCompany((companyId) => getAllEmployees({ companyId }), employeeLabel),
         employmentTypeId: asOptions(getAllEmploymentTypes, "employmentTypeName"),
         gradeId: asOptions(getAllEmployeeGrades, "gradeName"),
         healthInsuranceProviderId: asOptions(getAllEmployeeHealthInsurances, "providerName"),
@@ -627,7 +629,7 @@ export const employeeConfig = {
                 ? getCitiesByState(refId(values.stateId)).then((res) => (res.data?.data ?? []).map((x) => ({ value: x._id, label: x.cityName })))
                 : Promise.resolve([]),
     },
-    lookupDeps: ["countryId", "stateId"],
+    lookupDeps: ["countryId", "stateId", "companyId"],
     sections: [
         { id: "identity", title: "Identity" },
         { id: "account", title: "Login account", description: "Every employee has exactly one login — set it here, not on a separate screen." },
@@ -658,11 +660,11 @@ export const employeeConfig = {
         { name: "cityId", icon: MarkerPin01, label: "City", type: "select", optionsFrom: "cities", section: "location", placeholder: "Search city...", disabled: (v) => !v.stateId },
         { name: "address", type: "textarea", label: "Address", section: "location", placeholder: "Enter address" },
 
-        { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "organization", error: "Company is required!", optionsFrom: "companyId" },
-        { name: "departmentId", icon: Building07, label: "Department", type: "select", required: true, section: "organization", error: "Department is required!", optionsFrom: "departmentId" },
-        { name: "designationId", icon: User01, label: "Designation", type: "select", required: true, section: "organization", error: "Designation is required!", optionsFrom: "designationId" },
-        { name: "branchId", icon: MarkerPin01, label: "Branch", type: "select", required: true, section: "organization", error: "Branch is required!", optionsFrom: "branchId" },
-        { name: "reportsToId", icon: User01, label: "Reports To", type: "select", section: "organization", optionsFrom: "reportsToId" },
+        { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "organization", error: "Company is required!", optionsFrom: "companyId", clears: ["departmentId", "designationId", "branchId", "reportsToId"] },
+        { name: "departmentId", icon: Building07, label: "Department", type: "select", required: true, section: "organization", error: "Department is required!", optionsFrom: "departmentId", disabled: (v) => !v.companyId },
+        { name: "designationId", icon: User01, label: "Designation", type: "select", required: true, section: "organization", error: "Designation is required!", optionsFrom: "designationId", disabled: (v) => !v.companyId },
+        { name: "branchId", icon: MarkerPin01, label: "Branch", type: "select", required: true, section: "organization", error: "Branch is required!", optionsFrom: "branchId", disabled: (v) => !v.companyId },
+        { name: "reportsToId", icon: User01, label: "Reports To", type: "select", section: "organization", optionsFrom: "reportsToId", disabled: (v) => !v.companyId },
 
         { name: "status", label: "Status", type: "select", section: "employment", options: [{ value: "Active", label: "Active" }, { value: "Inactive", label: "Inactive" }, { value: "Suspended", label: "Suspended" }, { value: "Left", label: "Left" }] },
         { name: "dateOfJoining", label: "Date of Joining", type: "date", required: true, section: "employment", error: "Date of Joining is required!" },
@@ -1032,11 +1034,9 @@ export const interviewConfig = {
     toForm: (data) => ({ ...data, interviewTypeId: refId(data.interviewTypeId), jobApplicantId: refId(data.jobApplicantId), designationId: refId(data.designationId), interviewers: (data.interviewers ?? []).map(refId) }),
 };
 
-// Interview's own list rows carry no human-readable label (jobApplicantId
-// is an id, not a name) — a small custom loader instead of asOptions.
+// The applicant's name (populated by GET /interviews) and the date.
 const interviewOptionsLoader = () =>
-    getAllInterviews().then((res) =>
-        (res.data?.data ?? []).map((x) => ({ value: x._id, label: `Interview — ${x.scheduledOn?.slice?.(0, 10) ?? ""} (${x.status})` })));
+    getAllInterviews().then((res) => (res.data?.data ?? []).map((x) => ({ value: x._id, label: interviewLabel(x) })));
 
 export const interviewFeedbackConfig = {
     filterFields: [
@@ -1215,7 +1215,7 @@ export const employeeOnboardingConfig = {
     },
     lookups: {
         jobApplicantId: asOptions(getAllJobApplicants, "applicantName"),
-        jobOfferId: asOptions(getAllJobOffers, "status"),
+        jobOfferId: () => getAllJobOffers().then((res) => (res.data?.data ?? []).map((x) => ({ value: x._id, label: jobOfferLabel(x) }))),
         employeeOnboardingTemplateId: asOptions(getAllEmployeeOnboardingTemplates, "title"),
         companyId: asOptions(getAllCompanies, "companyName"),
         departmentId: asOptions(getAllDepartments, "departmentName"),
@@ -2382,7 +2382,7 @@ export const leavePolicyAssignmentConfig = {
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
         leavePolicyId: asOptions(getAllLeavePolicies, "title"),
-        leavePeriodId: () => getAllLeavePeriods().then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: `${row.fromDate?.slice?.(0, 10)} – ${row.toDate?.slice?.(0, 10)}` }))),
+        leavePeriodId: companyLabelledOptions(getAllLeavePeriods, getAllCompanies, leavePeriodLabel),
     },
     sections: [{ id: "details", title: "Details" }, { id: "status", title: "Status" }],
     fields: [
@@ -2443,7 +2443,7 @@ export const leaveAllocationConfig = {
         employeeId: asOptions(getAllEmployees, "employeeName"),
         leaveTypeId: asOptions(getAllLeaveTypes, "leaveTypeName"),
         companyId: asOptions(getAllCompanies, "companyName"),
-        leavePeriodId: () => getAllLeavePeriods().then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: `${row.fromDate?.slice?.(0, 10)} – ${row.toDate?.slice?.(0, 10)}` }))),
+        leavePeriodId: companyLabelledOptions(getAllLeavePeriods, getAllCompanies, leavePeriodLabel),
         leavePolicyId: asOptions(getAllLeavePolicies, "title"),
     },
     sections: [{ id: "details", title: "Details" }, { id: "status", title: "Status" }],
@@ -3411,7 +3411,7 @@ export const salaryStructureAssignmentConfig = {
     },
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
-        salaryStructureId: asOptions(getAllSalaryStructures, "currency"),
+        salaryStructureId: companyLabelledOptions(getAllSalaryStructures, getAllCompanies, salaryStructureLabel),
         incomeTaxSlabId: asOptions(getAllIncomeTaxSlabs, "name"),
     },
     sections: [{ id: "details", title: "Assignment details" }, { id: "computed", title: "Computed (read-only)" }],

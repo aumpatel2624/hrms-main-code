@@ -40,6 +40,7 @@ import { login } from "./auth.controller.js";
 const same = (a, b) => String(a) === String(b);
 const OPERATORS = {
   $in: (value, arg) => arg.some((x) => same(value, x)),
+  $nin: (value, arg) => !arg.some((x) => same(value, x)),
   $ne: (value, arg) => !same(value, arg),
   $lte: (value, arg) => value <= arg,
   $gte: (value, arg) => value >= arg,

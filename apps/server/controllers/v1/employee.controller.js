@@ -207,7 +207,7 @@ export const getEmployeeById = async (req, res) => {
 // Dropdown source (reports-to picker, approver pickers, and any other form
 // embedding an employee select). Not tied to the Employee screen's grant —
 // roles without that screen (Leave/Expense Approver, Interviewer) fill their
-// pickers from it too — but it is the whole staff list, so (ADR-046) the
+// pickers from it too — but it is the whole staff list, so (ADR-047) the
 // session must still resolve to a live account, and only ADMIN and a caller
 // whose Employee-screen scope is "all" (HR) get every company; anyone else
 // gets their own company's people.

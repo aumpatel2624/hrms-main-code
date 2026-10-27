@@ -176,3 +176,30 @@ export const checkPermission = (menuUrl, action) => {
   middleware.permission = { menuUrl, action };
   return middleware;
 };
+
+/**
+ * checkPermission for a route over records that name an approver (Expense
+ * Claim, Shift Request, Attendance Request): a USER the matrix refuses still
+ * passes when `namesCaller(req)` finds the record(s) the route touches naming
+ * them. They pass flagged `req.user.namedApproverOnly`, and the controller
+ * narrows them to exactly the records naming them — being named grants
+ * nothing else. Everyone else gets plain checkPermission.
+ */
+export const checkPermissionOrNamedApprover = (menuUrl, action, namesCaller) => {
+  const gate = checkPermission(menuUrl, action);
+  const middleware = async (req, res, next) => {
+    try {
+      if (req.user && req.user.role !== ROLES.ADMIN && (await resolveUserScope(req))
+        && !(await menuDataScope(req, menuUrl, action)) && (await namesCaller(req))) {
+        req.user.dataScope = SCOPES.OWN;
+        req.user.namedApproverOnly = true;
+        return next();
+      }
+    } catch (error) {
+      console.error("Error in checkPermissionOrNamedApprover:", error);
+    }
+    return gate(req, res, next);
+  };
+  middleware.permission = gate.permission;
+  return middleware;
+};

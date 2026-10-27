@@ -1,11 +1,15 @@
 import express from "express";
 import { ANY_ROLE } from "@demo-panel/shared/roles";
 import { authMiddleware } from "../../middlewares/authMiddleware.js";
-import { checkPermission } from "../../middlewares/checkPermission.js";
+import { checkPermission, checkPermissionOrNamedApprover } from "../../middlewares/checkPermission.js";
 import { allowOnlyFields } from "../../middlewares/inputValidator.js";
 import * as controller from "../../controllers/v1/shiftAttendanceTransactions.controller.js";
 
 const router = express.Router();
+
+// A request's named approver reads and decides it even without the screen in their role.
+const shiftApproverGate = (action) => checkPermissionOrNamedApprover("/shift-request", action, controller.shiftRequestNamesCaller);
+const attendanceApproverGate = (action) => checkPermissionOrNamedApprover("/attendance-request", action, controller.attendanceRequestNamesCaller);
 
 // ================================================================ ShiftRequest --
 /**
@@ -46,7 +50,7 @@ router.put("/shift-requests/:shiftRequestId", authMiddleware(ANY_ROLE), checkPer
  *       400: { description: Invalid input }
  *       403: { description: Access denied }
  */
-router.get("/shift-requests/:shiftRequestId", authMiddleware(ANY_ROLE), checkPermission("/shift-request", "read"), controller.getShiftRequestById);
+router.get("/shift-requests/:shiftRequestId", authMiddleware(ANY_ROLE), shiftApproverGate("read"), controller.getShiftRequestById);
 /**
  * @swagger
  * /shift-requests/search:
@@ -59,7 +63,7 @@ router.get("/shift-requests/:shiftRequestId", authMiddleware(ANY_ROLE), checkPer
  *       400: { description: Invalid input }
  *       403: { description: Access denied }
  */
-router.post("/shift-requests/search", authMiddleware(ANY_ROLE), checkPermission("/shift-request", "read"), controller.listShiftRequestByParams);
+router.post("/shift-requests/search", authMiddleware(ANY_ROLE), shiftApproverGate("read"), controller.listShiftRequestByParams);
 /**
  * @swagger
  * /shift-requests/{shiftRequestId}/approve:
@@ -70,7 +74,7 @@ router.post("/shift-requests/search", authMiddleware(ANY_ROLE), checkPermission(
  *     parameters: [{ in: path, name: shiftRequestId, required: true, schema: { type: string } }]
  *     responses: { 200: { description: Shift Request approved successfully }, 400: { description: Validation error } }
  */
-router.post("/shift-requests/:shiftRequestId/approve", authMiddleware(ANY_ROLE), checkPermission("/shift-request", "edit"), controller.approveShiftRequest);
+router.post("/shift-requests/:shiftRequestId/approve", authMiddleware(ANY_ROLE), shiftApproverGate("edit"), controller.approveShiftRequest);
 /**
  * @swagger
  * /shift-requests/{shiftRequestId}/reject:
@@ -81,14 +85,14 @@ router.post("/shift-requests/:shiftRequestId/approve", authMiddleware(ANY_ROLE),
  *     parameters: [{ in: path, name: shiftRequestId, required: true, schema: { type: string } }]
  *     responses: { 200: { description: Shift Request rejected }, 400: { description: Validation error } }
  */
-router.post("/shift-requests/:shiftRequestId/reject", authMiddleware(ANY_ROLE), checkPermission("/shift-request", "edit"), controller.rejectShiftRequest);
+router.post("/shift-requests/:shiftRequestId/reject", authMiddleware(ANY_ROLE), shiftApproverGate("edit"), controller.rejectShiftRequest);
 
 // =========================================================== AttendanceRequest --
 /**
  * @swagger
  * /attendance-requests:
  *   post:
- *     summary: Create an Attendance Request — create IS the action, writes/updates one Attendance row per covered day
+ *     summary: Create an Attendance Request — stays open until its named approver or HR approves it
  *     tags: [Shift & Attendance]
  *     security: [{ bearerAuth: [] }]
  *     responses: { 201: { description: Attendance Request created successfully }, 400: { description: Validation error } }
@@ -116,7 +120,7 @@ router.put("/attendance-requests/:attendanceRequestId", authMiddleware(ANY_ROLE)
  *       400: { description: Invalid input }
  *       403: { description: Access denied }
  */
-router.get("/attendance-requests/:attendanceRequestId", authMiddleware(ANY_ROLE), checkPermission("/attendance-request", "read"), controller.getAttendanceRequestById);
+router.get("/attendance-requests/:attendanceRequestId", authMiddleware(ANY_ROLE), attendanceApproverGate("read"), controller.getAttendanceRequestById);
 /**
  * @swagger
  * /attendance-requests/search:
@@ -129,12 +133,34 @@ router.get("/attendance-requests/:attendanceRequestId", authMiddleware(ANY_ROLE)
  *       400: { description: Invalid input }
  *       403: { description: Access denied }
  */
-router.post("/attendance-requests/search", authMiddleware(ANY_ROLE), checkPermission("/attendance-request", "read"), controller.listAttendanceRequestByParams);
+router.post("/attendance-requests/search", authMiddleware(ANY_ROLE), attendanceApproverGate("read"), controller.listAttendanceRequestByParams);
+/**
+ * @swagger
+ * /attendance-requests/{attendanceRequestId}/approve:
+ *   post:
+ *     summary: Approve an open Attendance Request — writes/updates one Attendance row per covered day
+ *     tags: [Shift & Attendance]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters: [{ in: path, name: attendanceRequestId, required: true, schema: { type: string } }]
+ *     responses: { 200: { description: Attendance Request approved successfully }, 400: { description: Validation error }, 403: { description: Own request, or not the named approver or HR } }
+ */
+router.post("/attendance-requests/:attendanceRequestId/approve", authMiddleware(ANY_ROLE), attendanceApproverGate("edit"), controller.approveAttendanceRequest);
+/**
+ * @swagger
+ * /attendance-requests/{attendanceRequestId}/reject:
+ *   post:
+ *     summary: Reject an open Attendance Request — no side effects
+ *     tags: [Shift & Attendance]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters: [{ in: path, name: attendanceRequestId, required: true, schema: { type: string } }]
+ *     responses: { 200: { description: Attendance Request rejected }, 400: { description: Validation error }, 403: { description: Own request, or not the named approver or HR } }
+ */
+router.post("/attendance-requests/:attendanceRequestId/reject", authMiddleware(ANY_ROLE), attendanceApproverGate("edit"), controller.rejectAttendanceRequest);
 /**
  * @swagger
  * /attendance-requests/{attendanceRequestId}/cancel:
  *   post:
- *     summary: Cancel an active Attendance Request — soft-deletes the specific Attendance rows it created
+ *     summary: Cancel an open or active Attendance Request — soft-deletes the specific Attendance rows it created
  *     tags: [Shift & Attendance]
  *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: attendanceRequestId, required: true, schema: { type: string } }]

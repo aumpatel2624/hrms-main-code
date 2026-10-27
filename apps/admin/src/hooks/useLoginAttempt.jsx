@@ -4,7 +4,7 @@ import { LOGIN } from '@demo-panel/shared/auth';
 /**
  * Custom hook for managing login attempt status
  * Handles the lock countdown timer, fed from the login response — the
- * status-by-email endpoint is admin-only (ADR-046), so the form no longer
+ * status-by-email endpoint is admin-only (ADR-047), so the form no longer
  * asks for an account's status before signing in.
  * @returns {Object} Login attempt status and formatted time
  */

@@ -242,6 +242,22 @@ const canAccessCompensatoryLeaveRequest = async (req, doc) => {
   return allowedIds.includes(String(doc.employeeId));
 };
 
+/**
+ * Why req.user may NOT approve or reject this Leave Application /
+ * Compensatory Leave Request, or null when they may. Seeing a request
+ * (canAccess… above) is not enough: nobody decides their own request — not
+ * even HR — and below "all" scope only the request's named Leave Approver,
+ * or another approver the employee resolves to, may decide it.
+ */
+const leaveDecisionRefusal = async (req, doc) => {
+  if (!req.user || req.user.role === ROLES.ADMIN) return null;
+  if (String(req.user.id) === String(doc.employeeId)) return "You cannot approve or reject your own leave request";
+  if ((req.user.dataScope || SCOPES.ALL) === SCOPES.ALL) return null;
+  if (String(doc.leaveApproverId || "") === String(req.user.id)) return null;
+  const approvers = await resolveApprovers(doc.employeeId, "leave");
+  return approvers.includes(String(req.user.id)) ? null : "Only the named Leave Approver or HR can approve or reject this leave request";
+};
+
 export const createCompensatoryLeaveRequest = async (req, res) => {
   try {
     // Issue #34 security fix: a self-service caller can only ever request
@@ -359,12 +375,13 @@ export const getCompensatoryLeaveRequestById = async (req, res) => {
     if (!(await canAccessCompensatoryLeaveRequest(req, doc))) {
       return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to view this Compensatory Leave Request" });
     }
+    const refusal = await leaveDecisionRefusal(req, doc);
     await doc.populate([
       { path: "employeeId", select: "employeeName employeeCode" },
       { path: "leaveTypeId", select: "leaveTypeName" },
       { path: "leaveAllocationId", select: "fromDate toDate" },
     ]);
-    return res.status(200).json({ isOk: true, status: 200, data: doc });
+    return res.status(200).json({ isOk: true, status: 200, data: { ...doc.toObject(), canDecide: !refusal } });
   } catch (error) {
     console.log("Error in getCompensatoryLeaveRequestById", error);
     return failure(res, error);
@@ -417,6 +434,8 @@ export const approveCompensatoryLeaveRequest = async (req, res) => {
   try {
     const doc = await CompensatoryLeaveRequest.findById(req.params.compensatoryLeaveRequestId);
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Compensatory Leave Request not found" });
+    const refusal = await leaveDecisionRefusal(req, doc);
+    if (refusal) return res.status(403).json({ isOk: false, status: 403, message: refusal });
     if (doc.status !== "open") {
       return res.status(400).json({ isOk: false, status: 400, message: `Only an open request can be approved (current status: ${doc.status})` });
     }
@@ -526,6 +545,8 @@ export const rejectCompensatoryLeaveRequest = async (req, res) => {
   try {
     const doc = await CompensatoryLeaveRequest.findById(req.params.compensatoryLeaveRequestId);
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Compensatory Leave Request not found" });
+    const refusal = await leaveDecisionRefusal(req, doc);
+    if (refusal) return res.status(403).json({ isOk: false, status: 403, message: refusal });
     if (doc.status !== "open") {
       return res.status(400).json({ isOk: false, status: 400, message: `Only an open request can be rejected (current status: ${doc.status})` });
     }
@@ -725,12 +746,12 @@ const runLeaveApplicationValidation = async (data, { excludeId = null, actingUse
     if (resolvedApprovers.length === 0) {
       return { error: { status: 400, message: "Please set a Leave Approver for this Employee or their Department" } };
     }
-    [leaveApproverId] = resolvedApprovers;
+    leaveApproverId = resolvedApprovers.find((id) => id !== String(employeeId)) ?? resolvedApprovers[0];
   } else if (resolvedApprovers.length > 0 && !resolvedApprovers.includes(String(leaveApproverId))) {
     return { error: { status: 400, message: "The supplied Leave Approver is not a resolved approver for this Employee" } };
   }
-  const approverEmployee = await Employee.findOne({ userId: leaveApproverId }).lean();
-  if (approverEmployee && String(approverEmployee._id) === String(employeeId)) {
+  // ADR-040: an approver id is the approver's own Employee id.
+  if (String(leaveApproverId) === String(employeeId)) {
     return { error: { status: 400, message: "Self-approval for leaves is not allowed" } };
   }
 
@@ -843,12 +864,13 @@ export const getLeaveApplicationById = async (req, res) => {
     // hex id, so passing it into getLeaveBalance's ObjectId constructor
     // throws.
     const balance = await getLeaveBalance(doc.employeeId, doc.leaveTypeId, new Date());
+    const refusal = await leaveDecisionRefusal(req, doc);
     await doc.populate([
       { path: "employeeId", select: "employeeName employeeCode" },
       { path: "leaveTypeId", select: "leaveTypeName" },
       { path: "companyId", select: "companyName" },
     ]);
-    return res.status(200).json({ isOk: true, status: 200, data: { ...doc.toObject(), currentBalance: balance } });
+    return res.status(200).json({ isOk: true, status: 200, data: { ...doc.toObject(), currentBalance: balance, canDecide: !refusal } });
   } catch (error) {
     console.log("Error in getLeaveApplicationById", error);
     return failure(res, error);
@@ -874,7 +896,10 @@ export const leaveApplicationScope = async (req) => {
 
 export const listLeaveApplicationByParams = async (req, res) => {
   try {
-    const scopeFilter = await leaveApplicationScope(req);
+    // A named Leave Approver also sees every application naming them, so
+    // they can find what leaveDecisionRefusal lets them decide.
+    const ownScope = await leaveApplicationScope(req);
+    const scopeFilter = ownScope && { $or: [ownScope, { leaveApproverId: new mongoose.Types.ObjectId(String(req.user.id)) }] };
 
     const list = await runListQuery(LeaveApplication, req.body, {
       searchRefs: [employeeSearch()],
@@ -916,6 +941,8 @@ export const approveLeaveApplication = async (req, res) => {
     if (!(await canAccessLeaveApplication(req, doc))) {
       return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to act on this Leave Application" });
     }
+    const refusal = await leaveDecisionRefusal(req, doc);
+    if (refusal) return res.status(403).json({ isOk: false, status: 403, message: refusal });
     if (doc.status !== "open") {
       return res.status(400).json({ isOk: false, status: 400, message: `Only an open application can be approved (current status: ${doc.status})` });
     }
@@ -1015,6 +1042,8 @@ export const rejectLeaveApplication = async (req, res) => {
     if (!(await canAccessLeaveApplication(req, doc))) {
       return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to act on this Leave Application" });
     }
+    const refusal = await leaveDecisionRefusal(req, doc);
+    if (refusal) return res.status(403).json({ isOk: false, status: 403, message: refusal });
     if (doc.status !== "open") {
       return res.status(400).json({ isOk: false, status: 400, message: `Only an open application can be rejected (current status: ${doc.status})` });
     }

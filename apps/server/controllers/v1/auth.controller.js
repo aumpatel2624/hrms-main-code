@@ -66,7 +66,7 @@ export const login = async (req, res) => {
       });
     }
 
-    // ADR-046: an unknown email and a wrong password get the same answer, so
+    // ADR-047: an unknown email and a wrong password get the same answer, so
     // the login form cannot be used to find out which accounts exist.
     const invalidCredentials = () => res.status(401).json({
       isOk: false,
@@ -117,6 +117,18 @@ export const login = async (req, res) => {
       }
 
       return invalidCredentials();
+    }
+
+    // An offboarded employee keeps their record (payroll, full-and-final) but
+    // not their access. Checked after the password, so the answer never tells
+    // a stranger which accounts exist or have left.
+    if (role === ROLES.USER && ["Left", "Inactive"].includes(account.status)) {
+      return res.status(403).json({
+        isOk: false,
+        message: "Your account is no longer active. Please contact HR.",
+        error: "Account inactive",
+        status: 403,
+      });
     }
 
     await authService.recordSuccessfulLogin(
@@ -254,7 +266,7 @@ export const getLoginStatus = async (req, res) => {
 };
 
 /**
- * POST /auth/login-status-by-email — admin only (ADR-046): it reports any
+ * POST /auth/login-status-by-email — admin only (ADR-047): it reports any
  * account's failed attempts and lock state.
  */
 export const getLoginStatusByEmail = async (req, res) => {

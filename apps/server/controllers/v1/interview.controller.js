@@ -4,7 +4,7 @@
  * is the one path allowed to change scheduledOn/fromTime/toTime after
  * creation (they're otherwise treated as set-once, matching source).
  *
- * ADR-046: below an "all" data scope (HR, ADMIN) a caller — the Interviewer
+ * ADR-047: below an "all" data scope (HR, ADMIN) a caller — the Interviewer
  * role — reaches only the interviews they are listed on in `interviewers`.
  */
 import { ROLES } from "@demo-panel/shared/roles";
@@ -195,7 +195,7 @@ export const listInterviewsByParams = async (req, res) => {
           },
         },
         // The joined applicant carries contact details and HR's notes — only
-        // the two names above are for the browser (ADR-046).
+        // the two names above are for the browser (ADR-047).
         { $project: { interviewType: 0, jobApplicant: 0 } },
       ],
     });

@@ -14,7 +14,7 @@
  * client-side).
  *
  * `EmployeePerformanceFeedback`: a folded-docstatus (draft/submitted/
- * cancelled) doctype. Confidential (ADR-046): below an "all" data scope a
+ * cancelled) doctype. Confidential (ADR-047): below an "all" data scope a
  * caller sees only feedback they are the subject or the named reviewer of,
  * and changes only feedback they reviewed — source's unrestricted Employee
  * grant let any employee read and edit every colleague's review.
@@ -588,7 +588,7 @@ export const recomputeAppraisalFeedbackScore = async (appraisalId) => {
   await appraisal.save();
 };
 
-// ADR-046: feedback is confidential. A caller whose data scope on this
+// ADR-047: feedback is confidential. A caller whose data scope on this
 // screen is "all" (HR, ADMIN) sees every row of their company as before;
 // anyone else sees only feedback they are the subject or the named reviewer
 // of — a manager's team scope does not widen it — and may change only

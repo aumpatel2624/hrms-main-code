@@ -4,7 +4,7 @@
  * parent Interview, not before its scheduledOn date, one feedback per
  * interviewer per interview (also a DB unique index — belt and suspenders).
  *
- * ADR-046: below an "all" data scope (HR, ADMIN) a caller — the Interviewer
+ * ADR-047: below an "all" data scope (HR, ADMIN) a caller — the Interviewer
  * role — reaches only their own feedback and submits only as themselves.
  */
 import { ROLES } from "@demo-panel/shared/roles";

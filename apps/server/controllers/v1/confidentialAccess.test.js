@@ -1,4 +1,4 @@
-// ADR-046: the remaining leaks from the pre-production simulation.
+// ADR-047: the remaining leaks from the pre-production simulation.
 //   L2  Employee Performance Feedback — only the reviewee, the reviewer and
 //       an "all"-scoped caller (HR, ADMIN) read a review; only the reviewer
 //       and HR/ADMIN change it.

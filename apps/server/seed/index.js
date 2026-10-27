@@ -1174,7 +1174,7 @@ const seedRecruitmentMasters = async () => {
  * whole funnel EXCEPT Interview Feedback, where — matching source's own
  * permission table exactly — both are read-only and only Interviewer
  * writes. Interviewer gets full CRUD on Interview and Interview Feedback
- * only, same as source, with `dataScope: SCOPES.OWN` (ADR-046): the
+ * only, same as source, with `dataScope: SCOPES.OWN` (ADR-047): the
  * controllers narrow it to the interviews the caller is assigned to and
  * their own feedback. Unscoped, it fell through to the role's "all" and
  * sent every interviewer every company's interviews.
@@ -2094,7 +2094,7 @@ const seedPayrollRoles = async () => {
  * Employee.reportsToId — degrades to exactly "own" with no reports). The
  * real per-action pattern this matches is `EmployeeTaxExemptionDeclaration`'s
  * `fullNoDelete`, ADR-030. `/employee-performance-feedback` gives Employee
- * `dataScope: SCOPES.OWN` (ADR-046): source's unscoped grant fell through to
+ * `dataScope: SCOPES.OWN` (ADR-047): source's unscoped grant fell through to
  * the role's "all" and let any employee read and edit every colleague's
  * review. The controller narrows anything below "all" to feedback the caller
  * is the subject or reviewer of; HR User read-only and HR Manager unchanged.
@@ -2132,7 +2132,7 @@ const seedPerformanceRoles = async () => {
   };
 
   // dataScope: SCOPES.TEAM on `/goal` was SCOPES.OWN, and Employee's
-  // `/employee-performance-feedback` row had none (ADR-046) — a wrong/stale
+  // `/employee-performance-feedback` row had none (ADR-047) — a wrong/stale
   // dataScope is a security/visibility gap, not an admin customisation to
   // preserve, so correct it in place on re-seed (same targeted-exception
   // pattern as issue #34's fixDataScope in seedTravelRoles).

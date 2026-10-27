@@ -14,7 +14,8 @@ import {
 } from "../../utils/referenceHelper.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { buildScopeFilter } from "../../utils/scope.js";
-import { departmentEmployeeIds, inCallerDepartment } from "../../utils/attendanceScope.js";
+import { departmentEmployeeIds } from "../../utils/attendanceScope.js";
+import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
 import { SCOPES } from "@demo-panel/shared/scopes";
 import { ROLES } from "@demo-panel/shared/roles";
 
@@ -269,24 +270,34 @@ const assertActiveEmployee = async (employeeId) => {
  * Issue #34 security fix: Travel Request's Employee grant never carried a
  * dataScope at all (fixed to SCOPES.OWN in seed/index.js), so this doctype
  * had no ownership enforcement anywhere — create/update trusted employeeId
- * from the body, get-by-id and the list had no scoping. Mirrors
- * shiftAttendanceTransactions.controller.js's canAccessOwnRecord/
- * employeeOwnScopeFilter shape exactly.
+ * from the body, get-by-id and the list had no scoping.
+ *
+ * One scope for the list and by id: "own" the caller's, "team" the caller's
+ * plus their reportsToId chain (as Shift/Attendance Requests and Leave), and
+ * "approver" the caller's plus who they approve for — there is no travel
+ * approver, so that is the caller's own. "Own department" (F3): the caller's
+ * current department, as on Employee.
  */
+const travelRequestScope = async (req) => {
+  if (req.user?.dataScope === SCOPES.DEPARTMENT) return { employeeId: { $in: await departmentEmployeeIds(req) } };
+  const ownEmployee = await resolveRequestEmployee(req);
+  const teamIds = req.user?.dataScope === SCOPES.TEAM ? await getSubordinateEmployeeIds(ownEmployee?._id) : undefined;
+  return buildScopeFilter({ ...req.user, id: ownEmployee?._id }, { owner: "employeeId", teamIds });
+};
+
 const canAccessOwnTravelRequest = async (req, doc) => {
   if (!req.user || req.user.role === ROLES.ADMIN) return true;
-  if (req.user.dataScope === SCOPES.DEPARTMENT) return inCallerDepartment(req, doc.employeeId);
-  if (req.user.dataScope !== SCOPES.OWN) return true;
-  await resolveRequestEmployee(req);
-  return String(req.user.employeeId) === String(doc.employeeId);
+  const scope = await travelRequestScope(req);
+  return !scope || Boolean(await TravelRequest.exists({ _id: doc._id, ...scope }));
 };
 
 export const createTravelRequest = async (req, res) => {
   try {
-    // A self-service caller can only ever request travel for themselves —
-    // the client-supplied employeeId is trusted only for HR User/HR Manager.
+    // Below "all" (own, department, team, approver) a caller can only ever
+    // request travel for themselves — the client-supplied employeeId is
+    // trusted only for HR User/HR Manager.
     let employeeId = req.body.employeeId;
-    if (req.user?.dataScope === SCOPES.OWN) {
+    if (req.user?.dataScope && req.user.dataScope !== SCOPES.ALL) {
       const ownEmployee = await resolveRequestEmployee(req);
       if (!ownEmployee) return res.status(403).json({ isOk: false, status: 403, message: "No employee record linked to this user" });
       employeeId = ownEmployee._id;
@@ -395,11 +406,7 @@ export const listTravelRequestByParams = async (req, res) => {
     // Issue #34 security fix: this list had no scope filter at all — an
     // Employee (dataScope OWN, per the seed fix) saw every employee's
     // Travel Requests, not just their own.
-    const ownEmployee = await resolveRequestEmployee(req);
-    // "Own department" (F3): the caller's current department, as on Employee.
-    const scopeFilter = req.user?.dataScope === SCOPES.DEPARTMENT
-      ? { employeeId: { $in: await departmentEmployeeIds(req) } }
-      : buildScopeFilter({ ...req.user, id: ownEmployee?._id }, { owner: "employeeId" });
+    const scopeFilter = await travelRequestScope(req);
 
     const list = await runListQuery(TravelRequest, req.body, {
       searchRefs: [employeeSearch()],

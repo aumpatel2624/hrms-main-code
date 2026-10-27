@@ -4573,3 +4573,50 @@ consumer; single-branch build
   code. No `widgetSources` change: no model changed.
 - **Deviates from convention**: no.
 
+
+### ADR-046 — Approvals and attendance integrity: no self-approval, no back-dated punches, requests wait for an approver
+
+- **Date**: 2026-10-27
+- **Status**: accepted
+- **Context**: The pre-production simulation (five companies, driven in the captain's browser) found that
+  approvals and attendance could be self-granted: an employee approved her own Casual Leave (the
+  create-time self-approval check looked the approver up by `Employee.userId`, a field gone since ADR-040,
+  and approve/reject only checked that the caller could *see* the application); any employee could add a
+  check-in for any past time, and a team lead's punch for a team member was silently filed under the team
+  lead; an On Duty Attendance Request turned an absent day into a paid Present day on create, with no
+  approver (ADR-025's "create IS the action"); the Expense Approver named on a claim, and the named Shift
+  Request approver, could not see or decide those records when their role lacked the screen, and any
+  employee with `edit` on Shift Request could approve any request, their own included; Left and Inactive
+  employees could still sign in (login checked only `isActive`).
+- **Decision**:
+  - **Deciding a request is not seeing it.** Approve/reject on Leave Application, Compensatory Leave
+    Request, Shift Request (including the Shift Assignment Tool's bulk processing) and Attendance Request is
+    refused for the requester themself — HR included — and, below `all` scope, for anyone but the request's
+    named approver (`leaveApproverId` or another resolved leave approver; `approverId` on shift and
+    attendance requests). Expense Claim approve/reject is refused on one's own claim (an employee could
+    name themselves `expenseApproverId`). Each detail endpoint returns `canDecide`, and the admin screens
+    show Approve/Reject only when it is true. A reporting-line manager who is not the named approver no
+    longer decides (they still see their team's requests as before).
+  - **Named approvers reach what names them.** `checkPermissionOrNamedApprover` (middlewares) wraps the
+    list/search, detail and approve/reject routes of Expense Claim, Shift Request and Attendance Request: a
+    user the matrix refuses passes only if the record(s) the route touches name them, flagged
+    `namedApproverOnly`, and the controller narrows them to exactly those records. Users with access see
+    their usual scope plus the records naming them; Leave Application's list does the same for
+    `leaveApproverId`. Submit, cancel, mark-paid, edit and delete keep plain `checkPermission`.
+  - **Check-ins**: below `all` scope a punch is the caller's own (another employee's id → 403) and is
+    stamped with the server's time; a typed time more than 2 minutes from now → 400. `all`-scope callers
+    (HR, CEO tier) and ADMIN are unchanged. Past days are corrected through Attendance Request or HR.
+  - **Attendance Request** gains `approverId` (the employee's resolved Shift Approver, else null — then
+    only HR decides) and two statuses: `open` (new default) and `rejected`. `approve` marks attendance and
+    sets `active`, so `active` keeps its old meaning ("applied") and existing rows need no backfill.
+    `cancel` works from `open` or `active`. `widgetSources` gains `approverId` as a filter.
+  - **Leavers**: login refuses an employee whose `status` is Left or Inactive (403, "Your account is no
+    longer active"), checked after the password so it reveals nothing to a stranger. Existing sessions are
+    left alone.
+- **Consequences**: an employee whose only resolved leave approver is themselves cannot apply until HR
+  sets another approver. When nothing resolves, the applicant may still type any colleague as Leave
+  Approver (the F4 workaround), and that colleague can now decide it — a product decision for when
+  approver fields get a UI. Attendance Request's approver reuses the Shift Approver rather than a new
+  field on Employee. A Suspended employee can still sign in, and a leaver's open session lasts until it
+  expires. Tested by `controllers/v1/approvalIntegrity.test.js`.
+- **Deviates from convention**: no. Supersedes ADR-025's "create IS the action" for Attendance Request.

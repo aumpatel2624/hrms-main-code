@@ -2,6 +2,7 @@ import { searchPayrollEntries, searchSalaryWithholdings, createSalaryWithholding
 import { createShiftType, getAllShiftTypes, getShiftTypeById, updateShiftType, deleteShiftType, searchShiftTypes, createShiftLocation, getAllShiftLocations, getShiftLocationById, updateShiftLocation, deleteShiftLocation, searchShiftLocations, createShiftAssignment, getAllShiftAssignments, getShiftAssignmentById, updateShiftAssignment, deleteShiftAssignment, searchShiftAssignments, createShiftSchedule, getAllShiftSchedules, getShiftScheduleById, updateShiftSchedule, deleteShiftSchedule, searchShiftSchedules, createShiftScheduleAssignment, getAllShiftScheduleAssignments, getShiftScheduleAssignmentById, updateShiftScheduleAssignment, deleteShiftScheduleAssignment, searchShiftScheduleAssignments, createEmployeeCheckin, getAllEmployeeCheckins, getEmployeeCheckinById, updateEmployeeCheckin, deleteEmployeeCheckin, searchEmployeeCheckins,
     createShiftRequest, getShiftRequestById, updateShiftRequest, searchShiftRequests, approveShiftRequest, rejectShiftRequest,
     createAttendanceRequest, getAttendanceRequestById, updateAttendanceRequest, searchAttendanceRequests, cancelAttendanceRequest,
+    approveAttendanceRequest, rejectAttendanceRequest,
 } from "../api/shiftAttendance.api";
 import {
     createSalaryComponent, getSalaryComponentById, updateSalaryComponent, deleteSalaryComponent, searchSalaryComponents, getAllSalaryComponents,
@@ -2641,8 +2642,10 @@ export const compensatoryLeaveRequestConfig = {
         { name: "reason", label: "Reason", type: "textarea", required: true, section: "details", error: "Reason is required!" },
         { name: "status", label: "Status", type: "select", section: "status", options: ["open", "approved", "rejected"], disabled: () => true, hint: "Set by the Approve/Reject actions below." },
     ],
+    // `canDecide` comes from the server: false for the requester themself and
+    // for anyone who is neither the named Leave Approver nor HR.
     renderExtra: ({ mode, id, values }) => (
-        mode === "edit" && id && values.status === "open" && (
+        mode === "edit" && id && values.status === "open" && values.canDecide && (
             <>
                 <SimpleActionButton
                     label="Approve" description="Validates the worked range against the Holiday List and Attendance, then grants the resulting leave."
@@ -2710,7 +2713,8 @@ export const leaveApplicationConfig = {
     renderExtra: ({ mode, id, values }) => (
         mode === "edit" && id && (
             <>
-                {values.status === "open" && (
+                {/* `canDecide` comes from the server: false for the applicant themself and for anyone who is neither the named Leave Approver nor HR. */}
+                {values.status === "open" && values.canDecide && (
                     <>
                         <SimpleActionButton
                             label="Approve" description="Re-checks the leave balance, creates/updates Attendance rows for the range, and writes 1-2 Leave Ledger Entry rows."
@@ -3086,7 +3090,7 @@ export const employeeCheckinConfig = {
         { name: "offshift", label: "Off shift", type: "checkbox", section: "details", hideIn: ["add", "edit"] },
         { name: "attendanceLinked", label: "Linked to attendance", type: "checkbox", section: "details", hideIn: ["add", "edit"] },
         { name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" },
-        { name: "time", label: "Time", section: "details", type: "datetime-local", disabled: (values) => Boolean(values.attendanceId), hint: "India time (Asia/Kolkata), the same clock as the register. Leave blank to use the current time." },
+        { name: "time", label: "Time", section: "details", type: "datetime-local", disabled: (values) => Boolean(values.attendanceId), hint: "India time (Asia/Kolkata), the same clock as the register. Leave blank to use the current time — only HR can record a different time; correct an earlier day with an Attendance Request." },
         { name: "logType", label: "Log type", section: "details", type: "select", options: ["IN", "OUT", null]},
         { name: "skipAutoAttendance", label: "Skip auto attendance", section: "details", type: "checkbox", default: false },
         { name: "latitude", label: "Latitude", section: "details", type: "number" },
@@ -3142,8 +3146,10 @@ export const shiftRequestConfig = {
         { name: "approverId", label: "Shift approver (leave blank to auto-resolve)", section: "details", type: "select", optionsFrom: "approverId" },
         { name: "status", label: "Status", section: "status", type: "select", options: ["open", "approved", "rejected"], disabled: () => true, hint: "Set by the Approve/Reject actions below." },
     ],
+    // `canDecide` comes from the server: false for the requester themself and
+    // for anyone who is neither the named Shift Approver nor HR.
     renderExtra: ({ mode, id, values }) => (
-        mode === "edit" && id && values.status === "open" && (
+        mode === "edit" && id && values.status === "open" && values.canDecide && (
             <>
                 <SimpleActionButton
                     label="Approve" description="Creates the real Shift Assignment for this employee, date range and shift type — through the same write-locked path as a manual assignment."
@@ -3182,7 +3188,7 @@ export const shiftRequestConfig = {
 
 export const attendanceRequestConfig = {
     key: "attendance-request", path: "/attendance-request", section: "Shift & Attendance", singular: "Attendance Request", plural: "Attendance Requests",
-    description: "Create is the action — saving writes or updates one Attendance record per day in the range (skipping holidays unless Include Holidays is checked, and skipping any day already covered by an approved leave). Cancel reverses exactly the Attendance rows this request created.",
+    description: "A request stays open until the named approver (the employee's Shift Approver) or HR approves it. Approving writes or updates one Attendance record per day in the range (skipping holidays unless Include Holidays is checked, and skipping any day already covered by an approved leave). Cancel reverses exactly the Attendance rows this request created.",
     api: { search: searchAttendanceRequests, getById: getAttendanceRequestById, create: createAttendanceRequest, update: updateAttendanceRequest },
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
@@ -3197,20 +3203,41 @@ export const attendanceRequestConfig = {
         { name: "halfDayDate", label: "Half day date", section: "details", type: "date", disabled: (values) => !values.halfDay },
         { name: "includeHolidays", label: "Include holidays", section: "details", type: "checkbox", hint: "Select if any of the days in this request are holidays." },
         { name: "explanation", label: "Explanation", section: "details", type: "textarea" },
-        { name: "status", label: "Status", section: "status", type: "select", options: ["active", "cancelled"], disabled: () => true, hint: "Set by the Cancel action below." },
+        { name: "status", label: "Status", section: "status", type: "select", options: ["open", "active", "rejected", "cancelled"], disabled: () => true, hint: "open until approved; active once approved and applied. Set by the actions below." },
     ],
+    // `canDecide` comes from the server: false for the requester themself and
+    // for anyone who is neither the named approver nor HR.
     renderExtra: ({ mode, id, values }) => (
-        mode === "edit" && id && values.status === "active" && (
-            <SimpleActionButton
-                label="Cancel" description="Soft-deletes the specific Attendance rows this request created."
-                onRun={() => cancelAttendanceRequest(id)}
-                onResult={() => window.location.reload()}
-            />
+        mode === "edit" && id && (
+            <>
+                {values.status === "open" && values.canDecide && (
+                    <>
+                        <SimpleActionButton
+                            label="Approve" description="Marks attendance for every day in the range."
+                            onRun={() => approveAttendanceRequest(id)}
+                            onResult={() => window.location.reload()}
+                        />
+                        <SimpleActionButton
+                            label="Reject" description="No side effects — no attendance was marked."
+                            onRun={() => rejectAttendanceRequest(id)}
+                            onResult={() => window.location.reload()}
+                        />
+                    </>
+                )}
+                {["open", "active"].includes(values.status) && (
+                    <SimpleActionButton
+                        label="Cancel" description="Withdraws the request and soft-deletes any Attendance rows it created."
+                        onRun={() => cancelAttendanceRequest(id)}
+                        onResult={() => window.location.reload()}
+                    />
+                )}
+            </>
         )
     ),
     filterFields: [
         { name: "employeeId", label: "Employee id", type: "objectId" },
         { name: "companyId", label: "Company id", type: "objectId" },
+        { name: "approverId", label: "Approver id", type: "objectId" },
         { name: "status", label: "Status", type: "string" },
         { name: "reason", label: "Reason", type: "string" },
         { name: "fromDate", label: "From date", type: "date" },

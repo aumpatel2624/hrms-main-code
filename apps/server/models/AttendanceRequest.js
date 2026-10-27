@@ -1,14 +1,15 @@
 import mongoose from "mongoose";
 
 /**
- * ADR-025 (module complete — second/transactional fork). Docstatus folding
- * (ADR-016): "create IS the action" — there is no separate approval step
- * (matching source's own submit-does-everything shape), so create directly
- * writes/updates one `Attendance` row per covered day. `status` here is
- * just active/cancelled — `cancel` soft-deletes the specific `Attendance`
- * rows this request created (tracked via `Attendance.attendanceRequestId`),
- * reusing `LeaveApplication.cancel`'s soft-delete-reversal pattern
- * (ADR-024).
+ * ADR-025 (module complete — second/transactional fork), with an approval
+ * step added after the pre-production simulation: create records an "open"
+ * request naming `approverId` (the employee's resolved Shift Approver, or
+ * null — then only HR decides); `approve` writes/updates one `Attendance`
+ * row per covered day and sets "active"; `reject` sets "rejected". "active"
+ * keeps its old meaning (applied), so rows written before the approval step
+ * need no backfill. `cancel` soft-deletes the specific `Attendance` rows this
+ * request created (tracked via `Attendance.attendanceRequestId`), reusing
+ * `LeaveApplication.cancel`'s soft-delete-reversal pattern (ADR-024).
  */
 const AttendanceRequestSchema = new mongoose.Schema(
   {
@@ -33,10 +34,16 @@ const AttendanceRequestSchema = new mongoose.Schema(
       required: true,
     },
     explanation: { type: String, trim: true, default: "" },
+    approverId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+      required: false,
+      default: null,
+    },
     status: {
       type: String,
-      enum: ["active", "cancelled"],
-      default: "active",
+      enum: ["open", "active", "rejected", "cancelled"],
+      default: "open",
       required: true,
     },
     isActive: {
@@ -51,6 +58,7 @@ const AttendanceRequestSchema = new mongoose.Schema(
 AttendanceRequestSchema.index({ employeeId: 1, status: 1 });
 AttendanceRequestSchema.index({ companyId: 1 });
 AttendanceRequestSchema.index({ status: 1 });
+AttendanceRequestSchema.index({ approverId: 1 });
 AttendanceRequestSchema.index({ reason: 1 });
 AttendanceRequestSchema.index({ fromDate: 1 });
 AttendanceRequestSchema.index({ toDate: 1 });

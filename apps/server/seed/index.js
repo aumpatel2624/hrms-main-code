@@ -53,6 +53,7 @@ import GratuityRule from "../models/GratuityRule.js";
 import LeaveType from "../models/LeaveType.js";
 import { PERMISSION_KEYS } from "@demo-panel/shared/permissions";
 import { SCOPES } from "@demo-panel/shared/scopes";
+import { seedApproverSelfService } from "./approver-self-service.js";
 
 dotenv.config();
 
@@ -2241,6 +2242,7 @@ const run = async () => {
   await seedPayrollRoles();
   await seedPerformanceRoles();
   await seedExpenseRoles();
+  await seedApproverSelfService();
   await seedRegionalGratuityRules();
   await seedGeographyData();
 

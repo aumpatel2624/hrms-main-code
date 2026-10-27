@@ -120,9 +120,10 @@ const harsh = person("harsh", roles.Employee, apidel, lead._id); // the intern
 const hr = person("hema", roles["HR Head"]);
 const tushar = person("tushar", roles.Interviewer);
 const nuvaPerson = person("neel", roles.Employee, nuva);
-const admin = { _id: oid(), role: "ADMIN" };
+const admin = { _id: oid(), role: "ADMIN", isActive: true };
 const employees = [lead, ekta, harsh, hr, tushar, nuvaPerson];
 stub(Employee, employees);
+stub(AdminUser, [admin]); // authMiddleware re-reads the account
 
 // The tier matrices (Employee "own", Team Lead "team", HR Head "all") plus
 // the Interviewer role as the base seed now grants it: own-scoped Interview

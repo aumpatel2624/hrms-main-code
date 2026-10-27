@@ -197,6 +197,10 @@ const unwrapListRows = (data) => {
 const asOptions = (loader, labelKey) => () =>
     loader().then((res) => unwrapListRows(res.data?.data).map((x) => ({ value: x._id, label: x[labelKey] })));
 
+// Approver / reviewer / interviewer pickers: nobody who has left, is inactive
+// or is suspended (the server filters on ?current=true).
+const getCurrentEmployees = () => getAllEmployees({ current: true });
+
 /**
  * The id of a relation, however it arrived.
  *
@@ -1051,7 +1055,7 @@ export const interviewFeedbackConfig = {
     api: { search: searchInterviewFeedbacks, getById: getInterviewFeedbackById, create: createInterviewFeedback, update: updateInterviewFeedback, remove: deleteInterviewFeedback },
     lookups: {
         interviewId: interviewOptionsLoader,
-        interviewerId: asOptions(getAllEmployees, "employeeName"),
+        interviewerId: asOptions(getCurrentEmployees, "employeeName"),
     },
     sections: [{ id: "details", title: "Details" }, { id: "status", title: "Status" }],
     fields: [
@@ -1379,7 +1383,7 @@ export const exitInterviewConfig = {
     },
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
-        interviewers: asOptions(getAllEmployees, "employeeName"),
+        interviewers: asOptions(getCurrentEmployees, "employeeName"),
     },
     sections: [{ id: "details", title: "Details" }],
     fields: [
@@ -2697,7 +2701,7 @@ export const leaveApplicationConfig = {
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
         leaveTypeId: asOptions(getAllLeaveTypes, "leaveTypeName"),
-        leaveApproverId: asOptions(getAllEmployees, "employeeName"),
+        leaveApproverId: asOptions(getCurrentEmployees, "employeeName"),
     },
     sections: [{ id: "details", title: "Details" }, { id: "approval", title: "Approval" }, { id: "status", title: "Status" }, { id: "actions", title: "Actions" }],
     fields: [
@@ -3138,7 +3142,7 @@ export const shiftRequestConfig = {
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
         shiftTypeId: asOptions(getAllShiftTypes, "shiftTypeName"),
-        approverId: asOptions(getAllEmployees, "employeeName"),
+        approverId: asOptions(getCurrentEmployees, "employeeName"),
     },
     sections: [{ id: "details", title: "Details" }, { id: "status", title: "Status" }],
     fields: [
@@ -4340,7 +4344,7 @@ export const expenseClaimTypeConfig = {
 };
 export const expenseClaimConfig = {
     key: "expense-claim", path: "/expense-claim", section: "Expenses", singular: "Expense Claim", plural: "Expense Claims", description: "Record a reimbursable expense claim, have it approved, submit it, and mark it paid after reimbursement.",
-    api: { search: searchExpenseClaims, getById: getExpenseClaimById, create: createExpenseClaim, update: updateExpenseClaim, remove: deleteExpenseClaim }, lookups: { employeeId: asOptions(getAllEmployees, "employeeName"), expenseApproverId: asOptions(getAllEmployees, "employeeName") },
+    api: { search: searchExpenseClaims, getById: getExpenseClaimById, create: createExpenseClaim, update: updateExpenseClaim, remove: deleteExpenseClaim }, lookups: { employeeId: asOptions(getAllEmployees, "employeeName"), expenseApproverId: asOptions(getCurrentEmployees, "employeeName") },
     sections: [{ id: "details", title: "Claim details" }, { id: "expenses", title: "Expenses" }, { id: "taxes", title: "Taxes and charges" }, { id: "totals", title: "Totals" }, { id: "status", title: "Status" }],
     fields: [{ name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" }, { name: "postingDate", label: "Posting Date", section: "details", type: "date" }, { name: "expenseApproverId", label: "Expense Approver", section: "details", type: "select", optionsFrom: "expenseApproverId", hint: "Leave blank to use the employee or department approver." }, { name: "totalClaimedAmount", label: "Total Claimed", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "totalSanctionedAmount", label: "Total Sanctioned", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "totalTaxesAndCharges", label: "Total Taxes", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "grandTotal", label: "Grand Total", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "status", label: "Status", section: "status", type: "text", disabled: () => true, hideIn: ["add"] }, { name: "isPaid", label: "Paid", section: "status", type: "checkbox", disabled: () => true, hideIn: ["add"] }],
     renderExtra: ({ mode, id, values, setValues }) => (
@@ -4950,7 +4954,7 @@ export const employeePerformanceFeedbackConfig = {
     canEditRow: (row) => row.canEdit !== false,
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
-        reviewerId: asOptions(getAllEmployees, "employeeName"),
+        reviewerId: asOptions(getCurrentEmployees, "employeeName"),
         appraisalId: () => getAllAppraisals().then((res) => unwrapListRows(res.data?.data).map((row) => ({ value: row._id, label: `Appraisal — ${row.employeeIdLabel || row.employeeId?.employeeName || row.employeeId} (${row.status})` }))),
     },
     sections: [

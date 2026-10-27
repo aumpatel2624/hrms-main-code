@@ -4663,3 +4663,53 @@ consumer; single-branch build
     sees every company's interviews and feedback (group-wide by design).
   - No `widgetSources` change: no model changed (`interviewers` already existed).
 - **Deviates from convention**: no.
+
+### ADR-048 — Access follows the record on every request; approver roles keep self-service; leave by id is the applicant's
+
+- **Date**: 2026-10-27
+- **Status**: accepted
+- **Context**: The pre-production simulation (report L4, U6, U9; 23 Oct report F9) and the ADR-046 work
+  found that access was fixed at sign-in. Role and department were copied into the session at login and
+  never re-read, so a user demoted from HR to Employee kept HR access, and unticking Is Active blocked only
+  new sign-ins. A Left employee (full-and-final paid) filed a leave application, an expense claim and a
+  check-in through a session that was already open. Suspended employees could sign in (ADR-046 blocked
+  only Left and Inactive). Leavers still appeared in approver, reviewer and interviewer pickers. Leave
+  Approver, Expense Approver and Interviewer replace Employee for whoever holds them, so those people had
+  no self-service: no leave, no expenses, no check-in. And a Leave Application by id was restricted only
+  on the old `approver` scope, so on the tier matrices' `own` scope any employee could open, edit (while
+  open) or cancel (once approved) anyone's leave. The same applied to a Compensatory Leave Request. An
+  `own`-scoped employee could also apply leave in someone else's name.
+- **Decision**:
+  - **Every request re-reads the account** (`authMiddleware`): one lookup by `_id` (Employee: `isActive`,
+    `status`, `roleId`, `departmentId`; AdminUser: `isActive`). A missing account, an unticked Is Active,
+    or a status in `NO_ACCESS_STATUSES` (Left, Inactive, Suspended; `models/Employee.js`) ends the session:
+    401, and the admin app returns to the login page. Otherwise the session's `roleId`/`departmentId` are
+    refreshed from the record, so a demotion or move applies on the next request. A request does this once:
+    the global search's replayed routes inherit `req.accountChecked`. This was chosen over ending
+    sessions when HR edits someone because it needs no session-store query and also covers changes that
+    do not go through the HR screens.
+  - **Login** refuses `NO_ACCESS_STATUSES` (Suspended added to ADR-046's check).
+  - **Pickers**: `GET /employees?current=true` leaves out those statuses. Leave Approver, Shift approver,
+    Expense Approver, Reviewer, Interviewer and Exit Interview interviewers use it. Every other picker
+    still lists leavers (Full and Final, Exit Interview, Gratuity…).
+  - **Approver roles' self-service**: `withEmployeeSelfService` (`seed/org-tiers.data.js`) gives
+    Leave Approver, Expense Approver and Interviewer every Employee-role row they lack (blank scopes
+    resolved to Employee's own, so nothing widens). Where they already have the page on an `own` /
+    `approver` row, that row gains the Employee row's actions. Any other existing row is untouched.
+    `seed/approver-self-service.js` applies it from the database's Employee matrix, as the last step of
+    both `npm run seed` and `npm run seed:tiers`. It is additive and idempotent, and re-running
+    `npm run seed` brings an existing install up to date.
+  - **Self-service creates are the caller's own** on `own` and `approver` rows: Leave Application and
+    Compensatory Leave Request (they pinned `approver` only) and Expense Claim (pinned `own` only).
+    This is what keeps the widened approver rows safe.
+  - **Leave Application / Compensatory Leave Request by id** (view, edit, approve/reject gate, cancel):
+    on an `own`, `team` or `approver` row, the applicant, the named `leaveApproverId` and, beyond
+    `own`, the people the caller approves for or manages. `all` (HR) is unchanged, and so is `department`,
+    which matches what the list shows.
+- **Consequences**: one extra indexed lookup per authenticated request. An install whose Employee matrix
+  later changes needs `npm run seed` again for the approver roles to follow. A Team Lead (`team`) can
+  still apply leave or file a claim naming anyone, and the Leave Application list on `team` scope shows
+  only own plus named records. Both are noted, not changed here. Supersedes ADR-046's "A Suspended
+  employee can still sign in, and a leaver's open session lasts until it expires." Tested by
+  `controllers/v1/accessLifecycle.test.js`.
+- **Deviates from convention**: no.

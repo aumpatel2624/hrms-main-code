@@ -1,7 +1,7 @@
 import bcrypt from "bcrypt";
 import { ROLES } from "@demo-panel/shared/roles";
 import AdminUser from "../../models/AdminUser.js";
-import Employee from "../../models/Employee.js";
+import Employee, { NO_ACCESS_STATUSES } from "../../models/Employee.js";
 import LoginAttempt from "../../models/LoginAttempt.js";
 import authService from "../../services/authService.js";
 
@@ -122,7 +122,7 @@ export const login = async (req, res) => {
     // An offboarded employee keeps their record (payroll, full-and-final) but
     // not their access. Checked after the password, so the answer never tells
     // a stranger which accounts exist or have left.
-    if (role === ROLES.USER && ["Left", "Inactive"].includes(account.status)) {
+    if (role === ROLES.USER && NO_ACCESS_STATUSES.includes(account.status)) {
       return res.status(403).json({
         isOk: false,
         message: "Your account is no longer active. Please contact HR.",

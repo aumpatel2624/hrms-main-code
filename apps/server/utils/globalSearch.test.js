@@ -116,11 +116,13 @@ const asha = person("Asha Wedding", "E-001", employeeRole);
 const ravi = person("Ravi Wedding", "E-002", employeeRole);
 const hrExec = person("Hema Exec", "E-003", hrExecutiveRole);
 const hrHead = person("Harish Head", "E-004", hrHeadRole);
+const admin = { _id: oid(), adminName: "Admin", isActive: true }; // authMiddleware re-reads the account
 
 db = {
   MenuMaster: menus,
   UserRoles: [employeeRole, hrExecutiveRole, hrHeadRole],
   Employee: [asha, ravi, hrExec, hrHead],
+  AdminUser: [admin],
   LeaveApplication: [
     { _id: oid(), employeeId: asha._id, companyId: acme, description: "Wedding in Jaipur", isActive: true },
     { _id: oid(), employeeId: ravi._id, companyId: acme, description: "Wedding in Pune", isActive: true },
@@ -152,7 +154,7 @@ const requestAs = (employee) => Object.assign(Object.create(express.request), {
   headers: {},
   session: { user: employee
     ? { id: String(employee._id), role: ROLES.USER, roleId: String(employee.roleId), departmentId: null }
-    : { id: String(oid()), role: ROLES.ADMIN } },
+    : { id: String(admin._id), role: ROLES.ADMIN } },
 });
 
 const search = async (employee, term) => {

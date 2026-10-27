@@ -32,6 +32,7 @@
  * widgets the dashboard shows is a separate per-role setting (Dashboard
  * Builder). "/profile" is reachable by every signed-in user and needs no grant.
  */
+import { PERMISSION_KEYS } from "@demo-panel/shared/permissions";
 import { SCOPES } from "@demo-panel/shared/scopes";
 import { FUNCTIONAL_ROLES } from "./org-functional-roles.data.js";
 
@@ -166,4 +167,40 @@ export const buildRoleRows = (roleName) => {
     linkByUrl.set(menuUrl, { menuUrl, dataScope: SCOPE_WORDS[word], read: true, write: false, edit: false, delete: false, print: true, mail: false });
   }
   return { menuRows, linkRows: [...linkByUrl.values()] };
+};
+
+/** The older approver roles (seed/index.js), held INSTEAD of Employee. */
+export const SELF_SERVICE_ROLE_NAMES = ["Leave Approver", "Expense Approver", "Interviewer"];
+
+/**
+ * An approver role's matrix rows plus the Employee role's, so whoever holds it
+ * can still apply for leave, file expenses, check in and see their own records.
+ * `employeeMatrix` is the Employee UserRoles document ({ roles, dataScope }).
+ * A page the role lacks gets the Employee row (its scope resolved, so a blank
+ * scope cannot widen to the approver role's default). A page the role already
+ * has on an own / approver row — self-service, where a create is pinned to the
+ * caller — gains the Employee row's actions; any other existing row is left
+ * alone. Rows match on menuId, or on menuGroupId for a link group (menuId null).
+ * Returns { rows, changes }; changes is 0 once the role already has it all.
+ */
+export const withEmployeeSelfService = (roleRows, employeeMatrix) => {
+  const keyOf = (row) => (row.menuId ? `menu:${row.menuId}` : `group:${row.menuGroupId}`);
+  const rows = roleRows.map((row) => ({ ...row }));
+  const byKey = new Map(rows.map((row) => [keyOf(row), row]));
+  let changes = 0;
+  for (const { _id, ...employeeRow } of employeeMatrix.roles) {
+    const row = byKey.get(keyOf(employeeRow));
+    if (!row) {
+      const added = { ...employeeRow, dataScope: employeeRow.dataScope || employeeMatrix.dataScope || SCOPES.ALL };
+      rows.push(added);
+      byKey.set(keyOf(added), added);
+      changes += 1;
+      continue;
+    }
+    if (![SCOPES.OWN, SCOPES.APPROVER].includes(row.dataScope)) continue;
+    const gained = PERMISSION_KEYS.filter((key) => employeeRow[key] && !row[key]);
+    for (const key of gained) row[key] = true;
+    if (gained.length) changes += 1;
+  }
+  return { rows, changes };
 };

@@ -83,6 +83,10 @@ const resolveLeaveVisibilityIds = async (req) => {
   return [...new Set([...approverIds, ...teamIds])];
 };
 
+// A self-service row (own, or approver = own + the people they approve):
+// whatever the body says, the caller applies for themselves only.
+const isSelfService = (req) => [SCOPES.OWN, SCOPES.APPROVER].includes(req.user?.dataScope);
+
 const referenceGuardedDelete = async (Model, modelName, id, label) => {
   const referenceInfo = await getReferencingCounts(modelName, id);
   if (referenceInfo.totalReferences > 0) {
@@ -230,17 +234,9 @@ const CLR_UPDATABLE_FIELDS = ["workFromDate", "workEndDate", "halfDay", "halfDay
 
 // Issue #34 security fix: this doctype had NO ownership check anywhere —
 // create trusted employeeId from the body, and update/get/delete never
-// verified the caller had any relationship to the request at all. Mirrors
-// canAccessLeaveApplication's shape exactly (same menu-row dataScope,
-// APPROVER, and the same "leave" approver domain).
-const canAccessCompensatoryLeaveRequest = async (req, doc) => {
-  if (!req.user || req.user.role === ROLES.ADMIN) return true;
-  if (req.user.dataScope !== SCOPES.APPROVER) return true;
-  await resolveRequestEmployee(req);
-  const visibilityIds = await resolveLeaveVisibilityIds(req);
-  const allowedIds = [String(req.user.employeeId), ...visibilityIds];
-  return allowedIds.includes(String(doc.employeeId));
-};
+// verified the caller had any relationship to the request at all. Same rule
+// as a Leave Application (same "leave" approver domain).
+const canAccessCompensatoryLeaveRequest = (req, doc) => canAccessLeaveApplication(req, doc);
 
 /**
  * Why req.user may NOT approve or reject this Leave Application /
@@ -265,7 +261,7 @@ export const createCompensatoryLeaveRequest = async (req, res) => {
     // trusted only for HR User/HR Manager (same intent as
     // createLeaveApplication above).
     let employeeId = req.body.employeeId;
-    if (req.user?.dataScope === SCOPES.APPROVER) {
+    if (isSelfService(req)) {
       const ownEmployee = await resolveRequestEmployee(req);
       if (!ownEmployee) return res.status(403).json({ isOk: false, status: 403, message: "No employee record linked to this user" });
       employeeId = ownEmployee._id;
@@ -766,12 +762,12 @@ const runLeaveApplicationValidation = async (data, { excludeId = null, actingUse
 
 export const createLeaveApplication = async (req, res) => {
   try {
-    // Issue #34 security fix: a self-service caller (dataScope APPROVER on
-    // this menu — see seedLeaveRoles) can only ever apply for themselves.
+    // Issue #34 security fix: a self-service caller (dataScope own or
+    // approver on this menu — isSelfService) can only ever apply for themselves.
     // The client-supplied employeeId is trusted only for HR User/HR
     // Manager, who legitimately create on behalf of any employee.
     let employeeId = req.body.employeeId;
-    if (req.user?.dataScope === SCOPES.APPROVER) {
+    if (isSelfService(req)) {
       const ownEmployee = await resolveRequestEmployee(req);
       if (!ownEmployee) return res.status(403).json({ isOk: false, status: 403, message: "No employee record linked to this user" });
       employeeId = ownEmployee._id;
@@ -820,7 +816,7 @@ export const updateLeaveApplication = async (req, res) => {
     // application to a different employee — drop the field entirely for
     // that tier so it falls through to the doc's existing owner untouched.
     const { employeeId: _ignoredEmployeeId, ...selfServiceBody } = req.body;
-    const body = req.user?.dataScope === SCOPES.APPROVER ? selfServiceBody : req.body;
+    const body = isSelfService(req) ? selfServiceBody : req.body;
 
     const merged = { ...doc.toObject(), ...body };
     const result = await runLeaveApplicationValidation(merged, { excludeId: leaveApplicationId, actingUserId: req.user?.id });
@@ -841,14 +837,20 @@ export const updateLeaveApplication = async (req, res) => {
   }
 };
 
-/** Whether req.user may see/act on this specific Leave Application (APPROVER-scope defense in depth). */
+/**
+ * Whether req.user may see/act on this specific Leave Application. On an
+ * own / team / approver row: the applicant, its named Leave Approver and,
+ * beyond "own", the people the caller approves for or manages. Any other
+ * scope reaches what its list shows.
+ */
 const canAccessLeaveApplication = async (req, doc) => {
   if (!req.user || req.user.role === ROLES.ADMIN) return true;
-  if (req.user.dataScope !== SCOPES.APPROVER) return true;
+  const scope = req.user.dataScope;
+  if (![SCOPES.OWN, SCOPES.TEAM, SCOPES.APPROVER].includes(scope)) return true;
+  if ([String(doc.employeeId), String(doc.leaveApproverId || "")].includes(String(req.user.id))) return true;
+  if (scope === SCOPES.OWN) return false;
   await resolveRequestEmployee(req);
-  const visibilityIds = await resolveLeaveVisibilityIds(req);
-  const allowedIds = [String(req.user.employeeId), ...visibilityIds];
-  return allowedIds.includes(String(doc.employeeId));
+  return (await resolveLeaveVisibilityIds(req)).includes(String(doc.employeeId));
 };
 
 export const getLeaveApplicationById = async (req, res) => {

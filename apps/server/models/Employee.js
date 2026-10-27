@@ -1,5 +1,8 @@
 import mongoose from "mongoose";
 
+/** Statuses that keep the record (payroll, full-and-final) but not the access. */
+export const NO_ACCESS_STATUSES = ["Left", "Inactive", "Suspended"];
+
 const EmployeeSchema = new mongoose.Schema(
   {
     // Real codes from the org-chart data (A005, U001, ...) — no naming-series

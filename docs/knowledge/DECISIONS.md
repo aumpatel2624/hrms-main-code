@@ -4899,3 +4899,45 @@ consumer; single-branch build
   noted there since ADR-024). Tested by `utils/leaveBalancePeriod.test.js`, `controllers/v1/blockedWorkflows.test.js`,
   `entities/tax-declaration-payload.test.js` and `components/crud/form-defaults.test.js`.
 - **Deviates from convention**: no.
+
+### ADR-053 — Small defects from the pre-production simulation
+
+- **Date**: 2026-10-27
+- **Status**: accepted
+- **Context**: The last group of the pre-production simulation's findings (report sections 4 and 7; 23 Oct report
+  F3, F11, F13, F19, F20, F24) plus side findings of ADR-048 to ADR-052. Each is small; together they are a submitted
+  payslip that could be deleted, role matrices any user could read, and screens that answered with internal wording.
+- **Decision**:
+  - **Salary slips**: only a draft or cancelled slip can be deleted. A submitted or withheld slip is refused (409,
+    "Cancel it first"), even with no other record pointing at it.
+  - **Sign-in**: the login field takes the email or the Employee Code, in either case, as its label and ADR-040
+    always said; it matched only the email.
+  - **Role matrices (F11)**: `GET /user-roles/:roleId` answers a USER for their own role (the menu is built from it)
+    and any role only with read on the User Roles screen (HR Head, System Admin and Auditor already have it; no
+    re-seed). This narrows the 2026-08-17 "matrix-free" note, which kept it open only for MenuContext.
+  - **Clear messages**: a duplicate role name answers 409 "A role with this name already exists" (F19). A required
+    field left blank answers "Status is required" rather than Mongoose's "Path `status` is required."
+    (`models/validationMessages.js`, imported by `server.js` before any model compiles).
+  - **Blank numbers**: a number field follows the blank rule of the dropdowns (F5): left out on create so the
+    server default applies, null on edit. A blank Variable is therefore null, which pay calculation reads as 0.
+  - **Pickers**: Payroll Correction picks a submitted or withheld slip by employee name and period. Approver
+    pickers (leave, expense, shift request, interview feedback, performance feedback) still offer only current
+    employees, but keep showing a saved approver who has since left, as "Name (left)". Onboarding's Department and
+    Designation list only the chosen company's. Salary Structure gains an optional `salaryStructureName`, shown first
+    in its dropdown label; existing structures read as before.
+  - **Screens**: Expense Claim hides Approve and Reject from the applicant (F20; the server already refused). The
+    separation form says the Relieving Date must be set before the Exit Interview and Full and Final. Shift
+    Assignment, Shift Request, Attendance Request and Salary Structure Assignment lists show the day, and a record's date fields show the
+    day without a time (F24). The Tax Exemption Proof Submission form sends only what the server accepts.
+  - **Scopes**: a team-scoped Leave Application list includes the caller's reporting chain, as the record by id
+    already did. A department-scoped Employee list and record by id are the caller's current department (F3); they
+    were company-wide.
+  - **Leave Policy Assignment**: an edit that changes the employee also moves the stored company to theirs.
+- **Consequences**: department scope is still not applied on Leave Applications, Expense Claims, Travel Requests,
+  Grievances, Shift Requests and Attendance Requests (F3's other six screens); no seeded role uses it there, but a
+  custom role can. `NativeSelect` (vendored, `components/base/`) still ignores the id a page passes, so the four
+  bulk tools' labels are not linked to their dropdowns; fixing it means editing a vendored file. Tested by new
+  `controllers/v1/roleAccess.test.js` and `models/validationMessages.test.js`, and new cases in `payrollIntegrity`,
+  `accessLifecycle`, `companyIntegrity`, `picker-labels`, `row-pickers`, `form-payload` and
+  `tax-declaration-payload` tests.
+- **Deviates from convention**: no.

@@ -14,7 +14,7 @@ Create one as soon as an employee's departure is confirmed.
 
 ### Details
 
-- **Employee** *(required, chosen from a list)*
+- **Employee** *(required, chosen from a list)* — Set the Relieving Date on this employee's record first: the Exit Interview and the Full and Final Statement cannot be created without it.
 - **Template** *(chosen from a list)*
 - **Separation Begins On** *(required, a date)*
 - **Exit Interview Summary (notes only — not linked to Exit Interview records)** *(free text)*

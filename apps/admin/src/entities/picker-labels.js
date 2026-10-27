@@ -12,7 +12,7 @@ export const leavePeriodLabel = (row, names) =>
     withCompany(`${day(row.fromDate)} – ${day(row.toDate)}`, names.get(String(row.companyId)));
 
 export const salaryStructureLabel = (row, names) =>
-    withCompany(`${row.payrollFrequency} — ${row.currency}`, names.get(String(row.companyId)));
+    withCompany(`${row.salaryStructureName ? `${row.salaryStructureName} — ` : ""}${row.payrollFrequency} — ${row.currency}`, names.get(String(row.companyId)));
 
 // GET /job-offers populates the applicant and the company.
 export const jobOfferLabel = (row) =>

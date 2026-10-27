@@ -352,4 +352,22 @@ resetWrites();
   expectStatus(await viewComp(asha), 200, "the applicant's compensatory leave");
 }
 
+// ------------------------------- 6. a department-scoped role's employee list --
+{
+  // F3: a custom role whose Employee screen is "Own department" listed everyone.
+  const deptRoleId = oid();
+  const softwareDev = oid();
+  const viewer = person("dina", "Employee", { roleId: deptRoleId, departmentId: softwareDev });
+  const colleague = person("colin", "Employee", { departmentId: softwareDev });
+  people.push(asDoc(viewer), asDoc(colleague));
+  stub(UserRoles, [...tierMatrices, { roleId: deptRoleId, isActive: true, dataScope: SCOPES.ALL, roles: [row("/employee", {}, SCOPES.DEPARTMENT)] }]);
+  invalidateRoleCache();
+  const res = await call(employeeRoutes, "post", "/employees/search", viewer);
+  expectStatus(res, 200, "department-scoped role lists employees");
+  assert.deepEqual(listedIds(res), [viewer, colleague].map((p) => String(p._id)).sort(), "only their own department");
+  const byId = (employee) => call(employeeRoutes, "get", "/employees/:employeeId", viewer, { params: { employeeId: String(employee._id) } });
+  expectStatus(await byId(colleague), 200, "a colleague in the department by id");
+  expectStatus(await byId(asha), 404, "someone in another department by id");
+}
+
 console.log("accessLifecycle.test.js passed");

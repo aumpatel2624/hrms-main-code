@@ -18,6 +18,9 @@ assert.deepEqual(periodOptions, [
 const structures = { data: { data: [{ _id: "s1", companyId: "c-nuv", payrollFrequency: "Monthly", currency: "INR" }] } };
 const structureOptions = await companyLabelledOptions(async () => structures, async () => companies, salaryStructureLabel)();
 assert.equal(structureOptions[0].label, "Monthly — INR (Nuva)");
+// A named structure leads with its name; an unnamed (older) one reads as before.
+assert.equal(salaryStructureLabel({ salaryStructureName: "Interns", payrollFrequency: "Monthly", currency: "INR", companyId: "c-nuv" }, new Map([["c-nuv", "Nuva"]])),
+    "Interns — Monthly — INR (Nuva)");
 
 // A company the list does not know leaves the label as it was.
 assert.equal(salaryStructureLabel({ payrollFrequency: "Monthly", currency: "INR", companyId: "gone" }, new Map()), "Monthly — INR");

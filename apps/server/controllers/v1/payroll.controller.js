@@ -219,7 +219,7 @@ export const validateEmployeeBenefits = async (employeeBenefits, maxBenefits, co
   }
 };
 
-const SALARYSTRUCTURE_TOP_FIELDS = ["companyId", "payrollFrequency", "isActive", "leaveEncashmentAmountPerDay", "currency", "maxBenefits"];
+const SALARYSTRUCTURE_TOP_FIELDS = ["companyId", "salaryStructureName", "payrollFrequency", "isActive", "leaveEncashmentAmountPerDay", "currency", "maxBenefits"];
 export const SALARYSTRUCTURE_FIELDS = [...SALARYSTRUCTURE_TOP_FIELDS, "earnings", "deductions", "employerContributions", "employeeBenefits"];
 const ROW_TABLES = ["earnings", "deductions", "employerContributions"];
 

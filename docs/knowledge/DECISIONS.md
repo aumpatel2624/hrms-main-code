@@ -4992,4 +4992,25 @@ consumer; single-branch build
 - **Consequences**: no re-seed or data change. A department-scoped create on Travel Requests and Grievances still
   trusts the employee named in the form (only "own" forces the caller's own). Tested by section 7 of
   `controllers/v1/accessLifecycle.test.js` (each of the five controllers reverted in turn makes it fail).
+
+### ADR-056 — A period's leftover leave is encashed or expired, never both
+
+- **Date**: 2026-10-27
+- **Status**: accepted
+- **Context**: Left out of scope by ADR-053. The daily scheduler ran `processExpiredAllocations` before
+  `generateLeaveEncashments`. Expiry wrote off the whole leftover; encashment then read the balance as of the
+  period's last day (which does not yet see the expiry row) and debited the same leftover again. An encashable
+  type with 5 days left and a 3-day limit lost 8 days: 5 expired and 3 encashed, so the next period came out 3 short.
+- **Decision**: encashment runs first, expiry second (`JOBS` in `jobs/leaveScheduler.js`). Encashment drafts up
+  to the type's limit; expiry, through `leavesLeftToExpire`, already counts the encashment debit dated on the
+  period's last day, so it writes off only what is left. A non-encashable type is unchanged. Encashment now matches
+  an allocation that ended yesterday in any status but `cancelled`, since it is usually still `active` when it runs.
+- **Consequences**: installs where both rows were already written are corrected by ADR-053's backfill, which sees
+  the encashment and lowers the expiry to what the encashment left (or removes it). Run
+  `npm run backfill:leave-expiry` once more after deploying this, for any period that ended between ADR-053's
+  deploy and this one; it is idempotent. Not changed: overlapping allocations of one type (ADR-053's note), and
+  encashment still only looks at allocations that ended yesterday, so a period that ended while the server was
+  down is expired but never encashed (as before). Tested by `jobs/processExpiredAllocations.test.js` (case 5, the
+  real scheduler pass: 3 encashed, 2 expired, next period's balance right; fails on the old order) and
+  `utils/leaveExpiry.test.js` (case 9, the backfill on a doubled period).
 - **Deviates from convention**: no.

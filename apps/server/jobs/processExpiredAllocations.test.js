@@ -6,13 +6,19 @@ import assert from "node:assert/strict";
 import mongoose from "mongoose";
 import LeaveAllocation from "../models/LeaveAllocation.js";
 import LeaveLedgerEntry from "../models/LeaveLedgerEntry.js";
+import LeaveType from "../models/LeaveType.js";
+import LeaveEncashment from "../models/LeaveEncashment.js";
+import SchedulerRunLog from "../models/SchedulerRunLog.js";
 import { getLeaveBalance } from "../utils/leaveBalance.js";
 import { processExpiredAllocations } from "./processExpiredAllocations.js";
+import { runDueJobs } from "./leaveScheduler.js";
 
 const same = (a, b) => String(a) === String(b);
 const OPERATORS = {
   $ne: (value, arg) => !same(value ?? null, arg ?? null),
+  $in: (value, arg) => arg.some((item) => same(value, item)),
   $gt: (value, arg) => value > arg,
+  $gte: (value, arg) => value != null && value >= arg,
   $lt: (value, arg) => value < arg,
   $lte: (value, arg) => value != null && value <= arg,
 };
@@ -105,4 +111,37 @@ ledger = [
 await processExpiredAllocations();
 assert.equal(expiryRows()[0].leaves, -9, "14 granted (10 + 4 carried) less 5 taken; the cancelled 7 do not count");
 
-console.log("processExpiredAllocations: expiry nets leave taken, next period balance, unused, spent and carry-forward checks passed");
+// 5. An encashable type's leftover is encashed or expired, never both: the
+//    scheduler's own pass over an allocation that ended yesterday, with 5 days
+//    left and a 3-day encashment limit, encashes 3 and expires 2 — before the
+//    fix expiry ran first and wrote off all 5, then encashment debited 3 more.
+const encashable = { _id: leaveTypeId, allowEncashment: true, maxEncashableLeaves: 3, nonEncashableLeaves: 0 };
+let encashments = [];
+LeaveType.find = (filter) => ({ lean: async () => (filter.allowEncashment ? [encashable] : []) });
+LeaveEncashment.findOne = async (filter) => encashments.find((doc) => matches(doc, filter)) ?? null;
+LeaveEncashment.create = async (doc) => { const saved = { ...doc, _id: new mongoose.Types.ObjectId() }; encashments.push(saved); return saved; };
+SchedulerRunLog.findOne = async () => null;
+SchedulerRunLog.findOneAndUpdate = async () => null;
+
+const now = new Date();
+const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+const ended = { ...allocation("2025-01-01", "2025-12-31"), fromDate: new Date(yesterday.getTime() - 300 * 864e5), toDate: yesterday };
+const following = { ...allocation("2025-01-01", "2025-12-31"), fromDate: now, toDate: day("2099-12-31") };
+const earlier = (days) => new Date(yesterday.getTime() - days * 864e5);
+allocations = [ended, following];
+ledger = [
+  { ...grant(ended, 8, earlier(299)), createdAt: earlier(299) },
+  { ...leave(-3, "2025-01-01", earlier(100)), fromDate: earlier(90), toDate: earlier(90) },
+  grant(following, 12, now),
+];
+encashments = [];
+await runDueJobs();
+const encashed = ledger.filter((row) => row.transactionType === "LeaveEncashment");
+assert.equal(encashments.length, 1, "one encashment drafted");
+assert.equal(encashments[0].encashmentDays, 3, "encashes up to the type's limit");
+assert.deepEqual(encashed.map((row) => row.leaves), [-3], "one encashment debit of 3");
+assert.deepEqual(expiryRows().map((row) => row.leaves), [-2], "expires only what encashment left (5 - 3), not all 5");
+assert.equal(ended.status, "expired");
+assert.equal(await getLeaveBalance(employeeId, leaveTypeId), 12, "next period: its own 12, not 3 short");
+
+console.log("processExpiredAllocations: expiry nets leave taken, next period balance, unused, spent, carry-forward and encash-then-expire checks passed");

@@ -36,11 +36,13 @@ import { allocateEarnedLeaves } from "./allocateEarnedLeaves.js";
  * across runs, mirroring the job's own daily-once bookkeeping in
  * `runDueJobs`).
  *
- * **Ordering matters here** (see the file-level comment on `JOBS` below):
- * this runs AFTER `processExpiredAllocations` in the same pass, so an
- * allocation whose `toDate` was yesterday has already been flipped from
- * `active` to `expired` by the time this queries — matched on `status:
- * "expired"`, not `"active"`.
+ * **Ordering matters here** (see the comment on `JOBS` below): this runs
+ * BEFORE `processExpiredAllocations` in the same pass (ADR-055), so a
+ * period's leftover is encashed first and expiry writes off only what is
+ * left after the encashment debit (`leavesLeftToExpire` counts it) — never
+ * both. An allocation that ended yesterday is usually still `active` here,
+ * but may already be `expired` (expired by hand, or a pass that ran expiry
+ * before this), so any non-cancelled status matches.
  *
  * Source's `create_leave_encashment` skips an allocation entirely when no
  * Salary Structure Assignment exists to derive a per-day rate from — this
@@ -68,7 +70,7 @@ export const generateLeaveEncashments = async () => {
   const leaveTypeById = new Map(encashableTypes.map((lt) => [String(lt._id), lt]));
 
   const allocations = await LeaveAllocation.find({
-    status: "expired",
+    status: { $ne: "cancelled" },
     leaveTypeId: { $in: encashableTypes.map((lt) => lt._id) },
     toDate: { $gte: startOfYesterday, $lte: endOfYesterday },
   });
@@ -134,11 +136,12 @@ export const generateLeaveEncashments = async () => {
 };
 
 // Fixed order (ADR-016/ADR-024) — later jobs in a run can depend on side
-// effects of earlier ones in the SAME run (e.g. encashment generation would
-// read allocations `processExpiredAllocations` may have just expired).
+// effects of earlier ones in the SAME run. Encashment runs before expiry
+// (ADR-055): expiry then writes off only what encashment left, where the
+// other way round the same leftover was both expired and encashed.
 const JOBS = [
-  { name: "processExpiredAllocations", fn: processExpiredAllocations },
   { name: "generateLeaveEncashments", fn: generateLeaveEncashments },
+  { name: "processExpiredAllocations", fn: processExpiredAllocations },
   { name: "allocateEarnedLeaves", fn: allocateEarnedLeaves },
 ];
 

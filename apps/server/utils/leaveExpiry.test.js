@@ -64,4 +64,11 @@ assert.equal(expiryCorrection(allocation, rows), null);
 rows = [own(12), expiry(-12), expiry(-12)];
 assert.deepEqual(expiryCorrection(allocation, rows), { skip: "2 expiry rows" });
 
-console.log("leaveExpiry: backfill detection, idempotency, period dating, own rows and skip checks passed");
+// 9. Expired and encashed both (the job order before ADR-055): 8 granted,
+//    3 taken, all 5 left expired, then 3 encashed on the last day → the
+//    expiry is lowered to the 2 encashment left; the encashment stays.
+const doubled = expiry(-5);
+rows = [own(8), debit("LeaveApplication", -3, "2025-03-10"), doubled, debit("LeaveEncashment", -3, "2025-12-31")];
+assert.deepEqual(expiryCorrection(allocation, rows), { rowId: doubled._id, written: 5, left: 2 });
+
+console.log("leaveExpiry: backfill detection, idempotency, period dating, own rows, skip and expired-and-encashed checks passed");

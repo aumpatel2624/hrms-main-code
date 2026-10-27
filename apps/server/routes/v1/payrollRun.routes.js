@@ -388,9 +388,9 @@ router.delete("/salary-withholdings/:id", authMiddleware(ANY_ROLE), checkPermiss
  *     summary: deletePayrollEntry
  *     tags: [Payroll]
  *     responses:
- *       200: { description: Successful operation }
+ *       200: { description: Deleted, with the cancelled salary slips it created }
  *       400: { description: Cancel before deleting; snapshots cannot be edited }
- *       409: { description: Referenced record }
+ *       409: { description: The cancelled entry links a slip that is not cancelled }
  */
 router.delete("/payroll-entries/:id", authMiddleware(ANY_ROLE), checkPermission("/payroll-entry", "delete"), allowOnlyFields([]), param("id").isMongoId(), handleValidationErrors, orchestration.deletePayrollEntry);
 

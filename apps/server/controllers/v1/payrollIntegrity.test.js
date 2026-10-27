@@ -257,4 +257,36 @@ console.log("payrollIntegrity: an entry whose slips all fail is marked failed");
 }
 console.log("payrollIntegrity: a submitted slip cannot be deleted");
 
+// ------------------------- 6. deleting a cancelled entry takes its slips --
+{
+  const slip = (employee, status) => ({ _id: oid(), employeeId: employee._id, companyId, startDate: sepStart, endDate: sepEnd, status });
+  const entryOf = (status, slips) => ({ _id: oid(), companyId, status, startDate: sepStart, endDate: sepEnd,
+    employeeDetails: slips.map((row) => ({ employeeId: row.employeeId, salarySlipId: row._id })) });
+  const remove = (entry) => call(payrollRunRoutes, "delete", "/payroll-entries/:id", { params: { id: String(entry._id) } });
+
+  const cancelled = [slip(asha, "cancelled"), slip(ravi, "cancelled")];
+  const entry = entryOf("cancelled", cancelled);
+  stub(SalarySlip, cancelled);
+  stub(PayrollEntry, [entry]);
+  const res = await remove(entry);
+  expectStatus(res, 200, "delete a cancelled entry");
+  assert.equal(res.body.data.deletedSalarySlips, 2);
+  assert.equal(entry.isDeleted, true);
+  assert.ok(cancelled.every((row) => row.isDeleted === true), "its cancelled slips are deleted with it");
+
+  const mixed = [slip(asha, "cancelled"), slip(ravi, "submitted")];
+  const odd = entryOf("cancelled", mixed);
+  stub(SalarySlip, mixed);
+  stub(PayrollEntry, [odd]);
+  const refused = await remove(odd);
+  expectStatus(refused, 409, "a cancelled entry still linking a submitted slip");
+  assert.match(refused.body.message, /not cancelled/);
+  assert.ok(odd.isDeleted !== true && mixed.every((row) => row.isDeleted !== true), "nothing deleted");
+
+  const draft = entryOf("draft", []);
+  stub(PayrollEntry, [draft]);
+  expectStatus(await remove(draft), 400, "an entry that is not cancelled");
+}
+console.log("payrollIntegrity: deleting a cancelled entry deletes its cancelled slips");
+
 console.log("payrollIntegrity: all cases passed");

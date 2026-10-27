@@ -44,6 +44,7 @@ const CrudList = ({ config }) => {
     const appliedFilters = prefs.filters ?? [];
 
     const [removeId, setRemoveId] = useState("");
+    const [removeRow, setRemoveRow] = useState(null);
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
@@ -141,6 +142,7 @@ const CrudList = ({ config }) => {
                     onEdit={() => navigate(`${config.path}/${row._id}/edit`)}
                     onRemove={() => {
                         setRemoveId(row._id);
+                        setRemoveRow(row);
                         setConfirmOpen(true);
                     }}
                 />
@@ -258,7 +260,7 @@ const CrudList = ({ config }) => {
                 onClose={() => setConfirmOpen(false)}
                 onConfirm={handleDelete}
                 isLoading={isDeleting}
-                description={`Are you sure you want to remove this ${config.singular.toLowerCase()}?`}
+                description={config.deleteDescription?.(removeRow) ?? `Are you sure you want to remove this ${config.singular.toLowerCase()}?`}
             />
 
             <ReferenceErrorModal

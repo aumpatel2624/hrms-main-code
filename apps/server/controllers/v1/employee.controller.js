@@ -36,6 +36,11 @@ const employeeTeamScopeFilter = async (req) => {
   // OWN (the org-tier "Employee" role) is the same filter with no team:
   // buildScopeFilter narrows to `_id === req.user.id`.
   if (req.user.dataScope === SCOPES.OWN) return buildScopeFilter(req.user, { owner: "_id" });
+  // DEPARTMENT (F3): the caller's own department as their record has it now.
+  if (req.user.dataScope === SCOPES.DEPARTMENT) {
+    const departmentId = (await resolveRequestEmployee(req))?.departmentId;
+    return { departmentId: departmentId ?? { $in: [] } };
+  }
   if (req.user.dataScope !== SCOPES.TEAM) return null;
   await resolveRequestEmployee(req);
   const teamIds = await getSubordinateEmployeeIds(req.user.employeeId);

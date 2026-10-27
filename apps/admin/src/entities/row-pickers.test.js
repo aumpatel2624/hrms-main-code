@@ -12,8 +12,7 @@ const source = readFileSync(new URL("./advanced.jsx", import.meta.url), "utf8");
 
 // `{ name: "salaryComponentId", label: "…", type: "text" … }` — an id typed by hand.
 const typedIds = [...source.matchAll(/\{\s*name:\s*"(\w+Id)",[^{}]*?type:\s*"text"/g)].map((m) => m[1]);
-// Payroll Correction's single Salary Slip field is the one left (not a row; noted in the PR).
-assert.deepEqual(typedIds.filter((name) => name !== "salarySlipId"), [], `free-text id fields: ${typedIds.join(", ")}`);
+assert.deepEqual(typedIds, [], `free-text id fields: ${typedIds.join(", ")}`);
 
 // The fourteen screens' row columns are dropdowns now.
 const rowPickers = [...source.matchAll(/name:\s*"(\w+Id)",\s*label:\s*"[^"]*",\s*type:\s*"select",\s*optionsFrom:\s*"(row\w+)"/g)];

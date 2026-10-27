@@ -309,7 +309,8 @@ const rowsOf = (res) => {
   const password = await bcrypt.hash("right-password", 4);
   const account = { ...person("zalak", roles.Employee), password, toObject() { return { ...this }; } };
   AdminUser.findOne = async () => null;
-  Employee.findOne = (filter) => query(filter.email === account.email ? account : null);
+  // Sign-in matches the email or the Employee Code ($or).
+  Employee.findOne = (filter) => query(filter.$or.some((cond) => cond.email === account.email) ? account : null);
   authService.isAccountLocked = async () => false;
   authService.recordFailedAttempt = async () => ({ isLocked: false, attemptsRemaining: 3 });
   const attempt = async (email, pass) => {

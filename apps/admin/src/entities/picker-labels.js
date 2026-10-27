@@ -12,7 +12,7 @@ export const leavePeriodLabel = (row, names) =>
     withCompany(`${day(row.fromDate)} – ${day(row.toDate)}`, names.get(String(row.companyId)));
 
 export const salaryStructureLabel = (row, names) =>
-    withCompany(`${row.payrollFrequency} — ${row.currency}`, names.get(String(row.companyId)));
+    withCompany(`${row.salaryStructureName ? `${row.salaryStructureName} — ` : ""}${row.payrollFrequency} — ${row.currency}`, names.get(String(row.companyId)));
 
 // GET /job-offers populates the applicant and the company.
 export const jobOfferLabel = (row) =>
@@ -29,6 +29,10 @@ export const interviewLabel = (row) =>
  */
 export const nameWithCompany = (key) => (row, names) =>
     withCompany(row[key], names.get(String(row.companyId?._id ?? row.companyId)));
+
+// Payroll Correction's slip: whose it is and which period, never its raw id.
+export const salarySlipLabel = (row, employeeNames) =>
+    `${employeeNames.get(String(row.employeeId?._id ?? row.employeeId)) ?? "Unknown employee"} — ${day(row.startDate)} – ${day(row.endDate)}`;
 
 export const companyNames = (companies = []) => new Map(companies.map((c) => [String(c._id), c.companyName]));
 
@@ -48,4 +52,18 @@ export const ofChosenCompany = (load, labelOf) => (values) => {
     const companyId = values.companyId?._id ?? values.companyId;
     if (!companyId) return Promise.resolve([]);
     return load(companyId).then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: labelOf(row) })));
+};
+
+/**
+ * Approver pickers: the current employees, plus any saved choice who is no
+ * longer among them, found in `allRows` (the plain list, which keeps leavers)
+ * and labelled "(left)".
+ */
+export const withSavedLeavers = (currentRows, savedIds, allRows) => {
+    const options = currentRows.map((row) => ({ value: row._id, label: row.employeeName }));
+    savedIds.filter((savedId) => !options.some((option) => String(option.value) === savedId)).forEach((savedId) => {
+        const leaver = allRows.find((row) => String(row._id) === savedId);
+        if (leaver) options.push({ value: leaver._id, label: `${leaver.employeeName} (left)` });
+    });
+    return options;
 };

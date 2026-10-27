@@ -257,6 +257,9 @@ const expectRefused = (res, pattern, label) => {
 
   const edit = (body) => call(leaveSetupRoutes, "put", "/leave-policy-assignments/:leavePolicyAssignmentId", admin, { params: { leavePolicyAssignmentId: String(wrong._id) }, body });
   expectRefused(await edit({ carryForward: true }), /Leave Period/, "editing the existing wrong assignment");
+  assignments.splice(1); // the assignment just created would overlap the one below
+  expectStatus(await edit({ employeeId: String(apdIntern._id), leavePeriodId: String(periodApd._id) }), 200, "HR moves it to an Apidel employee");
+  assert.ok(same(wrong.companyId, apidel), "the stored company follows the employee");
 
   const bulk = await call(leaveRoutes, "post", "/leave-control-panel/bulk-policy-assignments", admin, {
     body: { items: [{ employeeId: String(nuvIntern._id), leavePolicyId: policyId, assignmentBasedOn: "Leave Period", leavePeriodId: String(periodApd._id) }] },

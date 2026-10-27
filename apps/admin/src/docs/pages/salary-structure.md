@@ -14,6 +14,7 @@ Use this to define what a payroll frequency's pay actually consists of, before a
 
 ### Structure details
 
+- **Name** — Optional. Tells this company's structures apart in every Salary Structure dropdown.
 - **Company** *(required, chosen from a list)*
 - **Payroll frequency** *(required, chosen from a list)*
 - **Currency** *(required)*

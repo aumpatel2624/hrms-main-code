@@ -119,7 +119,7 @@ const CrudForm = ({ config, mode = "add" }) => {
     const isEdit = mode === "edit";
     const { id } = useParams();
     const navigate = useNavigate();
-    const { currentPagePermissions } = useContext(MenuContext);
+    const { currentPagePermissions, currentUserId } = useContext(MenuContext);
 
     const initialState = useMemo(
         () => initialFormValues(config.fields),
@@ -288,7 +288,7 @@ const CrudForm = ({ config, mode = "add" }) => {
                             );
                         })}
 
-                        {config.renderExtra?.({ mode, id, values, setValues, lookups })}
+                        {config.renderExtra?.({ mode, id, values, setValues, lookups, currentUserId })}
 
                         <FormActions
                             onSubmit={handleSubmit}

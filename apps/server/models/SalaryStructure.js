@@ -59,6 +59,9 @@ export const EmployeeBenefitDetailSchema = new mongoose.Schema(
 const SalaryStructureSchema = new mongoose.Schema(
   {
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company", required: true },
+    // Optional: tells one company's structures apart where frequency and
+    // currency are the same ("Staff", "Interns"). Older structures have none.
+    salaryStructureName: { type: String, trim: true, default: "" },
     // Server-required (ADR-026 closes a flagged source gap: source only
     // requires this client-side).
     payrollFrequency: { type: String, enum: ["Monthly", "Fortnightly", "Bimonthly", "Weekly", "Daily"], required: true },

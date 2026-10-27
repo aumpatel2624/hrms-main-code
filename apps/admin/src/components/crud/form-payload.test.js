@@ -7,9 +7,10 @@ const fields = [
     { name: "departmentId", type: "select" },
     { name: "status", type: "select", options: ["Open", "Closed"] },
     { name: "postingDate", type: "date" },
+    { name: "variable", type: "number" },
     { name: "isActive", type: "checkbox" },
 ];
-const blank = { name: "", departmentId: "", status: "", postingDate: "", isActive: true };
+const blank = { name: "", departmentId: "", status: "", postingDate: "", variable: "", isActive: true };
 
 // Create: a blank dropdown or date is left out, so the server's default applies.
 const created = formPayload(fields, blank, "add");
@@ -20,12 +21,13 @@ const edited = formPayload(fields, blank, "edit");
 assert.equal(edited.departmentId, null, "cleared reference sent as null");
 assert.equal(edited.status, null, "cleared choice sent as null");
 assert.equal(edited.postingDate, null, "cleared date sent as null");
+assert.equal(edited.variable, null, "cleared number sent as null");
 assert.equal(edited.name, "", "text fields untouched");
 
 // Chosen values, and keys the form has no field for, pass through.
 assert.deepEqual(
-    formPayload(fields, { departmentId: "d1", status: "Open", extra: "" }, "add"),
-    { departmentId: "d1", status: "Open", extra: "" },
+    formPayload(fields, { departmentId: "d1", status: "Open", variable: 0, extra: "" }, "add"),
+    { departmentId: "d1", status: "Open", variable: 0, extra: "" },
     "chosen values kept",
 );
 

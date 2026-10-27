@@ -237,7 +237,27 @@ console.log("payrollIntegrity: a cancelled month can be run again");
 }
 console.log("payrollIntegrity: an entry whose slips all fail is marked failed");
 
-// ------------------------- 5. deleting a cancelled entry takes its slips --
+// ------------------------------------ 5. a submitted slip is never deleted --
+{
+  const slip = (status) => ({ _id: oid(), employeeId: asha._id, companyId, startDate: sepStart, endDate: sepEnd, status });
+  const submitted = slip("submitted");
+  const withheld = slip("withheld");
+  const draft = slip("draft");
+  stub(SalarySlip, [submitted, withheld, draft]);
+  stub(PayrollEntry, []);
+  const remove = (row) => call(payrollRunRoutes, "delete", "/salary-slips/:salarySlipId", { params: { salarySlipId: String(row._id) } });
+  for (const row of [submitted, withheld]) {
+    const res = await remove(row);
+    expectStatus(res, 409, `a ${row.status} slip with no other references`);
+    assert.match(res.body.message, /Cancel it first/);
+    assert.notEqual(row.isDeleted, true);
+  }
+  expectStatus(await remove(draft), 200, "a draft slip");
+  assert.equal(draft.isDeleted, true);
+}
+console.log("payrollIntegrity: a submitted slip cannot be deleted");
+
+// ------------------------- 6. deleting a cancelled entry takes its slips --
 {
   const slip = (employee, status) => ({ _id: oid(), employeeId: employee._id, companyId, startDate: sepStart, endDate: sepEnd, status });
   const entryOf = (status, slips) => ({ _id: oid(), companyId, status, startDate: sepStart, endDate: sepEnd,

@@ -53,6 +53,7 @@ import GratuityRule from "../models/GratuityRule.js";
 import LeaveType from "../models/LeaveType.js";
 import { PERMISSION_KEYS } from "@demo-panel/shared/permissions";
 import { SCOPES } from "@demo-panel/shared/scopes";
+import { SHIFT_PREFERENCES } from "@demo-panel/shared/attendance";
 import { seedApproverSelfService } from "./approver-self-service.js";
 
 dotenv.config();
@@ -869,7 +870,7 @@ const parseOrgChartDate = (value) => {
 
 const GENDER_MAP = { male: "Male", female: "Female" };
 const WORK_MODE_VALUES = new Set(["WFO", "WFH"]);
-const SHIFT_PREFERENCE_VALUES = new Set(["Day", "Night", "UK"]);
+const SHIFT_PREFERENCE_VALUES = new Set(SHIFT_PREFERENCES);
 
 /**
  * Real Apidel employees (ADR-018), 195 rows from apidel-org-chart.csv.

@@ -30,9 +30,13 @@ const OPERATORS = {
   $ne: (value, arg) => !same(value, arg),
   $lte: (value, arg) => value <= arg,
   $gte: (value, arg) => value >= arg,
+  $gt: (value, arg) => value > arg,
+  $lt: (value, arg) => value < arg,
 };
 const matches = (row, filter = {}) => Object.entries(filter).every(([key, cond]) => {
   if (key === "$and") return cond.every((part) => matches(row, part));
+  if (key === "$or") return cond.some((part) => matches(row, part));
+  if (key === "$nor") return !cond.some((part) => matches(row, part));
   if (!isOperators(cond)) return same(row[key], cond);
   return Object.entries(cond).every(([op, arg]) => {
     if (!OPERATORS[op]) throw new Error(`stand-in query: unsupported ${op}`);
@@ -135,12 +139,14 @@ stub(LeaveAllocation, [
   { ...period, _id: oid(), employeeId: asha._id, leaveTypeId: sick._id },
   { ...period, _id: oid(), employeeId: chen._id, leaveTypeId: casual._id },
 ]);
+const grant = { transactionType: "LeaveAllocation", fromDate: period.fromDate };
+const taken = { transactionType: "LeaveApplication", fromDate: new Date("2026-01-20") };
 const ledger = [
-  { employeeId: asha._id, leaveTypeId: casual._id, leaves: 12 },
-  { employeeId: asha._id, leaveTypeId: casual._id, leaves: -3 },
-  { employeeId: asha._id, leaveTypeId: casual._id, leaves: -2, isDeleted: true }, // a cancelled leave
-  { employeeId: asha._id, leaveTypeId: sick._id, leaves: 6 },
-  { employeeId: chen._id, leaveTypeId: casual._id, leaves: 10 },
+  { ...grant, employeeId: asha._id, leaveTypeId: casual._id, leaves: 12 },
+  { ...taken, employeeId: asha._id, leaveTypeId: casual._id, leaves: -3 },
+  { ...taken, employeeId: asha._id, leaveTypeId: casual._id, leaves: -2, isDeleted: true }, // a cancelled leave
+  { ...grant, employeeId: asha._id, leaveTypeId: sick._id, leaves: 6 },
+  { ...grant, employeeId: chen._id, leaveTypeId: casual._id, leaves: 10 },
 ].map((row) => ({ ...row, createdAt: new Date("2026-02-01") }));
 LeaveLedgerEntry.aggregate = async ([{ $match }]) => {
   const rows = ledger.filter((row) => matches(row, $match));

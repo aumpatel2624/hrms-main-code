@@ -36,7 +36,10 @@ router.post("/payroll-periods", authMiddleware(ANY_ROLE), checkPermission("/payr
  *     responses:
  *       200: { description: Successful operation }
  */
-router.get("/payroll-periods", authMiddleware(ANY_ROLE), checkPermission("/payroll-period", "read"), controller.listPayrollPeriods);
+// Dropdown source — matrix-free like GET /shift-types: an employee's own Tax
+// Exemption Declaration needs its payroll periods (dates only, the caller's own
+// company — listPayrollPeriods confines it) though the Payroll Period setup page is HR's.
+router.get("/payroll-periods", authMiddleware(ANY_ROLE), controller.listPayrollPeriods);
 /**
  * @swagger
  * /payroll-periods/search:

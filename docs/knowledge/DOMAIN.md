@@ -281,7 +281,7 @@ module list — moved to modules 5, 6 and 8 respectively; see ADR-018 for why.
 | expenseApproverId, leaveApproverId, shiftRequestApproverId | ref User, optional | unseeded — fields exist for Leaves/Expenses/Shift Request, the scoping mechanism that reads them is still open (`OPEN-QUESTIONS.md` Q-4) |
 | healthInsuranceProviderId | ref EmployeeHealthInsurance, optional | |
 | healthInsuranceNo | String, optional | |
-| shiftPreference | enum, optional | Day / Night / UK — placeholder ahead of the real Shift & Attendance module |
+| shiftPreference | enum, optional | Day / Night / UK / USA (`SHIFT_PREFERENCES` in `packages/shared/src/attendance.js`, shared by the model and the form) — descriptive only; the shift actually worked is the Shift Assignment |
 | workMode | enum, optional | WFO / WFH — from CSV |
 | isActive | Boolean | default true |
 

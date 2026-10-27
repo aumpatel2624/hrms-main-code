@@ -1,5 +1,6 @@
 import swaggerJsdoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
+import { SHIFT_PREFERENCES } from "@demo-panel/shared/attendance";
 
 const options = {
   definition: {
@@ -388,7 +389,7 @@ const options = {
             shiftRequestApproverId: { type: "string", nullable: true },
             healthInsuranceProviderId: { type: "string", nullable: true },
             healthInsuranceNo: { type: "string", nullable: true },
-            shiftPreference: { type: "string", enum: ["Day", "Night", "UK"], nullable: true },
+            shiftPreference: { type: "string", enum: [...SHIFT_PREFERENCES], nullable: true },
             workMode: { type: "string", enum: ["WFO", "WFH"], nullable: true },
             isActive: { type: "boolean" },
           },
@@ -410,7 +411,7 @@ const options = {
             employmentTypeId: { type: "string" },
             gradeId: { type: "string" },
             healthInsuranceProviderId: { type: "string" },
-            shiftPreference: { type: "string", enum: ["Day", "Night", "UK"] },
+            shiftPreference: { type: "string", enum: [...SHIFT_PREFERENCES] },
             workMode: { type: "string", enum: ["WFO", "WFH"] },
             isActive: { type: "boolean", default: true },
           },

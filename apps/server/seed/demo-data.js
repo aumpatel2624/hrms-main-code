@@ -620,11 +620,12 @@ const seedLeaveData = async (companyId, employees) => {
 // ---------------------------------------------------------------------------
 
 const seedShiftAttendanceData = async (companyId, employees) => {
-  // Create demo Shift Types matching the CSV's three shift values.
+  // Create demo Shift Types, one per Employee shift preference (SHIFT_PREFERENCES).
   const SHIFT_DEFS = [
     { shiftTypeName: "Night Shift", startTime: "22:00", endTime: "06:00" },
     { shiftTypeName: "Day Shift",   startTime: "09:00", endTime: "18:00" },
     { shiftTypeName: "UK Shift",    startTime: "13:00", endTime: "22:00" },
+    { shiftTypeName: "USA Shift",   startTime: "19:30", endTime: "04:30" },
   ];
 
   const shiftByName = {};
@@ -637,7 +638,7 @@ const seedShiftAttendanceData = async (companyId, employees) => {
     shiftByName[def.shiftTypeName] = doc;
   }
 
-  const CSV_SHIFT_TO_SHIFT_NAME = { Day: "Day Shift", Night: "Night Shift", UK: "UK Shift" };
+  const CSV_SHIFT_TO_SHIFT_NAME = { Day: "Day Shift", Night: "Night Shift", UK: "UK Shift", USA: "USA Shift" };
 
   // Shift assignments — use all employees but cap the DB writes at 30.
   const slice = employees.slice(0, 30);

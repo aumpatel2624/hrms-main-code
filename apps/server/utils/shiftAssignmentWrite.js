@@ -13,8 +13,9 @@ export const withShiftWriteLock = async (key, action) => {
   try { return await action(); }
   finally { release(); if (tails.get(key) === next) tails.delete(key); }
 };
-export const saveShiftRecord = (doc, previous, req) => {
-  const save = async () => { await validateShiftRecord(doc, previous, req); return doc.save(); };
+// `options.onBehalf`: an approved request writes the requester's records (see validateShiftRecord).
+export const saveShiftRecord = (doc, previous, req, options) => {
+  const save = async () => { await validateShiftRecord(doc, previous, req, options); return doc.save(); };
   return doc.constructor.modelName === "ShiftAssignment"
     ? withShiftWriteLock(`employee:${doc.employeeId}`, save)
     : save();

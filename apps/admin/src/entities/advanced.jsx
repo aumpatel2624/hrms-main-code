@@ -46,17 +46,17 @@ import {
     createAppraisalTemplate, getAppraisalTemplateById, updateAppraisalTemplate, deleteAppraisalTemplate, searchAppraisalTemplates, getAllAppraisalTemplates,
     createAppraisalCycle, getAppraisalCycleById, updateAppraisalCycle, deleteAppraisalCycle, searchAppraisalCycles, getAllAppraisalCycles,
     getEligibleEmployeesForCycle, createAppraisalsForCycle, completeAppraisalCycle,
-    createAppraisal, getAppraisalById, updateAppraisal, deleteAppraisal, searchAppraisals, submitAppraisal, cancelAppraisal, getAllAppraisals,
+    createAppraisal, getAppraisalById, updateAppraisal, deleteAppraisal, searchAppraisals, submitAppraisal, cancelAppraisal,
     createGoal, getGoalById, updateGoal, deleteGoal, searchGoals, getAllGoals,
     archiveGoal, unarchiveGoal, closeGoal, reopenGoal,
     createEmployeePerformanceFeedback, getEmployeePerformanceFeedbackById, updateEmployeePerformanceFeedback,
-    deleteEmployeePerformanceFeedback, searchEmployeePerformanceFeedbacks,
+    deleteEmployeePerformanceFeedback, searchEmployeePerformanceFeedbacks, getFeedbackAppraisalOptions,
     submitEmployeePerformanceFeedback, cancelEmployeePerformanceFeedback,
 } from "../api/performance.api";
 import { GenerateShiftsPanel } from "../components/hrms/generate-shifts-panel";
 import { Building07, Hash02, Link01, Mail01, MarkerPin01, Phone, Shield01, Tag01, Type01, User01 } from "@untitledui/icons";
 import { isStrongPassword, isValidEmail, PASSWORD } from "@demo-panel/shared/validation";
-import { COMPANY_TIME_ZONE } from "@demo-panel/shared/attendance";
+import { COMPANY_TIME_ZONE, SHIFT_PREFERENCES } from "@demo-panel/shared/attendance";
 import { fromZonedDateTimeKey, zonedDateKey, zonedDateTimeKey } from "@demo-panel/shared/zonedTime";
 import api from "../api/index";
 import { ENDPOINTS } from "../api/endpoints";
@@ -174,6 +174,7 @@ import MarkEncashmentPaidPanel from "@/components/crud/mark-encashment-paid-pane
 import { employeePayload } from "./employee-payload";
 import { holidayListAssignmentPayload } from "./holiday-list-assignment-payload";
 import { salaryStructureAssignmentPayload } from "./salary-structure-assignment-payload";
+import { taxDeclarationPayload } from "./tax-declaration-payload";
 
 const ACTIVE = { name: "isActive", label: "Is Active", type: "checkbox", section: "status" };
 
@@ -682,7 +683,7 @@ export const employeeConfig = {
         { name: "employmentTypeId", icon: Tag01, label: "Employment Type", type: "select", section: "employment", optionsFrom: "employmentTypeId" },
         { name: "gradeId", icon: Tag01, label: "Employee Grade", type: "select", section: "employment", optionsFrom: "gradeId" },
         { name: "workMode", label: "Work Mode", type: "select", section: "employment", options: [{ value: "WFO", label: "Work From Office" }, { value: "WFH", label: "Work From Home" }] },
-        { name: "shiftPreference", label: "Shift", type: "select", section: "employment", options: [{ value: "Day", label: "Day" }, { value: "Night", label: "Night" }, { value: "UK", label: "UK" }] },
+        { name: "shiftPreference", label: "Shift", type: "select", section: "employment", options: SHIFT_PREFERENCES.map((value) => ({ value, label: value })) },
 
         { name: "healthInsuranceProviderId", icon: Tag01, label: "Health Insurance Provider", type: "select", section: "other", optionsFrom: "healthInsuranceProviderId" },
         { name: "healthInsuranceNo", label: "Health Insurance No.", section: "other", placeholder: "Enter policy/member number" },
@@ -4986,7 +4987,8 @@ export const employeePerformanceFeedbackConfig = {
         rowCriteriaId: criteriaRowOptions,
         employeeId: asOptions(getAllEmployees, "employeeName"),
         reviewerId: asOptions(getCurrentEmployees, "employeeName"),
-        appraisalId: () => getAllAppraisals().then((res) => unwrapListRows(res.data?.data).map((row) => ({ value: row._id, label: `Appraisal — ${row.employeeIdLabel || row.employeeId?.employeeName || row.employeeId} (${row.status})` }))),
+        // The appraisals the caller may give feedback on — their reports', or (HR) their company's.
+        appraisalId: () => getFeedbackAppraisalOptions().then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: `Appraisal — ${row.employeeIdLabel}${row.appraisalCycleIdLabel ? ` · ${row.appraisalCycleIdLabel}` : ""} (${row.status})` }))),
     },
     sections: [
         { id: "details", title: "Feedback Details" },
@@ -5655,6 +5657,7 @@ export const employeeTaxExemptionDeclarationConfig = {
         payrollPeriodId: refId(data.payrollPeriodId),
         declarations: (data.declarations ?? []).map((row) => ({ ...row, exemptionSubCategoryId: refId(row.exemptionSubCategoryId) })),
     }),
+    toPayload: taxDeclarationPayload,
 };
 
 const EXEMPTION_PROOF_COLUMNS = [

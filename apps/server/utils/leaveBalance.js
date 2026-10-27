@@ -12,26 +12,36 @@ import LeaveLedgerEntry from "../models/LeaveLedgerEntry.js";
  * rows itself in its own `$match` stage — it is not automatic here the way
  * it is for a plain list query.
  *
- * `asOfDate` filters on `createdAt` — "the ledger as it stood chronologically
- * at that point" — rather than reproducing source's per-transaction-type
- * date-field logic (`get_leave_balance_on` reads `to_date` for allocations
- * but `from_date`/`to_date` differently for applications/encashments). A
- * deliberate simplification: nothing in this fork yet writes application/
- * encashment rows, so there is no mixed-date-field case to get right today —
- * the second fork should revisit this if it needs true "balance as of an
- * arbitrary past date" semantics once those transaction types exist.
+ * Which rows count as of `asOfDate`:
+ * - an allocation's grant (a positive, unexpired `LeaveAllocation` row)
+ *   counts from the start of the period it covers (`fromDate`), whenever it
+ *   was recorded — so 2026's allocation, entered after go-live, covers leave
+ *   dated earlier in 2026, and next year's, entered early, does not count yet;
+ * - every other row (applications, encashments, adjustments, expiry) counts
+ *   once it was recorded (`createdAt`) — "the ledger as it stood at that
+ *   point", unchanged, so expiry and carry-forward behave as before;
+ * - `forConsumption` (a leave application's sufficiency check) also counts
+ *   every debit recorded so far, whatever its date: leave already taken or
+ *   booked is gone, even when it was recorded after — or is dated after —
+ *   the leave being checked.
  *
  * @param {string|ObjectId} employeeId
  * @param {string|ObjectId} leaveTypeId
  * @param {Date} [asOfDate] — defaults to now
+ * @param {{ forConsumption?: boolean }} [options]
  * @returns {Promise<number>}
  */
-export const getLeaveBalance = async (employeeId, leaveTypeId, asOfDate = new Date()) => {
+export const getLeaveBalance = async (employeeId, leaveTypeId, asOfDate = new Date(), { forConsumption = false } = {}) => {
+  const grant = { transactionType: "LeaveAllocation", isExpired: { $ne: true }, leaves: { $gt: 0 } };
   const match = {
     isDeleted: { $ne: true }, // manual — aggregate bypasses the soft-delete plugin
     employeeId: new mongoose.Types.ObjectId(String(employeeId)),
     leaveTypeId: new mongoose.Types.ObjectId(String(leaveTypeId)),
-    createdAt: { $lte: asOfDate },
+    $or: [
+      { ...grant, fromDate: { $lte: asOfDate } },
+      { $nor: [grant], createdAt: { $lte: asOfDate } },
+      ...(forConsumption ? [{ leaves: { $lt: 0 }, isExpired: { $ne: true } }] : []),
+    ],
   };
 
   const [result] = await LeaveLedgerEntry.aggregate([

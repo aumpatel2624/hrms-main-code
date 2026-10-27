@@ -4855,4 +4855,47 @@ consumer; single-branch build
   editor and is left for a follow-up. Tested by `apps/admin/src/entities/row-pickers.test.js` (no `…Id`
   text field left; every row lookup defined) and `controllers/v1/lookupOptions.test.js` (an Employee
   reads each names-only list and still gets 403 on the master lists).
+
+### ADR-052 — Everyday tasks the screens could not finish: tax declaration, manager feedback, past leave, shift change
+
+- **Date**: 2026-10-27
+- **Status**: accepted
+- **Context**: The pre-production simulation (report sections 4 and 6; 23 Oct report F14) found everyday tasks that
+  could not be completed on screen. A Tax Exemption Declaration failed for everyone with "Unexpected fields in
+  request body", and an employee's Payroll Period picker was empty. A team lead (on the Employee role) saw no
+  appraisals in the feedback form, so HR entered the feedback for them. Leave dated before go-live was refused
+  "Insufficient leave balance" although the year's allocation covered it, because the balance counted ledger rows
+  by the date they were recorded. A Shift Request was refused while the employee's current shift assignment was
+  open-ended, and the named approver could not approve one anyway. The leave edit form showed From and To blank.
+  The Employee form offered no USA shift.
+- **Decision**:
+  - **Tax declaration**: the form sends only the six fields the server accepts
+    (`entities/tax-declaration-payload.js`); it also sent the computed totals, HRA figures and status. The server
+    allowlist is unchanged. Create and update refuse another company's payroll period. `GET /payroll-periods`
+    becomes a matrix-free dropdown source confined to the caller's company (PERM-19) rather than a new grant on the
+    Payroll Period screen, so no sidebar entry appears and no re-seed is needed.
+  - **Manager feedback**: a new picker endpoint, `GET /employee-performance-feedbacks/appraisal-options`, behind the
+    feedback screen's own read permission, lists the caller's reporting chain's appraisals (an `all` scope: their
+    company's) with the label only. The Appraisal screen's access is untouched; widening the Employee role's
+    Appraisal scope would have exposed scores.
+  - **Past leave**: an allocation's grant counts from the start of the period it covers, not from when it was
+    recorded (INV-27). Every other ledger row still counts from when it was recorded, so expiry and carry-forward
+    are unchanged. Because past leave can now be recorded, a leave application's balance check also counts every
+    leave debit already recorded, whatever its date; otherwise leave entered later for an earlier date was
+    invisible to the check and the same days could be spent twice.
+  - **Shift change**: the request is not refused for the employee's current open-ended assignment that started
+    earlier. Approval ends it the day before the new shift, creates the new one, and for a request with a To Date
+    starts the old shift again the day after (INV-37). The decision is the authority for these writes, so the named
+    approver (often on an `own` scope) may make them; before, that write was refused "You can only manage your own
+    records". A true overlap with a dated assignment is still refused.
+  - **Leave edit dates (F14)**: an edit form trims stored date timestamps to the day a date input reads
+    (`storedFormValues`, `components/crud/form-defaults.js`), for every screen, not only Leave Application.
+  - **USA shift preference**: `SHIFT_PREFERENCES` in `packages/shared/src/attendance.js` (Day, Night, UK, USA) feeds
+    the Employee model's enum, the form's options, the seed and Swagger; the demo seed maps USA to a 19:30–04:30 USA
+    Shift like the others.
+- **Consequences**: the Tax Exemption Proof Submission form has the same read-only-fields defect and is not fixed
+  here. Feedback create still accepts any appraisal by id when the caller is its reviewer; only the picker narrows.
+  An allocation's expiry still writes off its whole grant, not grant minus leave taken (`processExpiredAllocations`,
+  noted there since ADR-024). Tested by `utils/leaveBalancePeriod.test.js`, `controllers/v1/blockedWorkflows.test.js`,
+  `entities/tax-declaration-payload.test.js` and `components/crud/form-defaults.test.js`.
 - **Deviates from convention**: no.

@@ -158,6 +158,21 @@ router.get(
 
 /**
  * @swagger
+ * /employee-performance-feedbacks/appraisal-options:
+ *   get:
+ *     summary: listFeedbackAppraisalOptions — the feedback form's Appraisal picker
+ *     tags: [Performance]
+ *     security: [{ bearerAuth: [] }]
+ */
+router.get(
+  "/employee-performance-feedbacks/appraisal-options",
+  authMiddleware(ANY_ROLE),
+  checkPermission("/employee-performance-feedback", "read"),
+  controller.listFeedbackAppraisalOptions,
+);
+
+/**
+ * @swagger
  * /employee-performance-feedbacks/search:
  *   post:
  *     summary: searchEmployeePerformanceFeedbacks

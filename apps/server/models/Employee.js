@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { SHIFT_PREFERENCES } from "@demo-panel/shared/attendance";
 
 /** Statuses that keep the record (payroll, full-and-final) but not the access. */
 export const NO_ACCESS_STATUSES = ["Left", "Inactive", "Suspended"];
@@ -195,7 +196,7 @@ const EmployeeSchema = new mongoose.Schema(
     // module (module 9) — not a preview of that module's design.
     shiftPreference: {
       type: String,
-      enum: ["Day", "Night", "UK"],
+      enum: [...SHIFT_PREFERENCES],
       required: false,
       default: null,
     },

@@ -612,6 +612,37 @@ const canEditStage = async (req) => {
   return { $addFields: { canEdit: { $eq: ["$reviewerId", me?._id ?? null] } } };
 };
 
+// The feedback form's Appraisal picker. A manager usually holds a role that
+// reads only their own appraisal, so the Appraisal list gave them nothing to
+// pick. This lists the appraisals the caller can give feedback on — their
+// company's for an "all"-scoped caller, otherwise those of the people in their
+// downward reporting chain — and only the picker label, none of the scores.
+export const listFeedbackAppraisalOptions = async (req, res) => {
+  try {
+    let scope;
+    if (isAllScoped(req)) {
+      scope = await attendanceScope(req, false);
+    } else {
+      const me = await resolveRequestEmployee(req);
+      scope = { employeeId: { $in: me ? await getSubordinateEmployeeIds(me._id) : [] } };
+    }
+    const appraisals = await Appraisal.find(scope).select("employeeId appraisalCycleId status").lean();
+    const [employees, cycles] = await Promise.all([
+      Employee.find({ _id: { $in: appraisals.map((row) => row.employeeId) } }).select("employeeName").lean(),
+      AppraisalCycle.find({ _id: { $in: appraisals.map((row) => row.appraisalCycleId) } }).select("cycleName").lean(),
+    ]);
+    const nameOf = (rows, id, field) => rows.find((row) => String(row._id) === String(id))?.[field] ?? "";
+    const data = appraisals.map((row) => ({
+      _id: row._id,
+      employeeId: row.employeeId,
+      employeeIdLabel: nameOf(employees, row.employeeId, "employeeName"),
+      appraisalCycleIdLabel: nameOf(cycles, row.appraisalCycleId, "cycleName"),
+      status: row.status,
+    }));
+    return res.status(200).json({ isOk: true, status: 200, data });
+  } catch (error) { return failure(res, error); }
+};
+
 export const createEmployeePerformanceFeedback = async (req, res) => {
   try {
     const { employeeId, reviewerId, appraisalId, feedback } = req.body;

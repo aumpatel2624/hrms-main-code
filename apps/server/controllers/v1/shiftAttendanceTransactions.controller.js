@@ -25,6 +25,7 @@ import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
 import { sameCalendarDay } from "../../utils/leaveDayCalculation.js";
 import { isHolidayForEmployee } from "../../utils/holidayResolution.js";
 import { saveShiftRecord } from "../../utils/shiftAssignmentWrite.js";
+import { dayStart } from "../../utils/shiftOccurrence.js";
 import { generateShiftsForScheduleAssignment } from "./shiftAttendance.controller.js";
 import { SCOPES } from "@demo-panel/shared/scopes";
 import { ROLES } from "@demo-panel/shared/roles";
@@ -142,14 +143,21 @@ const findOverlappingShiftRequests = (employeeId, fromDate, toDate, excludeId) =
  * overlapping the requested range is treated as the "actual shift timing"
  * conflict, rather than a real start/end-time overlap test that would only
  * matter if multiple concurrent shifts were allowed.
+ *
+ * The one exception is the employee's current open-ended assignment when it
+ * started before the request: approval ends it the day before (see
+ * `approveShiftRequest`), so it is a shift change, not a conflict.
  */
-const findOverlappingShiftAssignment = (employeeId, fromDate, toDate) => {
+const openEndedBefore = (assignment, fromDate) => !assignment.endDate && dayStart(assignment.startDate) < dayStart(fromDate);
+
+const findOverlappingShiftAssignment = async (employeeId, fromDate, toDate) => {
   const query = {
     employeeId, status: "active",
     $or: [{ endDate: null }, { endDate: { $gte: fromDate } }],
   };
   if (toDate) query.startDate = { $lte: toDate };
-  return ShiftAssignment.exists(query);
+  const overlapping = await ShiftAssignment.find(query).lean();
+  return overlapping.some((assignment) => !openEndedBefore(assignment, fromDate));
 };
 
 /** Shared by create and update — never throws, returns `{ error }` or the resolved fields to persist. */
@@ -335,6 +343,17 @@ export const approveShiftRequest = async (req, res) => {
       return res.status(400).json({ isOk: false, status: 400, message: `Only an open request can be approved (current status: ${doc.status})` });
     }
 
+    // A shift change: the current open-ended assignment ends the day before
+    // the new one starts, and — when the request has an end date — resumes
+    // the day after it. The decision above is the authority for these writes,
+    // so a named approver may make them on the requester's records.
+    const onBehalf = { onBehalf: true };
+    const current = (await ShiftAssignment.find({ employeeId: doc.employeeId, status: "active", endDate: null }))
+      .find((assignment) => openEndedBefore(assignment, doc.fromDate));
+    if (current) {
+      current.endDate = addDays(dayStart(doc.fromDate), -1);
+      await saveShiftRecord(current, current.toObject(), req, onBehalf);
+    }
     const assignment = new ShiftAssignment({
       employeeId: doc.employeeId,
       shiftTypeId: doc.shiftTypeId,
@@ -343,7 +362,22 @@ export const approveShiftRequest = async (req, res) => {
       endDate: doc.toDate || null,
       status: "active",
     });
-    await saveShiftRecord(assignment, null, req);
+    try {
+      await saveShiftRecord(assignment, null, req, onBehalf);
+    } catch (error) {
+      if (current) {
+        current.endDate = null;
+        await saveShiftRecord(current, current.toObject(), req, onBehalf);
+      }
+      throw error;
+    }
+    if (current && doc.toDate) {
+      const { shiftTypeId, shiftLocationId, companyId } = current;
+      await saveShiftRecord(new ShiftAssignment({
+        employeeId: doc.employeeId, shiftTypeId, shiftLocationId, companyId,
+        startDate: addDays(dayStart(doc.toDate), 1), endDate: null, status: "active",
+      }), null, req, onBehalf);
+    }
 
     doc.status = "approved";
     await doc.save();

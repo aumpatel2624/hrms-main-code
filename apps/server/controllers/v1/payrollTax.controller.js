@@ -494,6 +494,7 @@ export const createEmployeeTaxExemptionDeclaration = async (req, res) => {
 
     const period = await PayrollPeriod.findById(payrollPeriodId).lean();
     if (!period) throwError(404, "Payroll Period not found");
+    if (String(period.companyId) !== String(employee.companyId)) throwError(400, "Payroll Period must belong to the employee's company");
 
     const existing = await EmployeeTaxExemptionDeclaration.findOne({
       employeeId: resolvedEmployeeId,
@@ -623,6 +624,7 @@ export const updateEmployeeTaxExemptionDeclaration = async (req, res) => {
 
     const period = await PayrollPeriod.findById(doc.payrollPeriodId).lean();
     if (!period) throwError(404, "Payroll Period not found");
+    if (String(period.companyId) !== String(doc.companyId)) throwError(400, "Payroll Period must belong to the employee's company");
     await applyDeclarationHra(doc, period);
 
     await doc.save();

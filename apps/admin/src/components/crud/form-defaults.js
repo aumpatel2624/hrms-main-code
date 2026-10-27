@@ -16,3 +16,22 @@ export const initialFormValues = (fields) =>
                 : (f.default ?? (f.type === "multiselect" ? [] : "")),
         ]),
     );
+
+/**
+ * A stored record as an edit form holds it. The API sends dates as full ISO
+ * timestamps ("2026-09-15T00:00:00.000Z"), but a date input reads only
+ * "YYYY-MM-DD", so a screen whose config did not trim them showed its saved
+ * dates blank (Leave Application's From and To, F14). Dates are stored as
+ * the chosen day at UTC midnight, so the day is the timestamp's first ten
+ * characters.
+ */
+export const storedFormValues = (fields, values) => {
+    const out = { ...values };
+    fields.forEach((field) => {
+        const value = out[field.name];
+        if (field.type === "date" && typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+            out[field.name] = value.slice(0, 10);
+        }
+    });
+    return out;
+};

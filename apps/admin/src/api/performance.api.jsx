@@ -68,6 +68,7 @@ export const getAllEmployeePerformanceFeedbacks = async () => api.get(ENDPOINTS.
 export const getEmployeePerformanceFeedbackById = async (id) => api.get(ENDPOINTS.EMPLOYEE_PERFORMANCE_FEEDBACKS.BY_ID(id));
 export const updateEmployeePerformanceFeedback = async (id, data) => api.put(ENDPOINTS.EMPLOYEE_PERFORMANCE_FEEDBACKS.BY_ID(id), data);
 export const searchEmployeePerformanceFeedbacks = async (data) => api.post(ENDPOINTS.EMPLOYEE_PERFORMANCE_FEEDBACKS.SEARCH, data);
+export const getFeedbackAppraisalOptions = async () => api.get(ENDPOINTS.EMPLOYEE_PERFORMANCE_FEEDBACKS.APPRAISAL_OPTIONS);
 export const submitEmployeePerformanceFeedback = async (id) => api.post(ENDPOINTS.EMPLOYEE_PERFORMANCE_FEEDBACKS.SUBMIT(id));
 export const cancelEmployeePerformanceFeedback = async (id) => api.post(ENDPOINTS.EMPLOYEE_PERFORMANCE_FEEDBACKS.CANCEL(id));
 export const deleteEmployeePerformanceFeedback = async (id) => api.delete(ENDPOINTS.EMPLOYEE_PERFORMANCE_FEEDBACKS.BY_ID(id));

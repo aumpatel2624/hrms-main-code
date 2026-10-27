@@ -212,6 +212,7 @@ export const ENDPOINTS = {
     EMPLOYEE_PERFORMANCE_FEEDBACKS: {
         BASE: `${V1}/employee-performance-feedbacks`,
         SEARCH: `${V1}/employee-performance-feedbacks/search`,
+        APPRAISAL_OPTIONS: `${V1}/employee-performance-feedbacks/appraisal-options`,
         BY_ID: (id) => `${V1}/employee-performance-feedbacks/${id}`,
         SUBMIT: (id) => `${V1}/employee-performance-feedbacks/${id}/submit`,
         CANCEL: (id) => `${V1}/employee-performance-feedbacks/${id}/cancel`,

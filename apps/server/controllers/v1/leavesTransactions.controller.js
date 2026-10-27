@@ -635,7 +635,7 @@ const runLeaveApplicationValidation = async (data, { excludeId = null, actingUse
   // Balance sufficiency (Validation Rule 4, "for_consumption" balance) — as
   // of toDate, since applying leave consumes balance for the whole range.
   if (!leaveType.isLwp) {
-    const balance = await getLeaveBalance(employeeId, leaveTypeId, to);
+    const balance = await getLeaveBalance(employeeId, leaveTypeId, to, { forConsumption: true });
     if (balance < totalLeaveDays && !leaveType.allowNegative) {
       return { error: { status: 400, message: `Insufficient leave balance for Leave Type ${leaveType.leaveTypeName}` } };
     }
@@ -960,7 +960,7 @@ export const approveLeaveApplication = async (req, res) => {
     const to = new Date(doc.toDate);
 
     if (!leaveType.isLwp) {
-      const balance = await getLeaveBalance(doc.employeeId, doc.leaveTypeId, to);
+      const balance = await getLeaveBalance(doc.employeeId, doc.leaveTypeId, to, { forConsumption: true });
       if (balance < doc.totalLeaveDays && !leaveType.allowNegative) {
         return res.status(400).json({ isOk: false, status: 400, message: `Insufficient leave balance for Leave Type ${leaveType.leaveTypeName}` });
       }

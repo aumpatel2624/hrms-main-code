@@ -1,15 +1,14 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { LOGIN } from '@demo-panel/shared/auth';
-import { isValidEmail } from '@demo-panel/shared/validation';
-import { getLoginStatusByEmail } from '../api/auth.api';
 
 /**
  * Custom hook for managing login attempt status
- * Handles countdown timer and lock status checking
- * @param {string} email - Email to check status for
+ * Handles the lock countdown timer, fed from the login response — the
+ * status-by-email endpoint is admin-only (ADR-046), so the form no longer
+ * asks for an account's status before signing in.
  * @returns {Object} Login attempt status and formatted time
  */
-export const useLoginAttempt = (email) => {
+export const useLoginAttempt = () => {
     const [status, setStatus] = useState({
         attemptCount: 0,
         isLocked: false,
@@ -18,53 +17,6 @@ export const useLoginAttempt = (email) => {
         attemptsRemaining: LOGIN.MAX_ATTEMPTS,
     });
     const [formattedTime, setFormattedTime] = useState('');
-    const [loading, setLoading] = useState(false);
-
-    // Ref to track debounce timeout
-    const debounceTimeoutRef = useRef(null);
-
-    // Fetch login status from server
-    const fetchStatus = useCallback(async () => {
-        if (!email) return;
-
-        try {
-            setLoading(true);
-            const response = await getLoginStatusByEmail(email);
-            if (response.data?.isOk && response.data?.data) {
-                setStatus(response.data.data);
-            }
-        } catch (error) {
-            console.error('Failed to fetch login status:', error);
-        } finally {
-            setLoading(false);
-        }
-    }, [email]);
-
-    // Debounced fetch status when email changes
-    // Only calls API after user stops typing for 500ms and email is valid
-    useEffect(() => {
-        // Clear any existing timeout
-        if (debounceTimeoutRef.current) {
-            clearTimeout(debounceTimeoutRef.current);
-        }
-
-        // Only proceed if we have a valid email format
-        if (!isValidEmail(email)) {
-            return;
-        }
-
-        // Set a new debounced timeout
-        debounceTimeoutRef.current = setTimeout(() => {
-            fetchStatus();
-        }, 500); // 500ms debounce delay
-
-        // Cleanup on unmount or email change
-        return () => {
-            if (debounceTimeoutRef.current) {
-                clearTimeout(debounceTimeoutRef.current);
-            }
-        };
-    }, [email, fetchStatus]);
 
     // Countdown timer effect - starts when remainingTime changes and is > 0
     useEffect(() => {
@@ -131,8 +83,6 @@ export const useLoginAttempt = (email) => {
     return {
         ...status,
         formattedTime,
-        loading,
-        fetchStatus,
         updateFromResponse,
     };
 };

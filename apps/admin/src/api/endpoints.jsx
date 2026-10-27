@@ -221,7 +221,6 @@ export const ENDPOINTS = {
         OTP_SEND: `${V1}/otp/send`,
         OTP_VERIFY: `${V1}/otp/verify`,
         PASSWORD_RESET: `${V1}/otp/reset-password`,
-        LOGIN_STATUS_BY_EMAIL: `${V1}/auth/login-status-by-email`,
         LOGIN_STATUS: (userId) => `${V1}/auth/login-status/${userId}`,
         VERIFY_SESSION: `${V1}/auth/verify-session`
     },

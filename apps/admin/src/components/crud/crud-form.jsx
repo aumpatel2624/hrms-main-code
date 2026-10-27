@@ -4,7 +4,7 @@ import { toast } from "react-toastify";
 import { MenuContext } from "../../context/MenuContext";
 import { Card, PageHeader } from "@/components/ui/page";
 import { FormActions, FormSection, FullWidth } from "@/components/ui/form";
-import { CheckField, EmailField, Field, PasswordField, SelectField, TextAreaField } from "@/components/ui/field";
+import { CheckField, EmailField, Field, MultiSelectField, PasswordField, SelectField, TextAreaField } from "@/components/ui/field";
 import { initialFormValues } from "./form-defaults.js";
 import IconPicker from "@/components/ui/icon-picker";
 import JoditEditor from "jodit-react";
@@ -53,6 +53,16 @@ const renderField = ({ field, values, errors, showErrors, setValues, handleChang
                             ...(field.clears ?? []).reduce((acc, k) => ({ ...acc, [k]: "" }), {}),
                         }))
                     }
+                />
+            );
+        case "multiselect":
+            return (
+                <MultiSelectField
+                    key={field.name}
+                    {...shared}
+                    options={field.optionsFrom ? (lookups[field.optionsFrom] ?? []) : (field.options ?? [])}
+                    value={values[field.name]}
+                    onChange={(ids) => setValues((v) => ({ ...v, [field.name]: ids }))}
                 />
             );
         case "textarea":

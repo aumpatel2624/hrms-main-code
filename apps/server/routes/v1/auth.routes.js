@@ -47,9 +47,7 @@ const router = express.Router();
  *       400:
  *         description: Consent missing or validation error
  *       401:
- *         description: Invalid credentials
- *       404:
- *         description: User not found
+ *         description: Invalid credentials (unknown email or wrong password alike)
  *       423:
  *         description: Account locked
  */
@@ -126,7 +124,7 @@ router.get(
  * @swagger
  * /auth/login-status-by-email:
  *   post:
- *     summary: Get login attempt status by email (used by the login form)
+ *     summary: Admin - get login attempt status by email
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -141,7 +139,7 @@ router.get(
  *       200:
  *         description: Login attempt status
  */
-router.post("/auth/login-status-by-email", getLoginStatusByEmail);
+router.post("/auth/login-status-by-email", authMiddleware(ADMIN_ONLY), getLoginStatusByEmail);
 
 // ============ ADMIN-ONLY ACCOUNT MANAGEMENT ============
 

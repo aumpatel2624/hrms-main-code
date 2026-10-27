@@ -4573,3 +4573,45 @@ consumer; single-branch build
   code. No `widgetSources` change: no model changed.
 - **Deviates from convention**: no.
 
+
+### ADR-046 — Confidential reviews, assigned interviews, a company-confined staff list, and no account probing
+
+- **Date**: 2026-10-27
+- **Status**: accepted
+- **Context**: The pre-production simulation's privacy verdict was "not safe to deploy" after ADR-045. Four leaks
+  remained: (L2) any employee, interns and leavers included, could list and open a colleague's performance feedback
+  and was offered Edit — the base seed gave the `Employee` role an unscoped row on that screen, which falls through to
+  the role's `all`; (L5) the `Interviewer` role, also unscoped, received every company's interviews with each
+  applicant's whole joined record (email, phone, HR's CTC notes), and the Interview form had no way to assign
+  interviewers, so interview feedback always failed with 403; (L6) `GET /employees`, every picker's source, gave any
+  signed-in user all 69 people of all five companies; (L7) unauthenticated `POST /auth/login-status-by-email` reported
+  any account's attempts and lock state, and login said "User not found" for an unknown email.
+- **Decision**:
+  - **Performance feedback** — below an `all` data scope a caller sees only feedback they are the subject or reviewer
+    of (a manager's `team` scope no longer widens it), changes only feedback they reviewed, and creates feedback only as
+    its reviewer. Rows and the detail carry `canEdit`; a new optional entity-config hook, `canEditRow(row)`, read by the
+    shared list and detail screens, hides Edit when it is false. The seed gives `Employee` `own` on the screen and
+    corrects an existing row in place. HR, CEO tier and ADMIN are unchanged. Appraisal checked: not exposed — the
+    base seed gives `Employee` no Appraisal grant (the simulation's employees got 403) and the tier rows are already
+    scoped through `attendanceScope`; no change.
+  - **Interviews** — the existing `Interview.interviewers` field is now on the form as a new reusable `multiselect`
+    field type (employees picked by name). Below `all`, a caller reaches only interviews that list them and only their
+    own Interview Feedback, submitted in their own name. The seed gives `Interviewer` `own` on both screens, corrected
+    in place. The interview list drops the joined applicant and interview type documents for everyone, keeping the
+    names, as ADR-045 did for employees.
+  - **Staff list** — `GET /employees` requires a session that resolves to a live account, then confines anyone whose
+    `/employee` scope is below `all` to their own company. It is deliberately not gated on the Employee screen's read
+    flag: Leave Approver, Expense Approver and Interviewer have no Employee screen but fill pickers from this list
+    (an interviewer's feedback form among them).
+  - **Probing** — login gives an unknown email the same 401 as a wrong password and no longer sends the attempt
+    count; lockout itself is unchanged. The status-by-email endpoint is admin-only, and the login form no longer calls
+    it before sign-in.
+- **Consequences**:
+  - **An existing database must be re-seeded** (`npm run seed`) for the `Employee` and `Interviewer` rows to become
+    `own` — until then those roles still resolve to `all` on those screens and keep the L2/L5 access. An admin can
+    instead set the scope on the Role Permissions screen.
+  - The login form no longer shows "N attempts remaining"; the lock and its countdown still show when it happens.
+  - The `Hiring Manager & Interviewer` functional role (seed:tiers) keeps `all` ("assigned") on interviews; HR still
+    sees every company's interviews and feedback (group-wide by design).
+  - No `widgetSources` change: no model changed (`interviewers` already existed).
+- **Deviates from convention**: no.

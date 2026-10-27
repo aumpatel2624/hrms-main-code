@@ -19,4 +19,7 @@ assert.deepEqual(
     "other defaults unchanged",
 );
 
+// A multiselect starts as an empty id list, not "".
+assert.deepEqual(initialFormValues([{ name: "interviewers", type: "multiselect" }]).interviewers, [], "multiselect starts empty");
+
 console.log("form-defaults: all assertions passed");

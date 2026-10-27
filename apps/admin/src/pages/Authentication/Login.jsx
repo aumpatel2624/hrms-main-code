@@ -53,8 +53,7 @@ const Login = () => {
         attemptsRemaining,
         formattedTime,
         updateFromResponse,
-        fetchStatus: fetchLoginStatus,
-    } = useLoginAttempt(values.email);
+    } = useLoginAttempt();
 
     // Timer interval ref
     const timerRef = React.useRef(null);
@@ -195,8 +194,6 @@ const Login = () => {
                 })
                 .finally(() => {
                     setIsLoginLoading(false);
-                    // Refresh login status after attempt
-                    fetchLoginStatus();
                 });
         } catch (error) {
             console.error("Login error:", error);

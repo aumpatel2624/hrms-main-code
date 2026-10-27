@@ -705,10 +705,8 @@ export const employeeConfig = {
 };
 
 // ---------------------------------------------------------- Recruitment (ADR-019) --
-// Interviewers/defaultInterviewers (arrays of User refs) are schema-ready but
-// not exposed on these quick-entry forms — this admin has no multi-select
-// field type precedent to build against yet; a known simplification, not an
-// oversight.
+// Interview.interviewers is a `multiselect` field (ADR-046 — it decides who
+// sees the interview). InterviewType.defaultInterviewers is still API-only.
 
 export const jobApplicantSourceConfig = {
     filterFields: [
@@ -997,12 +995,15 @@ export const interviewConfig = {
         interviewTypeId: asOptions(getAllInterviewTypes, "interviewTypeName"),
         jobApplicantId: asOptions(getAllJobApplicants, "applicantName"),
         designationId: asOptions(getAllDesignations, "designationName"),
+        interviewers: asOptions(getAllEmployees, "employeeName"),
     },
     sections: [{ id: "details", title: "Details" }, { id: "schedule", title: "Schedule" }, { id: "status", title: "Status" }],
     fields: [
         { name: "interviewTypeId", icon: Type01, label: "Interview Type", type: "select", required: true, section: "details", error: "Interview Type is required!", optionsFrom: "interviewTypeId" },
         { name: "jobApplicantId", icon: User01, label: "Job Applicant", type: "select", required: true, section: "details", error: "Job Applicant is required!", optionsFrom: "jobApplicantId" },
         { name: "designationId", icon: User01, label: "Designation", type: "select", section: "details", optionsFrom: "designationId" },
+        // ADR-046: who may see this interview and submit feedback on it.
+        { name: "interviewers", label: "Interviewers", type: "multiselect", section: "details", optionsFrom: "interviewers", hint: "Only these employees (and HR) can see this interview and give feedback on it." },
         { name: "interviewSummary", label: "Interview Summary", type: "textarea", section: "details" },
 
         { name: "scheduledOn", label: "Scheduled On", type: "date", required: true, section: "schedule", error: "Scheduled On is required!" },
@@ -1022,7 +1023,7 @@ export const interviewConfig = {
         { name: "Status", selector: (row) => row.status, minWidth: "120px" },
     ],
     recordTitle: (r) => `${r.jobApplicantName ?? r.jobApplicantId?.applicantName ?? "Interview"} — ${r.interviewTypeName ?? r.interviewTypeId?.interviewTypeName ?? ""}`,
-    toForm: (data) => ({ ...data, interviewTypeId: refId(data.interviewTypeId), jobApplicantId: refId(data.jobApplicantId), designationId: refId(data.designationId) }),
+    toForm: (data) => ({ ...data, interviewTypeId: refId(data.interviewTypeId), jobApplicantId: refId(data.jobApplicantId), designationId: refId(data.designationId), interviewers: (data.interviewers ?? []).map(refId) }),
 };
 
 // Interview's own list rows carry no human-readable label (jobApplicantId
@@ -4915,6 +4916,9 @@ export const employeePerformanceFeedbackConfig = {
         update: updateEmployeePerformanceFeedback,
         remove: deleteEmployeePerformanceFeedback,
     },
+    // ADR-046: only the reviewer (or HR) may change feedback; the server sends
+    // that verdict on each row and enforces it.
+    canEditRow: (row) => row.canEdit !== false,
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
         reviewerId: asOptions(getAllEmployees, "employeeName"),

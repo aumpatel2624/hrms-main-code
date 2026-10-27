@@ -3,8 +3,14 @@
  * and designation-mismatch guards enforced on create; `rescheduleInterview`
  * is the one path allowed to change scheduledOn/fromTime/toTime after
  * creation (they're otherwise treated as set-once, matching source).
+ *
+ * ADR-046: below an "all" data scope (HR, ADMIN) a caller — the Interviewer
+ * role — reaches only the interviews they are listed on in `interviewers`.
  */
+import { ROLES } from "@demo-panel/shared/roles";
+import { SCOPES } from "@demo-panel/shared/scopes";
 import { runListQuery } from "../../utils/listQuery.js";
+import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import Interview from "../../models/Interview.js";
 import JobApplicant from "../../models/JobApplicant.js";
 import {
@@ -25,6 +31,12 @@ const failure = (res, error) => {
   }
   console.error("Interview request failed", error);
   return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+};
+
+const interviewScope = async (req) => {
+  if (req.user?.role === ROLES.ADMIN || req.user?.dataScope === SCOPES.ALL) return {};
+  const me = await resolveRequestEmployee(req);
+  return me ? { interviewers: me._id } : { _id: { $in: [] } };
 };
 
 const REQUIRED_FIELDS = ["interviewTypeId", "jobApplicantId", "scheduledOn", "fromTime", "toTime"];
@@ -77,7 +89,7 @@ export const createInterview = async (req, res) => {
 export const updateInterview = async (req, res) => {
   try {
     const { interviewId } = req.params;
-    const doc = await Interview.findById(interviewId);
+    const doc = await Interview.findOne({ $and: [{ _id: interviewId }, await interviewScope(req)] });
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Interview not found" });
     }
@@ -97,7 +109,7 @@ export const rescheduleInterview = async (req, res) => {
   try {
     const { interviewId } = req.params;
     const { scheduledOn, fromTime, toTime } = req.body;
-    const doc = await Interview.findById(interviewId);
+    const doc = await Interview.findOne({ $and: [{ _id: interviewId }, await interviewScope(req)] });
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Interview not found" });
     }
@@ -115,7 +127,7 @@ export const rescheduleInterview = async (req, res) => {
 export const deleteInterview = async (req, res) => {
   try {
     const { interviewId } = req.params;
-    const doc = await Interview.findById(interviewId);
+    const doc = await Interview.findOne({ $and: [{ _id: interviewId }, await interviewScope(req)] });
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Interview not found" });
     }
@@ -138,7 +150,7 @@ export const deleteInterview = async (req, res) => {
 export const getInterviewById = async (req, res) => {
   try {
     // Populated so the detail page can title the interview by applicant and type.
-    const doc = await Interview.findById(req.params.interviewId)
+    const doc = await Interview.findOne({ $and: [{ _id: req.params.interviewId }, await interviewScope(req)] })
       .populate("jobApplicantId", "applicantName")
       .populate("interviewTypeId", "interviewTypeName");
     if (!doc) {
@@ -153,7 +165,7 @@ export const getInterviewById = async (req, res) => {
 
 export const listInterviews = async (req, res) => {
   try {
-    const filter = { isActive: true };
+    const filter = { isActive: true, ...(await interviewScope(req)) };
     if (req.query.jobApplicantId) filter.jobApplicantId = req.query.jobApplicantId;
     const docs = await Interview.find(filter).select("interviewTypeId jobApplicantId status scheduledOn");
     return res.status(200).json({ isOk: true, status: 200, data: docs });
@@ -166,6 +178,7 @@ export const listInterviews = async (req, res) => {
 export const listInterviewsByParams = async (req, res) => {
   try {
     const list = await runListQuery(Interview, req.body, {
+      scopeFilter: await interviewScope(req),
       searchRefs: [{ field: "jobApplicantId", model: "JobApplicant", fields: ["applicantName"] }],
       searchFields: [],
       filterable: {
@@ -181,6 +194,9 @@ export const listInterviewsByParams = async (req, res) => {
             jobApplicantName: { $arrayElemAt: ["$jobApplicant.applicantName", 0] },
           },
         },
+        // The joined applicant carries contact details and HR's notes — only
+        // the two names above are for the browser (ADR-046).
+        { $project: { interviewType: 0, jobApplicant: 0 } },
       ],
     });
     return res.status(200).json({ isOk: true, status: 200, data: list });

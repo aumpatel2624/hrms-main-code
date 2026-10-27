@@ -4,6 +4,7 @@ import { Input } from "@/components/base/input/input";
 import { TextArea } from "@/components/base/textarea/textarea";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
 import { ComboBox } from "@/components/base/select/combobox";
+import { MultiSelect } from "@/components/base/select/multi-select";
 import { SelectItem } from "@/components/base/select/select-item";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { normalizeOption } from "./select-options";
@@ -117,5 +118,37 @@ export const SelectField = ({
                 </SelectItem>
             )}
         </ComboBox>
+    );
+};
+
+/**
+ * Pick several records from one option list — same options shape as
+ * SelectField, but the value and onChange carry an array of ids. The trigger
+ * lists the picked labels.
+ */
+export const MultiSelectField = ({ options = [], value, onChange, error, hint, placeholder = "Select", isDisabled, ...rest }) => {
+    const items = options.map(normalizeOption).map((o) => ({ id: String(o.value), label: o.label }));
+    const selected = new Set((Array.isArray(value) ? value : []).map(String));
+
+    return (
+        <MultiSelect
+            items={items}
+            selectedKeys={selected}
+            onSelectionChange={(keys) => onChange?.(keys === "all" ? items.map((i) => i.id) : [...keys].map(String))}
+            onReset={() => onChange?.([])}
+            onSelectAll={() => onChange?.(items.map((i) => i.id))}
+            selectedCountFormatter={() => items.filter((i) => selected.has(i.id)).map((i) => i.label).join(", ") || `${selected.size} selected`}
+            placeholder={placeholder}
+            isDisabled={isDisabled}
+            isInvalid={Boolean(error)}
+            hint={error || hint}
+            {...rest}
+        >
+            {(item) => (
+                <SelectItem key={item.id} id={item.id}>
+                    {item.label}
+                </SelectItem>
+            )}
+        </MultiSelect>
     );
 };

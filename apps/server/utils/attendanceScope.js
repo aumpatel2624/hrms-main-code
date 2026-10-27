@@ -24,10 +24,8 @@ export const attendanceScope = async (req, employeeOwned = true, { directReports
     const byEmployee = { employeeId: { $in: companyEmployees.map(row => row._id) } };
     return scope.$and ? { $and: [byEmployee, ...scope.$and.slice(1)] } : byEmployee;
   }
-  if (employeeOwned && req.user.dataScope === "department") {
-    const departmentId = employee?.departmentId;
-    const employees = departmentId ? await Employee.find({ departmentId, ...company }).select("_id").lean() : [];
-    return { $and: [company, { employeeId: { $in: employees.map(row => row._id) } }] };
+  if (employeeOwned && req.user.dataScope === SCOPES.DEPARTMENT) {
+    return { $and: [company, { employeeId: { $in: await departmentEmployeeIds(req) } }] };
   }
   // SCOPES.TEAM (pre-launch, org-chart manager visibility): resolve the
   // caller's downward reportsToId chain the same way an APPROVER scope
@@ -44,6 +42,20 @@ export const attendanceScope = async (req, employeeOwned = true, { directReports
   }, { owner: "employeeId", department: "departmentId", teamIds, approverIds }) : null;
   return row ? { $and: [company, row] } : company;
 };
+
+// F3: an "Own department" row — the employees in the caller's current
+// department and company (the caller among them). No department: nobody,
+// fail closed. Shared by every employee-owned screen that honours the scope.
+export const departmentEmployeeIds = async (req) => {
+  const employee = await resolveRequestEmployee(req);
+  if (!employee?.departmentId || !employee.companyId) return [];
+  const employees = await Employee.find({ departmentId: employee.departmentId, companyId: employee.companyId }).select("_id").lean();
+  return employees.map((row) => row._id);
+};
+
+/** Whether `employeeId` is one of departmentEmployeeIds — the by-id twin of the list filter. */
+export const inCallerDepartment = async (req, employeeId) =>
+  (await departmentEmployeeIds(req)).some((id) => String(id) === String(employeeId?._id ?? employeeId));
 
 // ADR-043: a source's `selfServiceFilter` (config/widgetSources.js) narrows
 // any caller whose row scope is less than "all" — an Employee sees submitted

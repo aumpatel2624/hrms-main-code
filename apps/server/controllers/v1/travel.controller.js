@@ -14,6 +14,7 @@ import {
 } from "../../utils/referenceHelper.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { buildScopeFilter } from "../../utils/scope.js";
+import { departmentEmployeeIds, inCallerDepartment } from "../../utils/attendanceScope.js";
 import { SCOPES } from "@demo-panel/shared/scopes";
 import { ROLES } from "@demo-panel/shared/roles";
 
@@ -274,6 +275,7 @@ const assertActiveEmployee = async (employeeId) => {
  */
 const canAccessOwnTravelRequest = async (req, doc) => {
   if (!req.user || req.user.role === ROLES.ADMIN) return true;
+  if (req.user.dataScope === SCOPES.DEPARTMENT) return inCallerDepartment(req, doc.employeeId);
   if (req.user.dataScope !== SCOPES.OWN) return true;
   await resolveRequestEmployee(req);
   return String(req.user.employeeId) === String(doc.employeeId);
@@ -394,7 +396,10 @@ export const listTravelRequestByParams = async (req, res) => {
     // Employee (dataScope OWN, per the seed fix) saw every employee's
     // Travel Requests, not just their own.
     const ownEmployee = await resolveRequestEmployee(req);
-    const scopeFilter = buildScopeFilter({ ...req.user, id: ownEmployee?._id }, { owner: "employeeId" });
+    // "Own department" (F3): the caller's current department, as on Employee.
+    const scopeFilter = req.user?.dataScope === SCOPES.DEPARTMENT
+      ? { employeeId: { $in: await departmentEmployeeIds(req) } }
+      : buildScopeFilter({ ...req.user, id: ownEmployee?._id }, { owner: "employeeId" });
 
     const list = await runListQuery(TravelRequest, req.body, {
       searchRefs: [employeeSearch()],

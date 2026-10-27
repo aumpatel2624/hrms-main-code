@@ -16,6 +16,7 @@ import { ROLES } from "@demo-panel/shared/roles";
 import { SCOPES } from "@demo-panel/shared/scopes";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { buildScopeFilter } from "../../utils/scope.js";
+import { departmentEmployeeIds, inCallerDepartment } from "../../utils/attendanceScope.js";
 
 // ---------------------------------------------------------- Grievance Type --
 
@@ -159,17 +160,30 @@ const validateConditionalFields = (fields) => {
 // leavesTransactions.controller.js's own createLeaveApplication). No delete
 // right exists for Employee at all (see seedEmployeeCareerEventsRoles), so
 // deleteEmployeeGrievance needs no ownership check of its own.
+// "Own department" (F3): grievances raised by someone in the caller's
+// current department — never one raised against the caller by someone
+// else, which would name the complainant to the person accused.
 const canAccessEmployeeGrievance = async (req, doc) => {
   if (!req.user || req.user.role === ROLES.ADMIN) return true;
-  if (req.user.dataScope !== SCOPES.OWN) return true;
+  if (req.user.dataScope !== SCOPES.OWN && req.user.dataScope !== SCOPES.DEPARTMENT) return true;
   const employee = await resolveRequestEmployee(req);
-  // getById populates raisedByEmployeeId; compare the id either way.
+  // getById populates the employee refs; compare the ids either way.
   const raisedBy = doc.raisedByEmployeeId?._id ?? doc.raisedByEmployeeId;
-  return !!employee && String(raisedBy) === String(employee._id);
+  if (!!employee && String(raisedBy) === String(employee._id)) return true;
+  if (req.user.dataScope === SCOPES.OWN) return false;
+  const against = doc.grievanceAgainstEmployeeId?._id ?? doc.grievanceAgainstEmployeeId;
+  return String(against) !== String(employee?._id) && inCallerDepartment(req, raisedBy);
 };
 
 const employeeGrievanceScopeFilter = async (req) => {
   if (!req.user || req.user.role === ROLES.ADMIN) return null;
+  if (req.user.dataScope === SCOPES.DEPARTMENT) {
+    const employee = await resolveRequestEmployee(req);
+    return { $and: [
+      { raisedByEmployeeId: { $in: await departmentEmployeeIds(req) } },
+      { $or: [{ raisedByEmployeeId: employee?._id }, { grievanceAgainstEmployeeId: { $ne: employee?._id } }] },
+    ] };
+  }
   if (req.user.dataScope !== SCOPES.OWN) return null;
   const employee = await resolveRequestEmployee(req);
   return buildScopeFilter({ ...req.user, id: employee?._id }, { owner: "raisedByEmployeeId" });

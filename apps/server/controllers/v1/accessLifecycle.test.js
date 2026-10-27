@@ -8,7 +8,9 @@
 //      self-service (seed/org-tiers.data.js withEmployeeSelfService),
 //   5. a Leave Application (and Compensatory Leave Request) by id is the
 //      applicant's, its named approver's, the caller's team's, or HR's — and a
-//      self-service create is always the caller's own.
+//      self-service create is always the caller's own,
+//   6. an "Own department" role reaches only its department's employees — on
+//      Employee and on the six employee-owned request screens (F3).
 // Drives the real mounted routes (authMiddleware → checkPermission → handler)
 // over in-memory stand-ins and the seeded matrices, like approvalIntegrity.test.js.
 import assert from "node:assert/strict";
@@ -32,6 +34,10 @@ import LeaveType from "../../models/LeaveType.js";
 import LoginAttempt from "../../models/LoginAttempt.js";
 import MenuMaster from "../../models/MenuMaster.js";
 import ShiftAssignment from "../../models/ShiftAssignment.js";
+import ShiftRequest from "../../models/ShiftRequest.js";
+import AttendanceRequest from "../../models/AttendanceRequest.js";
+import TravelRequest from "../../models/TravelRequest.js";
+import EmployeeGrievance from "../../models/EmployeeGrievance.js";
 import UserRoles from "../../models/UserRoles.js";
 import { invalidateRoleCache } from "../../middlewares/checkPermission.js";
 import { buildRoleRows, withEmployeeSelfService } from "../../seed/org-tiers.data.js";
@@ -39,6 +45,9 @@ import employeeRoutes from "../../routes/v1/employee.routes.js";
 import expenseRoutes from "../../routes/v1/expenses.routes.js";
 import leaveRoutes from "../../routes/v1/leavesTransactions.routes.js";
 import shiftRoutes from "../../routes/v1/shiftAttendance.routes.js";
+import shiftRequestRoutes from "../../routes/v1/shiftAttendanceTransactions.routes.js";
+import travelRoutes from "../../routes/v1/travel.routes.js";
+import careerRoutes from "../../routes/v1/employeeCareerEvents.routes.js";
 import { login } from "./auth.controller.js";
 
 // ---------------------------------------------------------------- stand-ins --
@@ -368,6 +377,46 @@ resetWrites();
   const byId = (employee) => call(employeeRoutes, "get", "/employees/:employeeId", viewer, { params: { employeeId: String(employee._id) } });
   expectStatus(await byId(colleague), 200, "a colleague in the department by id");
   expectStatus(await byId(asha), 404, "someone in another department by id");
+}
+
+// ------------- 7. "Own department" on the six employee-owned request screens --
+{
+  // F3, the rest of it: Leave Applications, Expense Claims, Travel Requests,
+  // Grievances, Shift Requests and Attendance Requests ignored the scope.
+  const deptRoleId = oid();
+  const finance = oid();
+  const viewer = person("devi", "Employee", { roleId: deptRoleId, departmentId: finance });
+  const colleague = person("cara", "Employee", { departmentId: finance });
+  people.push(asDoc(viewer), asDoc(colleague));
+  const screens = [
+    { menuUrl: "/leave-application", Model: LeaveApplication, router: leaveRoutes, path: "/leave-applications", param: "leaveApplicationId" },
+    { menuUrl: "/expense-claim", Model: ExpenseClaim, router: expenseRoutes, path: "/expense-claims", param: "id" },
+    { menuUrl: "/travel-request", Model: TravelRequest, router: travelRoutes, path: "/travel-requests", param: "travelRequestId" },
+    { menuUrl: "/employee-grievance", Model: EmployeeGrievance, router: careerRoutes, path: "/employee-grievances", param: "grievanceId", owner: "raisedByEmployeeId" },
+    { menuUrl: "/shift-request", Model: ShiftRequest, router: shiftRequestRoutes, path: "/shift-requests", param: "shiftRequestId" },
+    { menuUrl: "/attendance-request", Model: AttendanceRequest, router: shiftRequestRoutes, path: "/attendance-requests", param: "attendanceRequestId" },
+  ];
+  stub(UserRoles, [...tierMatrices, { roleId: deptRoleId, isActive: true, dataScope: SCOPES.ALL, roles: screens.map((screen) => row(screen.menuUrl, {}, SCOPES.DEPARTMENT)) }]);
+  invalidateRoleCache();
+  for (const { menuUrl, Model, router, path, param, owner = "employeeId" } of screens) {
+    const record = (employee, extra = {}) => ({ _id: oid(), [owner]: employee._id, companyId, leaveTypeId: leaveType._id, status: "open", isActive: true, ...extra });
+    const own = record(viewer);
+    const colleagues = record(colleague);
+    const outsiders = record(asha);
+    const rows = [own, colleagues, outsiders];
+    // A grievance against the viewer must not name its complainant to them.
+    const against = owner === "raisedByEmployeeId" ? record(colleague, { grievanceAgainstEmployeeId: viewer._id }) : null;
+    if (against) rows.push(against);
+    stub(Model, rows);
+    const res = await call(router, "post", `${path}/search`, viewer, { body: {} });
+    expectStatus(res, 200, `${menuUrl}: a department-scoped role lists`);
+    assert.deepEqual(listedIds(res), [own, colleagues].map((doc) => String(doc._id)).sort(), `${menuUrl}: only their own department's`);
+    const byId = (doc) => call(router, "get", `${path}/:${param}`, viewer, { params: { [param]: String(doc._id) } });
+    expectStatus(await byId(own), 200, `${menuUrl}: their own by id`);
+    expectStatus(await byId(colleagues), 200, `${menuUrl}: a department colleague's by id`);
+    assert.ok([403, 404].includes((await byId(outsiders)).statusCode), `${menuUrl}: another department's by id is refused`);
+    if (against) expectStatus(await byId(against), 403, `${menuUrl}: one raised against the viewer by id`);
+  }
 }
 
 console.log("accessLifecycle.test.js passed");

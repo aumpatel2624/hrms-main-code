@@ -318,6 +318,9 @@ export const deleteShiftScheduleAssignment = async (req, res) => {
 };
 
 export const EMPLOYEECHECKIN_FIELDS = ["employeeId", "time", "logType", "deviceId", "skipAutoAttendance", "latitude", "longitude", "companyId", "isActive"];
+// A self-service punch is stamped with the server's clock; a typed time is
+// accepted only this close to it (the form's minute precision plus clock skew).
+const CHECKIN_TIME_TOLERANCE_MS = 2 * 60 * 1000;
 export const createEmployeeCheckin = async (req, res) => {
   try {
     const payload = {};
@@ -328,11 +331,22 @@ export const createEmployeeCheckin = async (req, res) => {
     // check-in on behalf of a colleague (attendance fraud). A self-service
     // caller (dataScope !== ALL) can only ever check themself in, same
     // pattern as every other self-service create in this codebase
-    // (createLeaveApplication, createGoal, etc).
+    // (createLeaveApplication, createGoal, etc). A punch for someone else is
+    // refused rather than quietly re-filed under the caller, and the time is
+    // always now: a back- or forward-dated punch would fabricate attendance.
+    // Earlier days are corrected through an Attendance Request or HR.
     if (req.user && req.user.role !== ROLES.ADMIN && req.user.dataScope !== SCOPES.ALL) {
       const ownEmployee = await resolveRequestEmployee(req);
       if (!ownEmployee) return res.status(403).json({ isOk: false, status: 403, message: "No employee record linked to this user" });
+      if (payload.employeeId && String(payload.employeeId) !== String(ownEmployee._id)) {
+        return res.status(403).json({ isOk: false, status: 403, message: "You can only record your own check-in" });
+      }
+      const now = new Date();
+      if (payload.time && !(Math.abs(new Date(payload.time) - now) <= CHECKIN_TIME_TOLERANCE_MS)) {
+        return res.status(400).json({ isOk: false, status: 400, message: "A check-in is recorded at the current time. To correct an earlier day, raise an Attendance Request." });
+      }
       payload.employeeId = ownEmployee._id;
+      payload.time = now;
     }
     const doc = new EmployeeCheckin(payload);
     await saveShiftRecord(doc, null, req);

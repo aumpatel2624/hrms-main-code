@@ -53,6 +53,8 @@ export const createAttendanceRequest = async (data) => api.post(ENDPOINTS.ATTEND
 export const getAttendanceRequestById = async (id) => api.get(ENDPOINTS.ATTENDANCE_REQUESTS.BY_ID(id));
 export const updateAttendanceRequest = async (id, data) => api.put(ENDPOINTS.ATTENDANCE_REQUESTS.BY_ID(id), data);
 export const searchAttendanceRequests = async (data) => api.post(ENDPOINTS.ATTENDANCE_REQUESTS.SEARCH, data);
+export const approveAttendanceRequest = async (id) => api.post(ENDPOINTS.ATTENDANCE_REQUESTS.APPROVE(id));
+export const rejectAttendanceRequest = async (id) => api.post(ENDPOINTS.ATTENDANCE_REQUESTS.REJECT(id));
 export const cancelAttendanceRequest = async (id) => api.post(ENDPOINTS.ATTENDANCE_REQUESTS.CANCEL(id));
 
 // Shift Assignment Tool / Employee Attendance Tool — stateless bulk-action

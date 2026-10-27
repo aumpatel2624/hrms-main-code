@@ -126,6 +126,18 @@ export const login = async (req, res) => {
       });
     }
 
+    // An offboarded employee keeps their record (payroll, full-and-final) but
+    // not their access. Checked after the password, so the answer never tells
+    // a stranger which accounts exist or have left.
+    if (role === ROLES.USER && ["Left", "Inactive"].includes(account.status)) {
+      return res.status(403).json({
+        isOk: false,
+        message: "Your account is no longer active. Please contact HR.",
+        error: "Account inactive",
+        status: 403,
+      });
+    }
+
     await authService.recordSuccessfulLogin(
       userId,
       email,

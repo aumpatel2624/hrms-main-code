@@ -340,6 +340,7 @@ export const WIDGET_SOURCES = Object.freeze({
   "filterable": {
     "employeeId": "objectId",
     "companyId": "objectId",
+    "approverId": "objectId",
     "status": "string",
     "reason": "string",
     "fromDate": "date",

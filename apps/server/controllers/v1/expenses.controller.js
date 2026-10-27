@@ -7,6 +7,8 @@ import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { resolveApprovers, getEmployeesApprovedBy } from "../../utils/approvers.js";
 import { buildScopeFilter } from "../../utils/scope.js";
 import { SCOPES } from "@demo-panel/shared/scopes";
+import { ROLES } from "@demo-panel/shared/roles";
+import mongoose from "mongoose";
 import { computeExpenseTotals, computeTaxAmount } from "../../utils/expenseClaimCalc.js";
 
 const failure = (res, error) => {
@@ -36,8 +38,19 @@ const claimScope = async (req) => {
   const row = buildScopeFilter({ ...req.user, employeeId: own?._id }, { owner: "employeeId", approverIds });
   return { $and: [company, row] };
 };
-const ensureReadable = async (req, doc) => {
-  const scope = await claimScope(req);
+// Reading: claimScope plus every claim naming the caller as its Expense
+// Approver. A caller let in only for being named (checkPermissionOrNamedApprover)
+// sees exactly those claims. Editing and deleting stay on claimScope.
+const visibleClaimScope = async (req) => {
+  if (req.user?.role === ROLES.ADMIN) return claimScope(req);
+  const named = { expenseApproverId: new mongoose.Types.ObjectId(String(req.user.id)) };
+  if (req.user.namedApproverOnly) return named;
+  return { $or: [await claimScope(req), named] };
+};
+/** checkPermissionOrNamedApprover: does the claim this route touches (any claim, on the list) name the caller as Expense Approver? */
+export const claimNamesCaller = (req) => ExpenseClaim.exists({ ...(req.params.id ? { _id: req.params.id } : {}), expenseApproverId: req.user.id });
+const ensureReadable = async (req, doc, scopeOf = claimScope) => {
+  const scope = await scopeOf(req);
   const match = await ExpenseClaim.exists({ _id: doc._id, ...scope });
   if (!match) throwError(403, "You do not have permission to access this Expense Claim");
 };
@@ -85,14 +98,15 @@ export const createExpenseClaim = async (req, res) => { try {
   const data = await ExpenseClaim.create({ employeeId, companyId: employee.companyId, departmentId: employee.departmentId, postingDate: req.body.postingDate || new Date(), expenseApproverId: resolved, expenses, taxes, status: "draft", ...totals });
   return res.status(201).json({ isOk: true, status: 201, data });
 } catch (error) { return failure(res, error); } };
-export const listExpenseClaims = async (req, res) => { try { const data = await runListQuery(ExpenseClaim, req.query, { scopeFilter: await claimScope(req), filterable: EXPENSE_CLAIM_FILTERABLE, stages: STAGES }); return res.json({ isOk: true, status: 200, data }); } catch (error) { return failure(res, error); } };
-export const searchExpenseClaims = async (req, res) => { try { const data = await runListQuery(ExpenseClaim, req.body, { searchRefs: [employeeSearch()], scopeFilter: await claimScope(req), filterable: EXPENSE_CLAIM_FILTERABLE, stages: STAGES }); return res.json({ isOk: true, status: 200, data }); } catch (error) { return failure(res, error); } };
-export const getExpenseClaimById = async (req, res) => { try { const data = await ExpenseClaim.findById(req.params.id).populate("employeeId", "employeeName employeeCode").populate("departmentId", "departmentName").populate("expenseApproverId", "employeeName employeeCode").populate("expenses.expenseTypeId", "name description"); if (!data) throwError(404, "Expense Claim not found"); await ensureReadable(req, data); return res.json({ isOk: true, status: 200, data }); } catch (error) { return failure(res, error); } };
+export const listExpenseClaims = async (req, res) => { try { const data = await runListQuery(ExpenseClaim, req.query, { scopeFilter: await visibleClaimScope(req), filterable: EXPENSE_CLAIM_FILTERABLE, stages: STAGES }); return res.json({ isOk: true, status: 200, data }); } catch (error) { return failure(res, error); } };
+export const searchExpenseClaims = async (req, res) => { try { const data = await runListQuery(ExpenseClaim, req.body, { searchRefs: [employeeSearch()], scopeFilter: await visibleClaimScope(req), filterable: EXPENSE_CLAIM_FILTERABLE, stages: STAGES }); return res.json({ isOk: true, status: 200, data }); } catch (error) { return failure(res, error); } };
+export const getExpenseClaimById = async (req, res) => { try { const data = await ExpenseClaim.findById(req.params.id).populate("employeeId", "employeeName employeeCode").populate("departmentId", "departmentName").populate("expenseApproverId", "employeeName employeeCode").populate("expenses.expenseTypeId", "name description"); if (!data) throwError(404, "Expense Claim not found"); await ensureReadable(req, data, visibleClaimScope); return res.json({ isOk: true, status: 200, data }); } catch (error) { return failure(res, error); } };
 export const updateExpenseClaim = async (req, res) => { try { const doc = await ExpenseClaim.findById(req.params.id); if (!doc) throwError(404, "Expense Claim not found"); await ensureReadable(req, doc); if (doc.status !== "draft") throwError(400, "Only draft Expense Claim documents can be edited"); const rows = await normalizeRows(req.body.expenses ?? doc.expenses, req.body.taxes ?? doc.taxes); if (rows.expenses.length === 0) throwError(400, "An Expense Claim must have at least one expense row"); doc.expenses = rows.expenses; doc.taxes = rows.taxes; Object.assign(doc, rows.totals); if (req.body.postingDate !== undefined) doc.postingDate = req.body.postingDate; if (req.body.expenseApproverId !== undefined) doc.expenseApproverId = req.body.expenseApproverId || null; await doc.save(); return res.json({ isOk: true, status: 200, data: doc }); } catch (error) { return failure(res, error); } };
 export const deleteExpenseClaim = async (req, res) => { try { const doc = await ExpenseClaim.findById(req.params.id); if (!doc) throwError(404, "Expense Claim not found"); await ensureReadable(req, doc); if (doc.status === "submitted") throwError(400, "Submitted documents must be cancelled before deletion"); doc.isDeleted = true; await doc.save(); return res.json({ isOk: true, status: 200, message: "Expense Claim deleted successfully" }); } catch (error) { return failure(res, error); } };
-const act = (action) => async (req, res) => { try { const doc = await ExpenseClaim.findById(req.params.id); if (!doc) throwError(404, "Expense Claim not found"); if (!(await canAct(req, doc))) throwError(403, "You do not have permission to act on this Expense Claim"); await action(doc); await doc.save(); return res.json({ isOk: true, status: 200, data: doc }); } catch (error) { return failure(res, error); } };
-export const approveExpenseClaim = act(async (doc) => { if (doc.status !== "draft") throwError(400, "Only draft Expense Claim documents can be approved"); doc.status = "approved"; });
-export const rejectExpenseClaim = act(async (doc) => { if (doc.status !== "draft") throwError(400, "Only draft Expense Claim documents can be rejected"); doc.status = "rejected"; doc.expenses.forEach((row) => { row.sanctionedAmount = 0; }); Object.assign(doc, computeExpenseTotals(doc.expenses, doc.taxes)); });
+// `decision` (approve/reject): nobody decides their own claim, even when named as its approver.
+const act = (action, { decision = false } = {}) => async (req, res) => { try { const doc = await ExpenseClaim.findById(req.params.id); if (!doc) throwError(404, "Expense Claim not found"); if (decision && req.user?.role !== ROLES.ADMIN && String(doc.employeeId) === String(req.user?.id)) throwError(403, "You cannot approve or reject your own Expense Claim"); if (!(await canAct(req, doc))) throwError(403, "You do not have permission to act on this Expense Claim"); await action(doc); await doc.save(); return res.json({ isOk: true, status: 200, data: doc }); } catch (error) { return failure(res, error); } };
+export const approveExpenseClaim = act(async (doc) => { if (doc.status !== "draft") throwError(400, "Only draft Expense Claim documents can be approved"); doc.status = "approved"; }, { decision: true });
+export const rejectExpenseClaim = act(async (doc) => { if (doc.status !== "draft") throwError(400, "Only draft Expense Claim documents can be rejected"); doc.status = "rejected"; doc.expenses.forEach((row) => { row.sanctionedAmount = 0; }); Object.assign(doc, computeExpenseTotals(doc.expenses, doc.taxes)); }, { decision: true });
 export const submitExpenseClaim = act(async (doc) => { if (doc.status !== "approved") throwError(400, "Only approved Expense Claim documents can be submitted"); doc.status = "submitted"; });
 export const cancelExpenseClaim = act(async (doc) => { if (doc.status !== "submitted") throwError(400, "Only submitted Expense Claim documents can be cancelled"); doc.status = "cancelled"; });
 export const markExpenseClaimAsPaid = async (req, res) => {

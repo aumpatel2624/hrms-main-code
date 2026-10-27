@@ -1,7 +1,7 @@
 import express from "express";
 import { ANY_ROLE } from "@demo-panel/shared/roles";
 import { authMiddleware } from "../../middlewares/authMiddleware.js";
-import { checkPermission } from "../../middlewares/checkPermission.js";
+import { checkPermission, checkPermissionOrNamedApprover } from "../../middlewares/checkPermission.js";
 import { allowOnlyFields } from "../../middlewares/inputValidator.js";
 import * as controller from "../../controllers/v1/expenses.controller.js";
 const router = express.Router();
@@ -18,16 +18,19 @@ router.get("/expense-claim-types/:id", authMiddleware(ANY_ROLE), checkPermission
 router.put("/expense-claim-types/:id", authMiddleware(ANY_ROLE), checkPermission("/expense-claim-type", "edit"), allowOnlyFields(controller.EXPENSE_CLAIM_TYPE_FIELDS), controller.updateExpenseClaimType);
 router.delete("/expense-claim-types/:id", authMiddleware(ANY_ROLE), checkPermission("/expense-claim-type", "delete"), controller.deleteExpenseClaimType);
 // Expense Claim
+// The claim's named Expense Approver reads and decides it even without the screen in their role.
+const namedApproverGate = (action) => checkPermissionOrNamedApprover("/expense-claim", action, controller.claimNamesCaller);
 /** @swagger */
 router.post("/expense-claims", authMiddleware(ANY_ROLE), checkPermission("/expense-claim", "write"), allowOnlyFields(controller.EXPENSE_CLAIM_FIELDS), controller.createExpenseClaim);
 /** @swagger */
-router.get("/expense-claims", authMiddleware(ANY_ROLE), checkPermission("/expense-claim", "read"), controller.listExpenseClaims);
+router.get("/expense-claims", authMiddleware(ANY_ROLE), namedApproverGate("read"), controller.listExpenseClaims);
 /** @swagger */
-router.post("/expense-claims/search", authMiddleware(ANY_ROLE), checkPermission("/expense-claim", "read"), controller.searchExpenseClaims);
+router.post("/expense-claims/search", authMiddleware(ANY_ROLE), namedApproverGate("read"), controller.searchExpenseClaims);
 /** @swagger */
-router.get("/expense-claims/:id", authMiddleware(ANY_ROLE), checkPermission("/expense-claim", "read"), controller.getExpenseClaimById);
+router.get("/expense-claims/:id", authMiddleware(ANY_ROLE), namedApproverGate("read"), controller.getExpenseClaimById);
 /** @swagger */
 router.put("/expense-claims/:id", authMiddleware(ANY_ROLE), checkPermission("/expense-claim", "edit"), allowOnlyFields(controller.EXPENSE_CLAIM_FIELDS), controller.updateExpenseClaim);
-for (const [name, handler] of Object.entries({ approve: controller.approveExpenseClaim, reject: controller.rejectExpenseClaim, submit: controller.submitExpenseClaim, cancel: controller.cancelExpenseClaim, "mark-paid": controller.markExpenseClaimAsPaid })) router.post(`/expense-claims/:id/${name}`, authMiddleware(ANY_ROLE), checkPermission("/expense-claim", "edit"), handler);
+for (const [name, handler] of Object.entries({ approve: controller.approveExpenseClaim, reject: controller.rejectExpenseClaim })) router.post(`/expense-claims/:id/${name}`, authMiddleware(ANY_ROLE), namedApproverGate("edit"), handler);
+for (const [name, handler] of Object.entries({ submit: controller.submitExpenseClaim, cancel: controller.cancelExpenseClaim, "mark-paid": controller.markExpenseClaimAsPaid })) router.post(`/expense-claims/:id/${name}`, authMiddleware(ANY_ROLE), checkPermission("/expense-claim", "edit"), handler);
 router.delete("/expense-claims/:id", authMiddleware(ANY_ROLE), checkPermission("/expense-claim", "delete"), controller.deleteExpenseClaim);
 export default router;

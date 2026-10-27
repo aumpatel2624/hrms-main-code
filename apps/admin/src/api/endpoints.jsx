@@ -25,6 +25,7 @@ export const ENDPOINTS = {
     },
     ATTENDANCE_REQUESTS: {
         BASE: `${V1}/attendance-requests`, SEARCH: `${V1}/attendance-requests/search`, BY_ID: (id) => `${V1}/attendance-requests/${id}`,
+        APPROVE: (id) => `${V1}/attendance-requests/${id}/approve`, REJECT: (id) => `${V1}/attendance-requests/${id}/reject`,
         CANCEL: (id) => `${V1}/attendance-requests/${id}/cancel`,
     },
     SHIFT_ASSIGNMENT_TOOL: {

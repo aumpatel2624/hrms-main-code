@@ -16,6 +16,7 @@
  * the login User's own id, not the Employee id these two collections key
  * their `employeeId` field on.
  */
+import mongoose from "mongoose";
 import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { resolveApprovers } from "../../utils/approvers.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
@@ -71,9 +72,39 @@ const canAccessOwnRecord = async (req, doc) => {
   return String(req.user.employeeId) === String(doc.employeeId);
 };
 
-/** View access (get-by-id): own record, or — under SCOPES.TEAM — a report's. */
+/**
+ * List scope: own/team as above, plus every request naming the caller as its
+ * approver. A caller let in only for being named
+ * (checkPermissionOrNamedApprover) sees exactly those requests.
+ */
+const requestListScope = async (req) => {
+  const named = { approverId: new mongoose.Types.ObjectId(String(req.user.id)) };
+  if (req.user.namedApproverOnly) return named;
+  const scope = await employeeOwnScopeFilter(req);
+  return scope && { $or: [scope, named] };
+};
+
+/** checkPermissionOrNamedApprover: does the request this route touches (any request, on the list) name the caller as approver? */
+const namesCaller = (Model, idParam) => (req) => Model.exists({ ...(req.params[idParam] ? { _id: req.params[idParam] } : {}), approverId: req.user.id });
+export const shiftRequestNamesCaller = namesCaller(ShiftRequest, "shiftRequestId");
+export const attendanceRequestNamesCaller = namesCaller(AttendanceRequest, "attendanceRequestId");
+
+/**
+ * Why req.user may NOT approve or reject this Shift/Attendance Request, or
+ * null when they may: nobody decides their own request — not even HR — and
+ * below "all" scope only the request's named approver may.
+ */
+const decisionRefusal = (req, doc) => {
+  if (!req.user || req.user.role === ROLES.ADMIN) return null;
+  if (String(req.user.id) === String(doc.employeeId)) return "You cannot approve or reject your own request";
+  if ((req.user.dataScope || SCOPES.ALL) === SCOPES.ALL) return null;
+  return String(doc.approverId || "") === String(req.user.id) ? null : "Only the named approver or HR can approve or reject this request";
+};
+
+/** View access (get-by-id): own record, a request naming the caller as approver, or — under SCOPES.TEAM — a report's. */
 const canViewRecord = async (req, doc) => {
   if (!req.user || req.user.role === ROLES.ADMIN) return true;
+  if (String(doc.approverId || "") === String(req.user.id)) return true;
   if (req.user.dataScope !== SCOPES.OWN && req.user.dataScope !== SCOPES.TEAM) return true;
   const employee = await resolveRequestEmployee(req);
   if (!employee) return false;
@@ -241,13 +272,14 @@ export const getShiftRequestById = async (req, res) => {
     if (!(await canViewRecord(req, doc))) {
       return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to view this Shift Request" });
     }
+    const refusal = decisionRefusal(req, doc);
     await doc.populate([
       { path: "employeeId", select: "employeeName employeeCode" },
       { path: "shiftTypeId", select: "shiftTypeName" },
       { path: "companyId", select: "companyName" },
       { path: "approverId", select: "employeeName employeeCode" },
     ]);
-    return res.status(200).json({ isOk: true, status: 200, data: doc });
+    return res.status(200).json({ isOk: true, status: 200, data: { ...doc.toObject(), canDecide: !refusal } });
   } catch (error) {
     console.log("Error in getShiftRequestById", error);
     return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
@@ -256,7 +288,7 @@ export const getShiftRequestById = async (req, res) => {
 
 export const listShiftRequestByParams = async (req, res) => {
   try {
-    const scopeFilter = await employeeOwnScopeFilter(req);
+    const scopeFilter = await requestListScope(req);
     const list = await runListQuery(ShiftRequest, req.body, {
       searchRefs: [employeeSearch()],
       searchFields: [],
@@ -297,6 +329,8 @@ export const approveShiftRequest = async (req, res) => {
   try {
     const doc = await ShiftRequest.findById(req.params.shiftRequestId);
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Shift Request not found" });
+    const refusal = decisionRefusal(req, doc);
+    if (refusal) return res.status(403).json({ isOk: false, status: 403, message: refusal });
     if (doc.status !== "open") {
       return res.status(400).json({ isOk: false, status: 400, message: `Only an open request can be approved (current status: ${doc.status})` });
     }
@@ -324,6 +358,8 @@ export const rejectShiftRequest = async (req, res) => {
   try {
     const doc = await ShiftRequest.findById(req.params.shiftRequestId);
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Shift Request not found" });
+    const refusal = decisionRefusal(req, doc);
+    if (refusal) return res.status(403).json({ isOk: false, status: 403, message: refusal });
     if (doc.status !== "open") {
       return res.status(400).json({ isOk: false, status: 400, message: `Only an open request can be rejected (current status: ${doc.status})` });
     }
@@ -337,11 +373,14 @@ export const rejectShiftRequest = async (req, res) => {
 };
 
 // =========================================================== AttendanceRequest --
-// ADR-025: "create IS the action" — no separate approval step (source's own
-// submit-does-everything shape). Create directly writes/updates one
-// Attendance row per covered day; `cancel` soft-deletes exactly the rows it
+// Create only records the request (status "open", approverId = the
+// employee's resolved Shift Approver, or none — then HR decides). `approve`
+// writes/updates one Attendance row per covered day and sets "active";
+// `reject` sets "rejected"; `cancel` soft-deletes exactly the rows it
 // created (Attendance.attendanceRequestId back-ref), reusing
-// LeaveApplication.cancel's soft-delete-reversal pattern (ADR-024).
+// LeaveApplication.cancel's soft-delete-reversal pattern (ADR-024). Before
+// this, create marked attendance at once (ADR-025's "create IS the action"),
+// so an employee could turn an absence into a paid day with no approver.
 
 export const ATTENDANCEREQUEST_FIELDS = ["employeeId", "companyId", "fromDate", "toDate", "halfDay", "includeHolidays", "halfDayDate", "reason", "explanation"];
 
@@ -378,7 +417,7 @@ const runAttendanceRequestValidation = async (data, { excludeId = null } = {}) =
   }
 
   const overlapQuery = {
-    employeeId, status: "active",
+    employeeId, status: { $in: ["open", "active"] },
     toDate: { $gte: from }, fromDate: { $lte: to },
   };
   if (excludeId) overlapQuery._id = { $ne: excludeId };
@@ -387,7 +426,8 @@ const runAttendanceRequestValidation = async (data, { excludeId = null } = {}) =
     return { error: { status: 400, message: `Employee ${employee.employeeName} already has an Attendance Request that overlaps with this period` } };
   }
 
-  return { companyId: employee.companyId };
+  const [approverId = null] = (await resolveApprovers(employeeId, "shiftRequest")).filter((id) => id !== String(employeeId));
+  return { companyId: employee.companyId, approverId };
 };
 
 /** Attendance Request.md's get_attendance_status — half day date wins, then Work From Home, else Present (covers "On Duty"). */
@@ -458,19 +498,12 @@ export const createAttendanceRequest = async (req, res) => {
       halfDayDate: req.body.halfDay ? req.body.halfDayDate : null,
       reason: req.body.reason,
       explanation: req.body.explanation || "",
+      approverId: result.approverId,
     });
 
-    const days = [];
-    let cursor = new Date(doc.fromDate);
-    const to = new Date(doc.toDate);
-    while (cursor <= to) {
-      days.push(await markAttendanceForRequestDay(doc, cursor)); // eslint-disable-line no-await-in-loop
-      cursor = addDays(cursor, 1);
-    }
-
     return res.status(201).json({
-      isOk: true, status: 201, message: "Attendance Request created successfully",
-      data: { _id: doc._id, days },
+      isOk: true, status: 201, message: "Attendance Request created — it applies once approved",
+      data: { _id: doc._id },
     });
   } catch (error) {
     console.log("Error in createAttendanceRequest", error);
@@ -480,8 +513,8 @@ export const createAttendanceRequest = async (req, res) => {
 
 /**
  * Defense-in-depth guard (same shape as LeaveEncashment.updateLeaveEncashment,
- * issue #11) — this collection is immutable once created (create is the
- * action, cancel is the only reversal), but `/cancel` needs `edit`
+ * issue #11) — this collection is immutable once created (approve/reject
+ * decide it, cancel is the only reversal), but `/cancel` needs `edit`
  * permission on this menu row, which also makes the generic edit form
  * reachable — this returns a clean 400 instead of a silent crash.
  */
@@ -495,11 +528,13 @@ export const getAttendanceRequestById = async (req, res) => {
     if (!(await canViewRecord(req, doc))) {
       return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to view this Attendance Request" });
     }
+    const refusal = decisionRefusal(req, doc);
     await doc.populate([
       { path: "employeeId", select: "employeeName employeeCode" },
       { path: "companyId", select: "companyName" },
+      { path: "approverId", select: "employeeName employeeCode" },
     ]);
-    return res.status(200).json({ isOk: true, status: 200, data: doc });
+    return res.status(200).json({ isOk: true, status: 200, data: { ...doc.toObject(), canDecide: !refusal } });
   } catch (error) {
     console.log("Error in getAttendanceRequestById", error);
     return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
@@ -508,13 +543,14 @@ export const getAttendanceRequestById = async (req, res) => {
 
 export const listAttendanceRequestByParams = async (req, res) => {
   try {
-    const scopeFilter = await employeeOwnScopeFilter(req);
+    const scopeFilter = await requestListScope(req);
     const list = await runListQuery(AttendanceRequest, req.body, {
       searchRefs: [employeeSearch()],
       searchFields: ["explanation"],
       filterable: {
         employeeId: "objectId",
         companyId: "objectId",
+        approverId: "objectId",
         status: "string",
         reason: "string",
         fromDate: "date",
@@ -535,6 +571,53 @@ export const listAttendanceRequestByParams = async (req, res) => {
   }
 };
 
+/** POST /attendance-requests/:id/approve — marks attendance for every covered day, then "active". */
+export const approveAttendanceRequest = async (req, res) => {
+  try {
+    const doc = await AttendanceRequest.findById(req.params.attendanceRequestId);
+    if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Attendance Request not found" });
+    const refusal = decisionRefusal(req, doc);
+    if (refusal) return res.status(403).json({ isOk: false, status: 403, message: refusal });
+    if (doc.status !== "open") {
+      return res.status(400).json({ isOk: false, status: 400, message: `Only an open request can be approved (current status: ${doc.status})` });
+    }
+
+    const days = [];
+    let cursor = new Date(doc.fromDate);
+    const to = new Date(doc.toDate);
+    while (cursor <= to) {
+      days.push(await markAttendanceForRequestDay(doc, cursor)); // eslint-disable-line no-await-in-loop
+      cursor = addDays(cursor, 1);
+    }
+
+    doc.status = "active";
+    await doc.save();
+
+    return res.status(200).json({ isOk: true, status: 200, message: "Attendance Request approved successfully", data: { days } });
+  } catch (error) {
+    console.log("Error in approveAttendanceRequest", error);
+    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+  }
+};
+
+export const rejectAttendanceRequest = async (req, res) => {
+  try {
+    const doc = await AttendanceRequest.findById(req.params.attendanceRequestId);
+    if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Attendance Request not found" });
+    const refusal = decisionRefusal(req, doc);
+    if (refusal) return res.status(403).json({ isOk: false, status: 403, message: refusal });
+    if (doc.status !== "open") {
+      return res.status(400).json({ isOk: false, status: 400, message: `Only an open request can be rejected (current status: ${doc.status})` });
+    }
+    doc.status = "rejected";
+    await doc.save();
+    return res.status(200).json({ isOk: true, status: 200, message: "Attendance Request rejected" });
+  } catch (error) {
+    console.log("Error in rejectAttendanceRequest", error);
+    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+  }
+};
+
 export const cancelAttendanceRequest = async (req, res) => {
   try {
     const doc = await AttendanceRequest.findById(req.params.attendanceRequestId);
@@ -542,8 +625,8 @@ export const cancelAttendanceRequest = async (req, res) => {
     if (!(await canAccessOwnRecord(req, doc))) {
       return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to act on this Attendance Request" });
     }
-    if (doc.status !== "active") {
-      return res.status(400).json({ isOk: false, status: 400, message: `Only an active Attendance Request can be cancelled (current status: ${doc.status})` });
+    if (!["open", "active"].includes(doc.status)) {
+      return res.status(400).json({ isOk: false, status: 400, message: `Only an open or active Attendance Request can be cancelled (current status: ${doc.status})` });
     }
 
     await Attendance.updateMany({ attendanceRequestId: doc._id }, { isDeleted: true });
@@ -680,6 +763,8 @@ export const bulkProcessShiftRequests = async (req, res) => {
         if (!shiftRequestId || !["approve", "reject"].includes(decision)) throw new Error("Shift Request and a decision of approve or reject are required");
         const doc = await ShiftRequest.findById(shiftRequestId); // eslint-disable-line no-await-in-loop
         if (!doc) throw new Error("Shift Request not found");
+        const refusal = decisionRefusal(req, doc);
+        if (refusal) throw new Error(refusal);
         if (doc.status !== "open") throw new Error(`Only an open request can be processed (current status: ${doc.status})`);
 
         if (decision === "approve") {

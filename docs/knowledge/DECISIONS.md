@@ -4899,3 +4899,29 @@ consumer; single-branch build
   noted there since ADR-024). Tested by `utils/leaveBalancePeriod.test.js`, `controllers/v1/blockedWorkflows.test.js`,
   `entities/tax-declaration-payload.test.js` and `components/crud/form-defaults.test.js`.
 - **Deviates from convention**: no.
+
+### ADR-053 — Leave expiry writes off what is left, not the whole grant
+
+- **Date**: 2026-10-27
+- **Status**: accepted
+- **Context**: Payslip and leave-balance review finding R3-2, confirmed by ADR-052. `processExpiredAllocations`
+  summed only the allocation's own ledger rows (grant, carry-forward, `/adjust` deltas), so an allocation of 12
+  with 3 days taken expired 12. From the second leave period on the balance came out short by the leave taken in
+  the previous period (it could go negative), and leave was refused for days the person had. ADR-024 had flagged
+  this for revisiting once Leave Application wrote consuming rows.
+- **Decision**: expiry writes off the allocation's own rows plus every leave debit (application, encashment,
+  negative adjustment) dated inside the period the allocation covers, never below zero; nothing left writes no
+  row. Same dating as the live balance (INV-27, ADR-052: a grant covers its period). One pure function,
+  `leavesLeftToExpire` in `utils/leaveExpiry.js`, is shared by the job and the backfill.
+  **Backfill**: `npm run backfill:leave-expiry` (`apps/server/seed/backfill-leave-expiry.js`) checks every
+  expired allocation and corrects an expiry row that wrote off more than was left (`expiryCorrection`) — lowered
+  to what was left, or soft-deleted when nothing was. Dry run by default (prints each change); `-- --apply` makes
+  them. Run once on each install after deploy; a second run changes nothing. It only ever lowers a write-off.
+- **Consequences**: two allocations of one leave type covering the same days (e.g. a compensatory-leave
+  allocation inside the annual period) each net the same debits, so each expires less, never more — a balance
+  may stay a little high, never short. `generateLeaveEncashments` runs after expiry and debits the leftover
+  again, so an encashable type's leftover is both expired and encashed; not changed here. On an install where
+  that happened the backfill, which sees the encashment row, lowers that expiry by the encashed days. Tested by
+  `jobs/processExpiredAllocations.test.js` (12 granted, 3 taken expires 9 and the next period's balance is right;
+  fails on the old job) and `utils/leaveExpiry.test.js` (the backfill's detection).
+- **Deviates from convention**: no.

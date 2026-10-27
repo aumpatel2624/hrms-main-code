@@ -9,7 +9,8 @@
     "start": "node server.js",
     "seed": "node seed/index.js",
     "seed:demo": "node seed/demo-data.js",
-    "seed:tiers": "node seed/org-tiers.js"
+    "seed:tiers": "node seed/org-tiers.js",
+    "backfill:leave-expiry": "node seed/backfill-leave-expiry.js"
   },
   "keywords": [],
   "author": "",

@@ -256,6 +256,15 @@ const leaveDecisionRefusal = async (req, doc) => {
   return approvers.includes(String(req.user.id)) ? null : "Only the named Leave Approver or HR can approve or reject this leave request";
 };
 
+/**
+ * Whether req.user may edit, cancel or delete this Leave Application /
+ * Compensatory Leave Request. Seeing it (canAccess… above) is not enough:
+ * below "all" scope only the applicant may — a named approver or team lead
+ * decides it (leaveDecisionRefusal) but never rewrites or cancels it.
+ */
+const canChangeLeaveRequest = (req, doc) =>
+  !isSelfService(req) || req.user.role === ROLES.ADMIN || String(doc.employeeId) === String(req.user.id);
+
 export const createCompensatoryLeaveRequest = async (req, res) => {
   try {
     // Issue #34 security fix: a self-service caller can only ever request
@@ -323,7 +332,7 @@ export const updateCompensatoryLeaveRequest = async (req, res) => {
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Compensatory Leave Request not found" });
     // Issue #34 security fix: previously any authenticated Employee could
     // edit ANY Compensatory Leave Request by id.
-    if (!(await canAccessCompensatoryLeaveRequest(req, doc))) {
+    if (!canChangeLeaveRequest(req, doc)) {
       return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to edit this Compensatory Leave Request" });
     }
     if (doc.status !== "open") {
@@ -346,7 +355,7 @@ export const deleteCompensatoryLeaveRequest = async (req, res) => {
     // Issue #34 security fix: Employee has delete on this doctype (grant is
     // `full`) — previously any authenticated Employee could delete ANYONE's
     // pre-approval request by id.
-    if (!(await canAccessCompensatoryLeaveRequest(req, doc))) {
+    if (!canChangeLeaveRequest(req, doc)) {
       return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to delete this Compensatory Leave Request" });
     }
     if (doc.status === "approved") {
@@ -803,10 +812,9 @@ export const updateLeaveApplication = async (req, res) => {
     const { leaveApplicationId } = req.params;
     const doc = await LeaveApplication.findById(leaveApplicationId);
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Leave Application not found" });
-    // Issue #34 security fix: the same ownership guard getLeaveApplicationById/
-    // approve/reject/cancel already use, now also gating edits — previously any
-    // authenticated Employee could edit ANY Leave Application by id.
-    if (!(await canAccessLeaveApplication(req, doc))) {
+    // Issue #34 security fix: previously any authenticated Employee could
+    // edit ANY Leave Application by id. Below "all" only the applicant may.
+    if (!canChangeLeaveRequest(req, doc)) {
       return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to edit this Leave Application" });
     }
     if (doc.status !== "open") {
@@ -1079,7 +1087,7 @@ export const cancelLeaveApplication = async (req, res) => {
   try {
     const doc = await LeaveApplication.findById(req.params.leaveApplicationId);
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Leave Application not found" });
-    if (!(await canAccessLeaveApplication(req, doc))) {
+    if (!canChangeLeaveRequest(req, doc)) {
       return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to act on this Leave Application" });
     }
     if (doc.status !== "approved") {

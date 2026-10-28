@@ -87,40 +87,48 @@ const recordFailedAttempt = async (userId, userEmail, ipAddress, clientLocation 
         // what lets a fresh account "take over" tracking for its email
         // rather than colliding with an orphaned row nothing ever cleaned up
         // (found live, OPEN-QUESTIONS.md Q-12 / GitHub #9).
-        let attempt = await LoginAttempt.findOne({ userEmail });
-
-        if (!attempt) {
-            // Create new record
-            attempt = new LoginAttempt({
-                userId,
-                userEmail,
-                ipAddress: ipAddress || "unknown",
-                locationCoordinates: location,
-                attemptCount: 1,
-                lastLoginAttempt: new Date(),
-                isLocked: false,
-                lockUntil: null,
-            });
-        } else {
-            // Update existing record
-            attempt.userId = userId;
-            attempt.attemptCount += 1;
-            attempt.lastLoginAttempt = new Date();
-            attempt.ipAddress = ipAddress || "unknown";
-            attempt.locationCoordinates = location;
-            attempt.updatedAt = new Date();
+        //
+        // One atomic $inc upsert, not read-then-save: two wrong passwords at
+        // once both count, and neither collides on the unique userEmail
+        // index. If two upserts still race to insert, the loser retries once
+        // and lands on the row the winner created.
+        const increment = () => LoginAttempt.findOneAndUpdate(
+            { userEmail },
+            {
+                $inc: { attemptCount: 1 },
+                $set: {
+                    userId,
+                    ipAddress: ipAddress || "unknown",
+                    locationCoordinates: location,
+                    lastLoginAttempt: new Date(),
+                },
+                $setOnInsert: { isLocked: false, lockUntil: null },
+            },
+            { new: true, upsert: true }
+        );
+        let attempt;
+        try {
+            attempt = await increment();
+        } catch (error) {
+            if (error?.code !== 11000) throw error;
+            attempt = await increment();
         }
 
-        // Auto-lock if attempts >= MAX_ATTEMPTS
+        // Auto-lock if attempts >= MAX_ATTEMPTS ($min keeps the count within
+        // the schema's max when attempts arrive together)
         if (attempt.attemptCount >= MAX_ATTEMPTS) {
-            attempt.isLocked = true;
-            attempt.lockUntil = new Date(Date.now() + LOCK_DURATION_MS);
+            attempt = await LoginAttempt.findOneAndUpdate(
+                { _id: attempt._id },
+                {
+                    $set: { isLocked: true, lockUntil: new Date(Date.now() + LOCK_DURATION_MS) },
+                    $min: { attemptCount: MAX_ATTEMPTS },
+                },
+                { new: true }
+            );
             console.log(
                 `Account locked for ${userEmail} until ${attempt.lockUntil}`
             );
         }
-
-        await attempt.save();
 
         return {
             attemptCount: attempt.attemptCount,

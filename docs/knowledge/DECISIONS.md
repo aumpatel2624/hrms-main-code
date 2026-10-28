@@ -5038,3 +5038,27 @@ consumer; single-branch build
   role now edits only its own and its team's travel requests (it could edit any by id). Tested by section 8 of
   `controllers/v1/accessLifecycle.test.js` (each of the three controllers reverted in turn makes it fail).
 - **Deviates from convention**: no.
+
+### ADR-058 — Team and approver scope on grievances, travel edits and leave by id (custom roles)
+
+- **Date**: 2026-10-28
+- **Status**: accepted
+- **Context**: ADR-057 left three gaps that only a custom role can reach (the seeded tiers are own-scoped on these
+  pages, but User Roles lets HR give a row "team", "approver" or "Own department"). Employee Grievance under team or
+  approver scope was unscoped — list and by id showed every grievance, including the complainant's name to the
+  person it was against. A Travel Request edit dropped an employee change only for "own", so a department-, team- or
+  approver-scoped editor could move a request to someone else. Leave Application and Compensatory Leave by id under
+  team scope also reached the people the caller approves for, which the team list does not show.
+- **Decision**:
+  - Grievance, "team": raised by the caller or anyone in their downward reportsToId chain; "approver": the caller's
+    own — there is no grievance approver. Either way never one naming the caller as "Grievance Against" or "Employee
+    Responsible" unless the caller raised it. One filter (`teamOrApproverGrievanceFilter`) serves the list and by
+    id. "Own" and "Own department" are unchanged.
+  - Travel Request edit: below "all", the employee stays the stored one whatever the form says, as on create.
+  - Leave Application and Compensatory Leave by id, "team": aligned to the list — the reportsToId chain only, the
+    rule `utils/scope.js` defines for team. The people a caller approves for widen only "approver" scope. A named
+    Leave Approver still opens an application naming them, as before.
+- **Consequences**: no re-seed or data change. A team-scoped custom role that relied on opening an approvee's leave
+  by id needs "approver" scope instead. Tested by section 9 of `controllers/v1/accessLifecycle.test.js` (each of the
+  three controllers reverted in turn makes it fail).
+- **Deviates from convention**: no.

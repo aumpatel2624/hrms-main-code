@@ -13,7 +13,12 @@
 //      Employee and on the six employee-owned request screens (F3),
 //   8. below "all" scope a Travel Request or Grievance is filed as the caller,
 //      and Travel Request (list and by id) and the Compensatory Leave Request
-//      list reach the same people for a team- or approver-scoped role.
+//      list reach the same people for a team- or approver-scoped role,
+//   9. a team- or approver-scoped role (custom roles only) sees grievances
+//      raised by its team — never one naming it as accused or responsible —
+//      cannot move a Travel Request to someone else, and by id reaches the
+//      same Leave Applications and Compensatory Leave Requests its team list
+//      shows (the reportsToId chain, not the people it approves for).
 // Drives the real mounted routes (authMiddleware → checkPermission → handler)
 // over in-memory stand-ins and the seeded matrices, like approvalIntegrity.test.js.
 import assert from "node:assert/strict";
@@ -490,6 +495,92 @@ resetWrites();
   assert.deepEqual(listedIds(compRes), [String(reportsComp._id)], "team scope lists their report's compensatory leave");
   expectStatus(await call(leaveRoutes, "get", "/compensatory-leave-requests/:compensatoryLeaveRequestId", lead,
     { params: { compensatoryLeaveRequestId: String(reportsComp._id) } }), 200, "and opens it by id");
+}
+
+// ------ 9. team and approver scope on grievances, travel edits and leave --
+{
+  const scopeRoles = Object.fromEntries([SCOPES.ALL, SCOPES.DEPARTMENT, SCOPES.TEAM, SCOPES.APPROVER].map((scope) => [scope, oid()]));
+  const pages = ["/travel-request", "/employee-grievance", "/leave-application", "/compensatory-leave-request"];
+  stub(UserRoles, [...tierMatrices, ...Object.entries(scopeRoles).map(([scope, roleId]) => ({
+    roleId, isActive: true, dataScope: SCOPES.ALL, roles: pages.map((menuUrl) => row(menuUrl, { write: true, edit: true }, scope)),
+  }))]);
+  invalidateRoleCache();
+  const finance = oid();
+  const lead = person("nina", "Employee", { roleId: scopeRoles[SCOPES.TEAM] });
+  const report = person("ravi", "Employee", { reportsToId: lead._id });
+  // Approves nina's leave but does not report to her.
+  const approvee = person("arun", "Employee", { leaveApproverId: lead._id });
+  const approverCaller = person("ali", "Employee", { roleId: scopeRoles[SCOPES.APPROVER] });
+  const deptCaller = person("dev", "Employee", { roleId: scopeRoles[SCOPES.DEPARTMENT], departmentId: finance });
+  const deptColleague = person("dina", "Employee", { departmentId: finance });
+  const hrCaller = person("hari", "Employee", { roleId: scopeRoles[SCOPES.ALL] });
+  people.push(...[lead, report, approvee, approverCaller, deptCaller, deptColleague, hrCaller].map(asDoc));
+  const ids = (...docs) => docs.map((doc) => String(doc._id)).sort();
+
+  // Grievances: team and approver scope listed and opened every one.
+  const grievance = (raisedBy, extra = {}) => ({ _id: oid(), raisedByEmployeeId: raisedBy._id, subject: "s", status: "Open", isActive: true, ...extra });
+  const leadsOwn = grievance(lead);
+  const reports = grievance(report);
+  const outsiders = grievance(bilal);
+  const againstLead = grievance(report, { grievanceAgainstEmployeeId: lead._id });
+  const leadResponsible = grievance(report, { employeeResponsibleId: lead._id });
+  const leadComplains = grievance(lead, { grievanceAgainstEmployeeId: report._id });
+  const approversOwn = grievance(approverCaller);
+  const againstApprover = grievance(bilal, { grievanceAgainstEmployeeId: approverCaller._id });
+  stub(EmployeeGrievance, [leadsOwn, reports, outsiders, againstLead, leadResponsible, leadComplains, approversOwn, againstApprover]);
+  const listGrievances = async (caller) => listedIds(await call(careerRoutes, "post", "/employee-grievances/search", caller, { body: {} }));
+  const viewGrievance = async (caller, doc) => (await call(careerRoutes, "get", "/employee-grievances/:grievanceId", caller,
+    { params: { grievanceId: String(doc._id) } })).statusCode;
+  assert.deepEqual(await listGrievances(lead), ids(leadsOwn, reports, leadComplains),
+    "team scope lists its own and its report's grievances, none naming it as accused or responsible");
+  for (const doc of [leadsOwn, reports, leadComplains]) assert.equal(await viewGrievance(lead, doc), 200, "team scope opens a listed grievance by id");
+  for (const doc of [outsiders, againstLead, leadResponsible]) assert.equal(await viewGrievance(lead, doc), 403, "team scope opens an unlisted grievance by id");
+  assert.deepEqual(await listGrievances(approverCaller), ids(approversOwn), "approver scope lists its own grievances (there is no grievance approver)");
+  assert.equal(await viewGrievance(approverCaller, approversOwn), 200, "approver scope opens its own grievance by id");
+  for (const doc of [outsiders, againstApprover]) assert.equal(await viewGrievance(approverCaller, doc), 403, "approver scope opens someone else's grievance by id");
+
+  // Travel Request: a department-, team- or approver-scoped edit moved the request to someone else.
+  const travel = (employee) => asDoc({ _id: oid(), employeeId: employee._id, companyId, travelType: "Domestic", status: "Open", isActive: true });
+  const editable = [[deptCaller, travel(deptColleague)], [lead, travel(report)], [approverCaller, travel(approverCaller)]];
+  const hrsTravel = travel(report);
+  stub(TravelRequest, [...editable.map(([, doc]) => doc), hrsTravel]);
+  const moveTravel = (caller, doc) => call(travelRoutes, "put", "/travel-requests/:travelRequestId", caller, {
+    params: { travelRequestId: String(doc._id) }, body: { employeeId: String(bilal._id), travelType: "International" },
+  });
+  for (const [caller, doc] of editable) {
+    const before = doc.employeeId;
+    expectStatus(await moveTravel(caller, doc), 200, `${caller.employeeName} edits a travel request naming bilal`);
+    assert.ok(same(doc.employeeId, before), `${caller.employeeName}: the travel request stays with its employee`);
+    assert.equal(doc.travelType, "International", `${caller.employeeName}: the rest of the edit is kept`);
+  }
+  expectStatus(await moveTravel(hrCaller, hrsTravel), 200, "HR edits a travel request naming bilal");
+  assert.ok(same(hrsTravel.employeeId, bilal._id), "HR can move a travel request to someone else");
+
+  // Leave Application and Compensatory Leave Request: team scope by id
+  // reached the people the caller approves for, which its list does not.
+  const leaveOf = (employee) => ({ _id: oid(), employeeId: employee._id, leaveTypeId: leaveType._id, companyId, status: "open", isActive: true,
+    fromDate: new Date("2026-11-02"), toDate: new Date("2026-11-02"), leaveApproverId: tara._id });
+  const reportsLeave = leaveOf(report);
+  const approveesLeave = leaveOf(approvee);
+  stub(LeaveApplication, [reportsLeave, approveesLeave]);
+  const leaveList = await call(leaveRoutes, "post", "/leave-applications/search", lead, { body: {} });
+  expectStatus(leaveList, 200, "team scope lists leave applications");
+  assert.deepEqual(listedIds(leaveList), ids(reportsLeave), "team scope lists its report's leave, not its approvee's");
+  const viewLeave = async (doc) => (await call(leaveRoutes, "get", "/leave-applications/:leaveApplicationId", lead,
+    { params: { leaveApplicationId: String(doc._id) } })).statusCode;
+  assert.equal(await viewLeave(reportsLeave), 200, "team scope opens its report's leave by id");
+  assert.equal(await viewLeave(approveesLeave), 403, "team scope opens its approvee's leave by id");
+
+  const compOf = (employee) => ({ _id: oid(), employeeId: employee._id, companyId, status: "open", isActive: true });
+  const reportsComp = compOf(report);
+  const approveesComp = compOf(approvee);
+  stub(CompensatoryLeaveRequest, [reportsComp, approveesComp]);
+  const compList = await call(leaveRoutes, "post", "/compensatory-leave-requests/search", lead, { body: {} });
+  assert.deepEqual(listedIds(compList), ids(reportsComp), "team scope lists its report's compensatory leave, not its approvee's");
+  const viewComp = async (doc) => (await call(leaveRoutes, "get", "/compensatory-leave-requests/:compensatoryLeaveRequestId", lead,
+    { params: { compensatoryLeaveRequestId: String(doc._id) } })).statusCode;
+  assert.equal(await viewComp(reportsComp), 200, "team scope opens its report's compensatory leave by id");
+  assert.equal(await viewComp(approveesComp), 403, "team scope opens its approvee's compensatory leave by id");
 }
 
 console.log("accessLifecycle.test.js passed");

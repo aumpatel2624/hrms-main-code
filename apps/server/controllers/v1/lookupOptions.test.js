@@ -8,6 +8,7 @@
 import assert from "node:assert/strict";
 import mongoose from "mongoose";
 import { SCOPES } from "@demo-panel/shared/scopes";
+import Company from "../../models/Company.js";
 import Employee from "../../models/Employee.js";
 import EmployeeFeedbackCriteria from "../../models/EmployeeFeedbackCriteria.js";
 import EmployeeTaxExemptionSubCategory from "../../models/EmployeeTaxExemptionSubCategory.js";
@@ -15,8 +16,10 @@ import ExpenseClaimType from "../../models/ExpenseClaimType.js";
 import KRA from "../../models/KRA.js";
 import MenuMaster from "../../models/MenuMaster.js";
 import SalaryComponent from "../../models/SalaryComponent.js";
+import SalarySlip from "../../models/SalarySlip.js";
 import UserRoles from "../../models/UserRoles.js";
 import { buildRoleRows } from "../../seed/org-tiers.data.js";
+import dashboardRoutes from "../../routes/v1/dashboards.routes.js";
 import expenseRoutes from "../../routes/v1/expenses.routes.js";
 import payrollRoutes from "../../routes/v1/payroll.routes.js";
 import payrollTaxRoutes from "../../routes/v1/payrollTax.routes.js";
@@ -63,7 +66,8 @@ const asha = { _id: oid(), employeeName: "asha", roleId: employeeRole, companyId
 stub(Employee, [asha]);
 
 const menus = buildRoleRows("Employee").menuRows.map(({ menuUrl }) => ({ _id: oid(), menuUrl }))
-  .concat(["/expense-claim-type", "/salary-component", "/kra", "/employee-feedback-criteria", "/employee-tax-exemption-sub-category"]
+  .concat(["/expense-claim-type", "/salary-component", "/kra", "/employee-feedback-criteria", "/employee-tax-exemption-sub-category", "/dashboard-builder", "/salary-slip"]
+    .filter((menuUrl) => !buildRoleRows("Employee").menuRows.some((row) => row.menuUrl === menuUrl))
     .map((menuUrl) => ({ _id: oid(), menuUrl })));
 const menuIdByUrl = new Map(menus.map((menu) => [menu.menuUrl, menu._id]));
 stub(MenuMaster, menus);
@@ -83,10 +87,10 @@ stub(EmployeeFeedbackCriteria, [{ _id: oid(), criteria: "Teamwork", description:
 stub(EmployeeTaxExemptionSubCategory, [{ _id: oid(), name: "PPF", exemptionCategoryId: oid(), maxAmount: 150000 }]);
 
 // ------------------------------------------------------------------ helpers --
-const call = async (router, path, caller) => {
+const call = async (router, path, caller, params = {}) => {
   const layer = router.stack.find((entry) => entry.route?.path === path && entry.route.methods.get);
   assert.ok(layer, `GET ${path} is mounted`);
-  const req = { session: { user: { id: String(caller._id), role: "USER" } }, params: {}, body: {}, query: {} };
+  const req = { session: { user: { id: String(caller._id), role: "USER" } }, params, body: {}, query: {} };
   const res = fakeRes();
   for (const { handle } of layer.route.stack) {
     let advanced = false;
@@ -137,6 +141,39 @@ for (const [router, base] of [
   const paths = router.stack.filter((entry) => entry.route?.methods.get).map((entry) => entry.route.path);
   const byId = paths.findIndex((path) => path.startsWith(`${base}/:`));
   assert.ok(paths.indexOf(`${base}/options`) < byId, `${base}/options before ${base}/:id`);
+}
+
+// Dashboard Builder's reference filters (28 Oct re-test): a name to pick, not
+// an id to paste — only the ids the field holds in rows the caller may see,
+// each with its label and nothing else.
+{
+  const hrRole = oid();
+  const meera = { _id: oid(), employeeName: "Meera", roleId: hrRole, companyId: apidel, status: "Active", isActive: true };
+  const varun = { _id: oid(), employeeName: "Varun", roleId: employeeRole, companyId: nuva, status: "Active", isActive: true };
+  stub(Employee, [asha, meera, varun]);
+  stub(Company, [{ _id: apidel, companyName: "Apidel" }, { _id: nuva, companyName: "Nuva" }]);
+  const slips = [
+    { _id: oid(), employeeId: asha._id, companyId: apidel, status: "submitted", netPay: 50000 },
+    { _id: oid(), employeeId: varun._id, companyId: nuva, status: "submitted", netPay: 90000 },
+  ];
+  stub(SalarySlip, slips);
+  SalarySlip.distinct = async (field, filter) => [...new Set(slips.filter((row) => matches(row, filter)).map((row) => row[field]))];
+  stub(UserRoles, [{
+    roleId: hrRole, isActive: true, dataScope: SCOPES.ALL,
+    roles: ["/dashboard-builder", "/salary-slip"].map((menuUrl) => ({ menuId: menuIdByUrl.get(menuUrl), read: true })),
+  }]);
+
+  const path = "/dashboard-widgets/sources/:source/filter-options/:field";
+  const res = await call(dashboardRoutes, path, meera, { source: "salary-slips", field: "employeeId" });
+  assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+  assert.deepEqual(res.body.data, [{ value: String(asha._id), label: "asha (Apidel)" }], "Apidel's HR sees Apidel's names, not Nuva's");
+  assert.deepEqual(fieldsOf(res), ["label", "value"], "names only — no pay");
+
+  // Only reference filters, and only ones the registry declares.
+  assert.equal((await call(dashboardRoutes, path, meera, { source: "salary-slips", field: "netPay" })).statusCode, 404);
+  assert.equal((await call(dashboardRoutes, path, meera, { source: "nope", field: "employeeId" })).statusCode, 404);
+  // An Employee without the Dashboard Builder cannot ask.
+  assert.equal((await call(dashboardRoutes, path, asha, { source: "salary-slips", field: "employeeId" })).statusCode, 403);
 }
 
 console.log("lookupOptions.test.js: all assertions passed");

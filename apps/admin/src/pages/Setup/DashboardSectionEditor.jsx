@@ -27,7 +27,8 @@ import {
     SERIES_SLOTS,
 } from "@demo-panel/shared/widgets";
 import { MenuContext } from "../../context/MenuContext";
-import { getWidgetSources, getWidgetById, createWidget, updateWidget, previewWidget } from "../../api/dashboards.api";
+import { getWidgetSources, getWidgetById, createWidget, updateWidget, previewWidget, getWidgetFilterOptions } from "../../api/dashboards.api";
+import { fieldLabel } from "../../entities/picker-labels";
 import { Card, PageHeader } from "@/components/ui/page";
 import { Field, SelectField, TextAreaField } from "@/components/ui/field";
 import { WidgetCard, slotColor } from "@/components/ui/widgets";
@@ -186,6 +187,23 @@ const DashboardSectionEditor = ({ mode = "add" }) => {
 
     const source = sources.find((entry) => entry.key === form.source);
 
+    // Reference filters pick a name, never a pasted id: each source/field's
+    // options are fetched once, the first time a filter row needs them.
+    const [refOptions, setRefOptions] = useState({});
+    useEffect(() => {
+        form.filters
+            .filter((filter) => source?.filterable?.[filter.field] === "objectId")
+            .map((filter) => `${form.source}/${filter.field}`)
+            .filter((key) => !(key in refOptions))
+            .forEach((key) => {
+                setRefOptions((prev) => ({ ...prev, [key]: [] }));
+                const [sourceKey, field] = key.split("/");
+                getWidgetFilterOptions(sourceKey, field)
+                    .then((response) => setRefOptions((prev) => ({ ...prev, [key]: response.data.data ?? [] })))
+                    .catch((error) => console.error("Error loading filter options:", error));
+            });
+    }, [form.source, form.filters, source, refOptions]);
+
     useEffect(() => {
         const load = async () => {
             try {
@@ -306,7 +324,10 @@ const DashboardSectionEditor = ({ mode = "add" }) => {
 
     // ---- filters editor ---------------------------------------------------
 
-    const filterFieldOptions = Object.keys(source?.filterable ?? {}).map((field) => ({ value: field, label: field }));
+    const filterFieldOptions = Object.keys(source?.filterable ?? {}).map((field) => ({
+        value: field,
+        label: source.groupable?.[field]?.label ?? fieldLabel(field),
+    }));
     const opsFor = (field) => (operators[source?.filterable?.[field]] ?? []).map((op) => ({ value: op, label: op }));
 
     const setFilter = (index, patch) =>
@@ -328,6 +349,17 @@ const DashboardSectionEditor = ({ mode = "add" }) => {
                     ]}
                     value={String(filter.value ?? "")}
                     onChange={(option) => option && setFilter(index, { value: option.value === "true" })}
+                />
+            );
+        }
+        if (type === "objectId") {
+            return (
+                <SelectField
+                    aria-label="Filter value"
+                    placeholder="Search..."
+                    options={refOptions[`${form.source}/${filter.field}`] ?? []}
+                    value={filter.value ?? ""}
+                    onChange={(option) => setFilter(index, { value: option ? option.value : "" })}
                 />
             );
         }

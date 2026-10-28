@@ -1,7 +1,10 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import { FilterLines, RefreshCw01 } from "@untitledui/icons";
 import { MenuContext } from "../../context/MenuContext";
-import { searchLeaveLedgerEntries } from "../../api/leaves.api";
+import { getAllLeaveTypes, searchLeaveLedgerEntries } from "../../api/leaves.api";
+import { getAllCompanies } from "../../api/organizationSetup.api";
+import { getAllEmployees } from "../../api/employees.api";
+import { companyLabelledOptions, nameWithCompany } from "../../entities/picker-labels";
 import DataTable from "@/components/ui/data-table";
 import FilterPanel from "@/components/ui/filter-panel";
 import { Card, PageHeader } from "@/components/ui/page";
@@ -36,6 +39,12 @@ const FILTER_FIELDS = [
     { name: "createdAt", label: "Created", type: "date" },
 ];
 
+// The Employee and Leave Type filters pick names, not ids.
+const loadFilterLookups = () => Promise.all([
+    companyLabelledOptions(getAllEmployees, getAllCompanies, nameWithCompany("employeeName"))(),
+    getAllLeaveTypes().then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: row.leaveTypeName }))),
+]).then(([employeeId, leaveTypeId]) => ({ employeeId, leaveTypeId }));
+
 const LeaveLedgerEntries = () => {
     const { currentPagePermissions } = useContext(MenuContext);
 
@@ -49,6 +58,7 @@ const LeaveLedgerEntries = () => {
     const [query, setQuery] = useState("");
 
     const [showFilters, setShowFilters] = useState(false);
+    const [lookups, setLookups] = useState(null);
     const [draft, setDraft] = useState({ rows: [], matchType: "all" });
     const [applied, setApplied] = useState([]);
     const [matchType, setMatchType] = useState("all");
@@ -80,6 +90,11 @@ const LeaveLedgerEntries = () => {
         fetchRows();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pageNo, perPage, column, sortDirection, query, applied, matchType]);
+
+    useEffect(() => {
+        if (!showFilters || lookups) return;
+        loadFilterLookups().then(setLookups).catch((error) => console.error("Error loading filter options:", error));
+    }, [showFilters, lookups]);
 
     const columns = useMemo(
         () => [
@@ -151,6 +166,7 @@ const LeaveLedgerEntries = () => {
             {showFilters && (
                 <FilterPanel
                     fields={FILTER_FIELDS}
+                    lookups={lookups}
                     rows={draft.rows}
                     matchType={draft.matchType}
                     onChange={(next, nextMatch) => setDraft({ rows: next, matchType: nextMatch ?? draft.matchType })}

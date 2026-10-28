@@ -4,6 +4,7 @@ import { MenuContext } from "../../context/MenuContext";
 import { getAllEmployees } from "../../api/employees.api";
 import { getAllShiftTypes, bulkMarkAttendance, resolveHalfDayAttendance } from "../../api/shiftAttendance.api";
 import { searchAttendances } from "../../api/attendance.api";
+import { linkedName } from "../../entities/picker-labels";
 import { Card, PageHeader } from "@/components/ui/page";
 import { Button } from "@/components/base/buttons/button";
 import { NativeSelect } from "@/components/base/select/select-native";
@@ -224,9 +225,9 @@ const EmployeeAttendanceTool = () => {
                                     const employee = employees.find((e) => e._id === row.employeeId);
                                     return (
                                         <tr key={idx} className="border-b border-secondary last:border-b-0">
-                                            <td className="px-4 py-2">{employee?.employeeName || row.employeeId}</td>
+                                            <td className="px-4 py-2">{employee?.employeeName || "Unknown employee"}</td>
                                             <td className="px-4 py-2">{row.success ? <Badge size="sm" color="success">Success</Badge> : <Badge size="sm" color="error">Failed</Badge>}</td>
-                                            <td className="px-4 py-2 text-tertiary">{row.error || row.attendanceId || "—"}</td>
+                                            <td className="px-4 py-2 text-tertiary">{row.error || (row.success ? "Attendance marked" : "—")}</td>
                                         </tr>
                                     );
                                 })}
@@ -258,7 +259,7 @@ const EmployeeAttendanceTool = () => {
                             {halfDayRows.map((row) => (
                                 <li key={row._id} className="flex items-center gap-3 px-4 py-2">
                                     <input type="radio" name="half-day-row" checked={selectedHalfDayId === row._id} onChange={() => setSelectedHalfDayId(row._id)} />
-                                    <span className="text-sm text-primary">{row.employeeName || row.employeeIdLabel || row.employeeId}</span>
+                                    <span className="text-sm text-primary">{linkedName(row.employeeName || row.employeeIdLabel, row.employeeId)}</span>
                                 </li>
                             ))}
                             {halfDayRows.length === 0 && <li className="p-4 text-sm text-tertiary">No pending Half Day records for this date.</li>}

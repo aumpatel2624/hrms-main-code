@@ -43,7 +43,7 @@ export const calculateAnnualEligibleHraExemption = async ({
 }) => {
   const company = await Company.findById(companyId).lean();
   if (!company?.basicComponentId || !company?.hraComponentId) {
-    throw new Error(`Please set Basic and HRA component in Company ${companyId}`);
+    throw new Error(`Please set Basic and HRA component in Company ${company?.companyName ?? "(deleted)"}`);
   }
 
   const periodStart = asDate(payrollPeriod.startDate);
@@ -57,7 +57,7 @@ export const calculateAnnualEligibleHraExemption = async ({
       .sort({ fromDate: -1 }).lean();
     if (previous) assignments = [previous];
   }
-  if (!assignments.length) throw new Error(`No Salary Structure Assignment found for employee ${employeeId}`);
+  if (!assignments.length) throw new Error("No Salary Structure Assignment found for this employee");
 
   let basicAmount = 0;
   let hraAmount = 0;
@@ -69,7 +69,7 @@ export const calculateAnnualEligibleHraExemption = async ({
     if (effectiveToDate < effectiveFromDate) continue;
 
     const structure = await SalaryStructure.findById(assignment.salaryStructureId).lean();
-    if (!structure) throw new Error(`Salary Structure ${assignment.salaryStructureId} not found`);
+    if (!structure) throw new Error("The employee's assigned Salary Structure no longer exists");
     const basicRow = (structure.earnings || []).find((row) => sameId(row.salaryComponentId, company.basicComponentId));
     const hraRow = (structure.earnings || []).find((row) => sameId(row.salaryComponentId, company.hraComponentId));
     if (!hraRow) continue;

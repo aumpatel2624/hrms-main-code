@@ -73,7 +73,7 @@ import {
     resetEmployeePassword,
 } from "../api/employees.api";
 import { getAllRoles } from "../api/roles.api";
-import { companyLabelledOptions, interviewLabel, jobOfferLabel, leavePeriodLabel, nameWithCompany, ofChosenCompany, salarySlipLabel, salaryStructureLabel, withSavedLeavers } from "./picker-labels";
+import { companyLabelledOptions, goalLabel, interviewLabel, jobOfferLabel, labelledOptions, leaveAllocationLabel, leavePeriodLabel, linkedName, nameWithCompany, ofChosenCompany, payrollPeriodLabel, salarySlipLabel, salaryStructureAssignmentLabel, salaryStructureLabel, shiftScheduleLabel, withSavedLeavers } from "./picker-labels";
 import { getAllCountries, getStatesByCountry, getCitiesByState } from "../api/locations.api";
 import {
     createAdminUser, deleteAdminUser, getAdminUserById, updateAdminUser, searchAdminUsers, resetAdminUserPassword,
@@ -149,7 +149,7 @@ import {
     updateHolidayListAssignment, searchHolidayListAssignments,
     createLeavePolicy, deleteLeavePolicy, getLeavePolicyById, updateLeavePolicy, searchLeavePolicies, getAllLeavePolicies,
     createLeavePolicyAssignment, deleteLeavePolicyAssignment, getLeavePolicyAssignmentById,
-    updateLeavePolicyAssignment, searchLeavePolicyAssignments, grantLeavePolicyAssignmentAllocations,
+    updateLeavePolicyAssignment, searchLeavePolicyAssignments, grantLeavePolicyAssignmentAllocations, getAllLeavePolicyAssignments,
     createLeaveAllocation, deleteLeaveAllocation, getAllLeaveAllocations, getLeaveAllocationById, updateLeaveAllocation,
     searchLeaveAllocations, adjustLeaveAllocation,
     createLeaveAdjustment, getLeaveAdjustmentById, searchLeaveAdjustments,
@@ -221,6 +221,15 @@ const expenseTypeRowOptions = asOptions(getExpenseClaimTypeOptions, "name");
 const kraRowOptions = asOptions(getKRAOptions, "name");
 const criteriaRowOptions = asOptions(getEmployeeFeedbackCriteriaOptions, "criteria");
 
+// List filters (`filterLookups`) whose form has no plain dropdown to reuse:
+// every company, and the employee form's company-narrowed organization pickers.
+const companyFilterOptions = asOptions(getAllCompanies, "companyName");
+const departmentFilterOptions = companyLabelledOptions(getAllDepartments, getAllCompanies, nameWithCompany("departmentName"));
+const branchFilterOptions = companyLabelledOptions(getAllBranches, getAllCompanies, nameWithCompany("branchName"));
+const leavePolicyAssignmentOptions = labelledOptions(getAllLeavePolicyAssignments,
+    [[getAllEmployees, "employeeName"], [getAllLeavePolicies, "title"]],
+    (row, names) => `${names.get(String(row.employeeId?._id ?? row.employeeId)) ?? "Unknown employee"} — ${names.get(String(row.leavePolicyId?._id ?? row.leavePolicyId)) ?? "Unknown policy"}`);
+
 /**
  * The id of a relation, however it arrived.
  *
@@ -244,11 +253,11 @@ const employeeTitle = (label) => (r) => {
     return name ? `${label} — ${name}` : label;
 };
 
-/** "2026-04-01 – 2026-04-30" labels for payroll-period dropdowns (startDate alone is a raw timestamp). */
-const payrollPeriodOptions = () =>
-    getAllPayrollPeriods().then((res) => (res.data?.data ?? []).map((row) => ({
-        value: row._id, label: `${row.startDate?.slice?.(0, 10)} – ${row.endDate?.slice?.(0, 10)}`,
-    })));
+/** "2026-04-01 – 2027-03-31 (Apidel)" labels for payroll-period dropdowns: every company has one. */
+const payrollPeriodOptions = labelledOptions(getAllPayrollPeriods, [[getAllCompanies, "companyName"]], payrollPeriodLabel);
+// "Ekta Bansal — Casual Leave — 2026-01-01 – 2026-12-31", not just the year.
+const leaveAllocationOptions = labelledOptions(getAllLeaveAllocations,
+    [[getAllEmployees, "employeeName"], [getAllLeaveTypes, "leaveTypeName"]], leaveAllocationLabel);
 
 const mobileRule = (v) => (v && v.length !== 10 ? "Phone number should be 10 digits" : undefined);
 const emailRule = (v) => (v && !isValidEmail(v) ? "Invalid email address" : undefined);
@@ -532,6 +541,7 @@ export const branchConfig = {
         { name: "isActive", label: "Active", type: "boolean" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions },
     key: "branch",
     path: "/branch",
     section: "HR Setup",
@@ -617,6 +627,7 @@ export const employeeConfig = {
         { name: "isActive", label: "Active", type: "boolean" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { departmentId: departmentFilterOptions, designationId: designationRowOptions, branchId: branchFilterOptions },
     key: "employee",
     path: "/employee",
     section: "HR Core",
@@ -767,6 +778,7 @@ export const interviewTypeConfig = {
         { name: "isActive", label: "Active", type: "boolean" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { designationId: designationRowOptions },
     key: "interview-type",
     path: "/interview-type",
     section: "Recruitment",
@@ -1090,7 +1102,7 @@ export const interviewFeedbackConfig = {
         ACTIVE,
     ],
     columns: [
-        { name: "Interviewer", selector: (row) => row.interviewerName || row.interviewerId, minWidth: "160px" },
+        { name: "Interviewer", selector: (row) => linkedName(row.interviewerName, row.interviewerId), minWidth: "160px" },
         { name: "Result", selector: (row) => row.result, minWidth: "120px" },
     ],
     recordTitle: (r) => `Feedback — ${r.result ?? ""}`,
@@ -1224,6 +1236,7 @@ export const employeeOnboardingConfig = {
         { name: "isActive", label: "Active", type: "boolean" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { departmentId: departmentFilterOptions },
     key: "employee-onboarding",
     path: "/employee-onboarding",
     section: "Onboarding & Separation",
@@ -1457,6 +1470,7 @@ export const fullAndFinalStatementConfig = {
         { name: "isActive", label: "Active", type: "boolean" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { employeeId: employeeRowOptions, companyId: companyFilterOptions },
     key: "full-and-final-statement",
     path: "/full-and-final-statement",
     section: "Onboarding & Separation",
@@ -1806,6 +1820,7 @@ export const trainingProgramConfig = {
         { name: "isActive", label: "Active", type: "boolean" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions },
     key: "training-program",
     path: "/training-program",
     section: "Training & Skills",
@@ -1938,8 +1953,8 @@ export const trainingFeedbackConfig = {
         ACTIVE,
     ],
     columns: [
-        { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "180px" },
-        { name: "Training Event", selector: (row) => row.trainingEventName || row.trainingEventId, minWidth: "180px" },
+        { name: "Employee", selector: (row) => linkedName(row.employeeName, row.employeeId), minWidth: "180px" },
+        { name: "Training Event", selector: (row) => linkedName(row.trainingEventName, row.trainingEventId), minWidth: "180px" },
     ],
     recordTitle: employeeTitle("Training Feedback"),
     toForm: (data) => ({ ...data, employeeId: refId(data.employeeId), trainingEventId: refId(data.trainingEventId) }),
@@ -1975,6 +1990,7 @@ export const employeeSkillMapConfig = {
         { name: "isActive", label: "Active", type: "boolean" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { employeeId: employeeRowOptions },
     key: "employee-skill-map",
     path: "/employee-skill-map",
     section: "Training & Skills",
@@ -2010,7 +2026,7 @@ export const employeeSkillMapConfig = {
             )}
         </>
     ),
-    columns: [{ name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "220px" }],
+    columns: [{ name: "Employee", selector: (row) => linkedName(row.employeeName, row.employeeId), minWidth: "220px" }],
     recordTitle: employeeTitle("Employee Skill Map"),
     toForm: (data) => ({ ...data, employeeId: refId(data.employeeId) }),
 };
@@ -2145,7 +2161,7 @@ export const travelRequestConfig = {
         </>
     ),
     columns: [
-        { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "200px" },
+        { name: "Employee", selector: (row) => linkedName(row.employeeName, row.employeeId), minWidth: "200px" },
         { name: "Type", selector: (row) => row.travelType, minWidth: "120px" },
         { name: "Status", selector: (row) => row.status, minWidth: "120px" },
     ],
@@ -2278,6 +2294,7 @@ export const holidayListConfig = {
         { name: "isActive", label: "Active", type: "boolean" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions },
     key: "holiday-list",
     path: "/holiday-list",
     section: "Leaves",
@@ -2344,7 +2361,7 @@ export const holidayListAssignmentConfig = {
         ACTIVE,
     ],
     columns: [
-        { name: "Holiday List", selector: (row) => row.holidayListName || row.holidayListId, minWidth: "180px" },
+        { name: "Holiday List", selector: (row) => linkedName(row.holidayListName, row.holidayListId), minWidth: "180px" },
         { name: "Applicable For", selector: (row) => row.applicableFor, minWidth: "130px" },
         { name: "From", selector: (row) => row.fromDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
     ],
@@ -2401,6 +2418,7 @@ export const leavePolicyAssignmentConfig = {
         { name: "status", label: "Status", type: "string" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions },
     key: "leave-policy-assignment",
     path: "/leave-policy-assignment",
     section: "Leaves",
@@ -2438,7 +2456,7 @@ export const leavePolicyAssignmentConfig = {
         )
     ),
     columns: [
-        { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "200px" },
+        { name: "Employee", selector: (row) => linkedName(row.employeeName, row.employeeId), minWidth: "200px" },
         { name: "Status", selector: (row) => row.status, minWidth: "110px" },
         { name: "From", selector: (row) => row.effectiveFrom?.slice?.(0, 10) ?? "—", minWidth: "110px" },
         { name: "To", selector: (row) => row.effectiveTo?.slice?.(0, 10) ?? "—", minWidth: "110px" },
@@ -2461,6 +2479,7 @@ export const leaveAllocationConfig = {
         { name: "status", label: "Status", type: "string" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { leavePolicyAssignmentId: leavePolicyAssignmentOptions },
     key: "leave-allocation",
     path: "/leave-allocation",
     section: "Leaves",
@@ -2521,8 +2540,8 @@ export const leaveAllocationConfig = {
 
 export const attendanceConfig = {
     filterFields: [
-        { name: "departmentId", label: "Department id", type: "objectId" },
-        { name: "shiftId", label: "Shift id", type: "objectId" },
+        { name: "departmentId", label: "Department", type: "objectId" },
+        { name: "shiftId", label: "Shift", type: "objectId" },
         { name: "workingHours", label: "Working hours", type: "number" },
         { name: "standardWorkingHours", label: "Standard working hours", type: "number" },
         { name: "actualOvertimeDuration", label: "Actual overtime duration", type: "number" },
@@ -2615,6 +2634,7 @@ export const leaveAdjustmentConfig = {
         { name: "companyId", label: "Company", type: "objectId" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions },
     key: "leave-adjustment",
     path: "/leave-adjustment",
     section: "Leaves",
@@ -2625,7 +2645,7 @@ export const leaveAdjustmentConfig = {
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
         leaveTypeId: asOptions(getAllLeaveTypes, "leaveTypeName"),
-        leaveAllocationId: () => getAllLeaveAllocations().then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: `${row.fromDate?.slice?.(0, 10)} – ${row.toDate?.slice?.(0, 10)}` }))),
+        leaveAllocationId: leaveAllocationOptions,
     },
     fields: [
         { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
@@ -2637,7 +2657,7 @@ export const leaveAdjustmentConfig = {
         { name: "reasonForAdjustment", label: "Reason for Adjustment", type: "textarea", section: "details" },
     ],
     columns: [
-        { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "180px" },
+        { name: "Employee", selector: (row) => linkedName(row.employeeName, row.employeeId), minWidth: "180px" },
         { name: "Type", selector: (row) => row.adjustmentType, minWidth: "100px" },
         { name: "Leaves", selector: (row) => row.leavesToAdjust, minWidth: "90px" },
         { name: "Posting Date", selector: (row) => row.postingDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
@@ -2656,6 +2676,7 @@ export const compensatoryLeaveRequestConfig = {
         { name: "workEndDate", label: "Work End Date", type: "date" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions },
     key: "compensatory-leave-request",
     path: "/compensatory-leave-request",
     section: "Leaves",
@@ -2700,7 +2721,7 @@ export const compensatoryLeaveRequestConfig = {
         )
     ),
     columns: [
-        { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "180px" },
+        { name: "Employee", selector: (row) => linkedName(row.employeeName, row.employeeId), minWidth: "180px" },
         { name: "Work From", selector: (row) => row.workFromDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
         { name: "Work End", selector: (row) => row.workEndDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
         { name: "Status", selector: (row) => row.status, minWidth: "100px" },
@@ -2720,6 +2741,7 @@ export const leaveApplicationConfig = {
         { name: "toDate", label: "To Date", type: "date" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions },
     key: "leave-application",
     path: "/leave-application",
     section: "Leaves",
@@ -2779,7 +2801,7 @@ export const leaveApplicationConfig = {
         )
     ),
     columns: [
-        { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "180px" },
+        { name: "Employee", selector: (row) => linkedName(row.employeeName, row.employeeId), minWidth: "180px" },
         { name: "From", selector: (row) => row.fromDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
         { name: "To", selector: (row) => row.toDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
         { name: "Days", selector: (row) => row.totalLeaveDays, minWidth: "80px" },
@@ -2799,6 +2821,7 @@ export const leaveEncashmentConfig = {
         { name: "encashmentDate", label: "Encashment Date", type: "date" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions },
     key: "leave-encashment",
     path: "/leave-encashment",
     section: "Leaves",
@@ -2809,7 +2832,7 @@ export const leaveEncashmentConfig = {
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
         leaveTypeId: asOptions(getAllLeaveTypes, "leaveTypeName"),
-        leaveAllocationId: () => getAllLeaveAllocations().then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: `${row.fromDate?.slice?.(0, 10)} – ${row.toDate?.slice?.(0, 10)}` }))),
+        leaveAllocationId: leaveAllocationOptions,
     },
     sections: [{ id: "details", title: "Details" }, { id: "computed", title: "Computed (read-only)" }, { id: "payment", title: "Payment" }],
     fields: [
@@ -2836,7 +2859,7 @@ export const leaveEncashmentConfig = {
         )
     ),
     columns: [
-        { name: "Employee", selector: (row) => row.employeeName || row.employeeId, minWidth: "180px" },
+        { name: "Employee", selector: (row) => linkedName(row.employeeName, row.employeeId), minWidth: "180px" },
         { name: "Date", selector: (row) => row.encashmentDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
         { name: "Days", selector: (row) => row.encashmentDays, minWidth: "80px" },
         { name: "Amount", selector: (row) => row.encashmentAmount, minWidth: "100px" },
@@ -2939,9 +2962,9 @@ export const shiftTypeConfig = {
     ],
     filterFields: [
         { name: "shiftTypeName", label: "Shift type name", type: "string" },
-        { name: "holidayListId", label: "Holiday list id", type: "objectId" },
+        { name: "holidayListId", label: "Holiday list", type: "objectId" },
         { name: "enableAutoAttendance", label: "Enable auto attendance", type: "boolean" },
-        { name: "companyId", label: "Company id", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
         { name: "isActive", label: "Is active", type: "boolean" },
         { name: "createdAt", label: "Created at", type: "date" },
     ],
@@ -2971,7 +2994,7 @@ export const shiftLocationConfig = {
     ],
     filterFields: [
         { name: "locationName", label: "Location name", type: "string" },
-        { name: "companyId", label: "Company id", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
         { name: "isActive", label: "Is active", type: "boolean" },
         { name: "createdAt", label: "Created at", type: "date" },
     ],
@@ -3005,14 +3028,13 @@ export const shiftAssignmentConfig = {
         { name: "isActive", label: "Is active", section: "details", type: "checkbox", default: true, required: true, error: "Is active is required" },
     ],
     filterFields: [
-        { name: "employeeId", label: "Employee id", type: "objectId" },
-        { name: "shiftTypeId", label: "Shift type id", type: "objectId" },
-        { name: "shiftLocationId", label: "Shift location id", type: "objectId" },
-        { name: "shiftScheduleAssignmentId", label: "Shift schedule assignment id", type: "objectId" },
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "shiftTypeId", label: "Shift type", type: "objectId" },
+        { name: "shiftLocationId", label: "Shift location", type: "objectId" },
         { name: "startDate", label: "Start date", type: "date" },
         { name: "endDate", label: "End date", type: "date" },
         { name: "status", label: "Status", type: "string" },
-        { name: "companyId", label: "Company id", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
         { name: "isActive", label: "Is active", type: "boolean" },
         { name: "createdAt", label: "Created at", type: "date" },
     ],
@@ -3045,8 +3067,8 @@ export const shiftScheduleConfig = {
     ],
     filterFields: [
         { name: "frequency", label: "Frequency", type: "string" },
-        { name: "shiftTypeId", label: "Shift type id", type: "objectId" },
-        { name: "companyId", label: "Company id", type: "objectId" },
+        { name: "shiftTypeId", label: "Shift type", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
         { name: "isActive", label: "Is active", type: "boolean" },
         { name: "createdAt", label: "Created at", type: "date" },
     ],
@@ -3076,7 +3098,7 @@ export const shiftScheduleAssignmentConfig = {
     api: { search: searchShiftScheduleAssignments, getById: getShiftScheduleAssignmentById, create: createShiftScheduleAssignment, update: updateShiftScheduleAssignment, remove: deleteShiftScheduleAssignment },
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
-        shiftScheduleId: asOptions(getAllShiftSchedules, "frequency"),
+        shiftScheduleId: labelledOptions(getAllShiftSchedules, [[getAllShiftTypes, "shiftTypeName"], [getAllCompanies, "companyName"]], shiftScheduleLabel),
         shiftLocationId: asOptions(getAllShiftLocations, "locationName"),
         companyId: asOptions(getAllCompanies, "companyName"),
     },
@@ -3092,13 +3114,13 @@ export const shiftScheduleAssignmentConfig = {
         { name: "isActive", label: "Is active", section: "details", type: "checkbox", default: true, required: true, error: "Is active is required" },
     ],
     filterFields: [
-        { name: "employeeId", label: "Employee id", type: "objectId" },
-        { name: "shiftScheduleId", label: "Shift schedule id", type: "objectId" },
-        { name: "shiftLocationId", label: "Shift location id", type: "objectId" },
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "shiftScheduleId", label: "Shift schedule", type: "objectId" },
+        { name: "shiftLocationId", label: "Shift location", type: "objectId" },
         { name: "enabled", label: "Enabled", type: "boolean" },
         { name: "createShiftsAfter", label: "Create shifts after", type: "date" },
         { name: "status", label: "Status", type: "string" },
-        { name: "companyId", label: "Company id", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
         { name: "isActive", label: "Is active", type: "boolean" },
         { name: "createdAt", label: "Created at", type: "date" },
     ],
@@ -3140,18 +3162,18 @@ export const employeeCheckinConfig = {
         { name: "isActive", label: "Is active", section: "details", type: "checkbox", default: true, required: true, error: "Is active is required" },
     ],
     filterFields: [
-        { name: "employeeId", label: "Employee id", type: "objectId" },
-        { name: "shiftId", label: "Shift id", type: "objectId" },
-        { name: "attendanceId", label: "Attendance id", type: "objectId" },
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "shiftId", label: "Shift", type: "objectId" },
         { name: "time", label: "Time", type: "date" },
         { name: "logType", label: "Log type", type: "string" },
-        { name: "deviceId", label: "Device id", type: "objectId" },
+        { name: "deviceId", label: "Device", type: "string" },
         { name: "skipAutoAttendance", label: "Skip auto attendance", type: "boolean" },
         { name: "offshift", label: "Offshift", type: "boolean" },
-        { name: "companyId", label: "Company id", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
         { name: "isActive", label: "Is active", type: "boolean" },
         { name: "createdAt", label: "Created at", type: "date" },
     ],
+    filterLookups: { shiftId: asOptions(getAllShiftTypes, "shiftTypeName") },
     columns: [
         { name: "Employee", selector: (row) => row.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
         { name: "Shift", selector: (row) => row.shiftIdLabel || "—", sortable: true, sortField: "shiftId" },
@@ -3207,15 +3229,16 @@ export const shiftRequestConfig = {
         )
     ),
     filterFields: [
-        { name: "employeeId", label: "Employee id", type: "objectId" },
-        { name: "shiftTypeId", label: "Shift type id", type: "objectId" },
-        { name: "companyId", label: "Company id", type: "objectId" },
-        { name: "approverId", label: "Approver id", type: "objectId" },
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "shiftTypeId", label: "Shift type", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "approverId", label: "Approver", type: "objectId" },
         { name: "status", label: "Status", type: "string" },
         { name: "fromDate", label: "From date", type: "date" },
         { name: "toDate", label: "To date", type: "date" },
         { name: "createdAt", label: "Created at", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions },
     columns: [
         { name: "Employee", selector: (row) => row.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
         { name: "Shift type", selector: (row) => row.shiftTypeIdLabel || "—", sortable: true, sortField: "shiftTypeId" },
@@ -3277,15 +3300,16 @@ export const attendanceRequestConfig = {
         )
     ),
     filterFields: [
-        { name: "employeeId", label: "Employee id", type: "objectId" },
-        { name: "companyId", label: "Company id", type: "objectId" },
-        { name: "approverId", label: "Approver id", type: "objectId" },
+        { name: "employeeId", label: "Employee", type: "objectId" },
+        { name: "companyId", label: "Company", type: "objectId" },
+        { name: "approverId", label: "Approver", type: "objectId" },
         { name: "status", label: "Status", type: "string" },
         { name: "reason", label: "Reason", type: "string" },
         { name: "fromDate", label: "From date", type: "date" },
         { name: "toDate", label: "To date", type: "date" },
         { name: "createdAt", label: "Created at", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions, approverId: employeeRowOptions },
     columns: [
         { name: "Employee", selector: (row) => row.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
         { name: "From date", selector: (row) => String(row.fromDate ?? "—").slice(0, 10), sortable: true, sortField: "fromDate" },
@@ -3360,6 +3384,7 @@ export const salaryComponentConfig = {
         { name: "isActive", label: "Active", type: "boolean" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions },
     columns: [
         { name: "Name", selector: (row) => row.salaryComponentName, sortable: true, sortField: "salaryComponentName", minWidth: "200px" },
         { name: "Abbreviation", selector: (row) => row.abbreviation, sortable: true, sortField: "abbreviation" },
@@ -3419,6 +3444,7 @@ export const salaryStructureConfig = {
         { name: "isActive", label: "Active", type: "boolean" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions },
     columns: [
         { name: "Name", selector: (row) => row.salaryStructureName || "—" },
         { name: "Company", selector: (row) => row.companyIdLabel || "—", sortable: true, sortField: "companyId" },
@@ -3486,6 +3512,7 @@ export const salaryStructureAssignmentConfig = {
         { name: "companyId", label: "Company", type: "objectId" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions },
     columns: [
         { name: "Employee", selector: (row) => row.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
         { name: "From date", selector: (row) => String(row.fromDate ?? "—").slice(0, 10), sortable: true, sortField: "fromDate" },
@@ -3535,6 +3562,7 @@ export const payrollPeriodConfig = {
         { name: "isActive", label: "Active", type: "boolean" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions },
     columns: [
         { name: "Company", selector: (row) => row.companyIdLabel || "—", sortable: true, sortField: "companyId" },
         { name: "Start date", selector: (row) => String(row.startDate ?? "—").slice(0, 10), sortable: true, sortField: "startDate" },
@@ -3591,7 +3619,10 @@ export const salarySlipConfig = {
     },
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
-        salaryStructureAssignmentId: asOptions(getAllSalaryStructureAssignments, "currency"),
+        salaryStructureAssignmentId: labelledOptions(getAllSalaryStructureAssignments, [
+            [getAllEmployees, "employeeName"],
+            [getAllSalaryStructures, (row) => row.salaryStructureName || `${row.payrollFrequency} — ${row.currency}`],
+        ], salaryStructureAssignmentLabel),
     },
     sections: [
         { id: "details", title: "Slip details" },
@@ -3663,6 +3694,7 @@ export const salarySlipConfig = {
         { name: "status", label: "Status", type: "string" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions },
     columns: [
         { name: "Employee", selector: (row) => row.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
         { name: "Start date", selector: (row) => String(row.startDate ?? "—").slice(0, 10), sortable: true, sortField: "startDate" },
@@ -4807,6 +4839,7 @@ export const appraisalConfig = {
         { name: "endDate", label: "End Date", type: "date" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions },
     recordTitle: (r) => `Appraisal — ${r.employeeId?.employeeName || r.employeeIdLabel || ""}`,
     toForm: (data) => ({
         ...data,
@@ -4866,7 +4899,7 @@ export const goalConfig = {
     },
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
-        parentGoalId: asOptions(getAllGoals, "goalName"),
+        parentGoalId: labelledOptions(getAllGoals, [[getAllCompanies, "companyName"]], goalLabel),
         appraisalCycleId: asOptions(getAllAppraisalCycles, "cycleName"),
         kraId: asOptions(getAllKRAs, "name"),
     },
@@ -4955,6 +4988,7 @@ export const goalConfig = {
         { name: "endDate", label: "End Date", type: "date" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions },
     recordTitle: (r) => r.goalName,
     toForm: (data) => ({
         ...data,
@@ -5082,6 +5116,7 @@ export const employeePerformanceFeedbackConfig = {
         { name: "totalScore", label: "Total Score", type: "number" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions, appraisalCycleId: asOptions(getAllAppraisalCycles, "cycleName") },
     recordTitle: (r) => `Feedback — ${r.employeeId?.employeeName || r.employeeIdLabel || ""}`,
     toForm: (data) => ({
         ...data,
@@ -5332,6 +5367,7 @@ export const employeeBenefitLedgerConfig = {
         { name: "postingDate", label: "Posting Date", type: "date" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { employeeId: employeeRowOptions, salaryComponentId: salaryComponentRowOptions, payrollPeriodId: payrollPeriodOptions },
     recordTitle: (r) => `Benefit Ledger — ${r.transactionType}: ${r.amount}`,
     toForm: (data) => ({
         ...data,
@@ -5407,6 +5443,7 @@ export const payrollCorrectionConfig = {
         { name: "status", label: "Status", type: "string" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { employeeId: employeeRowOptions },
     recordTitle: (r) => `Payroll Correction — ${r.daysToReverse ?? ""} days`,
     toForm: (data) => ({
         ...data,
@@ -5628,7 +5665,7 @@ export const employeeTaxExemptionDeclarationConfig = {
     lookups: {
         rowExemptionSubCategoryId: asOptions(getEmployeeTaxExemptionSubCategoryOptions, "name"),
         employeeId: asOptions(getAllEmployees, "employeeName"),
-        payrollPeriodId: () => getAllPayrollPeriods().then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: `${row.startDate?.slice?.(0, 10)} – ${row.endDate?.slice?.(0, 10)}` }))),
+        payrollPeriodId: payrollPeriodOptions,
     },
     sections: [
         { id: "details", title: "Declaration Details" },
@@ -5689,6 +5726,7 @@ export const employeeTaxExemptionDeclarationConfig = {
         { name: "status", label: "Status", type: "string" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions },
     recordTitle: employeeTitle("Tax Declaration"),
     toForm: (data) => ({
         ...data,
@@ -5722,7 +5760,7 @@ export const employeeTaxExemptionProofSubmissionConfig = {
     lookups: {
         rowExemptionSubCategoryId: asOptions(getEmployeeTaxExemptionSubCategoryOptions, "name"),
         employeeId: asOptions(getAllEmployees, "employeeName"),
-        payrollPeriodId: () => getAllPayrollPeriods().then((res) => (res.data?.data ?? []).map((row) => ({ value: row._id, label: `${row.startDate?.slice?.(0, 10)} – ${row.endDate?.slice?.(0, 10)}` }))),
+        payrollPeriodId: payrollPeriodOptions,
     },
     sections: [
         { id: "details", title: "Proof Details" },
@@ -5787,6 +5825,7 @@ export const employeeTaxExemptionProofSubmissionConfig = {
         { name: "status", label: "Status", type: "string" },
         { name: "createdAt", label: "Created", type: "date" },
     ],
+    filterLookups: { companyId: companyFilterOptions },
     recordTitle: employeeTitle("Proof Submission"),
     toForm: (data) => ({
         ...data,

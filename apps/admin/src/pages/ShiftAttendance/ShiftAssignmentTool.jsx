@@ -6,6 +6,8 @@ import {
     getAllShiftTypes, getAllShiftLocations, getAllShiftSchedules, searchShiftRequests,
     bulkAssignShifts, bulkAssignShiftSchedules, bulkProcessShiftRequests,
 } from "../../api/shiftAttendance.api";
+import { getAllCompanies } from "../../api/organizationSetup.api";
+import { linkedName, shiftScheduleLabel } from "../../entities/picker-labels";
 import { Card, PageHeader } from "@/components/ui/page";
 import { Button } from "@/components/base/buttons/button";
 import { NativeSelect } from "@/components/base/select/select-native";
@@ -39,6 +41,7 @@ const ShiftAssignmentTool = () => {
     const [shiftTypes, setShiftTypes] = useState([]);
     const [shiftLocations, setShiftLocations] = useState([]);
     const [shiftSchedules, setShiftSchedules] = useState([]);
+    const [companies, setCompanies] = useState([]);
     const [openRequests, setOpenRequests] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -59,10 +62,12 @@ const ShiftAssignmentTool = () => {
     useEffect(() => {
         const load = async () => {
             try {
-                const [employeesRes, shiftTypesRes, shiftLocationsRes, shiftSchedulesRes, requestsRes] = await Promise.all([
+                const [employeesRes, shiftTypesRes, shiftLocationsRes, shiftSchedulesRes, requestsRes, companiesRes] = await Promise.all([
                     getAllEmployees(), getAllShiftTypes(), getAllShiftLocations(), getAllShiftSchedules(),
                     searchShiftRequests({ filters: [{ field: "status", op: "eq", value: "open" }], per_page: 500 }),
+                    getAllCompanies(),
                 ]);
+                setCompanies(companiesRes.data?.data ?? []);
                 setEmployees(employeesRes.data?.data ?? []);
                 setShiftTypes(shiftTypesRes.data?.data ?? []);
                 setShiftLocations(shiftLocationsRes.data?.data ?? []);
@@ -153,7 +158,9 @@ const ShiftAssignmentTool = () => {
         try {
             const items = [...selectedRequestIds].map((shiftRequestId) => ({ shiftRequestId, decision }));
             const res = await bulkProcessShiftRequests(items);
-            const rows = res.data?.data?.results ?? [];
+            // The result names only the request; show whose it was.
+            const whose = new Map(openRequests.map((r) => [r._id, linkedName(r.employeeIdLabel, r.employeeId)]));
+            const rows = (res.data?.data?.results ?? []).map((row) => ({ ...row, requestLabel: whose.get(row.shiftRequestId) }));
             setResults(rows);
             toast.success(`${rows.filter((r) => r.success).length} of ${rows.length} succeeded`);
             setOpenRequests((prev) => prev.filter((r) => !selectedRequestIds.has(r._id)));
@@ -165,6 +172,9 @@ const ShiftAssignmentTool = () => {
             setRunning(false);
         }
     };
+
+    // Shift type and company names for the schedule picker's labels.
+    const scheduleNames = new Map([...shiftTypes.map((s) => [String(s._id), s.shiftTypeName]), ...companies.map((c) => [String(c._id), c.companyName])]);
 
     document.title = "Shift Assignment Tool | Apidel HRMS";
 
@@ -206,7 +216,7 @@ const ShiftAssignmentTool = () => {
                             <div className="flex flex-col gap-1">
                                 <label className="text-sm font-medium text-secondary" htmlFor="sat-shift-schedule">Shift Schedule</label>
                                 <NativeSelect id="sat-shift-schedule" value={shiftScheduleId} onChange={(e) => setShiftScheduleId(e.target.value)}
-                                    options={[{ value: "", label: "Select a Shift Schedule…" }, ...shiftSchedules.map((s) => ({ value: s._id, label: s.frequency }))]} />
+                                    options={[{ value: "", label: "Select a Shift Schedule…" }, ...shiftSchedules.map((s) => ({ value: s._id, label: shiftScheduleLabel(s, scheduleNames) }))]} />
                             </div>
                         )}
                         <div className="flex flex-col gap-1">
@@ -271,8 +281,8 @@ const ShiftAssignmentTool = () => {
                                     {openRequests.map((req) => (
                                         <li key={req._id} className="flex items-center gap-3 px-4 py-2">
                                             <Checkbox isSelected={selectedRequestIds.has(req._id)} onChange={() => toggleRequest(req._id)} />
-                                            <span className="text-sm text-primary">{req.employeeIdLabel || req.employeeId}</span>
-                                            <span className="text-xs text-tertiary">{req.shiftTypeIdLabel || req.shiftTypeId} — {req.fromDate?.slice?.(0, 10)} to {req.toDate ? req.toDate.slice(0, 10) : "open-ended"}</span>
+                                            <span className="text-sm text-primary">{linkedName(req.employeeIdLabel, req.employeeId)}</span>
+                                            <span className="text-xs text-tertiary">{linkedName(req.shiftTypeIdLabel, req.shiftTypeId)} — {req.fromDate?.slice?.(0, 10)} to {req.toDate ? req.toDate.slice(0, 10) : "open-ended"}</span>
                                         </li>
                                     ))}
                                     {openRequests.length === 0 && <li className="p-4 text-sm text-tertiary">No open Shift Requests.</li>}
@@ -300,9 +310,9 @@ const ShiftAssignmentTool = () => {
                                     const employee = employees.find((e) => e._id === row.employeeId);
                                     return (
                                         <tr key={idx} className="border-b border-secondary last:border-b-0">
-                                            <td className="px-4 py-2">{employee?.employeeName || row.employeeId || row.shiftRequestId}</td>
+                                            <td className="px-4 py-2">{employee?.employeeName || row.requestLabel || "Unknown employee"}</td>
                                             <td className="px-4 py-2">{row.success ? <Badge size="sm" color="success">Success</Badge> : <Badge size="sm" color="error">Failed</Badge>}</td>
-                                            <td className="px-4 py-2 text-tertiary">{row.error || row.shiftAssignmentId || row.shiftScheduleAssignmentId || row.status || "—"}</td>
+                                            <td className="px-4 py-2 text-tertiary">{row.error || (row.shiftAssignmentId ? "Shift assigned" : row.shiftScheduleAssignmentId ? "Shift Schedule assigned" : row.status) || "—"}</td>
                                         </tr>
                                     );
                                 })}

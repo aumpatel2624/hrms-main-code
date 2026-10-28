@@ -13,7 +13,7 @@
 import { runListQuery } from "../../utils/listQuery.js";
 import JobOffer from "../../models/JobOffer.js";
 import JobApplicant from "../../models/JobApplicant.js";
-import { findActivePlanDetail, getDesignationCounts } from "./staffingPlan.controller.js";
+import { findActivePlanDetail, getDesignationCounts, planPeriod } from "./staffingPlan.controller.js";
 import {
   getReferencingCounts,
   formatReferenceMessage,
@@ -42,7 +42,7 @@ const validateVacancyCap = async (designationId, companyId, onDate) => {
   if (!detail.numberOfPositions) return null;
   const { employeeCount, jobOpenings } = await getDesignationCounts(designationId, companyId);
   if (employeeCount + jobOpenings >= detail.numberOfPositions) {
-    return `There are no vacancies under Staffing Plan ${plan._id} for this designation`;
+    return `There are no vacancies for this designation under the Staffing Plan for ${planPeriod(plan)}`;
   }
   return null;
 };

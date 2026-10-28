@@ -632,6 +632,7 @@ export const ENDPOINTS = {
         WIDGET_BY_ID: (id) => `${V1}/dashboard-widgets/${id}`,
         WIDGET_SEARCH: `${V1}/dashboard-widgets/search`,
         WIDGET_SOURCES: `${V1}/dashboard-widgets/sources`,
+        WIDGET_FILTER_OPTIONS: (source, field) => `${V1}/dashboard-widgets/sources/${source}/filter-options/${field}`,
         WIDGET_PREVIEW: `${V1}/dashboard-widgets/preview`,
         WIDGET_RUN: (id) => `${V1}/dashboard-widgets/${id}/run`,
         ROLE_DASHBOARDS: `${V1}/role-dashboards`,

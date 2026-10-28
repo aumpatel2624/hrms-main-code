@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { companyLabelledOptions, interviewLabel, jobOfferLabel, leavePeriodLabel, nameWithCompany, ofChosenCompany, salarySlipLabel, salaryStructureLabel, withSavedLeavers } from "./picker-labels.js";
+import { companyLabelledOptions, fieldLabel, goalLabel, interviewLabel, jobOfferLabel, labelledOptions, leaveAllocationLabel, leavePeriodLabel, linkedName, nameWithCompany, ofChosenCompany, payrollPeriodLabel, readableFrequency, salarySlipLabel, salaryStructureAssignmentLabel, salaryStructureLabel, shiftScheduleLabel, withSavedLeavers } from "./picker-labels.js";
 
 const companies = { data: { data: [{ _id: "c-apd", companyName: "Apidel" }, { _id: "c-nuv", companyName: "Nuva" }] } };
 const periods = { data: { data: [
@@ -69,5 +69,47 @@ assert.deepEqual(withSavedLeavers(currentStaff, ["e9"], everyone), [
 ]);
 assert.deepEqual(withSavedLeavers(currentStaff, ["e1"], everyone), [{ value: "e1", label: "Asha" }], "a current approver is not repeated");
 assert.deepEqual(withSavedLeavers(currentStaff, [], []), [{ value: "e1", label: "Asha" }], "new forms offer only current employees");
+
+// Look-alike pickers (28 Oct re-test): every option told apart.
+const employees = { data: { data: [{ _id: "e1", employeeName: "Ekta Bansal" }, { _id: "e2", employeeName: "Varun" }] } };
+const leaveTypes = { data: { data: [{ _id: "lt1", leaveTypeName: "Casual Leave" }] } };
+const allocations = { data: { data: [
+    { _id: "a1", employeeId: "e1", leaveTypeId: "lt1", fromDate: "2026-01-01T00:00:00.000Z", toDate: "2026-12-31T00:00:00.000Z" },
+    { _id: "a2", employeeId: "e2", leaveTypeId: "lt1", fromDate: "2026-01-01T00:00:00.000Z", toDate: "2026-12-31T00:00:00.000Z" },
+] } };
+const allocationOptions = await labelledOptions(async () => allocations,
+    [[async () => employees, "employeeName"], [async () => leaveTypes, "leaveTypeName"]], leaveAllocationLabel)();
+assert.deepEqual(allocationOptions.map((o) => o.label), [
+    "Ekta Bansal — Casual Leave — 2026-01-01 – 2026-12-31",
+    "Varun — Casual Leave — 2026-01-01 – 2026-12-31",
+]);
+
+const names = new Map([["e1", "Ekta Bansal"], ["s1", "Standard Monthly"], ["c-apd", "Apidel"], ["st1", "Morning"]]);
+assert.equal(salaryStructureAssignmentLabel({ employeeId: "e1", salaryStructureId: "s1", fromDate: "2026-09-01T00:00:00.000Z", currency: "INR" }, names),
+    "Ekta Bansal — from 2026-09-01 — Standard Monthly");
+assert.equal(payrollPeriodLabel({ companyId: "c-apd", startDate: "2026-04-01T00:00:00.000Z", endDate: "2027-03-31T00:00:00.000Z" }, names),
+    "2026-04-01 – 2027-03-31 (Apidel)");
+assert.equal(goalLabel({ goalName: "Ship the billing module", employeeIdLabel: "Ekta Bansal", companyId: "c-apd" }, names),
+    "Ship the billing module — Ekta Bansal (Apidel)");
+assert.equal(readableFrequency("every-1-week"), "Every week");
+assert.equal(readableFrequency("every-3-weeks"), "Every 3 weeks");
+assert.equal(shiftScheduleLabel({ shiftTypeId: "st1", frequency: "every-2-weeks", repeatOnDays: ["Monday", "Wednesday"], companyId: "c-apd" }, names),
+    "Morning — Every 2 weeks on Mon, Wed (Apidel)");
+
+// Goal's own list answers with runListQuery's `[{ count, data }]` wrapper.
+const goals = { data: { data: [{ count: 1, data: [{ _id: "g1", goalName: "Grow", employeeIdLabel: "Varun", companyId: "c-nuv" }] }] } };
+assert.deepEqual(await labelledOptions(async () => goals, [[async () => companies, "companyName"]], goalLabel)(),
+    [{ value: "g1", label: "Grow — Varun (Nuva)" }]);
+
+// A list cell whose linked record is gone reads "(deleted)", never the id.
+assert.equal(linkedName("Asha", "e1"), "Asha");
+assert.equal(linkedName("", "64f000000000000000000001"), "(deleted)");
+assert.equal(linkedName(undefined, null), "—");
+
+// Dashboard Builder filter fields read as words, not keys.
+assert.equal(fieldLabel("employeeId"), "Employee");
+assert.equal(fieldLabel("raisedByEmployeeId"), "Raised by employee");
+assert.equal(fieldLabel("createdAt"), "Created at");
+assert.equal(fieldLabel("isActive"), "Active");
 
 console.log("picker-labels: all assertions passed");

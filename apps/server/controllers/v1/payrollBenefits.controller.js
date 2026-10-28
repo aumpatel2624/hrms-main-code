@@ -138,7 +138,7 @@ const computeAndValidateApplication = async ({
     seenComponents.add(compId);
 
     const comp = await SalaryComponent.findById(compId).lean();
-    if (!comp) throwError(404, `Salary Component ${compId} not found`);
+    if (!comp) throwError(404, "A chosen Salary Component no longer exists");
     if (!comp.isFlexibleBenefit) {
       throwError(400, `Salary Component ${comp.name} is not marked as a flexible benefit`);
     }

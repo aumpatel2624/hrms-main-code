@@ -666,7 +666,7 @@ export const createEmployeePerformanceFeedback = async (req, res) => {
     const appraisal = await Appraisal.findById(appraisalId).lean();
     if (!appraisal) throwError(404, "Appraisal not found");
     if (String(appraisal.employeeId) !== String(employeeId)) {
-      throwError(400, `Appraisal ${appraisalId} does not belong to Employee ${employeeId}`);
+      throwError(400, "This Appraisal does not belong to the chosen employee");
     }
 
     await assertFeedbackCycleNotCompleted(appraisal.appraisalCycleId);

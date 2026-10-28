@@ -380,7 +380,7 @@ export const searchEmployeeCheckins = async (req, res) => {
   try {
     const data = await runListQuery(EmployeeCheckin, req.body, { searchRefs: [employeeSearch()], scopeFilter: await attendanceScope(req, true),
       searchFields: [],
-      filterable: {"employeeId": "objectId", "shiftId": "objectId", "attendanceId": "objectId", "time": "date", "logType": "string", "deviceId": "objectId", "skipAutoAttendance": "boolean", "offshift": "boolean", "companyId": "objectId", "isActive": "boolean", "createdAt": "date"},
+      filterable: {"employeeId": "objectId", "shiftId": "objectId", "attendanceId": "objectId", "time": "date", "logType": "string", "deviceId": "string", "skipAutoAttendance": "boolean", "offshift": "boolean", "companyId": "objectId", "isActive": "boolean", "createdAt": "date"},
       stages: [{"$lookup": {"from": "employees", "localField": "employeeId", "foreignField": "_id", "as": "employeeId_joined"}}, {"$addFields": {"employeeIdLabel": {"$arrayElemAt": ["$employeeId_joined.employeeName", 0]}}}, {"$project": {"employeeId_joined": 0}}, {"$lookup": {"from": "shifttypes", "localField": "shiftId", "foreignField": "_id", "as": "shiftId_joined"}}, {"$addFields": {"shiftIdLabel": {"$arrayElemAt": ["$shiftId_joined.shiftTypeName", 0]}}}, {"$project": {"shiftId_joined": 0}}, {"$lookup": {"from": "companies", "localField": "companyId", "foreignField": "_id", "as": "companyId_joined"}}, {"$addFields": {"companyIdLabel": {"$arrayElemAt": ["$companyId_joined.companyName", 0]}}}, {"$project": {"companyId_joined": 0}}],
     });
     return res.status(200).json({ isOk: true, status: 200, data });

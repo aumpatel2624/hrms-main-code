@@ -8,6 +8,7 @@ import DeleteBlockedModal from "@/components/ui/delete-blocked-modal";
 import { ConfirmModal } from "@/components/ui/modal";
 import { Card, PageHeader, RowActions } from "@/components/ui/page";
 import FilterPanel from "@/components/ui/filter-panel";
+import { normalizeOption } from "@/components/ui/select-options";
 import ColumnMenu from "@/components/ui/column-menu";
 import { useTablePrefs } from "@/components/ui/table-prefs";
 import { Button } from "@/components/base/buttons/button";
@@ -40,7 +41,13 @@ const CrudList = ({ config }) => {
     const [draft, setDraft] = useState({ rows: prefs.filters ?? [], matchType: prefs.matchType ?? "all" });
     const [lookups, setLookups] = useState({});
 
-    const filterFields = config.filterFields ?? [];
+    // An enum filter with no options of its own offers its form field's.
+    const filterFields = (config.filterFields ?? []).map((f) => {
+        const formOptions = config.fields?.find((field) => field.name === f.name)?.options;
+        return f.type === "enum" && !f.options && !f.optionsFrom && Array.isArray(formOptions)
+            ? { ...f, options: formOptions.filter((o) => o !== null && o !== "").map(normalizeOption) }
+            : f;
+    });
     const appliedFilters = prefs.filters ?? [];
 
     const [removeId, setRemoveId] = useState("");
@@ -92,15 +99,22 @@ const CrudList = ({ config }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pageNo, perPage, column, sortDirection, query, filter, appliedFilters, prefs.matchType]);
 
-    // Option lists for filter rows that pick a related record.
+    // Option lists for filter rows that pick a related record: the config's
+    // `filterLookups`, else the form's own dropdown for that field — so a
+    // "Employee" filter offers names instead of opening empty. Loaded the
+    // first time the panel opens.
     useEffect(() => {
-        Object.entries(config.filterLookups ?? {}).forEach(([key, loader]) => {
-            loader()
+        if (!showFilters) return;
+        const pickers = filterFields.filter((f) => ["objectId", "enum"].includes(f.type) && !f.options).map((f) => f.optionsFrom ?? f.name);
+        const loaders = { ...config.lookups, ...config.filterLookups };
+        pickers.filter((key) => loaders[key] && !(key in lookups)).forEach((key) => {
+            setLookups((prev) => ({ ...prev, [key]: [] }));
+            Promise.resolve().then(() => loaders[key]({}))
                 .then((options) => setLookups((prev) => ({ ...prev, [key]: options })))
                 .catch((err) => console.log(err));
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [showFilters]);
 
     const handleDelete = async (e) => {
         e.preventDefault();

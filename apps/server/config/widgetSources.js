@@ -256,7 +256,7 @@ export const WIDGET_SOURCES = Object.freeze({
     "attendanceId": "objectId",
     "time": "date",
     "logType": "string",
-    "deviceId": "objectId",
+    "deviceId": "string",
     "skipAutoAttendance": "boolean",
     "offshift": "boolean",
     "companyId": "objectId",

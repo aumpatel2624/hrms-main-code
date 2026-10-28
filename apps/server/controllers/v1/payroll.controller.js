@@ -268,7 +268,7 @@ const buildRows = async (incomingRows, existingRows, companyId) => {
 
     if (!incoming.salaryComponentId) throwError(400, "Each row needs a salaryComponentId");
     const component = await SalaryComponent.findOne({ _id: incoming.salaryComponentId, companyId });
-    if (!component) throwError(400, `Salary Component ${incoming.salaryComponentId} not found for this company`);
+    if (!component) throwError(400, "A chosen Salary Component does not belong to this company");
 
     result.push({
       salaryComponentId: component._id,

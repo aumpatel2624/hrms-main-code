@@ -14,7 +14,7 @@ import { runListQuery } from "../../utils/listQuery.js";
 import JobOpening from "../../models/JobOpening.js";
 import Company from "../../models/Company.js";
 import JobRequisition from "../../models/JobRequisition.js";
-import { findActivePlanDetail, getDesignationCounts } from "./staffingPlan.controller.js";
+import { findActivePlanDetail, getDesignationCounts, planPeriod } from "./staffingPlan.controller.js";
 import {
   getReferencingCounts,
   formatReferenceMessage,
@@ -47,7 +47,7 @@ const validateVacancyCap = async (doc, excludeSelfId = null) => {
   if (!detail.numberOfPositions) return null;
   const { employeeCount, jobOpenings } = await getDesignationCounts(doc.designationId, doc.companyId, excludeSelfId);
   if (employeeCount + jobOpenings >= detail.numberOfPositions) {
-    return `Job Openings for this designation are already open or hiring is complete as per Staffing Plan ${plan._id}`;
+    return `Job Openings for this designation are already open or hiring is complete as per the Staffing Plan for ${planPeriod(plan)}`;
   }
   return null;
 };

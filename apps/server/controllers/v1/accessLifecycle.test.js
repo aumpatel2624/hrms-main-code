@@ -18,7 +18,10 @@
 //      raised by its team — never one naming it as accused or responsible —
 //      cannot move a Travel Request to someone else, and by id reaches the
 //      same Leave Applications and Compensatory Leave Requests its team list
-//      shows (the reportsToId chain, not the people it approves for).
+//      shows (the reportsToId chain, not the people it approves for),
+//  10. an Employee Referral (list, by id, edit, delete, create job applicant)
+//      is the referrer's, their team's for a team-scoped role, or HR's — and
+//      below "all" a referral is always made, and stays, as the caller.
 // Drives the real mounted routes (authMiddleware → checkPermission → handler)
 // over in-memory stand-ins and the seeded matrices, like approvalIntegrity.test.js.
 import assert from "node:assert/strict";
@@ -46,6 +49,7 @@ import ShiftRequest from "../../models/ShiftRequest.js";
 import AttendanceRequest from "../../models/AttendanceRequest.js";
 import TravelRequest from "../../models/TravelRequest.js";
 import EmployeeGrievance from "../../models/EmployeeGrievance.js";
+import EmployeeReferral from "../../models/EmployeeReferral.js";
 import UserRoles from "../../models/UserRoles.js";
 import { invalidateRoleCache } from "../../middlewares/checkPermission.js";
 import { buildRoleRows, withEmployeeSelfService } from "../../seed/org-tiers.data.js";
@@ -581,6 +585,77 @@ resetWrites();
     { params: { compensatoryLeaveRequestId: String(doc._id) } })).statusCode;
   assert.equal(await viewComp(reportsComp), 200, "team scope opens its report's compensatory leave by id");
   assert.equal(await viewComp(approveesComp), 403, "team scope opens its approvee's compensatory leave by id");
+}
+
+// ------------------------------------------------- 10. employee referrals --
+{
+  const ownRole = oid();
+  const teamRole = oid();
+  const allRole = oid();
+  const manage = { write: true, edit: true, delete: true };
+  stub(UserRoles, [
+    ...tierMatrices,
+    { roleId: ownRole, isActive: true, dataScope: SCOPES.ALL, roles: [row("/employee-referral", manage, SCOPES.OWN)] },
+    { roleId: teamRole, isActive: true, dataScope: SCOPES.ALL, roles: [row("/employee-referral", manage, SCOPES.TEAM)] },
+    { roleId: allRole, isActive: true, dataScope: SCOPES.ALL, roles: [row("/employee-referral", manage, SCOPES.ALL)] },
+  ]);
+  invalidateRoleCache();
+  const owner = person("omkar", "Employee", { roleId: ownRole });
+  const lead = person("lata", "Employee", { roleId: teamRole });
+  const report = person("raj", "Employee", { reportsToId: lead._id });
+  const recruiter = person("rhea", "Employee", { roleId: allRole });
+  people.push(...[owner, lead, report, recruiter].map(asDoc));
+  const ids = (...docs) => docs.map((doc) => String(doc._id)).sort();
+
+  const referral = (referrer) => ({ _id: oid(), referrerId: referrer._id, fullName: `${referrer.employeeName}'s friend`,
+    email: `${referrer.employeeName}.friend@example.com`, contactNo: "99999", status: "Pending", isActive: true });
+  const tarasOwn = referral(tara);
+  const bilals = referral(bilal);
+  const ownersOwn = referral(owner);
+  const leadsOwn = referral(lead);
+  const reports = referral(report);
+  const all = stub(EmployeeReferral, [tarasOwn, bilals, ownersOwn, leadsOwn, reports]);
+  const search = async (caller) => listedIds(await call(careerRoutes, "post", "/employee-referrals/search", caller, { body: {} }));
+  const getList = async (caller) => (await call(careerRoutes, "get", "/employee-referrals", caller)).body.data.map((r) => String(r._id)).sort();
+  const byId = (method, path, caller, doc, body = {}) => call(careerRoutes, method, path, caller, { params: { referralId: String(doc._id) }, body });
+  const view = async (caller, doc) => (await byId("get", "/employee-referrals/:referralId", caller, doc)).statusCode;
+
+  // The seeded Employee tier (own): only the referrals they made.
+  assert.deepEqual(await search(tara), ids(tarasOwn), "an employee lists only their own referrals");
+  assert.deepEqual(await getList(tara), ids(tarasOwn), "and the plain list too");
+  assert.equal(await view(tara, tarasOwn), 200, "an employee opens their own referral");
+  assert.equal(await view(tara, bilals), 403, "an employee opens a colleague's referral");
+  // Team scope: their own and their report's.
+  assert.deepEqual(await search(lead), ids(leadsOwn, reports), "team scope lists its own and its report's referrals");
+  assert.equal(await view(lead, reports), 200, "team scope opens its report's referral");
+  assert.equal(await view(lead, bilals), 403, "team scope opens an outsider's referral");
+  // HR (the seeded HR Head row) sees every one.
+  assert.deepEqual(await search(hema), ids(...all), "HR lists every referral");
+  assert.equal(await view(hema, bilals), 200, "HR opens anyone's referral");
+
+  // Edit, delete and create-job-applicant on a colleague's referral are refused.
+  expectStatus(await byId("put", "/employee-referrals/:referralId", owner, bilals, { contactNo: "11111" }), 403, "own scope edits a colleague's referral");
+  assert.equal(bilals.contactNo, "99999", "the colleague's referral is unchanged");
+  expectStatus(await byId("delete", "/employee-referrals/:referralId", owner, bilals), 403, "own scope deletes a colleague's referral");
+  expectStatus(await byId("post", "/employee-referrals/:referralId/create-job-applicant", owner, bilals), 403,
+    "own scope makes a job applicant from a colleague's referral");
+  // Their own edit is kept, but never moves the referral to someone else.
+  expectStatus(await byId("put", "/employee-referrals/:referralId", owner, ownersOwn, { contactNo: "22222", referrerId: String(bilal._id) }), 200,
+    "own scope edits their own referral naming bilal");
+  assert.ok(same(ownersOwn.referrerId, owner._id) && ownersOwn.contactNo === "22222", "the edit is kept, the referrer is not moved");
+  expectStatus(await byId("put", "/employee-referrals/:referralId", hema, bilals, { referrerId: String(tara._id) }), 200, "HR edits anyone's referral");
+  assert.ok(same(bilals.referrerId, tara._id), "HR can move a referral to someone else");
+
+  // A create below "all" is the caller's own whatever the body names; HR's is as chosen.
+  const created = [];
+  EmployeeReferral.create = async (data) => { created.push(data); return data; };
+  const refer = (caller, n) => call(careerRoutes, "post", "/employee-referrals", caller, {
+    body: { firstName: "New", lastName: `Hire${n}`, date: "2026-10-28", forDesignationId: String(oid()), email: `new${n}@example.com`, referrerId: String(bilal._id) },
+  });
+  expectStatus(await refer(tara, 1), 201, "an employee refers someone naming bilal");
+  assert.ok(same(created.at(-1).referrerId, tara._id), "the employee's referral is their own");
+  expectStatus(await refer(recruiter, 2), 201, "HR refers someone for bilal");
+  assert.ok(same(created.at(-1).referrerId, bilal._id), "HR's referral is bilal's");
 }
 
 console.log("accessLifecycle.test.js passed");

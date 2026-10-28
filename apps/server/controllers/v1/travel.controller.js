@@ -332,9 +332,12 @@ export const updateTravelRequest = async (req, res) => {
       return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to edit this Travel Request" });
     }
 
-    // A self-service caller can never reassign the request to a different
-    // employee — the field is dropped from the update entirely for that tier.
-    const body = req.user?.dataScope === SCOPES.OWN ? { ...req.body, employeeId: String(doc.employeeId) } : req.body;
+    // Below "all" (own, department, team, approver) a caller can never
+    // reassign the request to a different employee — the field is pinned to
+    // the stored one, as on create.
+    const body = req.user?.dataScope && req.user.dataScope !== SCOPES.ALL
+      ? { ...req.body, employeeId: String(doc.employeeId) }
+      : req.body;
 
     const nextEmployeeId = body.employeeId ?? String(doc.employeeId);
     const guard = await assertActiveEmployee(nextEmployeeId);

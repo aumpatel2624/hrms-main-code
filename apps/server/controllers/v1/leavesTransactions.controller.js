@@ -841,8 +841,8 @@ export const updateLeaveApplication = async (req, res) => {
 /**
  * Whether req.user may see/act on this specific Leave Application. On an
  * own / team / approver / department row: the applicant, its named Leave
- * Approver and, beyond "own", the people the caller approves for, manages
- * or shares a department with. Any other scope reaches what its list shows.
+ * Approver and, beyond "own", the people the caller manages ("team"),
+ * approves for or manages ("approver") or shares a department with. Any other scope reaches what its list shows.
  */
 const canAccessLeaveApplication = async (req, doc) => {
   if (!req.user || req.user.role === ROLES.ADMIN) return true;
@@ -852,7 +852,12 @@ const canAccessLeaveApplication = async (req, doc) => {
   if (scope === SCOPES.OWN) return false;
   if (scope === SCOPES.DEPARTMENT) return inCallerDepartment(req, doc.employeeId);
   await resolveRequestEmployee(req);
-  return (await resolveLeaveVisibilityIds(req)).includes(String(doc.employeeId));
+  // "team" is the reportsToId chain only (utils/scope.js), as the list —
+  // being someone's approver widens only the "approver" scope.
+  const ids = scope === SCOPES.TEAM
+    ? await getSubordinateEmployeeIds(req.user.employeeId)
+    : await resolveLeaveVisibilityIds(req);
+  return ids.includes(String(doc.employeeId));
 };
 
 export const getLeaveApplicationById = async (req, res) => {

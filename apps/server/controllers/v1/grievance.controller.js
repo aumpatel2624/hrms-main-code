@@ -17,6 +17,7 @@ import { SCOPES } from "@demo-panel/shared/scopes";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { buildScopeFilter } from "../../utils/scope.js";
 import { departmentEmployeeIds, inCallerDepartment } from "../../utils/attendanceScope.js";
+import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
 
 // ---------------------------------------------------------- Grievance Type --
 
@@ -163,8 +164,28 @@ const validateConditionalFields = (fields) => {
 // "Own department" (F3): grievances raised by someone in the caller's
 // current department — never one raised against the caller by someone
 // else, which would name the complainant to the person accused.
+// "team" (custom roles): grievances raised by the caller or anyone in their
+// reportsToId chain; "approver": the caller's own — there is no grievance
+// approver. Either way never one naming the caller as the person it is
+// against or the Employee Responsible, unless the caller raised it. One
+// filter serves the list and by id.
+const teamOrApproverGrievanceFilter = async (req) => {
+  const employee = await resolveRequestEmployee(req);
+  const teamIds = req.user.dataScope === SCOPES.TEAM ? await getSubordinateEmployeeIds(employee?._id) : undefined;
+  return { $and: [
+    buildScopeFilter({ ...req.user, employeeId: employee?._id }, { owner: "raisedByEmployeeId", teamIds }),
+    { $or: [
+      { raisedByEmployeeId: employee?._id },
+      { grievanceAgainstEmployeeId: { $ne: employee?._id }, employeeResponsibleId: { $ne: employee?._id } },
+    ] },
+  ] };
+};
+
 const canAccessEmployeeGrievance = async (req, doc) => {
   if (!req.user || req.user.role === ROLES.ADMIN) return true;
+  if (req.user.dataScope === SCOPES.TEAM || req.user.dataScope === SCOPES.APPROVER) {
+    return Boolean(await EmployeeGrievance.exists({ _id: doc._id, ...(await teamOrApproverGrievanceFilter(req)) }));
+  }
   if (req.user.dataScope !== SCOPES.OWN && req.user.dataScope !== SCOPES.DEPARTMENT) return true;
   const employee = await resolveRequestEmployee(req);
   // getById populates the employee refs; compare the ids either way.
@@ -177,6 +198,9 @@ const canAccessEmployeeGrievance = async (req, doc) => {
 
 const employeeGrievanceScopeFilter = async (req) => {
   if (!req.user || req.user.role === ROLES.ADMIN) return null;
+  if (req.user.dataScope === SCOPES.TEAM || req.user.dataScope === SCOPES.APPROVER) {
+    return teamOrApproverGrievanceFilter(req);
+  }
   if (req.user.dataScope === SCOPES.DEPARTMENT) {
     const employee = await resolveRequestEmployee(req);
     return { $and: [

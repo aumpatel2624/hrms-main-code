@@ -5373,7 +5373,10 @@ export const payrollCorrectionConfig = {
     ],
     columns: [
         { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
-        { name: "Salary Slip", selector: (r) => (r.salarySlipId?._id ? String(r.salarySlipId._id) : String(r.salarySlipId || "—")) },
+        // Search adds the slip's dates (salarySlipPeriod); the slip is the row's employee's.
+        { name: "Salary Slip", selector: (r) => (r.salarySlipPeriod
+            ? salarySlipLabel({ employeeId: r.employeeId, ...r.salarySlipPeriod }, new Map([[String(r.employeeId?._id ?? r.employeeId), r.employeeId?.employeeName ?? r.employeeIdLabel]]))
+            : "—") },
         { name: "Days Reversed", selector: (r) => r.daysToReverse ?? "—" },
         { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" },
         { name: "Created", selector: (r) => String(r.createdAt ?? "").slice(0, 10), sortable: true, sortField: "createdAt" },

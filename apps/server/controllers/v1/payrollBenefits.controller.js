@@ -1124,6 +1124,16 @@ export const searchPayrollCorrections = async (req, res) => {
       stages: [
         { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employeeId_joined" } },
         { $addFields: { employeeIdLabel: { $arrayElemAt: ["$employeeId_joined.employeeName", 0] } } },
+        // The list names the slip by its period; only the dates leave the slip, never its pay.
+        {
+          $lookup: {
+            from: "salaryslips",
+            let: { slipId: "$salarySlipId" },
+            pipeline: [{ $match: { $expr: { $eq: ["$_id", "$$slipId"] } } }, { $project: { _id: 0, startDate: 1, endDate: 1 } }],
+            as: "salarySlipPeriod",
+          },
+        },
+        { $addFields: { salarySlipPeriod: { $arrayElemAt: ["$salarySlipPeriod", 0] } } },
         { $project: { employeeId_joined: 0 } },
       ],
     });

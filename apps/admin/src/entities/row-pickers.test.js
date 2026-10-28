@@ -35,4 +35,10 @@ const interviewConfig = source.slice(source.indexOf("export const interviewConfi
 assert.match(interviewConfig, /interviewers:\s*companyLabelledOptions\(getCurrentEmployees,\s*getAllCompanies,\s*nameWithCompany\("employeeName"\)\)/,
     "Interviewers lists current staff with their company");
 
+// The Payroll Correction list names the slip (employee and period), never its raw id.
+const correctionConfig = source.slice(source.indexOf("export const payrollCorrectionConfig"), source.indexOf("export const", source.indexOf("export const payrollCorrectionConfig") + 1));
+const slipColumn = correctionConfig.match(/\{ name: "Salary Slip", selector:[\s\S]*?\) \},/)?.[0] ?? "";
+assert.match(slipColumn, /salarySlipLabel\(/, "Salary Slip column uses salarySlipLabel");
+assert.doesNotMatch(slipColumn, /String\(r\.salarySlipId/, "Salary Slip column does not print the slip id");
+
 console.log("row-pickers.test.js: all assertions passed");

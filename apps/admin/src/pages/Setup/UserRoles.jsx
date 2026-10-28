@@ -90,7 +90,11 @@ const UserRoles = () => {
   const [dataScope, setDataScope] = useState(SCOPES.ALL);
   const [rolesChanged, setRolesChanged] = useState(false);
 
-  const {menuData: contextMenuData, loading: menuLoading} = useContext(MenuContext);
+  const {menuData: contextMenuData, loading: menuLoading, isAdmin, getPermissionsForMenu, findMenuIdForPath} = useContext(MenuContext);
+  // Only a role granted this screen may open it. Asked of the menu directly:
+  // the current-page permissions can still be the last screen's when this
+  // one has no menu row for the user.
+  const canManageRoles = isAdmin || getPermissionsForMenu(findMenuIdForPath("/user-roles")).read;
 
   // Fetch all roles and menu data
   useEffect(() => {
@@ -704,6 +708,17 @@ const UserRoles = () => {
         ));
 
     document.title = `User Roles | Apidel HRMS`;
+
+    if (!canManageRoles) {
+        return (
+            <>
+                <PageHeader title="User Roles" pageTitle="Setup" />
+                <Card className="px-5 py-8 text-center">
+                    <p className="text-sm text-tertiary">You do not have access to user roles.</p>
+                </Card>
+            </>
+        );
+    }
 
     return (
         <>

@@ -9,6 +9,7 @@ import { runListQuery } from "../../utils/listQuery.js";
 import Employee, { NO_ACCESS_STATUSES } from "../../models/Employee.js";
 import JobApplicant from "../../models/JobApplicant.js";
 import JobOffer from "../../models/JobOffer.js";
+import EmployeeOnboarding from "../../models/EmployeeOnboarding.js";
 import Department from "../../models/Department.js";
 import Designation from "../../models/Designation.js";
 import Branch from "../../models/Branch.js";
@@ -134,8 +135,19 @@ export const createEmployee = async (req, res) => {
     const fields = pickFields(req.body);
     const mismatch = await organizationMismatch(fields);
     if (mismatch) return res.status(400).json({ isOk: false, status: 400, message: mismatch });
+    // An employee made from a completed onboarding (its Create Employee
+    // button prefills this form) is linked back to it: once, and only in the
+    // onboarding's own company.
+    const onboarding = fields.jobApplicantId ? await EmployeeOnboarding.findOne({ jobApplicantId: fields.jobApplicantId }) : null;
+    if (onboarding?.employeeId) {
+      return res.status(409).json({ isOk: false, status: 409, message: "This hire's onboarding already has an Employee" });
+    }
+    if (onboarding?.companyId && String(onboarding.companyId) !== String(fields.companyId)) {
+      return res.status(400).json({ isOk: false, status: 400, message: "Company must be the company of this hire's onboarding" });
+    }
     fields.password = await bcrypt.hash(fields.password, 10);
-    await Employee.create(fields);
+    const employee = await Employee.create(fields);
+    if (onboarding) await EmployeeOnboarding.updateOne({ _id: onboarding._id }, { employeeId: employee._id });
     await syncJobApplicantAndOffer(fields.jobApplicantId);
     return res.status(201).json({ isOk: true, status: 201, message: "Employee created successfully" });
   } catch (error) {

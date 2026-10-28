@@ -14,7 +14,9 @@
 //   7. an Interview's interviewers work for the interview's company (re-check
 //      N2) — its job opening's, else its designation's,
 //   8. a Company's Basic and HRA Salary Components are its own (re-test P3),
-//      and a house rent declaration for a company without them is a clear 400.
+//      and a house rent declaration for a company without them is a clear 400,
+//   9. an Employee made from a completed onboarding is linked back to it
+//      (re-test P6), once, and only in the onboarding's company.
 // Drives the real mounted routes (authMiddleware → checkPermission → handler)
 // over in-memory stand-ins and the seeded matrices, like accessLifecycle.test.js.
 import assert from "node:assert/strict";
@@ -104,6 +106,11 @@ const stub = (Model, rows = []) => {
   Model.create = async (data) => { const doc = asDoc({ _id: oid(), ...data }); rows.push(doc); return doc; };
   Model.insertMany = async (docs) => docs;
   Model.updateMany = async () => ({});
+  Model.updateOne = async (filter, update) => {
+    const row = rows.find((candidate) => matches(candidate, filter));
+    if (row) Object.assign(row, update);
+    return {};
+  };
   return rows;
 };
 const fakeRes = () => ({
@@ -414,6 +421,42 @@ const expectRefused = (res, pattern, label) => {
     (error) => error.status === 400 && /HR must set the Basic Salary Component and the HRA Salary Component on the company "Techno Sales"/.test(error.message),
     "a missing HRA component is a 400 naming the company and the setting",
   );
+}
+
+// ------------------------- 9. an onboarded hire's employee links back to it --
+{
+  const ravi = { _id: oid(), applicantName: "Ravi ApplicantTRP", status: "Open" };
+  stub(JobApplicant, [ravi]);
+  stub(JobOffer, []);
+  const onboarding = { _id: oid(), jobApplicantId: ravi._id, companyId: apidel, employeeId: null, boardingStatus: "Completed", dateOfJoining: new Date("2026-11-02"),
+    activities: [{ activityName: "Laptop", status: "Completed", requiredForEmployeeCreation: true }] };
+  stub(EmployeeOnboarding, [onboarding]);
+  stub(Department, [engApd, engNuv, approverDept]);
+
+  // Create Employee hands the Add Employee form the hire's details.
+  const prefill = await call(onboardingRoutes, "post", "/employee-onboardings/:onboardingId/make-employee", admin, { params: { onboardingId: String(onboarding._id) } });
+  expectStatus(prefill, 200, "Create Employee on a completed onboarding");
+  assert.ok(same(prefill.body.data.jobApplicantId, ravi._id), "the form carries the hire's applicant");
+
+  const save = (body) => call(employeeRoutes, "post", "/employees", admin, {
+    body: {
+      ...prefill.body.data, email: "ravi@work.example", password: "Demo@1234", roleId: String(roles.Employee),
+      employeeCode: "APD120", departmentId: String(engApd._id), designationId: String(internApd._id), branchId: String(vadodara._id), ...body,
+    },
+  });
+  expectRefused(await save({ employeeCode: "NUV120", email: "ravi.nuv@work.example", companyId: String(nuva), departmentId: String(engNuv._id),
+    designationId: String(internNuv._id), branchId: String(ahmedabad._id) }), /company of this hire's onboarding/, "saved under another company");
+  assert.equal(onboarding.employeeId, null, "not linked");
+
+  expectStatus(await save({}), 201, "HR saves the prefilled form");
+  const created = people.find((someone) => someone.employeeCode === "APD120");
+  assert.ok(created, "the employee exists");
+  assert.ok(same(onboarding.employeeId, created._id), "the onboarding names its employee");
+  assert.equal(ravi.status, "Accepted", "the applicant is hired");
+
+  const again = await save({ employeeCode: "APD121", email: "ravi2@work.example" });
+  expectStatus(again, 409, "a second employee for the same hire");
+  assert.ok(same(onboarding.employeeId, created._id), "the link is unchanged");
 }
 
 console.log("companyIntegrity.test.js passed");

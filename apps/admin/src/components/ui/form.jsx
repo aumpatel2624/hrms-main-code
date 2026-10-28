@@ -35,7 +35,7 @@ export const FullWidth = ({ children, className }) => (
  * Cancel navigates through the router - Untitled UI's Button renders a plain
  * anchor when given `href`, which would reload the whole app.
  */
-export const FormActions = ({ onSubmit, cancelTo, onCancel, isLoading, submitLabel = "Save", loadingLabel = "Saving..." }) => {
+export const FormActions = ({ onSubmit, cancelTo, onCancel, isLoading, submitLabel = "Save", loadingLabel = "Saving...", canSubmit = true }) => {
     const navigate = useNavigate();
     return (
     <div className="sticky bottom-0 -mx-5 flex items-center justify-end gap-3 rounded-b-xl border-t border-secondary bg-primary px-5 py-4 md:-mx-6 md:px-6">
@@ -46,9 +46,11 @@ export const FormActions = ({ onSubmit, cancelTo, onCancel, isLoading, submitLab
         >
             Cancel
         </Button>
-        <Button type="submit" onClick={onSubmit} isLoading={isLoading} isDisabled={isLoading}>
-            {isLoading ? loadingLabel : submitLabel}
-        </Button>
+        {canSubmit && (
+            <Button type="submit" onClick={onSubmit} isLoading={isLoading} isDisabled={isLoading}>
+                {isLoading ? loadingLabel : submitLabel}
+            </Button>
+        )}
     </div>
     );
 };

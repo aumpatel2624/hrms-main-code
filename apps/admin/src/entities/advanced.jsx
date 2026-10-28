@@ -1271,7 +1271,7 @@ export const employeeOnboardingConfig = {
         { name: "boardingBeginsOn", label: "Onboarding Begins On", type: "date", required: true, section: "details", error: "Onboarding Begins On is required!" },
         ACTIVE,
     ],
-    renderExtra: ({ mode, id, values, setValues }) => (
+    renderExtra: ({ mode, id, values, setValues, navigate }) => (
         <>
             <SimpleArrayField
                 title="Activities" description={`Status: ${values.boardingStatus ?? "Pending"} (derived from the activities below).`}
@@ -1285,8 +1285,9 @@ export const employeeOnboardingConfig = {
                         onResult={() => window.location.reload()}
                     />
                     <SimpleActionButton
-                        label="Create Employee" description="Builds a prefilled Employee record from this onboarding (once every required activity is Completed) — review and save it on the Employee screen."
+                        label="Create Employee" description="Opens Add Employee prefilled from this onboarding (once every required activity is Completed). Add the login and branch, then save: the new employee is linked to this onboarding."
                         onRun={() => makeEmployeeFromOnboarding(id)}
+                        onResult={(res) => navigate("/employee/add", { state: { prefill: res.data?.data } })}
                     />
                 </>
             )}
@@ -1371,8 +1372,9 @@ export const employeeSeparationConfig = {
         search: searchEmployeeSeparations, getById: getEmployeeSeparationById,
         create: createEmployeeSeparation, update: updateEmployeeSeparation, remove: deleteEmployeeSeparation,
     },
+    lookupDeps: ["employeeId"],
     lookups: {
-        employeeId: asOptions(getAllEmployees, "employeeName"),
+        employeeId: currentEmployeeOptions("employeeId"),
         employeeSeparationTemplateId: asOptions(getAllEmployeeSeparationTemplates, "title"),
     },
     sections: [{ id: "details", title: "Details" }, { id: "activities", title: "Activities" }],
@@ -1671,7 +1673,10 @@ export const employeePromotionConfig = {
         { name: "newDesignationId", label: "New Designation", type: "select", section: "details", optionsFrom: "newDesignationId" },
         { name: "newGradeId", label: "New Grade", type: "select", section: "details", optionsFrom: "newGradeId" },
         { name: "currentCtc", label: "Current CTC (leave blank to fetch from Employee)", type: "number", section: "details" },
-        { name: "revisedCtc", label: "Revised CTC", type: "number", section: "details" },
+        {
+            name: "revisedCtc", label: "Revised CTC", type: "number", section: "details",
+            hint: "Recorded on the promotion only — it does not change pay. To pay the new CTC, add a new Salary Structure Assignment for this employee from the promotion date.",
+        },
         ACTIVE,
     ],
     columns: [
@@ -2687,6 +2692,7 @@ export const compensatoryLeaveRequestConfig = {
         search: searchCompensatoryLeaveRequests, getById: getCompensatoryLeaveRequestById,
         create: createCompensatoryLeaveRequest, update: updateCompensatoryLeaveRequest, remove: deleteCompensatoryLeaveRequest,
     },
+    canSave: (values) => values.status === "open",
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
         leaveTypeId: asOptions(getAllLeaveTypes, "leaveTypeName"),
@@ -2752,12 +2758,14 @@ export const leaveApplicationConfig = {
         search: searchLeaveApplications, getById: getLeaveApplicationById,
         create: createLeaveApplication, update: updateLeaveApplication,
     },
-    lookupDeps: ["leaveApproverId"],
+    lookupDeps: ["employeeId", "leaveApproverId"],
     lookups: {
-        employeeId: asOptions(getAllEmployees, "employeeName"),
+        employeeId: currentEmployeeOptions("employeeId"),
         leaveTypeId: asOptions(getAllLeaveTypes, "leaveTypeName"),
         leaveApproverId: currentEmployeeOptions("leaveApproverId"),
     },
+    // The server refuses edits once a leave is approved, rejected or cancelled.
+    canSave: (values) => values.status === "open",
     sections: [{ id: "details", title: "Details" }, { id: "approval", title: "Approval" }, { id: "status", title: "Status" }, { id: "actions", title: "Actions" }],
     fields: [
         { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
@@ -3226,6 +3234,7 @@ export const shiftRequestConfig = {
     key: "shift-request", path: "/shift-request", section: "Shift & Attendance", singular: "Shift Request", plural: "Shift Requests",
     description: "Request a shift change for a date range. The Shift Approver is resolved automatically (your own Shift Approver, else your Department's) unless you set one explicitly. Approving creates the real Shift Assignment; rejecting has no side effects.",
     api: { search: searchShiftRequests, getById: getShiftRequestById, create: createShiftRequest, update: updateShiftRequest },
+    canSave: (values) => values.status === "open",
     lookupDeps: ["approverId"],
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),

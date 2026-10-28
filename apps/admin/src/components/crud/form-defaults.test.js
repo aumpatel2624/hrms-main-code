@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { initialFormValues, storedFormValues } from "./form-defaults.js";
+import { initialFormValues, prefilledFormValues, storedFormValues } from "./form-defaults.js";
 
 // Is active starts checked on a create form when the config gives no default.
 assert.equal(initialFormValues([{ name: "isActive", type: "checkbox" }]).isActive, true, "isActive defaults on");
@@ -30,5 +30,17 @@ assert.deepEqual(
     "date fields trimmed to the day, other fields untouched",
 );
 assert.deepEqual(storedFormValues(leaveFields, { fromDate: "2026-09-15", toDate: "" }), { fromDate: "2026-09-15", toDate: "" }, "already a day, or blank");
+
+// Re-test P6: an onboarding's Create Employee opens Add Employee with the hire's
+// details. Its dates become days, its blanks keep the form's defaults, and the
+// hire's applicant goes along so the saved employee links back to it.
+const employeeFields = [{ name: "employeeName", type: "text" }, { name: "departmentId", type: "select" }, { name: "dateOfJoining", type: "date" }, { name: "isActive", type: "checkbox" }];
+const blankEmployee = initialFormValues(employeeFields);
+assert.equal(prefilledFormValues(employeeFields, blankEmployee, undefined), blankEmployee, "no hand-over: the blank form");
+assert.deepEqual(
+    prefilledFormValues(employeeFields, blankEmployee, { employeeName: "Ravi ApplicantTRP", departmentId: null, dateOfJoining: "2026-11-02T00:00:00.000Z", jobApplicantId: "a1" }),
+    { employeeName: "Ravi ApplicantTRP", departmentId: "", dateOfJoining: "2026-11-02", isActive: true, jobApplicantId: "a1" },
+    "the onboarding's details fill the form",
+);
 
 console.log("form-defaults: all assertions passed");

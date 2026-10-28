@@ -162,8 +162,9 @@ const validateConditionalFields = (fields) => {
 // right exists for Employee at all (see seedEmployeeCareerEventsRoles), so
 // deleteEmployeeGrievance needs no ownership check of its own.
 // "Own department" (F3): grievances raised by someone in the caller's
-// current department — never one raised against the caller by someone
-// else, which would name the complainant to the person accused.
+// current department — never one raised by someone else against the caller
+// or naming them as the Employee Responsible, which would name the
+// complainant to the person accused.
 // "team" (custom roles): grievances raised by the caller or anyone in their
 // reportsToId chain; "approver": the caller's own — there is no grievance
 // approver. Either way never one naming the caller as the person it is
@@ -193,7 +194,8 @@ const canAccessEmployeeGrievance = async (req, doc) => {
   if (!!employee && String(raisedBy) === String(employee._id)) return true;
   if (req.user.dataScope === SCOPES.OWN) return false;
   const against = doc.grievanceAgainstEmployeeId?._id ?? doc.grievanceAgainstEmployeeId;
-  return String(against) !== String(employee?._id) && inCallerDepartment(req, raisedBy);
+  const responsible = doc.employeeResponsibleId?._id ?? doc.employeeResponsibleId;
+  return String(against) !== String(employee?._id) && String(responsible) !== String(employee?._id) && inCallerDepartment(req, raisedBy);
 };
 
 const employeeGrievanceScopeFilter = async (req) => {
@@ -205,7 +207,10 @@ const employeeGrievanceScopeFilter = async (req) => {
     const employee = await resolveRequestEmployee(req);
     return { $and: [
       { raisedByEmployeeId: { $in: await departmentEmployeeIds(req) } },
-      { $or: [{ raisedByEmployeeId: employee?._id }, { grievanceAgainstEmployeeId: { $ne: employee?._id } }] },
+      { $or: [
+        { raisedByEmployeeId: employee?._id },
+        { grievanceAgainstEmployeeId: { $ne: employee?._id }, employeeResponsibleId: { $ne: employee?._id } },
+      ] },
     ] };
   }
   if (req.user.dataScope !== SCOPES.OWN) return null;
@@ -256,6 +261,13 @@ export const updateEmployeeGrievance = async (req, res) => {
     }
     const fields = pickFields(req.body);
     delete fields.raisedByEmployeeId; // ownership is fixed at creation, never reassignable by the request body
+    // Below "all", who it is against and who is responsible are the
+    // complainant's choice at creation only — a manager who can see a
+    // report's grievance must not move the blame. HR can still change them.
+    if (req.user?.dataScope && req.user.dataScope !== SCOPES.ALL) {
+      delete fields.grievanceAgainstEmployeeId;
+      delete fields.employeeResponsibleId;
+    }
     const merged = { ...doc.toObject(), ...fields };
     const conditionalError = validateConditionalFields(merged);
     if (conditionalError) {

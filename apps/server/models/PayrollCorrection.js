@@ -49,6 +49,13 @@ const PayrollCorrectionSchema = new mongoose.Schema(
       ref: "SalarySlip",
       required: true,
     },
+    // The active Payroll Period covering the slip, found on create; accrual
+    // arrears post their ledger entries against it on submit.
+    payrollPeriodId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "PayrollPeriod",
+      default: null,
+    },
     payrollDate: {
       type: Date,
       default: Date.now,
@@ -75,6 +82,10 @@ const PayrollCorrectionSchema = new mongoose.Schema(
       enum: ["draft", "submitted", "cancelled"],
       default: "draft",
       required: true,
+    },
+    remarks: {
+      type: String,
+      default: "",
     },
   },
   { timestamps: true },

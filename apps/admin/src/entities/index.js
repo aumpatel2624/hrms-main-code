@@ -23,8 +23,8 @@ import {
     createEmailSetup, deleteEmailSetup, getEmailSetupById, updateEmailSetup, searchEmailSetups,
 } from "../api/emails.api";
 import { createMenuGroup, deleteMenuGroup, getMenuGroupById, updateMenuGroup, searchMenuGroups } from "../api/menus.api";
-import { getAllSalaryStructures, getAllSalaryComponents } from "../api/payroll.api";
-import { companyLabelledOptions, salaryStructureLabel } from "./picker-labels";
+import { getAllSalaryStructures, getSalaryComponentOptions } from "../api/payroll.api";
+import { companyLabelledOptions, ofThisCompany, salaryStructureLabel } from "./picker-labels";
 
 /** Maps an API list response to the { value, label } shape SelectField wants. */
 const asOptions = (loader, labelKey) => () =>
@@ -216,7 +216,8 @@ export const companyConfig = {
     plural: "Companies",
     description: "Legal entities within Apidel. Every branch, department and designation belongs to one.",
     api: { search: searchCompanies, getById: getCompanyById, create: createCompany, update: updateCompany, remove: deleteCompany },
-    lookups: { basicComponentId: asOptions(getAllSalaryComponents, "salaryComponentName"), hraComponentId: asOptions(getAllSalaryComponents, "salaryComponentName") },
+    // Only this company's own components: another company's never match its salary structures (re-test P3).
+    lookups: { basicComponentId: ofThisCompany(getSalaryComponentOptions, (row) => row.salaryComponentName), hraComponentId: ofThisCompany(getSalaryComponentOptions, (row) => row.salaryComponentName) },
     sections: [
         { id: "details", title: "Company details" },
         { id: "status", title: "Status" },
@@ -224,8 +225,8 @@ export const companyConfig = {
     fields: [
         { name: "companyName", icon: Building07, label: "Company Name", required: true, section: "details", error: "Company Name is required!", placeholder: "Enter company name" },
         { name: "companyCode", icon: Hash02, label: "Company Code", section: "details", placeholder: "Enter company code (optional)" },
-        { name: "basicComponentId", label: "Basic Salary Component", section: "details", type: "select", optionsFrom: "basicComponentId" },
-        { name: "hraComponentId", label: "HRA Salary Component", section: "details", type: "select", optionsFrom: "hraComponentId" },
+        { name: "basicComponentId", label: "Basic Salary Component", section: "details", type: "select", optionsFrom: "basicComponentId", hint: "One of this company's own salary components. Save the company first, then add its components." },
+        { name: "hraComponentId", label: "HRA Salary Component", section: "details", type: "select", optionsFrom: "hraComponentId", hint: "One of this company's own salary components. Save the company first, then add its components." },
         ACTIVE,
     ],
     columns: [

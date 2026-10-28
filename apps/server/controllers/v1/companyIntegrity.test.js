@@ -12,7 +12,9 @@
 //   6. the approver resolvers skip a Left / Inactive / Suspended approver and
 //      fall through to the next one,
 //   7. an Interview's interviewers work for the interview's company (re-check
-//      N2) — its job opening's, else its designation's.
+//      N2) — its job opening's, else its designation's,
+//   8. a Company's Basic and HRA Salary Components are its own (re-test P3),
+//      and a house rent declaration for a company without them is a clear 400.
 // Drives the real mounted routes (authMiddleware → checkPermission → handler)
 // over in-memory stand-ins and the seeded matrices, like accessLifecycle.test.js.
 import assert from "node:assert/strict";
@@ -44,10 +46,12 @@ import LeavePeriod from "../../models/LeavePeriod.js";
 import LeavePolicyAssignment from "../../models/LeavePolicyAssignment.js";
 import LeaveType from "../../models/LeaveType.js";
 import MenuMaster from "../../models/MenuMaster.js";
+import SalaryComponent from "../../models/SalaryComponent.js";
 import UserRoles from "../../models/UserRoles.js";
 import { invalidateRoleCache } from "../../middlewares/checkPermission.js";
 import { buildRoleRows } from "../../seed/org-tiers.data.js";
 import { resolveApprovers } from "../../utils/approvers.js";
+import { calculateAnnualEligibleHraExemption } from "../../utils/hraExemptionCalc.js";
 import careerRoutes from "../../routes/v1/employeeCareerEvents.routes.js";
 import employeeRoutes from "../../routes/v1/employee.routes.js";
 import expenseRoutes from "../../routes/v1/expenses.routes.js";
@@ -55,6 +59,7 @@ import interviewRoutes from "../../routes/v1/interviews.routes.js";
 import leaveSetupRoutes from "../../routes/v1/leaves.routes.js";
 import leaveRoutes from "../../routes/v1/leavesTransactions.routes.js";
 import onboardingRoutes from "../../routes/v1/onboarding.routes.js";
+import organizationRoutes from "../../routes/v1/organizationSetup.routes.js";
 
 // ---------------------------------------------------------------- stand-ins --
 const same = (a, b) => String(a) === String(b);
@@ -375,6 +380,40 @@ const expectRefused = (res, pattern, label) => {
   assert.deepEqual(saved.interviewers.map(String), [String(tara._id), String(manju._id)], "the interviewers are unchanged");
   expectStatus(await edit({ interviewers: [String(bilal._id)], interviewSummary: "Strong" }), 200, "editing in an Apidel interviewer");
   assert.deepEqual(saved.interviewers.map(String), [String(bilal._id)]);
+}
+
+// ------------------------------ 8. a company's own Basic and HRA components --
+{
+  const basicApd = { _id: oid(), salaryComponentName: "Basic Salary - APD", companyId: apidel };
+  const hraApd = { _id: oid(), salaryComponentName: "House Rent Allowance - APD", companyId: apidel };
+  const basicTsl = { _id: oid(), salaryComponentName: "Basic - TSL", companyId: shreeraj };
+  stub(SalaryComponent, [basicApd, hraApd, basicTsl]);
+  const techno = { _id: shreeraj, companyName: "Techno Sales", companyCode: "TSL", basicComponentId: null, hraComponentId: null, isActive: true };
+  const companies = stub(Company, [techno]);
+  const edit = (body) => call(organizationRoutes, "put", "/companies/:companyId", admin, {
+    params: { companyId: String(techno._id) }, body: { companyName: "Techno Sales", companyCode: "TSL", isActive: true, ...body },
+  });
+
+  expectRefused(await edit({ basicComponentId: String(basicApd._id), hraComponentId: String(hraApd._id) }), /Basic Salary Component must be one of this company's own/,
+    "Techno Sales saved with Apidel's components");
+  expectRefused(await edit({ basicComponentId: String(basicTsl._id), hraComponentId: String(hraApd._id) }), /HRA Salary Component must be one of this company's own/,
+    "its own Basic with Apidel's HRA");
+  assert.equal(techno.basicComponentId, null, "nothing was stored");
+  expectStatus(await edit({ basicComponentId: String(basicTsl._id), hraComponentId: "" }), 200, "its own Basic, no HRA yet");
+  assert.ok(same(techno.basicComponentId, basicTsl._id));
+
+  const create = (body) => call(organizationRoutes, "post", "/companies", admin, { body: { companyName: "Kaveri Foods", isActive: true, ...body } });
+  expectRefused(await create({ basicComponentId: String(basicApd._id) }), /Basic Salary Component/, "a new company with Apidel's Basic");
+  expectStatus(await create({}), 201, "a new company without components");
+  assert.equal(companies.length, 2);
+
+  // House rent declared for a company with no HRA component: HR's setup, a 400 that says so.
+  const period = { startDate: new Date("2026-04-01"), endDate: new Date("2027-03-31") };
+  await assert.rejects(
+    calculateAnnualEligibleHraExemption({ employeeId: apdIntern._id, companyId: techno._id, payrollPeriod: period, monthlyHouseRent: 9000, rentedInMetroCity: false }),
+    (error) => error.status === 400 && /HR must set the Basic Salary Component and the HRA Salary Component on the company "Techno Sales"/.test(error.message),
+    "a missing HRA component is a 400 naming the company and the setting",
+  );
 }
 
 console.log("companyIntegrity.test.js passed");

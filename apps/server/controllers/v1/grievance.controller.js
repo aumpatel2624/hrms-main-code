@@ -266,6 +266,7 @@ export const updateEmployeeGrievance = async (req, res) => {
     // report's grievance must not move the blame. HR can still change them.
     if (req.user?.dataScope && req.user.dataScope !== SCOPES.ALL) {
       delete fields.grievanceAgainstEmployeeId;
+      delete fields.grievanceAgainstText;
       delete fields.employeeResponsibleId;
     }
     const merged = { ...doc.toObject(), ...fields };

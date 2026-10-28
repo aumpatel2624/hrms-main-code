@@ -731,19 +731,19 @@ resetWrites();
 
   // Grievance: the edit is kept, the accused and responsible are not moved.
   const grievance = asDoc({ _id: oid(), raisedByEmployeeId: applicant._id, grievanceAgainstEmployeeId: bilal._id, employeeResponsibleId: tara._id,
-    subject: "s", status: "Open", isActive: true });
+    grievanceAgainstText: "Bilal", subject: "s", status: "Open", isActive: true });
   stub(EmployeeGrievance, [grievance]);
   const editGrievance = (caller, subject) => call(careerRoutes, "put", "/employee-grievances/:grievanceId", caller, {
-    params: { grievanceId: String(grievance._id) }, body: { subject, grievanceAgainstEmployeeId: String(lead._id), employeeResponsibleId: String(applicant._id) },
+    params: { grievanceId: String(grievance._id) }, body: { subject, grievanceAgainstEmployeeId: String(lead._id), employeeResponsibleId: String(applicant._id), grievanceAgainstText: "Lead" },
   });
   for (const caller of [lead, applicant]) {
     expectStatus(await editGrievance(caller, `by ${caller.employeeName}`), 200, `${caller.employeeName} edits the grievance naming someone else`);
     assert.equal(grievance.subject, `by ${caller.employeeName}`, `${caller.employeeName}: the rest of the edit is kept`);
-    assert.ok(same(grievance.grievanceAgainstEmployeeId, bilal._id) && same(grievance.employeeResponsibleId, tara._id),
+    assert.ok(same(grievance.grievanceAgainstEmployeeId, bilal._id) && same(grievance.employeeResponsibleId, tara._id) && grievance.grievanceAgainstText === "Bilal",
       `${caller.employeeName}: who it is against and who is responsible are unchanged`);
   }
   expectStatus(await editGrievance(hrCaller, "by hiral"), 200, "HR edits the grievance");
-  assert.ok(same(grievance.grievanceAgainstEmployeeId, lead._id) && same(grievance.employeeResponsibleId, applicant._id),
+  assert.ok(same(grievance.grievanceAgainstEmployeeId, lead._id) && same(grievance.employeeResponsibleId, applicant._id) && grievance.grievanceAgainstText === "Lead",
     "HR can change who it is against and who is responsible");
 
   // Shift Request edit and Attendance Request cancel: only the applicant, or HR.

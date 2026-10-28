@@ -5108,3 +5108,33 @@ consumer; single-branch build
   approved leave. Tested by section 11 of `controllers/v1/accessLifecycle.test.js` and by
   `services/authService.test.js`, which runs two parallel wrong passwords. Both fail on the old code.
 - **Deviates from convention**: no.
+
+### ADR-061 — Grievance blame is fixed once raised; only the applicant changes a shift or attendance request
+
+- **Date**: 2026-10-28
+- **Status**: accepted
+- **Context**: leftovers from ADR-058 and ADR-060. (1) "Own department" grievance scope hid a grievance raised
+  against the caller but not one naming them as Employee Responsible; team and approver scope already hid both.
+  (2) Anyone who could edit a visible grievance could change its Grievance Against and Employee Responsible, so a
+  team lead could move the blame on a report's grievance. (3) Shift Request edit and Attendance Request cancel
+  (`canAccessOwnRecord`) let a department-scoped caller change a department colleague's request, and let an
+  approver-scoped (or any other non-own, non-team) role change anyone's request by id. (4) `createAttendanceRequest`
+  pinned the employee whenever `dataScope !== "all"`, including unset, while leave uses `isSelfService`.
+- **Decision**:
+  - "Own department" grievance list and by id exclude a grievance naming the caller as accused or as Employee
+    Responsible, unless the caller raised it — the same rule as team and approver.
+  - `updateEmployeeGrievance` drops `grievanceAgainstEmployeeId` and `employeeResponsibleId` from the body below
+    `all`, like it already drops `raisedByEmployeeId`; the rest of the edit is kept. HR (`all`) and ADMIN can still
+    change them. Create is unchanged: the complainant names them.
+  - `canChangeRequest` replaces `canAccessOwnRecord` for Shift Request edit and Attendance Request cancel. It is
+    `canChangeLeaveRequest`'s rule: below `all` (`isSelfService`), only the applicant. Viewing, approving and
+    rejecting are unchanged.
+  - `createAttendanceRequest` uses `isSelfService`. Through the routes `dataScope` is always set for a USER and
+    ADMIN was already exempt, so this changes no live behaviour; it makes leave and attendance read the same.
+- **Consequences**: no re-seed or data change. A team lead or department colleague who used to fix a request now
+  asks the applicant or HR. A complainant who named the wrong person asks HR to correct it. Seeded tiers are `own`
+  on Shift and Attendance Requests, so the seeded roles behave as before; only custom department-, team- or
+  approver-scoped roles lose rights. `createShiftRequest` still uses the old `!== "all"` form (same no-op
+  difference); left as it is. Tested by sections 7 and 12 of `controllers/v1/accessLifecycle.test.js`; each new
+  check fails on the old code.
+- **Deviates from convention**: no.

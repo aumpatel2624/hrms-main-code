@@ -24,7 +24,10 @@
 //      below "all" a referral is always made, and stays, as the caller,
 //  11. below "all" only the applicant edits, cancels or deletes a Leave
 //      Application or Compensatory Leave Request — a team lead or named Leave
-//      Approver decides it but cannot change it; HR still can.
+//      Approver decides it but cannot change it; HR still can,
+//  12. below "all" a grievance's accused and Employee Responsible are fixed
+//      once it is raised, and only the applicant edits a Shift Request or
+//      cancels an Attendance Request; HR still can.
 // Drives the real mounted routes (authMiddleware → checkPermission → handler)
 // over in-memory stand-ins and the seeded matrices, like approvalIntegrity.test.js.
 import assert from "node:assert/strict";
@@ -49,6 +52,7 @@ import LoginAttempt from "../../models/LoginAttempt.js";
 import MenuMaster from "../../models/MenuMaster.js";
 import ShiftAssignment from "../../models/ShiftAssignment.js";
 import ShiftRequest from "../../models/ShiftRequest.js";
+import ShiftType from "../../models/ShiftType.js";
 import AttendanceRequest from "../../models/AttendanceRequest.js";
 import TravelRequest from "../../models/TravelRequest.js";
 import EmployeeGrievance from "../../models/EmployeeGrievance.js";
@@ -419,9 +423,12 @@ resetWrites();
     const colleagues = record(colleague);
     const outsiders = record(asha);
     const rows = [own, colleagues, outsiders];
-    // A grievance against the viewer must not name its complainant to them.
-    const against = owner === "raisedByEmployeeId" ? record(colleague, { grievanceAgainstEmployeeId: viewer._id }) : null;
-    if (against) rows.push(against);
+    // A grievance against the viewer, or naming them as the Employee
+    // Responsible, must not name its complainant to them.
+    const isGrievance = owner === "raisedByEmployeeId";
+    const against = isGrievance ? record(colleague, { grievanceAgainstEmployeeId: viewer._id }) : null;
+    const responsible = isGrievance ? record(colleague, { employeeResponsibleId: viewer._id }) : null;
+    if (isGrievance) rows.push(against, responsible);
     stub(Model, rows);
     const res = await call(router, "post", `${path}/search`, viewer, { body: {} });
     expectStatus(res, 200, `${menuUrl}: a department-scoped role lists`);
@@ -431,6 +438,7 @@ resetWrites();
     expectStatus(await byId(colleagues), 200, `${menuUrl}: a department colleague's by id`);
     assert.ok([403, 404].includes((await byId(outsiders)).statusCode), `${menuUrl}: another department's by id is refused`);
     if (against) expectStatus(await byId(against), 403, `${menuUrl}: one raised against the viewer by id`);
+    if (responsible) expectStatus(await byId(responsible), 403, `${menuUrl}: one naming the viewer as responsible by id`);
   }
 }
 
@@ -700,6 +708,75 @@ resetWrites();
   expectStatus(await editLeave(hema), 200, "HR edits it");
   expectStatus(await cancelLeave(hema), 200, "HR cancels the approved leave");
   assert.equal(approved.status, "cancelled");
+}
+
+// ------ 12. grievance blame and shift / attendance requests stay the owner's --
+{
+  // A team lead could edit a report's grievance to move who it is against or
+  // who is responsible; a department colleague or approver-scoped role could
+  // edit anyone's Shift Request or cancel anyone's Attendance Request.
+  const scopeRoles = Object.fromEntries([SCOPES.ALL, SCOPES.OWN, SCOPES.DEPARTMENT, SCOPES.TEAM, SCOPES.APPROVER].map((scope) => [scope, oid()]));
+  const pages = ["/employee-grievance", "/shift-request", "/attendance-request"];
+  stub(UserRoles, [...tierMatrices, ...Object.entries(scopeRoles).map(([scope, roleId]) => ({
+    roleId, isActive: true, dataScope: SCOPES.ALL, roles: pages.map((menuUrl) => row(menuUrl, { write: true, edit: true }, scope)),
+  }))]);
+  invalidateRoleCache();
+  const finance = oid();
+  const lead = person("leela", "Employee", { roleId: scopeRoles[SCOPES.TEAM] });
+  const applicant = person("rohan", "Employee", { roleId: scopeRoles[SCOPES.OWN], reportsToId: lead._id, departmentId: finance });
+  const deptCaller = person("diya", "Employee", { roleId: scopeRoles[SCOPES.DEPARTMENT], departmentId: finance });
+  const approverCaller = person("amar", "Employee", { roleId: scopeRoles[SCOPES.APPROVER] });
+  const hrCaller = person("hiral", "Employee", { roleId: scopeRoles[SCOPES.ALL] });
+  people.push(...[lead, applicant, deptCaller, approverCaller, hrCaller].map(asDoc));
+
+  // Grievance: the edit is kept, the accused and responsible are not moved.
+  const grievance = asDoc({ _id: oid(), raisedByEmployeeId: applicant._id, grievanceAgainstEmployeeId: bilal._id, employeeResponsibleId: tara._id,
+    subject: "s", status: "Open", isActive: true });
+  stub(EmployeeGrievance, [grievance]);
+  const editGrievance = (caller, subject) => call(careerRoutes, "put", "/employee-grievances/:grievanceId", caller, {
+    params: { grievanceId: String(grievance._id) }, body: { subject, grievanceAgainstEmployeeId: String(lead._id), employeeResponsibleId: String(applicant._id) },
+  });
+  for (const caller of [lead, applicant]) {
+    expectStatus(await editGrievance(caller, `by ${caller.employeeName}`), 200, `${caller.employeeName} edits the grievance naming someone else`);
+    assert.equal(grievance.subject, `by ${caller.employeeName}`, `${caller.employeeName}: the rest of the edit is kept`);
+    assert.ok(same(grievance.grievanceAgainstEmployeeId, bilal._id) && same(grievance.employeeResponsibleId, tara._id),
+      `${caller.employeeName}: who it is against and who is responsible are unchanged`);
+  }
+  expectStatus(await editGrievance(hrCaller, "by hiral"), 200, "HR edits the grievance");
+  assert.ok(same(grievance.grievanceAgainstEmployeeId, lead._id) && same(grievance.employeeResponsibleId, applicant._id),
+    "HR can change who it is against and who is responsible");
+
+  // Shift Request edit and Attendance Request cancel: only the applicant, or HR.
+  const shiftType = { _id: oid(), shiftTypeName: "Day" };
+  stub(ShiftType, [shiftType]);
+  const shift = { _id: oid(), employeeId: applicant._id, shiftTypeId: shiftType._id, companyId, approverId: approverCaller._id, status: "open",
+    fromDate: new Date("2026-11-02"), toDate: new Date("2026-11-02") };
+  stub(ShiftRequest, [shift]);
+  const editShift = (caller) => call(shiftRequestRoutes, "put", "/shift-requests/:shiftRequestId", caller, {
+    params: { shiftRequestId: String(shift._id) }, body: { toDate: "2026-11-03", approverId: String(approverCaller._id) },
+  });
+  const attendanceOf = () => ({ _id: oid(), employeeId: applicant._id, companyId, approverId: approverCaller._id, status: "open",
+    fromDate: new Date("2026-11-02"), toDate: new Date("2026-11-02"), reason: "On Duty" });
+  const attendance = attendanceOf();
+  const hrsAttendance = attendanceOf();
+  stub(AttendanceRequest, [attendance, hrsAttendance]);
+  const cancelAttendance = (caller, doc) => call(shiftRequestRoutes, "post", "/attendance-requests/:attendanceRequestId/cancel", caller,
+    { params: { attendanceRequestId: String(doc._id) } });
+
+  for (const [caller, label] of [[deptCaller, "a department colleague"], [lead, "the applicant's team lead"], [approverCaller, "the named approver (approver scope)"]]) {
+    expectStatus(await editShift(caller), 403, `${label} edits the shift request`);
+    expectStatus(await cancelAttendance(caller, attendance), 403, `${label} cancels the attendance request`);
+  }
+  assert.equal(shift.toDate.toISOString(), new Date("2026-11-02").toISOString(), "the shift request was not edited");
+  assert.equal(attendance.status, "open", "the attendance request was not cancelled");
+
+  expectStatus(await editShift(applicant), 200, "the applicant edits their shift request");
+  assert.equal(String(shift.toDate), "2026-11-03", "the applicant's edit is kept");
+  expectStatus(await editShift(hrCaller), 200, "HR edits it");
+  expectStatus(await cancelAttendance(applicant, attendance), 200, "the applicant cancels their attendance request");
+  assert.equal(attendance.status, "cancelled");
+  expectStatus(await cancelAttendance(hrCaller, hrsAttendance), 200, "HR cancels an attendance request");
+  assert.equal(hrsAttendance.status, "cancelled");
 }
 
 console.log("accessLifecycle.test.js passed");

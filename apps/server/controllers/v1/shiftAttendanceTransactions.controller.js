@@ -63,19 +63,19 @@ const employeeOwnScopeFilter = async (req) => {
   return buildScopeFilter({ ...req.user, id: employee?._id }, { owner: "employeeId", teamIds });
 };
 
+// Any row below "all" (own, department, team, approver): the caller files
+// and changes only their own requests. Only "all" (HR) acts for others.
+// Same rule as leavesTransactions.controller.js's isSelfService.
+const isSelfService = (req) => Boolean(req.user?.dataScope) && req.user.dataScope !== SCOPES.ALL;
+
 /**
- * Write access (update/cancel) always stays own-only, even under
- * SCOPES.TEAM — a manager can SEE a report's request (canViewRecord below),
- * never edit/cancel it themself. `!== SCOPES.ALL` so this still applies now
- * that Employee's own-service scope on this menu is SCOPES.TEAM.
+ * Write access (update/cancel): below "all" only the applicant — a manager,
+ * department colleague or named approver can SEE a request (canViewRecord
+ * below) and the approver decides it (decisionRefusal), but none of them
+ * edits or cancels it. Same rule as canChangeLeaveRequest.
  */
-const canAccessOwnRecord = async (req, doc) => {
-  if (!req.user || req.user.role === ROLES.ADMIN) return true;
-  if (req.user.dataScope === SCOPES.DEPARTMENT) return inCallerDepartment(req, doc.employeeId);
-  if (req.user.dataScope !== SCOPES.OWN && req.user.dataScope !== SCOPES.TEAM) return true;
-  await resolveRequestEmployee(req);
-  return String(req.user.employeeId) === String(doc.employeeId);
-};
+const canChangeRequest = (req, doc) =>
+  !isSelfService(req) || req.user.role === ROLES.ADMIN || String(doc.employeeId) === String(req.user.id);
 
 /**
  * List scope: own/team as above, plus every request naming the caller as its
@@ -254,7 +254,7 @@ export const updateShiftRequest = async (req, res) => {
   try {
     const doc = await ShiftRequest.findById(req.params.shiftRequestId);
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Shift Request not found" });
-    if (!(await canAccessOwnRecord(req, doc))) {
+    if (!canChangeRequest(req, doc)) {
       return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to edit this Shift Request" });
     }
     if (doc.status !== "open") {
@@ -512,13 +512,13 @@ const markAttendanceForRequestDay = async (doc, date) => {
 
 export const createAttendanceRequest = async (req, res) => {
   try {
-    // Issue #34 security fix: a self-service caller (dataScope OWN on this
-    // menu) can only ever request an attendance correction for themselves —
-    // this previously let any Employee mark Attendance rows (On Leave/Half
-    // Day) for someone else's employeeId. Trusted from the body only for
-    // HR User/HR Manager.
+    // Issue #34 security fix: a self-service caller (any scope below all on
+    // this menu — isSelfService) can only ever request an attendance
+    // correction for themselves — this previously let any Employee mark
+    // Attendance rows (On Leave/Half Day) for someone else's employeeId.
+    // Trusted from the body only for HR User/HR Manager.
     let employeeId = req.body.employeeId;
-    if (req.user && req.user.role !== ROLES.ADMIN && req.user.dataScope !== SCOPES.ALL) {
+    if (isSelfService(req)) {
       const ownEmployee = await resolveRequestEmployee(req);
       if (!ownEmployee) return res.status(403).json({ isOk: false, status: 403, message: "No employee record linked to this user" });
       employeeId = ownEmployee._id;
@@ -661,7 +661,7 @@ export const cancelAttendanceRequest = async (req, res) => {
   try {
     const doc = await AttendanceRequest.findById(req.params.attendanceRequestId);
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Attendance Request not found" });
-    if (!(await canAccessOwnRecord(req, doc))) {
+    if (!canChangeRequest(req, doc)) {
       return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to act on this Attendance Request" });
     }
     if (!["open", "active"].includes(doc.status)) {

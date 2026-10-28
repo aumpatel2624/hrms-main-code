@@ -1917,7 +1917,7 @@ const seedShiftAttendanceTransactionsRoles = async () => {
     Object.fromEntries(PERMISSION_KEYS.map((key) => [key, key === "read" || (key === "write" && write) || (key === "edit" && edit) || (key === "delete" && del)]));
   const full = perm(true, true, true);
   // dataScope: SCOPES.TEAM (pre-launch, org-chart manager visibility) — was
-  // SCOPES.OWN. A manager sees, but per canAccessOwnRecord/canViewRecord in
+  // SCOPES.OWN. A manager sees, but per canChangeRequest/canViewRecord in
   // shiftAttendanceTransactions.controller.js can never edit/cancel, their
   // reports' Shift/Attendance Requests too, matching the parity fix applied
   // to Leave/CompLeave/Shift Assignment/Employee Checkin this session.

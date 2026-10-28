@@ -297,7 +297,7 @@ export const markTrainingEventScheduled = async (req, res) => {
  * Issue #34 security fix: Training Feedback's Employee grant never carried a
  * dataScope at all (fixed to SCOPES.OWN in seed/index.js), so this doctype
  * had no ownership enforcement anywhere. Mirrors
- * shiftAttendanceTransactions.controller.js's canAccessOwnRecord shape.
+ * the shape shiftAttendanceTransactions.controller.js's own-record check had.
  * (No update function exists for this doctype and Employee has no delete
  * grant here, so only create/get need it.)
  */

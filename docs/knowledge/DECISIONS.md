@@ -5208,3 +5208,40 @@ consumer; single-branch build
   `entities/request-decisions.test.js`, section 7 of `controllers/v1/payrollIntegrity.test.js`, section 8 of
   `controllers/v1/companyIntegrity.test.js` and `entities/picker-labels.test.js`; each fails on the old code.
 - **Deviates from convention**: no.
+
+### ADR-065 — Screens name records; nothing shows or asks for an internal id
+
+- **Date**: 2026-10-28
+- **Status**: accepted
+- **Context**: the 2026-10-28 full re-test (section 7, after PR #59 and #74) still found internal ids in front of
+  people. The Dashboard Builder's filter listed raw keys ("employeeId") and took a reference value as a typed
+  ObjectId. Four bulk tools printed each new record's id in their results; the Audit Log showed old and new ids for
+  reference fields; error messages read "Salary Component 64f… not found". Ten lists printed the id when the linked
+  record was gone. Several pickers had options nobody could tell apart: every Salary Structure Assignment "INR",
+  every allocation the same year, one payroll period per company with no company, two identical parent goals, shift
+  schedules as "every-1-week". Most list filters opened empty, labelled "Employee id", "Company id".
+- **Decision**:
+  - A new `GET /dashboard-widgets/sources/:source/filter-options/:field` (Dashboard Builder read) answers a
+    reference filter's values as `{ value, label }` only: the ids the field holds in rows the caller may see,
+    through the same scope as running the widget (`widgetScopeFilter`). Labels come from
+    `utils/recordLabels.js`, which reads only a record's name, dates and the names of its employee, leave type,
+    shift type, salary structure and company — never pay or personal fields. The builder shows field names in words.
+  - The Audit Log's entry endpoint adds `fromLabel` / `toLabel` to reference-field changes, by the same labeller;
+    "(deleted)" once the record is gone.
+  - Bulk tools say what happened ("Salary Structure assigned"); the listed error messages name the record or
+    describe it plainly. A list whose linked record is gone shows "(deleted)" (`linkedName`).
+  - Look-alike pickers use `labelledOptions` (picker-labels.js; `companyLabelledOptions` is now its one-list case):
+    allocation "employee — leave type — dates", assignment "employee — from date — structure", payroll period with
+    its company, parent goal with its employee and company, shift schedule "shift — Every 2 weeks on Mon (company)".
+  - A list filter on a reference finds its options under its own name: the config's `filterLookups`, else the form's
+    dropdown of the same name (not one narrowed to a chosen company). An enum filter with none borrows its form
+    field's options. Configs that had neither gained `filterLookups`; labels lost their trailing "id". Check-in's
+    Device filter is text, as the field is. The dead Attendance and Shift Schedule Assignment filters were removed.
+- **Consequences**: saved records and saved widgets are unchanged — only what people see changes. No re-seed: no
+  role or menu row changed. Follow-ups, out of scope here: Department, Designation, Branch and Employee pickers
+  that show the name only; eight status filters whose form has no options to borrow (Job Requisition, Job Opening,
+  Job Applicant, Interview, Interview Feedback, Onboarding, Separation, Full and Final). Tested by
+  `utils/recordLabels.test.js`, `controllers/v1/idFreeMessages.test.js`, the Dashboard Builder case in
+  `controllers/v1/lookupOptions.test.js`, `entities/picker-labels.test.js` and `entities/row-pickers.test.js`;
+  each fails on the old code.
+- **Deviates from convention**: no.

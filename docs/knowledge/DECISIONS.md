@@ -5082,3 +5082,29 @@ consumer; single-branch build
 - **Consequences**: no re-seed or data change. Tested by section 10 of `controllers/v1/accessLifecycle.test.js` and
   the referral checks in `utils/globalSearch.test.js` (both fail on the old controller).
 - **Deviates from convention**: no.
+
+### ADR-060 — Only the applicant changes a leave request below "all"; failed sign-ins count atomically
+
+- **Date**: 2026-10-28
+- **Status**: accepted
+- **Context**: two leftovers from the 23 Oct access review. (1) Leave Application edit and cancel, and Compensatory
+  Leave Request edit and delete, used the same check as opening one by id. So the request's named Leave Approver
+  (even on an `own` row) and a team lead (the seeded Tower / Department Manager / Team Lead tiers, `team` scope)
+  could rewrite a report's open leave, cancel their approved leave, or edit and delete their compensatory leave.
+  (2) `recordFailedAttempt` read the LoginAttempt row, then inserted it. Two wrong passwords at the same moment for
+  an account with no row both inserted, and one failed on the unique `userEmail` index with a 500.
+- **Decision**:
+  - `canChangeLeaveRequest` guards Leave Application edit and cancel and Compensatory Leave Request edit and
+    delete. Below `all` (`isSelfService`), only the applicant may. HR (`all`) and ADMIN may change anyone's.
+    Opening by id, approve and reject are unchanged: a named approver or team lead still sees and decides it
+    (`leaveDecisionRefusal`).
+  - A failed sign-in is one atomic `$inc` upsert keyed by `userEmail`. If two upserts still race to insert, the
+    loser retries once. Reaching the threshold sets the lock in a second atomic update, and `$min` keeps the count
+    within the schema's max. The threshold, lock length and messages are unchanged.
+  - Attendance Request create: no change. It already files every caller below `all`, including "Own department",
+    as themselves. That is ADR-057's rule for creates.
+- **Consequences**: no re-seed or data change. A team lead or named approver who used to fix a report's leave dates
+  now rejects it, and the employee applies again. HR can still edit. The applicant can still cancel their own
+  approved leave. Tested by section 11 of `controllers/v1/accessLifecycle.test.js` and by
+  `services/authService.test.js`, which runs two parallel wrong passwords. Both fail on the old code.
+- **Deviates from convention**: no.

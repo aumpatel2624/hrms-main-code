@@ -21,7 +21,10 @@
 //      shows (the reportsToId chain, not the people it approves for),
 //  10. an Employee Referral (list, by id, edit, delete, create job applicant)
 //      is the referrer's, their team's for a team-scoped role, or HR's — and
-//      below "all" a referral is always made, and stays, as the caller.
+//      below "all" a referral is always made, and stays, as the caller,
+//  11. below "all" only the applicant edits, cancels or deletes a Leave
+//      Application or Compensatory Leave Request — a team lead or named Leave
+//      Approver decides it but cannot change it; HR still can.
 // Drives the real mounted routes (authMiddleware → checkPermission → handler)
 // over in-memory stand-ins and the seeded matrices, like approvalIntegrity.test.js.
 import assert from "node:assert/strict";
@@ -656,6 +659,47 @@ resetWrites();
   assert.ok(same(created.at(-1).referrerId, tara._id), "the employee's referral is their own");
   expectStatus(await refer(recruiter, 2), 201, "HR refers someone for bilal");
   assert.ok(same(created.at(-1).referrerId, bilal._id), "HR's referral is bilal's");
+}
+
+// --------------------- 11. only the applicant changes their leave request --
+{
+  // A team lead (team scope) and a named Leave Approver (own scope) could
+  // edit, cancel and delete a report's or approvee's request by id.
+  stub(UserRoles, tierMatrices);
+  invalidateRoleCache();
+  const leaveOf = (status, day) => ({ _id: oid(), employeeId: asha._id, leaveApproverId: tara._id, leaveTypeId: leaveType._id, companyId, status,
+    fromDate: new Date(day), toDate: new Date(day), totalLeaveDays: 1, description: "" });
+  const open = leaveOf("open", "2026-11-02");
+  const approved = leaveOf("approved", "2026-11-09");
+  stub(LeaveApplication, [open, approved]);
+  const leaveId = (doc) => ({ leaveApplicationId: String(doc._id) });
+  const editLeave = (caller) => call(leaveRoutes, "put", "/leave-applications/:leaveApplicationId", caller, { params: leaveId(open), body: { description: `by ${caller.employeeName}` } });
+  const cancelLeave = (caller) => call(leaveRoutes, "post", "/leave-applications/:leaveApplicationId/cancel", caller, { params: leaveId(approved) });
+
+  const comp = asDoc({ _id: oid(), employeeId: asha._id, companyId, status: "open", reason: "weekend release", isActive: true });
+  stub(CompensatoryLeaveRequest, [comp]);
+  const compId = { compensatoryLeaveRequestId: String(comp._id) };
+  const editComp = (caller) => call(leaveRoutes, "put", "/compensatory-leave-requests/:compensatoryLeaveRequestId", caller, { params: compId, body: { reason: `by ${caller.employeeName}` } });
+  const deleteComp = (caller) => call(leaveRoutes, "delete", "/compensatory-leave-requests/:compensatoryLeaveRequestId", caller, { params: compId });
+
+  for (const [caller, label] of [[manju, "the applicant's team lead"], [tara, "the named Leave Approver"]]) {
+    expectStatus(await call(leaveRoutes, "get", "/leave-applications/:leaveApplicationId", caller, { params: leaveId(open) }), 200, `${label} still opens the leave`);
+    expectStatus(await editLeave(caller), 403, `${label} edits the leave`);
+    expectStatus(await cancelLeave(caller), 403, `${label} cancels the approved leave`);
+    expectStatus(await editComp(caller), 403, `${label} edits the compensatory leave`);
+    expectStatus(await deleteComp(caller), 403, `${label} deletes the compensatory leave`);
+  }
+  assert.equal(open.description, "", "the leave was not edited");
+  assert.equal(approved.status, "approved", "the leave was not cancelled");
+  assert.equal(comp.reason, "weekend release", "the compensatory leave was not edited");
+
+  expectStatus(await editLeave(asha), 200, "the applicant edits their open leave");
+  assert.equal(open.description, "by asha");
+  expectStatus(await editComp(asha), 200, "the applicant edits their compensatory leave");
+  assert.equal(comp.reason, "by asha");
+  expectStatus(await editLeave(hema), 200, "HR edits it");
+  expectStatus(await cancelLeave(hema), 200, "HR cancels the approved leave");
+  assert.equal(approved.status, "cancelled");
 }
 
 console.log("accessLifecycle.test.js passed");

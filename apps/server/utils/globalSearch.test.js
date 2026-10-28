@@ -146,6 +146,7 @@ db = {
   ],
   EmployeeReferral: [
     { _id: oid(), referrerId: ravi._id, fullName: "Wedding Planner", email: "planner@example.com", isActive: true },
+    { _id: oid(), referrerId: asha._id, fullName: "Wedding Singer", email: "singer@example.com", isActive: true },
   ],
 };
 
@@ -183,11 +184,11 @@ assert.throws(() => buildSearchTargets(app._router, [{ screen: "/employee", rout
 
 // 2. A plain Employee finds their own records and nobody else's.
 const asAsha = await search(asha, "wedding");
-const ownGroups = ["/employee", "/employee-grievance", "/expense-claim", "/leave-application", "/salary-slip"];
+const ownGroups = ["/employee", "/employee-grievance", "/employee-referral", "/expense-claim", "/leave-application", "/salary-slip"];
 assert.deepEqual(ids(asAsha["/leave-application"]), idsOf(db.LeaveApplication[0]), "own leave application only");
 assert.deepEqual(ids(asAsha["/employee-grievance"]), idsOf(db.EmployeeGrievance[0]), "own grievance only");
 assert.deepEqual(ids(asAsha["/employee"]), idsOf(asha), "own employee record only");
-assert.equal(asAsha["/employee-referral"], undefined, "a colleague's referral never surfaces");
+assert.deepEqual(ids(asAsha["/employee-referral"]), idsOf(db.EmployeeReferral[1]), "own referral only, never a colleague's");
 assert.deepEqual(await search(asha, "Ravi"), {}, "a colleague's name finds nothing on any screen");
 
 // ...including the records found through the employee's name or code (ADR-044).
@@ -206,6 +207,7 @@ const asHr = await search(hrExec, "wedding");
 assert.deepEqual(ids(asHr["/leave-application"]), idsOf(...db.LeaveApplication), "HR sees every leave application");
 assert.deepEqual(ids(asHr["/employee-grievance"]), idsOf(...db.EmployeeGrievance), "HR sees every grievance");
 assert.deepEqual(ids(asHr["/employee"]), idsOf(asha, ravi), "HR sees every matching employee");
+assert.deepEqual(ids(asHr["/employee-referral"]), idsOf(...db.EmployeeReferral), "HR sees every referral");
 const asHrHead = await search(hrHead, "wedding");
 assert.deepEqual(ids(asHrHead["/salary-component"]), idsOf(db.SalaryComponent[0]), "only the caller's company's components");
 assert.deepEqual(ids(asHrHead["/expense-claim"]), idsOf(...db.ExpenseClaim), "HR finds every expense claim by name");

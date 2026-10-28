@@ -5062,3 +5062,23 @@ consumer; single-branch build
   by id needs "approver" scope instead. Tested by section 9 of `controllers/v1/accessLifecycle.test.js` (each of the
   three controllers reverted in turn makes it fail).
 - **Deviates from convention**: no.
+
+### ADR-059 — Employee Referral follows the caller's data scope; it rejoins global search
+
+- **Date**: 2026-10-28
+- **Status**: accepted
+- **Context**: every tier role holds `/employee-referral` with "own" scope, but no Employee Referral path applied a
+  scope: the list (`POST …/search` and `GET /employee-referrals`), by id, edit, delete and create-job-applicant
+  reached every referral, so any employee saw every colleague's referred candidates — name, email, phone, current
+  employer, resume link. ADR-044 kept the screen out of global search for this reason. Create also trusted the
+  form's `referrerId`, so a referral could be filed in a colleague's name.
+- **Decision**:
+  - One scope, on `referrerId`, for the two lists, by id, edit, delete and create-job-applicant, in the shape Travel
+    Request uses: "own" the caller's referrals, "team" plus their downward reportsToId chain, "approver" the caller's
+    own (there is no referral approver), "Own department" the caller's current department. "All" (HR) unchanged.
+  - Below "all", create files the referral as the caller and an edit never changes `referrerId`, as on Travel Request.
+  - `/employee-referral` is back in `config/globalSearch.js`; search replays the now-scoped list, so it returns only
+    referrals the caller may see. This closes ADR-044's left-out note for this screen.
+- **Consequences**: no re-seed or data change. Tested by section 10 of `controllers/v1/accessLifecycle.test.js` and
+  the referral checks in `utils/globalSearch.test.js` (both fail on the old controller).
+- **Deviates from convention**: no.

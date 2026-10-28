@@ -15,6 +15,12 @@ import {
   getReferencingCounts,
   formatReferenceMessage,
 } from "../../utils/referenceHelper.js";
+import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
+import { buildScopeFilter } from "../../utils/scope.js";
+import { departmentEmployeeIds } from "../../utils/attendanceScope.js";
+import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
+import { SCOPES } from "@demo-panel/shared/scopes";
+import { ROLES } from "@demo-panel/shared/roles";
 
 const failure = (res, error) => {
   if (error.status) {
@@ -41,10 +47,41 @@ const pickFields = (body) =>
     [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS].filter((k) => body[k] !== undefined).map((k) => [k, body[k]]),
   );
 
+/**
+ * The list, GET list, by id, edit, delete and create-job-applicant all follow
+ * the caller's data scope on `referrerId`, as Travel Request does on
+ * `employeeId`: every tier role holds this page with "own", and the list had
+ * no scope at all, so any employee saw every colleague's referred candidates
+ * (name, email, phone, employer, resume). "team" adds the reportsToId chain,
+ * "approver" is the caller's own (there is no referral approver), "Own
+ * department" the caller's current department. HR ("all") is unchanged.
+ */
+const referralScope = async (req) => {
+  if (req.user?.dataScope === SCOPES.DEPARTMENT) return { referrerId: { $in: await departmentEmployeeIds(req) } };
+  const ownEmployee = await resolveRequestEmployee(req);
+  const teamIds = req.user?.dataScope === SCOPES.TEAM ? await getSubordinateEmployeeIds(ownEmployee?._id) : undefined;
+  return buildScopeFilter({ ...req.user, id: ownEmployee?._id }, { owner: "referrerId", teamIds });
+};
+
+const canAccessReferral = async (req, doc) => {
+  if (!req.user || req.user.role === ROLES.ADMIN) return true;
+  const scope = await referralScope(req);
+  return !scope || Boolean(await EmployeeReferral.exists({ _id: doc._id, ...scope }));
+};
+
+const belowAll = (req) => Boolean(req.user?.dataScope && req.user.dataScope !== SCOPES.ALL);
+
 const computeFullName = (first, last) => [first, last].filter(Boolean).join(" ");
 
 export const createEmployeeReferral = async (req, res) => {
   try {
+    // Below "all" a referral is always the caller's own — the client-supplied
+    // referrerId is trusted only for HR.
+    if (belowAll(req)) {
+      const ownEmployee = await resolveRequestEmployee(req);
+      if (!ownEmployee) return res.status(403).json({ isOk: false, status: 403, message: "No employee record linked to this user" });
+      req.body = { ...req.body, referrerId: String(ownEmployee._id) };
+    }
     const missing = REQUIRED_FIELDS.filter((k) => !req.body[k]);
     if (missing.length) {
       return res.status(400).json({ isOk: false, status: 400, message: `Missing required field(s): ${missing.join(", ")}` });
@@ -83,7 +120,11 @@ export const updateEmployeeReferral = async (req, res) => {
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee Referral not found" });
     }
+    if (!(await canAccessReferral(req, doc))) {
+      return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to edit this Employee Referral" });
+    }
     const fields = pickFields(req.body);
+    if (belowAll(req)) delete fields.referrerId; // never moved to someone else
     if (fields.firstName || fields.lastName) {
       fields.fullName = computeFullName(fields.firstName ?? doc.firstName, fields.lastName ?? doc.lastName);
     }
@@ -102,6 +143,9 @@ export const deleteEmployeeReferral = async (req, res) => {
     const doc = await EmployeeReferral.findById(referralId);
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee Referral not found" });
+    }
+    if (!(await canAccessReferral(req, doc))) {
+      return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to delete this Employee Referral" });
     }
     const referenceInfo = await getReferencingCounts("EmployeeReferral", referralId);
     if (referenceInfo.totalReferences > 0) {
@@ -125,6 +169,9 @@ export const getEmployeeReferralById = async (req, res) => {
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee Referral not found" });
     }
+    if (!(await canAccessReferral(req, doc))) {
+      return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to view this Employee Referral" });
+    }
     return res.status(200).json({ isOk: true, status: 200, data: doc });
   } catch (error) {
     console.log("Error in getEmployeeReferralById", error);
@@ -132,9 +179,9 @@ export const getEmployeeReferralById = async (req, res) => {
   }
 };
 
-export const listEmployeeReferrals = async (_req, res) => {
+export const listEmployeeReferrals = async (req, res) => {
   try {
-    const docs = await EmployeeReferral.find({ isActive: true }).select("fullName status email");
+    const docs = await EmployeeReferral.find({ isActive: true, ...(await referralScope(req)) }).select("fullName status email");
     return res.status(200).json({ isOk: true, status: 200, data: docs });
   } catch (error) {
     console.log("Error in listEmployeeReferrals", error);
@@ -150,6 +197,7 @@ export const listEmployeeReferralsByParams = async (req, res) => {
         status: "enum", referrerId: "objectId", forDesignationId: "objectId",
         date: "date", isActive: "boolean", createdAt: "date",
       },
+      scopeFilter: await referralScope(req),
     });
     return res.status(200).json({ isOk: true, status: 200, data: list });
   } catch (error) {
@@ -165,6 +213,9 @@ export const createJobApplicantFromReferral = async (req, res) => {
     const doc = await EmployeeReferral.findById(req.params.referralId);
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee Referral not found" });
+    }
+    if (!(await canAccessReferral(req, doc))) {
+      return res.status(403).json({ isOk: false, status: 403, message: "You do not have permission to edit this Employee Referral" });
     }
     const referralSource = await JobApplicantSource.findOne({ sourceName: "Referral" });
 

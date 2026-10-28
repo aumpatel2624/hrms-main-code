@@ -57,8 +57,8 @@ const buildTransporter = (emailSetup) => {
  * merge fields, send. Never throws: a missing/inactive trigger or template,
  * or a transporter failure, all come back as `{ sent: false, reason }`
  * instead of stopping the caller's request. The caller decides what that
- * means for it — see otp.controller.js, which still 404s on a miss to keep
- * its existing behaviour, and a future public form that would not.
+ * means for it — otp.controller.js only logs it, so the forgot-password reply
+ * never says whether an account exists.
  *
  * `reason` is one of: "no_trigger" | "no_template" | "send_failed".
  */

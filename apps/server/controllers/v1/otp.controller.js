@@ -5,6 +5,15 @@ import AdminUser from "../../models/AdminUser.js";
 import bcrypt from "bcrypt";
 import { sendTriggeredEmail } from "../../utils/sendTriggeredEmail.js";
 
+// One reply for every email (re-check N1): an unknown address, a real one, a
+// real one still inside the resend cooldown and a real one whose email failed
+// to send all answer alike, so the form cannot be used to find out who has an
+// account. Why a real account's code did not go out is only logged.
+const OTP_REQUESTED = {
+  isOk: true,
+  message: "If an account exists for this email, a code has been sent to it",
+};
+
 export const createOtp = async (req, res) => {
   try {
     const { email } = req.body;
@@ -16,25 +25,16 @@ export const createOtp = async (req, res) => {
     }
 
     if (!user) {
-      return res.status(400).json({
-        isOk: false,
-        message: "User not found",
-      });
+      return res.status(200).json(OTP_REQUESTED);
     }
 
     // Check if an OTP was recently sent (within the last minute)
     const existingOtp = await Otp.findOne({ email });
     if (existingOtp) {
       const timeDiff = Date.now() - existingOtp.createdAt.getTime();
-      const cooldownPeriod = OTP.RESEND_COOLDOWN_MS;
 
-      if (timeDiff < cooldownPeriod) {
-        const remainingTime = Math.ceil((cooldownPeriod - timeDiff) / 1000);
-        return res.status(429).json({
-          isOk: false,
-          message: `Please wait ${remainingTime} seconds before requesting a new OTP`,
-          remainingTime: remainingTime,
-        });
+      if (timeDiff < OTP.RESEND_COOLDOWN_MS) {
+        return res.status(200).json(OTP_REQUESTED);
       }
 
       // Delete the previous OTP if it exists and cooldown has passed
@@ -54,41 +54,18 @@ export const createOtp = async (req, res) => {
       createdAt: new Date(),
     });
 
-    // Fire the forgot-password trigger (ADR-015) instead of the inline
-    // lookup/fill/send this used to do — see sendTriggeredEmail.js. It never
-    // throws; the reason it reports maps onto the same responses this
-    // endpoint has always returned, so callers see no behaviour change.
+    // Fire the forgot-password trigger (ADR-015) — see sendTriggeredEmail.js.
+    // Not awaited, so a real account does not answer
+    // noticeably slower than an unknown one while the mail goes out.
     const username = user.adminName || user.employeeName || "Admin";
-    const { sent, reason } = await sendTriggeredEmail("password.forgot", {
+    sendTriggeredEmail("password.forgot", {
       toEmail: email,
       mergeFields: { USERNAME: username, OTP_CODE: otp },
-    });
+    }).then(({ sent, reason }) => {
+      if (!sent) console.error(`createOtp: password.forgot email not sent (${reason})`);
+    }).catch((error) => console.error("createOtp: password.forgot email failed", error));
 
-    if (!sent) {
-      if (reason === "no_trigger") {
-        return res.status(404).json({
-          isOk: false,
-          message: "Email template type not found",
-        });
-      }
-      if (reason === "no_template") {
-        return res.status(404).json({
-          isOk: false,
-          message: "Email template not found",
-        });
-      }
-      return res.status(500).json({
-        isOk: false,
-        message: "Failed to send OTP email",
-      });
-    }
-
-    console.log("Email sent successfully");
-
-    return res.status(200).json({
-      isOk: true,
-      message: "OTP sent to your email",
-    });
+    return res.status(200).json(OTP_REQUESTED);
   } catch (error) {
     console.error("Error in createOtp:", error);
     return res.status(500).json({

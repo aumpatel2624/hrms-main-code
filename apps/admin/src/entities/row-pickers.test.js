@@ -29,4 +29,10 @@ for (const key of new Set(rowPickers.map((m) => m[2]))) {
 assert.ok(!/<SimpleArrayField(?:(?!\/>)[\s\S])*columns=\{(?:SALARY_DETAIL|EXPENSE)_COLUMNS\}(?:(?!lookups=)(?!\/>)[\s\S])*\/>/.test(source),
     "Salary Structure and Expense Claim rows receive the form's lookups");
 
+// Re-check N2: the Interview form's Interviewers are current staff, each with
+// their company — not every employee of every company, leavers included.
+const interviewConfig = source.slice(source.indexOf("export const interviewConfig"), source.indexOf("export const", source.indexOf("export const interviewConfig") + 1));
+assert.match(interviewConfig, /interviewers:\s*companyLabelledOptions\(getCurrentEmployees,\s*getAllCompanies,\s*nameWithCompany\("employeeName"\)\)/,
+    "Interviewers lists current staff with their company");
+
 console.log("row-pickers.test.js: all assertions passed");

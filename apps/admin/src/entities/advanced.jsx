@@ -1022,7 +1022,8 @@ export const interviewConfig = {
         interviewTypeId: asOptions(getAllInterviewTypes, "interviewTypeName"),
         jobApplicantId: asOptions(getAllJobApplicants, "applicantName"),
         designationId: asOptions(getAllDesignations, "designationName"),
-        interviewers: asOptions(getAllEmployees, "employeeName"),
+        // Current staff only, each with their company (HR sees every company's).
+        interviewers: companyLabelledOptions(getCurrentEmployees, getAllCompanies, nameWithCompany("employeeName")),
     },
     sections: [{ id: "details", title: "Details" }, { id: "schedule", title: "Schedule" }, { id: "status", title: "Status" }],
     fields: [

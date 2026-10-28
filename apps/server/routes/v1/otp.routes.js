@@ -33,11 +33,7 @@ const router = express.Router();
  *                 format: email
  *     responses:
  *       200:
- *         description: OTP sent successfully
- *       400:
- *         description: User not found
- *       429:
- *         description: Rate limit - wait before requesting new OTP
+ *         description: The same reply for every email, whether or not it has an account (a real account gets the code unless it is inside the resend cooldown)
  *       500:
  *         description: Server error
  */

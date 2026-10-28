@@ -8,11 +8,14 @@
 //       the caller's own company for anyone else.
 //   L7  Login — one answer for an unknown email and a wrong password; the
 //       attempt-status-by-email endpoint needs an admin session.
+//   N1  Forgot password — one answer for an unknown email and a real one,
+//       whether or not the email goes out (re-check N1).
 // Runs the real checkPermission + handlers over in-memory stand-ins and the
 // seeded tier matrices, like employeePrivacy.test.js.
 import assert from "node:assert/strict";
 import bcrypt from "bcrypt";
 import mongoose from "mongoose";
+import nodemailer from "nodemailer";
 import Employee from "../../models/Employee.js";
 import AdminUser from "../../models/AdminUser.js";
 import MenuMaster from "../../models/MenuMaster.js";
@@ -22,6 +25,9 @@ import AppraisalCycle from "../../models/AppraisalCycle.js";
 import EmployeePerformanceFeedback from "../../models/EmployeePerformanceFeedback.js";
 import Interview from "../../models/Interview.js";
 import InterviewFeedback from "../../models/InterviewFeedback.js";
+import Otp from "../../models/Otp.js";
+import EmailFor from "../../models/EmailFor.js";
+import EmailTemplate from "../../models/EmailTemplate.js";
 import authService from "../../services/authService.js";
 import authRoutes from "../../routes/v1/auth.routes.js";
 import { checkPermission } from "../../middlewares/checkPermission.js";
@@ -30,6 +36,7 @@ import { stripCredentials } from "../../utils/jsonSecrets.js";
 import { SCOPES } from "@demo-panel/shared/scopes";
 import { listEmployees } from "./employee.controller.js";
 import { login } from "./auth.controller.js";
+import { createOtp } from "./otp.controller.js";
 import {
   createEmployeePerformanceFeedback, getEmployeePerformanceFeedbackById,
   searchEmployeePerformanceFeedbacks, updateEmployeePerformanceFeedback,
@@ -347,6 +354,52 @@ const rowsOf = (res) => {
   assert.ok(!JSON.stringify(anonymous.body).includes("attemptCount"));
   assert.equal((await runRoute({ user: { id: String(ekta._id), role: "USER" } })).statusCode, 403, "a signed-in employee cannot probe accounts either");
   assert.equal((await runRoute({ user: { id: String(admin._id), role: "ADMIN" } })).statusCode, 200, "an admin still can");
+}
+
+// ====================================================== N1: forgot password
+{
+  const account = person("zalak", roles.Employee);
+  AdminUser.findOne = async () => null;
+  Employee.findOne = (filter) => query(filter.email === account.email ? account : null);
+  const codes = [];
+  Otp.findOne = async (filter) => codes.find((row) => row.email === filter.email) ?? null;
+  Otp.deleteOne = async (filter) => { codes.splice(codes.findIndex((row) => row.email === filter.email), 1); };
+  Otp.create = async (row) => { codes.push(row); return row; };
+  const mailed = [];
+  nodemailer.createTransport = () => ({ sendMail: async (mail) => { mailed.push(mail); } });
+  const request = async (email) => {
+    const res = fakeRes();
+    await createOtp({ body: { email } }, res);
+    await new Promise((resolve) => setImmediate(resolve)); // the email goes out after the reply
+    return res;
+  };
+  const sameAnswer = (res, unknown, label) => {
+    assert.equal(res.statusCode, unknown.statusCode, `${label}: same status as an unknown email`);
+    assert.deepEqual(res.body, unknown.body, `${label}: same reply as an unknown email`);
+  };
+
+  // Email not configured: no trigger, so the real account's code cannot go out.
+  EmailFor.findOne = async () => null;
+  const unknown = await request("nobody@work.example");
+  assert.equal(unknown.statusCode, 200);
+  assert.equal(codes.length, 0, "an unknown email gets no code");
+  sameAnswer(await request(account.email), unknown, "real account, email not configured");
+  sameAnswer(await request(account.email), unknown, "real account inside the resend cooldown");
+  assert.equal(mailed.length, 0);
+
+  // Email configured: the real account still gets its code.
+  codes.length = 0;
+  EmailFor.findOne = async () => ({ _id: oid() });
+  EmailTemplate.findOne = () => ({
+    populate: async () => ({ mailerName: "HR", emailSubject: "Reset", emailSignature: "Code {{OTP_CODE}}",
+      emailFrom: { email: "hr@work.example", host: "smtp.work.example", port: 587, SSL: false, appPassword: "x" } }),
+  });
+  sameAnswer(await request(account.email), unknown, "real account, email configured");
+  assert.equal(mailed.length, 1, "the code is mailed");
+  assert.equal(mailed[0].to, account.email);
+  assert.equal(mailed[0].html, `Code ${codes[0].otp}`, "with the stored code");
+  sameAnswer(await request("nobody@work.example"), unknown, "unknown email, email configured");
+  assert.equal(mailed.length, 1, "nothing is mailed to an unknown email");
 }
 
 console.log("confidentialAccess.test.js passed");

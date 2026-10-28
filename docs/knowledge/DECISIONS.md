@@ -5155,3 +5155,29 @@ consumer; single-branch build
 - **Consequences**: each page label on the four bulk tools now names its dropdown. A `NativeSelect` with a `label`
   prop is announced as before. Re-vendoring Untitled UI would drop this edit; re-apply it.
 - **Deviates from convention**: yes — AGENTS.md says never edit `apps/admin/src/components/base/`.
+
+### ADR-063 — Forgot password answers alike for every email; interviewers are the interview's company's current staff
+
+- **Date**: 2026-10-28
+- **Status**: accepted
+- **Context**: the 2026-10-28 privacy re-check left two gaps. (N1) `POST /otp/send` said 400 "User not found" for an
+  unknown email but 404 "Email template type not found" (or 200 "OTP sent" once email is set up, or 429 inside the
+  resend cooldown) for a real one, so the forgot-password form told anyone who has an account. (N2) The Interview
+  form's Interviewers picker listed every employee of all five companies, leavers included, by name only, and the
+  server saved another company's employee as interviewer (Techno Sales' Tushar on an Apidel interview).
+- **Decision**:
+  - `createOtp` replies 200 "If an account exists for this email, a code has been sent to it" for an unknown email,
+    a real one, a real one inside the cooldown and a real one whose email fails. A real account outside the cooldown
+    still gets a fresh code; why a mail did not go out is only logged. The mail is sent after the reply, not
+    awaited, so a real account does not answer noticeably slower. The sign-in screen shows the server's message.
+    Verify and reset are unchanged: without a valid code they answer alike already.
+  - The Interviewers picker uses the current-staff list (`?current=true`, as ADR-048's pickers) and labels each
+    employee with their company (ADR-049's convention).
+  - Interview create and edit refuse (400) an interviewer who is not in the interview's company — its job opening's,
+    else its designation's — via `companyMismatch`. An interview with neither is not checked.
+- **Consequences**: no re-seed or data change. Inside the cooldown a real user no longer sees the seconds left;
+  the screen's own countdown still runs. A misconfigured email template no longer shows on the form — check the
+  server log. An existing interview whose saved interviewer has since left no longer shows that person in the
+  picker. Tested by N1 in `controllers/v1/confidentialAccess.test.js`, section 7 of
+  `controllers/v1/companyIntegrity.test.js` and `entities/row-pickers.test.js`; each fails on the old code.
+- **Deviates from convention**: no.

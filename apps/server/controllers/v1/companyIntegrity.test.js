@@ -10,7 +10,9 @@
 //   5. below "all" scope (a Team Lead's "team") a leave application or an
 //      expense claim is the caller's own, whoever the body names,
 //   6. the approver resolvers skip a Left / Inactive / Suspended approver and
-//      fall through to the next one.
+//      fall through to the next one,
+//   7. an Interview's interviewers work for the interview's company (re-check
+//      N2) — its job opening's, else its designation's.
 // Drives the real mounted routes (authMiddleware → checkPermission → handler)
 // over in-memory stand-ins and the seeded matrices, like accessLifecycle.test.js.
 import assert from "node:assert/strict";
@@ -30,8 +32,10 @@ import EmployeePropertyChange from "../../models/EmployeePropertyChange.js";
 import EmployeeTransfer from "../../models/EmployeeTransfer.js";
 import ExpenseClaim from "../../models/ExpenseClaim.js";
 import ExpenseClaimType from "../../models/ExpenseClaimType.js";
+import Interview from "../../models/Interview.js";
 import JobApplicant from "../../models/JobApplicant.js";
 import JobOffer from "../../models/JobOffer.js";
+import JobOpening from "../../models/JobOpening.js";
 import LeaveAllocation from "../../models/LeaveAllocation.js";
 import LeaveApplication from "../../models/LeaveApplication.js";
 import LeaveBlockList from "../../models/LeaveBlockList.js";
@@ -47,6 +51,7 @@ import { resolveApprovers } from "../../utils/approvers.js";
 import careerRoutes from "../../routes/v1/employeeCareerEvents.routes.js";
 import employeeRoutes from "../../routes/v1/employee.routes.js";
 import expenseRoutes from "../../routes/v1/expenses.routes.js";
+import interviewRoutes from "../../routes/v1/interviews.routes.js";
 import leaveSetupRoutes from "../../routes/v1/leaves.routes.js";
 import leaveRoutes from "../../routes/v1/leavesTransactions.routes.js";
 import onboardingRoutes from "../../routes/v1/onboarding.routes.js";
@@ -342,6 +347,34 @@ const expectRefused = (res, pattern, label) => {
   assert.ok(same(leaves.at(-1).leaveApproverId, tara._id), "it goes to the current department approver, not the leaver");
   expectStatus(await fileExpense(nina, nina), 201, "nina files a claim");
   assert.equal(claims.at(-1).expenseApproverId, null, "with nobody current to approve it, the claim waits for HR, not a leaver");
+}
+
+// --------------------------- 7. interviewers from the interview's company --
+{
+  const opening = { _id: oid(), jobTitle: "Intern", companyId: apidel, designationId: internApd._id };
+  stub(JobOpening, [opening]);
+  const kiran = { _id: oid(), applicantName: "kiran", jobOpeningId: opening._id, designationId: internApd._id };
+  const noor = { _id: oid(), applicantName: "noor", jobOpeningId: null, designationId: internNuv._id };
+  stub(JobApplicant, [kiran, noor]);
+  const interviews = stub(Interview, []);
+  const schedule = (applicant, interviewers) => call(interviewRoutes, "post", "/interviews", admin, {
+    body: { interviewTypeId: String(oid()), jobApplicantId: String(applicant._id), scheduledOn: "2026-11-20", fromTime: "10:00", toTime: "11:00",
+      interviewers: interviewers.map((someone) => String(someone._id)) },
+  });
+
+  expectRefused(await schedule(kiran, [tara, nuvIntern]), /Interviewer must belong to the interview's company/,
+    "Nuva's employee on an Apidel opening's interview");
+  expectRefused(await schedule(noor, [tara]), /Interviewer/, "Apidel's employee on a Nuva designation's interview");
+  assert.equal(interviews.length, 0, "no interview was recorded");
+
+  expectStatus(await schedule(kiran, [tara, manju]), 201, "Apidel interviewers on an Apidel interview");
+  expectStatus(await schedule(noor, [nuvIntern]), 201, "a Nuva interviewer on a Nuva interview");
+  const [saved] = interviews;
+  const edit = (body) => call(interviewRoutes, "put", "/interviews/:interviewId", admin, { params: { interviewId: String(saved._id) }, body });
+  expectRefused(await edit({ interviewers: [String(nuvIntern._id)] }), /Interviewer/, "editing in another company's interviewer");
+  assert.deepEqual(saved.interviewers.map(String), [String(tara._id), String(manju._id)], "the interviewers are unchanged");
+  expectStatus(await edit({ interviewers: [String(bilal._id)], interviewSummary: "Strong" }), 200, "editing in an Apidel interviewer");
+  assert.deepEqual(saved.interviewers.map(String), [String(bilal._id)]);
 }
 
 console.log("companyIntegrity.test.js passed");

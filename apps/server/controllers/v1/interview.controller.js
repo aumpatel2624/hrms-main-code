@@ -13,6 +13,10 @@ import { runListQuery } from "../../utils/listQuery.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import Interview from "../../models/Interview.js";
 import JobApplicant from "../../models/JobApplicant.js";
+import JobOpening from "../../models/JobOpening.js";
+import Designation from "../../models/Designation.js";
+import Employee from "../../models/Employee.js";
+import { companyMismatch } from "../../utils/companyMatch.js";
 import {
   getReferencingCounts,
   formatReferenceMessage,
@@ -46,6 +50,20 @@ const pickFields = (body) =>
     [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS].filter((k) => body[k] !== undefined).map((k) => [k, body[k]]),
   );
 
+// An interview's company is its job opening's, else its designation's. Its
+// interviewers must work there (re-check N2: HR's group-wide picker let
+// another company's employee be saved onto an interview). An interview with
+// neither cannot be placed in a company and is not checked.
+const interviewerMismatch = async ({ jobOpeningId, designationId, interviewers }) => {
+  const source = jobOpeningId
+    ? await JobOpening.findById(jobOpeningId).select("companyId").lean()
+    : designationId ? await Designation.findById(designationId).select("companyId").lean() : null;
+  if (!source?.companyId) return null;
+  return companyMismatch(source.companyId,
+    [].concat(interviewers ?? []).map((id) => ({ Model: Employee, id, label: "Interviewer" })),
+    "the interview's company");
+};
+
 export const createInterview = async (req, res) => {
   try {
     const missing = REQUIRED_FIELDS.filter((k) => !req.body[k]);
@@ -77,6 +95,8 @@ export const createInterview = async (req, res) => {
         fields.designationId = applicant.designationId;
       }
     }
+    const mismatch = await interviewerMismatch(fields);
+    if (mismatch) return res.status(400).json({ isOk: false, status: 400, message: mismatch });
 
     await Interview.create(fields);
     return res.status(201).json({ isOk: true, status: 201, message: "Interview created successfully" });
@@ -96,6 +116,9 @@ export const updateInterview = async (req, res) => {
     // scheduledOn/fromTime/toTime are set-once outside of the dedicated
     // reschedule action (see rescheduleInterview below).
     const { scheduledOn, fromTime, toTime, ...rest } = pickFields(req.body);
+    const { jobOpeningId, designationId, interviewers } = doc;
+    const mismatch = await interviewerMismatch({ jobOpeningId, designationId, interviewers, ...rest });
+    if (mismatch) return res.status(400).json({ isOk: false, status: 400, message: mismatch });
     Object.assign(doc, rest);
     await doc.save();
     return res.status(200).json({ isOk: true, status: 200, message: "Interview updated successfully" });

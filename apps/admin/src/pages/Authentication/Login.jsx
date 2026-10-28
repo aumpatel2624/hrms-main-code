@@ -237,7 +237,7 @@ const Login = () => {
             .then((res) => {
                 setIsSendOtpLoading(false);
                 if (res.data.isOk) {
-                    toast.success("OTP sent to your email");
+                    toast.success(res.data.message || "OTP sent to your email");
                     setForgotPasswordStep(2);
 
                     // Start the countdown timer
@@ -290,7 +290,7 @@ const Login = () => {
             .then((res) => {
                 setIsResendOtpLoading(false);
                 if (res.data.isOk) {
-                    toast.success("OTP resent to your email");
+                    toast.success(res.data.message || "OTP resent to your email");
 
                     // Start the countdown timer
                     setOtpResendDisabled(true);

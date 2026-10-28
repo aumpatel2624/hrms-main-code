@@ -10,7 +10,10 @@
 //      applicant's, its named approver's, the caller's team's, or HR's — and a
 //      self-service create is always the caller's own,
 //   6. an "Own department" role reaches only its department's employees — on
-//      Employee and on the six employee-owned request screens (F3).
+//      Employee and on the six employee-owned request screens (F3),
+//   8. below "all" scope a Travel Request or Grievance is filed as the caller,
+//      and Travel Request (list and by id) and the Compensatory Leave Request
+//      list reach the same people for a team- or approver-scoped role.
 // Drives the real mounted routes (authMiddleware → checkPermission → handler)
 // over in-memory stand-ins and the seeded matrices, like approvalIntegrity.test.js.
 import assert from "node:assert/strict";
@@ -417,6 +420,76 @@ resetWrites();
     assert.ok([403, 404].includes((await byId(outsiders)).statusCode), `${menuUrl}: another department's by id is refused`);
     if (against) expectStatus(await byId(against), 403, `${menuUrl}: one raised against the viewer by id`);
   }
+}
+
+// ---- 8. creates pinned to the caller; travel and comp leave scope agree --
+{
+  const scopeRoles = Object.fromEntries([SCOPES.ALL, SCOPES.DEPARTMENT, SCOPES.TEAM, SCOPES.APPROVER].map((scope) => [scope, oid()]));
+  const pages = ["/travel-request", "/employee-grievance", "/compensatory-leave-request"];
+  stub(UserRoles, [...tierMatrices, ...Object.entries(scopeRoles).map(([scope, roleId]) => ({
+    roleId, isActive: true, dataScope: SCOPES.ALL, roles: pages.map((menuUrl) => row(menuUrl, { write: true, edit: true }, scope)),
+  }))]);
+  invalidateRoleCache();
+  const lead = person("tomas", "Employee", { roleId: scopeRoles[SCOPES.TEAM] });
+  const report = person("rita", "Employee", { reportsToId: lead._id });
+  const approverCaller = person("abe", "Employee", { roleId: scopeRoles[SCOPES.APPROVER] });
+  const deptCaller = person("dora", "Employee", { roleId: scopeRoles[SCOPES.DEPARTMENT] });
+  const hrCaller = person("harsh", "Employee", { roleId: scopeRoles[SCOPES.ALL] });
+  people.push(...[lead, report, approverCaller, deptCaller, hrCaller].map(asDoc));
+
+  // A department-, team- or approver-scoped create named someone else and was filed as them.
+  const createdTravel = [];
+  const createdGrievances = [];
+  TravelRequest.create = async (data) => { createdTravel.push(data); return data; };
+  EmployeeGrievance.create = async (data) => { createdGrievances.push(data); return data; };
+  const fileTravel = (caller) => call(travelRoutes, "post", "/travel-requests", caller, {
+    body: { employeeId: String(bilal._id), travelType: "Domestic", purposeOfTravelId: String(oid()) },
+  });
+  const fileGrievance = (caller) => call(careerRoutes, "post", "/employee-grievances", caller, {
+    body: { raisedByEmployeeId: String(bilal._id), subject: "s", date: "2026-10-20", grievanceTypeId: String(oid()), description: "d",
+      grievanceAgainstEmployeeId: String(tara._id), employeeResponsibleId: String(hema._id) },
+  });
+  for (const caller of [deptCaller, lead, approverCaller]) {
+    expectStatus(await fileTravel(caller), 201, `${caller.employeeName} files a travel request naming bilal`);
+    assert.ok(same(createdTravel.at(-1).employeeId, caller._id), `${caller.employeeName}: the travel request is their own`);
+    expectStatus(await fileGrievance(caller), 201, `${caller.employeeName} raises a grievance naming bilal`);
+    const grievance = createdGrievances.at(-1);
+    assert.ok(same(grievance.raisedByEmployeeId, caller._id), `${caller.employeeName}: the grievance is raised by them`);
+    assert.ok(same(grievance.grievanceAgainstEmployeeId, tara._id) && same(grievance.employeeResponsibleId, hema._id),
+      `${caller.employeeName}: who it is against and who is responsible stay as chosen`);
+  }
+  // HR (an "all" row) still files on someone's behalf.
+  expectStatus(await fileTravel(hrCaller), 201, "HR files a travel request for bilal");
+  assert.ok(same(createdTravel.at(-1).employeeId, bilal._id), "HR's travel request is bilal's");
+  expectStatus(await fileGrievance(hrCaller), 201, "HR raises a grievance for bilal");
+  assert.ok(same(createdGrievances.at(-1).raisedByEmployeeId, bilal._id), "HR's grievance is raised by bilal");
+
+  // Travel Request: the list and by id reach the same people.
+  const travel = (employee) => ({ _id: oid(), employeeId: employee._id, companyId, status: "Open", isActive: true });
+  const leadsOwn = travel(lead);
+  const reports = travel(report);
+  const outsiders = travel(bilal);
+  const approversOwn = travel(approverCaller);
+  stub(TravelRequest, [leadsOwn, reports, outsiders, approversOwn]);
+  const listTravel = async (caller) => listedIds(await call(travelRoutes, "post", "/travel-requests/search", caller, { body: {} }));
+  const viewTravel = (caller, doc) => call(travelRoutes, "get", "/travel-requests/:travelRequestId", caller, { params: { travelRequestId: String(doc._id) } });
+  assert.deepEqual(await listTravel(lead), [leadsOwn, reports].map((doc) => String(doc._id)).sort(), "team scope lists their own and their report's travel");
+  expectStatus(await viewTravel(lead, reports), 200, "team scope opens their report's travel by id");
+  expectStatus(await viewTravel(lead, outsiders), 403, "team scope opens someone outside the team's travel by id");
+  assert.deepEqual(await listTravel(approverCaller), [String(approversOwn._id)], "approver scope lists their own travel (there is no travel approver)");
+  expectStatus(await viewTravel(approverCaller, approversOwn), 200, "approver scope opens their own travel by id");
+  expectStatus(await viewTravel(approverCaller, outsiders), 403, "approver scope opens someone else's travel by id");
+
+  // Compensatory Leave Request: the team-scope list has the report's, as by id does.
+  const compOf = (employee) => ({ _id: oid(), employeeId: employee._id, companyId, status: "open", isActive: true });
+  const reportsComp = compOf(report);
+  const outsidersComp = compOf(bilal);
+  stub(CompensatoryLeaveRequest, [reportsComp, outsidersComp]);
+  const compRes = await call(leaveRoutes, "post", "/compensatory-leave-requests/search", lead, { body: {} });
+  expectStatus(compRes, 200, "team scope lists compensatory leave");
+  assert.deepEqual(listedIds(compRes), [String(reportsComp._id)], "team scope lists their report's compensatory leave");
+  expectStatus(await call(leaveRoutes, "get", "/compensatory-leave-requests/:compensatoryLeaveRequestId", lead,
+    { params: { compensatoryLeaveRequestId: String(reportsComp._id) } }), 200, "and opens it by id");
 }
 
 console.log("accessLifecycle.test.js passed");

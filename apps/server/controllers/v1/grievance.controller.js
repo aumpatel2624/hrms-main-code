@@ -191,8 +191,11 @@ const employeeGrievanceScopeFilter = async (req) => {
 
 export const createEmployeeGrievance = async (req, res) => {
   try {
+    // Below "all" (own, department, team, approver) the complainant is the
+    // caller, whatever the body says; who it is against or who is
+    // responsible stays the caller's choice.
     let raisedByEmployeeId = req.body.raisedByEmployeeId;
-    if (req.user?.dataScope === SCOPES.OWN) {
+    if (req.user?.dataScope && req.user.dataScope !== SCOPES.ALL) {
       const ownEmployee = await resolveRequestEmployee(req);
       if (!ownEmployee) {
         return res.status(403).json({ isOk: false, status: 403, message: "No employee record linked to this user" });

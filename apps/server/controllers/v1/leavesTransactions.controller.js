@@ -388,13 +388,9 @@ export const getCompensatoryLeaveRequestById = async (req, res) => {
 
 export const listCompensatoryLeaveRequestByParams = async (req, res) => {
   try {
-    await resolveRequestEmployee(req);
-    let approverIds = [];
-    if (req.user?.dataScope === SCOPES.APPROVER) approverIds = await resolveLeaveVisibilityIds(req);
-    // "Own department": as by id, which shares Leave Application's check.
-    const scopeFilter = req.user?.dataScope === SCOPES.DEPARTMENT
-      ? { employeeId: { $in: await departmentEmployeeIds(req) } }
-      : buildScopeFilter(req.user, { owner: "employeeId", approverIds });
+    // As by id, which shares Leave Application's check: the same scope as
+    // its list, "team" (the caller's reportsToId chain) included.
+    const scopeFilter = await leaveApplicationScope(req);
 
     const list = await runListQuery(CompensatoryLeaveRequest, req.body, {
       searchRefs: [employeeSearch()],

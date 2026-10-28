@@ -5014,3 +5014,27 @@ consumer; single-branch build
   real scheduler pass: 3 encashed, 2 expired, next period's balance right; fails on the old order) and
   `utils/leaveExpiry.test.js` (case 9, the backfill on a doubled period).
 - **Deviates from convention**: no.
+
+### ADR-057 — Below "all", a Travel Request or Grievance is filed as the caller; travel and comp leave scope agree
+
+- **Date**: 2026-10-27
+- **Status**: accepted
+- **Context**: ADR-055 left three gaps. A department-, team- or approver-scoped create on Travel Requests and
+  Employee Grievances trusted the employee named in the form (only "own" forced the caller's own), so a record could
+  be filed in someone else's name; ADR-048/049 had already closed this for Leave Applications, Compensatory Leave and
+  Expense Claims. Travel Request by id was open to any record under team and approver scope while its list was
+  own-only for them. The Compensatory Leave Request list ignored team scope although its by-id check allows the team.
+- **Decision**:
+  - Below "all" scope, a Travel Request's employee and a Grievance's complainant (`raisedByEmployeeId`) are the
+    caller, whatever the form says — the same rule as leave and expense creates. "All" (HR) still files for anyone.
+    A grievance's "Grievance Against" and "Employee Responsible" stay free to choose.
+  - Travel Request has one scope for the list and by id (`travelRequestScope`), following `utils/scope.js`: "team"
+    is the caller's own plus their downward reportsToId chain (as on Shift/Attendance Requests and Leave);
+    "approver" is the caller's own plus who they approve for — there is no travel approver, so it is their own;
+    "Own department" as ADR-055. By id is a membership test against that scope, so the two cannot drift.
+  - The Compensatory Leave Request list uses Leave Application's `leaveApplicationScope`, which already applies
+    "team" (own plus reportsToId chain); its by-id check was already Leave Application's.
+- **Consequences**: no re-seed or data change. The by-id check also guards Travel Request edits, so a team-scoped
+  role now edits only its own and its team's travel requests (it could edit any by id). Tested by section 8 of
+  `controllers/v1/accessLifecycle.test.js` (each of the three controllers reverted in turn makes it fail).
+- **Deviates from convention**: no.

@@ -7,8 +7,9 @@ import { FormSection, FullWidth } from "@/components/ui/form";
  * (ADR-020's markAsCompleted/makeEmployee/markAsPaid) — this admin has no
  * generic "action button" affordance yet, so this is the smallest reusable
  * version, same `renderExtra` hook SimpleArrayField and
- * EmailTemplateMergeFields already use. Only rendered in edit mode (an
- * action needs an existing record id).
+ * EmailTemplateMergeFields already use. Only rendered for an existing record
+ * (an action needs its id): in edit mode, or on the View page through
+ * `renderViewExtra`.
  */
 const SimpleActionButton = ({ label, description, onRun, onResult }) => {
     const [busy, setBusy] = useState(false);

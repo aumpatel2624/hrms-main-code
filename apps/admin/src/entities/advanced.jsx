@@ -3191,6 +3191,37 @@ export const employeeCheckinConfig = {
     toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["employeeId", "time", "logType", "deviceId", "skipAutoAttendance", "latitude", "longitude", "companyId", "isActive"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : key === "time" ? fromZonedDateTimeKey(value, COMPANY_TIME_ZONE).toISOString() : value])),
 };
 
+// Approve/Reject for the request's named approver (or HR), on the View and Edit pages.
+const shiftRequestDecision = (id, values) => values.status === "open" && values.canDecide && (
+    <>
+        <SimpleActionButton
+            label="Approve" description="Creates the real Shift Assignment for this employee, date range and shift type — through the same write-locked path as a manual assignment."
+            onRun={() => approveShiftRequest(id)}
+            onResult={() => window.location.reload()}
+        />
+        <SimpleActionButton
+            label="Reject" description="No side effects."
+            onRun={() => rejectShiftRequest(id)}
+            onResult={() => window.location.reload()}
+        />
+    </>
+);
+
+const attendanceRequestDecision = (id, values) => values.status === "open" && values.canDecide && (
+    <>
+        <SimpleActionButton
+            label="Approve" description="Marks attendance for every day in the range."
+            onRun={() => approveAttendanceRequest(id)}
+            onResult={() => window.location.reload()}
+        />
+        <SimpleActionButton
+            label="Reject" description="No side effects — no attendance was marked."
+            onRun={() => rejectAttendanceRequest(id)}
+            onResult={() => window.location.reload()}
+        />
+    </>
+);
+
 export const shiftRequestConfig = {
     key: "shift-request", path: "/shift-request", section: "Shift & Attendance", singular: "Shift Request", plural: "Shift Requests",
     description: "Request a shift change for a date range. The Shift Approver is resolved automatically (your own Shift Approver, else your Department's) unless you set one explicitly. Approving creates the real Shift Assignment; rejecting has no side effects.",
@@ -3211,23 +3242,10 @@ export const shiftRequestConfig = {
         { name: "status", label: "Status", section: "status", type: "select", options: ["open", "approved", "rejected"], disabled: () => true, hint: "Set by the Approve/Reject actions below." },
     ],
     // `canDecide` comes from the server: false for the requester themself and
-    // for anyone who is neither the named Shift Approver nor HR.
-    renderExtra: ({ mode, id, values }) => (
-        mode === "edit" && id && values.status === "open" && values.canDecide && (
-            <>
-                <SimpleActionButton
-                    label="Approve" description="Creates the real Shift Assignment for this employee, date range and shift type — through the same write-locked path as a manual assignment."
-                    onRun={() => approveShiftRequest(id)}
-                    onResult={() => window.location.reload()}
-                />
-                <SimpleActionButton
-                    label="Reject" description="No side effects."
-                    onRun={() => rejectShiftRequest(id)}
-                    onResult={() => window.location.reload()}
-                />
-            </>
-        )
-    ),
+    // for anyone who is neither the named Shift Approver nor HR. Also on the
+    // View page: a named approver on the Employee role cannot open Edit.
+    renderExtra: ({ mode, id, values }) => mode === "edit" && id && shiftRequestDecision(id, values),
+    renderViewExtra: ({ id, values }) => shiftRequestDecision(id, values),
     filterFields: [
         { name: "employeeId", label: "Employee", type: "objectId" },
         { name: "shiftTypeId", label: "Shift type", type: "objectId" },
@@ -3271,24 +3289,13 @@ export const attendanceRequestConfig = {
         { name: "status", label: "Status", section: "status", type: "select", options: ["open", "active", "rejected", "cancelled"], disabled: () => true, hint: "open until approved; active once approved and applied. Set by the actions below." },
     ],
     // `canDecide` comes from the server: false for the requester themself and
-    // for anyone who is neither the named approver nor HR.
+    // for anyone who is neither the named approver nor HR. Also on the View
+    // page: a named approver on the Employee role cannot open Edit.
+    renderViewExtra: ({ id, values }) => attendanceRequestDecision(id, values),
     renderExtra: ({ mode, id, values }) => (
         mode === "edit" && id && (
             <>
-                {values.status === "open" && values.canDecide && (
-                    <>
-                        <SimpleActionButton
-                            label="Approve" description="Marks attendance for every day in the range."
-                            onRun={() => approveAttendanceRequest(id)}
-                            onResult={() => window.location.reload()}
-                        />
-                        <SimpleActionButton
-                            label="Reject" description="No side effects — no attendance was marked."
-                            onRun={() => rejectAttendanceRequest(id)}
-                            onResult={() => window.location.reload()}
-                        />
-                    </>
-                )}
+                {attendanceRequestDecision(id, values)}
                 {["open", "active"].includes(values.status) && (
                     <SimpleActionButton
                         label="Cancel" description="Withdraws the request and soft-deletes any Attendance rows it created."

@@ -43,7 +43,10 @@ export const calculateAnnualEligibleHraExemption = async ({
 }) => {
   const company = await Company.findById(companyId).lean();
   if (!company?.basicComponentId || !company?.hraComponentId) {
-    throw new Error(`Please set Basic and HRA component in Company ${company?.companyName ?? "(deleted)"}`);
+    // HR's setup, not the employee's input: a clear 400, not a 500 (re-test P3).
+    const error = new Error(`House rent cannot be declared yet: HR must set the Basic Salary Component and the HRA Salary Component on the company "${company?.companyName ?? "(deleted)"}" (HR Setup › Company).`);
+    error.status = 400;
+    throw error;
   }
 
   const periodStart = asDate(payrollPeriod.startDate);

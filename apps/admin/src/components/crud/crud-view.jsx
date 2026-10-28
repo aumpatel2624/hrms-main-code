@@ -263,6 +263,9 @@ const CrudView = ({ config }) => {
                             </FormSection>
                         )}
 
+                        {/* Actions a reader may take without edit rights, e.g. a named approver's Approve/Reject. */}
+                        {config.renderViewExtra?.({ id, values })}
+
                         {(record.createdAt || record.updatedAt) && (
                             <div className="flex flex-wrap gap-x-6 gap-y-1 border-t border-secondary py-4 text-xs text-tertiary">
                                 {record.createdAt && <span>Created {formatDate(record.createdAt)}</span>}

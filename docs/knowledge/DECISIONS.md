@@ -5181,3 +5181,30 @@ consumer; single-branch build
   picker. Tested by N1 in `controllers/v1/confidentialAccess.test.js`, section 7 of
   `controllers/v1/companyIntegrity.test.js` and `entities/row-pickers.test.js`; each fails on the old code.
 - **Deviates from convention**: no.
+
+### ADR-064 — Named approvers decide from the View page; Payroll Correction keeps its period; a company's Basic/HRA are its own
+
+- **Date**: 2026-10-28
+- **Status**: accepted
+- **Context**: the 2026-10-28 full re-test (P1–P3). (P1) A team lead on the Employee role named as a Shift Request's
+  approver saw no Approve or Reject: they lived only on the Edit page, which the role's matrix row (`edit` false) may
+  not open. The server already accepted that approver's decision (`checkPermissionOrNamedApprover`). Attendance
+  Request had the same layout. (P2) `GET /payroll-corrections/:id` answered 500: the controller populates
+  `payrollPeriodId`, which `models/PayrollCorrection.js` lacked (Mongoose refuses to populate a path not in the schema),
+  although ADR-029 lists it and `remarks`, and create already sends both (silently dropped). (P3) The Company screen
+  offered and saved any company's salary components as its Basic and HRA, so four companies pointed at Apidel's and
+  HRA exemption came out ₹0; a company with none set made a house-rent declaration fail with a 500.
+- **Decision**:
+  - The CRUD View page renders an optional `renderViewExtra({ id, values })`. Shift Request and Attendance Request
+    show Approve/Reject there (and still on Edit), only for an open request whose `canDecide` the server returns true.
+  - `PayrollCorrection` gains `payrollPeriodId` (ref PayrollPeriod, default null) and `remarks`, as ADR-029 describes.
+  - Company create and edit refuse (400) a Basic or HRA Salary Component that is not that company's own; a new company
+    can have none yet. The form's two pickers list only the company's own components (empty until it is saved).
+  - A house-rent HRA calculation for a company without both components throws a 400 naming the company and the setting.
+- **Consequences**: no re-seed and no data change; stored company settings are untouched. A company still holding
+  another company's component must have it replaced (or cleared) before its next save. Corrections saved before this
+  fix have no stored period, so their submit posts no accrual ledger entries, as before; new ones post them. An
+  Attendance Request's approver still comes only from the employee's Shift Approver (not changed here). Tested by
+  `entities/request-decisions.test.js`, section 7 of `controllers/v1/payrollIntegrity.test.js`, section 8 of
+  `controllers/v1/companyIntegrity.test.js` and `entities/picker-labels.test.js`; each fails on the old code.
+- **Deviates from convention**: no.

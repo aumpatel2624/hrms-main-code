@@ -6,6 +6,7 @@
 //   3. a cancelled run's slips still counted as existing, so the month could
 //      not be run again, and they could not be deleted while linked,
 //   4. an entry whose slips all failed to submit was still marked "submitted".
+// And from the 28 Oct re-test (P2): a saved Payroll Correction would not open.
 // (Formula rows ignoring payment days is salarySlipCalc.test.js, Scenario C2.)
 // Drives the real mounted routes as an Admin over in-memory stand-ins, like
 // approvalIntegrity.test.js.
@@ -14,11 +15,13 @@ import mongoose from "mongoose";
 import AdminUser from "../../models/AdminUser.js";
 import Employee from "../../models/Employee.js";
 import EmployeeGrade from "../../models/EmployeeGrade.js";
+import PayrollCorrection from "../../models/PayrollCorrection.js";
 import PayrollEntry from "../../models/PayrollEntry.js";
 import SalarySlip from "../../models/SalarySlip.js";
 import SalaryStructure from "../../models/SalaryStructure.js";
 import SalaryStructureAssignment from "../../models/SalaryStructureAssignment.js";
 import SalaryWithholding from "../../models/SalaryWithholding.js";
+import payrollBenefitsRoutes from "../../routes/v1/payrollBenefits.routes.js";
 import payrollRoutes from "../../routes/v1/payroll.routes.js";
 import payrollRunRoutes from "../../routes/v1/payrollRun.routes.js";
 import { resolveEligiblePayrollEmployees } from "./payrollOrchestration.controller.js";
@@ -288,5 +291,37 @@ console.log("payrollIntegrity: a submitted slip cannot be deleted");
   expectStatus(await remove(draft), 400, "an entry that is not cancelled");
 }
 console.log("payrollIntegrity: deleting a cancelled entry deletes its cancelled slips");
+
+// ------------------------------- 7. a saved Payroll Correction opens (P2) --
+{
+  // Mongoose refuses to populate a path its schema lacks (strictPopulate), so
+  // GET /payroll-corrections/:id answered 500 while it populated payrollPeriodId.
+  const correction = asDoc({ _id: oid(), employeeId: asha._id, companyId, salarySlipId: oid(), payrollPeriodId: oid(), status: "draft" });
+  const populated = [];
+  const strictQuery = (result) => {
+    const chain = {
+      populate: (path) => {
+        if (!PayrollCorrection.schema.path(path)) throw new Error(`Cannot populate path \`${path}\` because it is not in your schema.`);
+        populated.push(path);
+        return chain;
+      },
+      then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
+    };
+    return chain;
+  };
+  PayrollCorrection.findById = (id) => strictQuery(same(id, correction._id) ? correction : null);
+  PayrollCorrection.findOne = async () => correction;
+
+  const opened = await call(payrollBenefitsRoutes, "get", "/payroll-corrections/:id", { params: { id: String(correction._id) } });
+  expectStatus(opened, 200, "a saved correction opens");
+  assert.ok(populated.includes("payrollPeriodId"), "with its payroll period");
+
+  // What create writes is kept, not silently dropped by the schema.
+  const period = oid();
+  const kept = new PayrollCorrection({ payrollPeriodId: period, remarks: "LWP reversed after review" }).toObject();
+  assert.ok(same(kept.payrollPeriodId, period), "payrollPeriodId is stored");
+  assert.equal(kept.remarks, "LWP reversed after review", "remarks are stored");
+}
+console.log("payrollIntegrity: a saved payroll correction opens");
 
 console.log("payrollIntegrity: all cases passed");

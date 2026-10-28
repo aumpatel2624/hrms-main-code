@@ -114,6 +114,18 @@ export const ofChosenCompany = (load, labelOf) => (values) => {
 };
 
 /**
+ * The Company form's Basic and HRA Salary Components: the company's own
+ * components only, and none on a company not yet saved (none can be its own).
+ * `id` is the form's record id; `load` lists components with their company.
+ */
+export const ofThisCompany = (load, labelOf) => (_values, { id } = {}) => {
+    if (!id) return Promise.resolve([]);
+    return load().then((res) => (res.data?.data ?? [])
+        .filter((row) => String(row.companyId?._id ?? row.companyId) === String(id))
+        .map((row) => ({ value: row._id, label: labelOf(row) })));
+};
+
+/**
  * Approver pickers: the current employees, plus any saved choice who is no
  * longer among them, found in `allRows` (the plain list, which keeps leavers)
  * and labelled "(left)".

@@ -16,6 +16,7 @@ import Designation from "../../models/Designation.js";
 import EmploymentType from "../../models/EmploymentType.js";
 import EmployeeGrade from "../../models/EmployeeGrade.js";
 import EmployeeHealthInsurance from "../../models/EmployeeHealthInsurance.js";
+import SalaryComponent from "../../models/SalaryComponent.js";
 import {
   getReferencingCounts,
   formatReferenceMessage,
@@ -57,6 +58,19 @@ const referenceGuardedDelete = async (Model, modelName, id, label) => {
 
 // ---------------------------------------------------------------- Company --
 
+// A company's Basic and HRA components must be its own: another company's never
+// appear in its salary structures, so HRA exemption silently came out 0 (re-test P3).
+// A company not yet saved has no components, so `companyId` null refuses any.
+const assertOwnComponents = async (companyId, { basicComponentId, hraComponentId }) => {
+  for (const [componentId, label] of [[basicComponentId, "Basic"], [hraComponentId, "HRA"]]) {
+    if (!componentId) continue;
+    if (companyId && (await SalaryComponent.exists({ _id: componentId, companyId }))) continue;
+    const error = new Error(`The ${label} Salary Component must be one of this company's own salary components. Save the company first, then add its components.`);
+    error.status = 400;
+    throw error;
+  }
+};
+
 export const createCompany = async (req, res) => {
   try {
     const { companyName, companyCode, basicComponentId, hraComponentId, isActive } = req.body;
@@ -69,6 +83,7 @@ export const createCompany = async (req, res) => {
       return res.status(400).json({ isOk: false, status: 400, message: "Company already exists" });
     }
 
+    await assertOwnComponents(null, { basicComponentId, hraComponentId });
     await Company.create({ companyName, companyCode, basicComponentId, hraComponentId, isActive });
     return res.status(201).json({ isOk: true, status: 201, message: "Company created successfully" });
   } catch (error) {
@@ -87,6 +102,7 @@ export const updateCompany = async (req, res) => {
       return res.status(404).json({ isOk: false, status: 404, message: "Company not found" });
     }
 
+    await assertOwnComponents(company._id, { basicComponentId, hraComponentId });
     company.companyName = companyName;
     company.companyCode = companyCode;
     company.basicComponentId = basicComponentId || null;

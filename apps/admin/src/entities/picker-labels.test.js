@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { companyLabelledOptions, fieldLabel, goalLabel, interviewLabel, jobOfferLabel, labelledOptions, leaveAllocationLabel, leavePeriodLabel, linkedName, nameWithCompany, ofChosenCompany, payrollPeriodLabel, readableFrequency, salarySlipLabel, salaryStructureAssignmentLabel, salaryStructureLabel, shiftScheduleLabel, withSavedLeavers } from "./picker-labels.js";
+import { companyLabelledOptions, fieldLabel, goalLabel, interviewLabel, jobOfferLabel, labelledOptions, leaveAllocationLabel, leavePeriodLabel, linkedName, nameWithCompany, ofChosenCompany, ofThisCompany, payrollPeriodLabel, readableFrequency, salarySlipLabel, salaryStructureAssignmentLabel, salaryStructureLabel, shiftScheduleLabel, withSavedLeavers } from "./picker-labels.js";
 
 const companies = { data: { data: [{ _id: "c-apd", companyName: "Apidel" }, { _id: "c-nuv", companyName: "Nuva" }] } };
 const periods = { data: { data: [
@@ -111,5 +111,17 @@ assert.equal(fieldLabel("employeeId"), "Employee");
 assert.equal(fieldLabel("raisedByEmployeeId"), "Raised by employee");
 assert.equal(fieldLabel("createdAt"), "Created at");
 assert.equal(fieldLabel("isActive"), "Active");
+
+// Re-test P3: the Company form's Basic and HRA pickers list that company's own components only.
+const companyComponents = [
+    { _id: "s1", salaryComponentName: "Basic Salary - APD", companyId: "c-apd" },
+    { _id: "s2", salaryComponentName: "Basic - TSL", companyId: { _id: "c-tsl" } },
+];
+let loads = 0;
+const ownComponents = ofThisCompany(async () => { loads += 1; return { data: { data: companyComponents } }; }, (row) => row.salaryComponentName);
+assert.deepEqual(await ownComponents({}, { id: "c-tsl", mode: "edit" }), [{ value: "s2", label: "Basic - TSL" }], "Techno Sales sees only its own");
+assert.deepEqual(await ownComponents({}, { id: "c-apd", mode: "view" }), [{ value: "s1", label: "Basic Salary - APD" }]);
+assert.deepEqual(await ownComponents({}, { mode: "add" }), [], "a company not yet saved has none");
+assert.equal(loads, 2, "nothing is requested for a new company");
 
 console.log("picker-labels: all assertions passed");

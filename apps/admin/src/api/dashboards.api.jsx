@@ -6,6 +6,7 @@ const invalidateDashboards = () => invalidateQuery(["dashboards"]);
 
 // Widget library (Dashboard Builder screen)
 export const getWidgetSources = async () => api.get(ENDPOINTS.DASHBOARDS.WIDGET_SOURCES);
+export const getWidgetFilterOptions = async (source, field) => api.get(ENDPOINTS.DASHBOARDS.WIDGET_FILTER_OPTIONS(source, field));
 export const listWidgets = async () => api.get(ENDPOINTS.DASHBOARDS.WIDGETS);
 export const searchWidgets = async (params) => api.post(ENDPOINTS.DASHBOARDS.WIDGET_SEARCH, params);
 export const getWidgetById = async (id) => api.get(ENDPOINTS.DASHBOARDS.WIDGET_BY_ID(id));

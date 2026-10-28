@@ -21,6 +21,9 @@ export const PERIODS_PER_YEAR = { Monthly: 12, Fortnightly: 26, Bimonthly: 24, W
 
 const round2 = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
 
+// A row named in an error: its abbreviation, else its component's name — never its id.
+const rowName = (row) => row.abbreviation || row.salaryComponentId?.salaryComponentName || "a row without an abbreviation";
+
 /**
  * Evaluates one earnings/deductions/employerContributions table in place
  * against `context` (mutated: each resolved row's abbreviation is injected
@@ -39,7 +42,7 @@ export const evaluateComponentTable = (rows, context) => {
       try {
         passes = evaluateCondition(plain.condition, context);
       } catch (error) {
-        throw new Error(`Row "${plain.abbreviation || plain.salaryComponentId}": condition error — ${error.message}`);
+        throw new Error(`Row "${rowName(plain)}": condition error — ${error.message}`);
       }
       if (!passes) {
         evaluated.push({ ...plain, defaultAmount: 0, _skipped: true });
@@ -52,7 +55,7 @@ export const evaluateComponentTable = (rows, context) => {
       try {
         defaultAmount = evaluateFormula(plain.formula, context);
       } catch (error) {
-        throw new Error(`Row "${plain.abbreviation || plain.salaryComponentId}": formula error — ${error.message}`);
+        throw new Error(`Row "${rowName(plain)}": formula error — ${error.message}`);
       }
     } else {
       defaultAmount = Number(plain.amount) || 0;

@@ -14,6 +14,7 @@ import {
 } from "../../middlewares/inputValidator.js";
 import {
   listWidgetSources,
+  listWidgetFilterOptions,
   createDashboardWidget,
   listDashboardWidgets,
   getDashboardWidgetById,
@@ -50,6 +51,36 @@ router.get(
   authMiddleware(ANY_ROLE),
   checkPermission("/dashboard-builder", "read"),
   listWidgetSources,
+);
+
+/**
+ * @swagger
+ * /dashboard-widgets/sources/{source}/filter-options/{field}:
+ *   get:
+ *     summary: Names for a reference filter's values (id and label only, caller's scope)
+ *     tags: [Dashboards]
+ *     parameters:
+ *       - in: path
+ *         name: source
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: field
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: "[{ value, label }] sorted by label"
+ *       404:
+ *         description: Not a reference filter on this source
+ */
+router.get(
+  "/dashboard-widgets/sources/:source/filter-options/:field",
+  authMiddleware(ANY_ROLE),
+  checkPermission("/dashboard-builder", "read"),
+  listWidgetFilterOptions,
 );
 
 /**

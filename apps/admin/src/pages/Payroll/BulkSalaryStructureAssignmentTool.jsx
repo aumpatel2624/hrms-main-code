@@ -243,11 +243,11 @@ const BulkSalaryStructureAssignmentTool = () => {
                                     const employee = (eligible || []).find((e) => e.employeeId === row.employeeId);
                                     return (
                                         <tr key={`${row.employeeId}-${idx}`} className="border-b border-secondary last:border-b-0">
-                                            <td className="px-4 py-2">{employee?.employeeName || row.employeeId}</td>
+                                            <td className="px-4 py-2">{employee?.employeeName || "Unknown employee"}</td>
                                             <td className="px-4 py-2">
                                                 {row.success ? <Badge size="sm" color="success">Success</Badge> : <Badge size="sm" color="error">Failed</Badge>}
                                             </td>
-                                            <td className="px-4 py-2 text-tertiary">{row.error || row.salaryStructureAssignmentId || "—"}</td>
+                                            <td className="px-4 py-2 text-tertiary">{row.error || (row.success ? "Salary Structure assigned" : "—")}</td>
                                         </tr>
                                     );
                                 })}

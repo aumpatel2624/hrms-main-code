@@ -80,7 +80,7 @@ const FilterRow = ({ row, fields, lookups, onChange, onRemove }) => {
                 <SelectField
                     aria-label="Value"
                     placeholder="Search..."
-                    options={lookups?.[field.optionsFrom] ?? field.options ?? []}
+                    options={lookups?.[field.optionsFrom ?? field.name] ?? field.options ?? []}
                     value={row.value}
                     onChange={(o) => onChange({ ...row, value: o ? o.value : "" })}
                 />

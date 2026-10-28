@@ -39,6 +39,10 @@ export const getDesignationCounts = async (designationId, companyId, excludeJobO
   return { employeeCount, jobOpenings };
 };
 
+// A plan as people know it in a message: "2026-04-01 – 2027-03-31", not its id.
+export const planPeriod = (plan) =>
+  `${new Date(plan.fromDate).toISOString().slice(0, 10)} – ${new Date(plan.toDate).toISOString().slice(0, 10)}`;
+
 // Finds the active Staffing Plan (if any) covering this designation+company
 // on the given date — used both to compute this plan's own rows and by the
 // Recruitment retrofit's vacancy-cap check.
@@ -79,7 +83,7 @@ const validateOverlap = async (doc) => {
   for (const other of others) {
     for (const detail of doc.staffingDetails) {
       if (other.staffingDetails.some((d) => String(d.designationId) === String(detail.designationId))) {
-        return `A Staffing Plan already exists for this designation and company in an overlapping date range (${other._id})`;
+        return `A Staffing Plan already exists for this designation and company in an overlapping date range (${planPeriod(other)})`;
       }
     }
   }

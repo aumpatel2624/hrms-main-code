@@ -439,7 +439,7 @@ const prepareDeclarationRows = async (rows = []) => {
   for (const r of rows) {
     if (!r.exemptionSubCategoryId) throwError(400, "Sub-category is required for each declaration line");
     const sub = await EmployeeTaxExemptionSubCategory.findById(r.exemptionSubCategoryId).lean();
-    if (!sub) throwError(404, `Exemption Sub-Category ${r.exemptionSubCategoryId} not found`);
+    if (!sub) throwError(404, "A chosen Exemption Sub-Category no longer exists");
 
     const amount = Math.max(0, Number(r.amount) || 0);
     prepared.push({
@@ -716,7 +716,7 @@ const prepareProofRows = async (rows = []) => {
   for (const r of rows) {
     if (!r.exemptionSubCategoryId) throwError(400, "Sub-category is required for each proof line");
     const sub = await EmployeeTaxExemptionSubCategory.findById(r.exemptionSubCategoryId).lean();
-    if (!sub) throwError(404, `Exemption Sub-Category ${r.exemptionSubCategoryId} not found`);
+    if (!sub) throwError(404, "A chosen Exemption Sub-Category no longer exists");
 
     const amount = Math.max(0, Number(r.amount) || 0);
     prepared.push({

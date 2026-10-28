@@ -1,5 +1,6 @@
 import AuditLog from "../../models/AuditLog.js";
 import { runListQuery } from "../../utils/listQuery.js";
+import { labelChanges } from "../../utils/recordLabels.js";
 
 /**
  * Reading the audit trail.
@@ -40,6 +41,8 @@ export const getAuditLogById = async (req, res) => {
     if (!entry) {
       return res.status(404).json({ isOk: false, status: 404, message: "Audit entry not found" });
     }
+    // Reference fields read as names, not the ObjectIds the log stores.
+    entry.changes = await labelChanges(entry.model, entry.changes);
     return res.status(200).json({ isOk: true, status: 200, data: entry });
   } catch (error) {
     console.error("Error in getAuditLogById:", error);

@@ -36,8 +36,11 @@ const formatDate = (value) => {
     });
 };
 
-/** Nothing, an empty string and a redaction all need to read differently. */
-const Value = ({ value }) => {
+/**
+ * Nothing, an empty string and a redaction all need to read differently. A
+ * reference field arrives with the server's `label` — its name, never the id.
+ */
+const Value = ({ value, label }) => {
     if (value === null || value === undefined) {
         return <span className="text-quaternary italic">not set</span>;
     }
@@ -45,7 +48,7 @@ const Value = ({ value }) => {
     if (value === "[REDACTED]") {
         return <span className="font-medium text-warning-primary">hidden</span>;
     }
-    return <span className="break-all">{String(value)}</span>;
+    return <span className="break-all">{label ?? String(value)}</span>;
 };
 
 const FILTER_FIELDS = [
@@ -341,10 +344,10 @@ const AuditLog = () => {
                                                     {change.field}
                                                 </td>
                                                 <td className="px-3 py-2 align-top text-tertiary">
-                                                    <Value value={change.from} />
+                                                    <Value value={change.from} label={change.fromLabel} />
                                                 </td>
                                                 <td className="px-3 py-2 align-top text-primary">
-                                                    <Value value={change.to} />
+                                                    <Value value={change.to} label={change.toLabel} />
                                                 </td>
                                             </tr>
                                         ))}

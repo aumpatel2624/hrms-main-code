@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { attendanceScope, withSelfServiceFilter } from "../../utils/attendanceScope.js";
 import { ROLES } from "@demo-panel/shared/roles";
 import DashboardWidget from "../../models/DashboardWidget.js";
@@ -6,6 +7,7 @@ import { WIDGET_SOURCES } from "../../config/widgetSources.js";
 import { runListQuery, OPERATORS } from "../../utils/listQuery.js";
 import { buildScopeFilter } from "../../utils/scope.js";
 import { validateWidget, runWidgetQuery, runWidgetBreakdown } from "../../utils/widgetQuery.js";
+import { describeRecords, refModelName } from "../../utils/recordLabels.js";
 import { resolveUserScope, checkPermission } from "../../middlewares/checkPermission.js";
 import { getReferencingCounts, formatReferenceMessage } from "../../utils/referenceHelper.js";
 import { deleteCacheByPrefix, getOrSet } from "../../utils/cache.js";
@@ -85,6 +87,35 @@ export const listWidgetSources = async (req, res) => {
     filterable: source.filterable,
   }));
   return res.status(200).json({ isOk: true, status: 200, data: { sources, operators: OPERATORS } });
+};
+
+/**
+ * The values a reference filter can take, by name — "Ekta Bansal (Apidel)",
+ * not a pasted ObjectId. Only ids the field actually holds in rows the caller
+ * may see, each with its label and nothing else.
+ */
+export const listWidgetFilterOptions = async (req, res) => {
+  try {
+    const source = WIDGET_SOURCES[req.params.source];
+    const { field } = req.params;
+    if (!source || source.filterable[field] !== "objectId") {
+      return res.status(404).json({ isOk: false, status: 404, message: "Not a reference filter on this source" });
+    }
+    const scopeFilter = await widgetScopeFilter(req, res, source);
+    if (res.headersSent) return;
+
+    const Model = mongoose.model(source.model);
+    const values = (await Model.distinct(field, scopeFilter ?? {})).filter((value) => value !== null && value !== "");
+    const refName = refModelName(Model.schema, field);
+    const labels = refName ? await describeRecords(refName, values) : new Map();
+    const data = values
+      .map((value) => ({ value: String(value), label: labels.get(String(value)) ?? (refName ? "(deleted)" : String(value)) }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    return res.status(200).json({ isOk: true, status: 200, data });
+  } catch (error) {
+    console.error("Error in listWidgetFilterOptions:", error);
+    return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+  }
 };
 
 // ============ WIDGET CRUD ============
@@ -221,6 +252,25 @@ export const listDashboardWidgetByParams = async (req, res) => {
 
 // ============ RUNNING ============
 
+/**
+ * The rows of `source` the caller may see (ADR-002), or nothing once it has
+ * already answered 401/403. A widget and its filter options share it, so a
+ * filter can never offer a value from rows the widget would hide.
+ */
+const widgetScopeFilter = async (req, res, source) => {
+  if (!(await resolveUserScope(req))) {
+    res.status(401).json({ isOk: false, status: 401, message: "Session invalid or expired" });
+    return undefined;
+  }
+  if (source.companyConfined) {
+    await checkPermission(source.menuUrl, "read")(req, res, () => {});
+    if (res.headersSent) return undefined;
+  }
+  return withSelfServiceFilter(req, source.companyConfined
+    ? await attendanceScope(req, source.employeeOwned)
+    : buildScopeFilter(req.user, source.scopeable), source.selfServiceFilter);
+};
+
 const executeWidget = async (req, res, widget, cacheKey = null) => {
   const source = WIDGET_SOURCES[widget.source];
   const errors = validateWidget(widget, source);
@@ -234,16 +284,8 @@ const executeWidget = async (req, res, widget, cacheKey = null) => {
     });
   }
 
-  if (!(await resolveUserScope(req))) {
-    return res.status(401).json({ isOk: false, status: 401, message: "Session invalid or expired" });
-  }
-  if (source.companyConfined) {
-    await checkPermission(source.menuUrl, "read")(req, res, () => {});
-    if (res.headersSent) return;
-  }
-  const scopeFilter = withSelfServiceFilter(req, source.companyConfined
-    ? await attendanceScope(req, source.employeeOwned)
-    : buildScopeFilter(req.user, source.scopeable), source.selfServiceFilter);
+  const scopeFilter = await widgetScopeFilter(req, res, source);
+  if (res.headersSent) return;
 
   const data = await (cacheKey ? getOrSet(cacheKey, 120, buildResult) : buildResult());
   return res.status(200).json({ isOk: true, status: 200, data });

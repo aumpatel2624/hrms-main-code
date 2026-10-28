@@ -1,4 +1,5 @@
 import { FormSection, FullWidth } from "@/components/ui/form";
+import { emptyRow, withCell } from "./array-rows.js";
 
 /**
  * Minimal repeatable-row editor for an embedded array field (ADR-020,
@@ -21,16 +22,13 @@ const optionOf = (opt) => (typeof opt === "object" ? opt : { value: opt, label: 
 // A populated ref (getById) still selects its own row.
 const idOf = (value) => (value && typeof value === "object" ? (value._id ?? value.id) : value);
 
-const emptyRow = (columns) =>
-    Object.fromEntries(columns.map((c) => [c.name, c.type === "checkbox" ? false : ""]));
-
 const SimpleArrayField = ({ title, description, fieldName, columns, values, setValues, lookups = {} }) => {
     const rows = values[fieldName] ?? [];
 
-    const updateRow = (idx, colName, val) => {
+    const updateRow = (idx, col, val) => {
         setValues((v) => {
             const next = [...(v[fieldName] ?? [])];
-            next[idx] = { ...next[idx], [colName]: val };
+            next[idx] = withCell(next[idx], col, val);
             return { ...v, [fieldName]: next };
         });
     };
@@ -59,7 +57,7 @@ const SimpleArrayField = ({ title, description, fieldName, columns, values, setV
                                         <select
                                             className="rounded-md border border-primary bg-primary px-2 py-1 text-sm text-primary"
                                             value={idOf(row[col.name]) ?? ""}
-                                            onChange={(e) => updateRow(idx, col.name, e.target.value)}
+                                            onChange={(e) => updateRow(idx, col, e.target.value)}
                                         >
                                             <option value="">—</option>
                                             {(col.optionsFrom ? (lookups[col.optionsFrom] ?? []) : col.options).map(optionOf).map((opt) => (
@@ -70,7 +68,7 @@ const SimpleArrayField = ({ title, description, fieldName, columns, values, setV
                                         <input
                                             type="checkbox"
                                             checked={Boolean(row[col.name])}
-                                            onChange={(e) => updateRow(idx, col.name, e.target.checked)}
+                                            onChange={(e) => updateRow(idx, col, e.target.checked)}
                                         />
                                     ) : (
                                         <input
@@ -78,7 +76,7 @@ const SimpleArrayField = ({ title, description, fieldName, columns, values, setV
                                             className="rounded-md border border-primary bg-primary px-2 py-1 text-sm text-primary"
                                             value={row[col.name] ?? ""}
                                             onChange={(e) =>
-                                                updateRow(idx, col.name, col.type === "number" ? Number(e.target.value) : e.target.value)
+                                                updateRow(idx, col, col.type === "number" ? Number(e.target.value) : e.target.value)
                                             }
                                         />
                                     )}

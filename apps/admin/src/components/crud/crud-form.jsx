@@ -1,11 +1,11 @@
 import { useContext, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { MenuContext } from "../../context/MenuContext";
 import { Card, PageHeader } from "@/components/ui/page";
 import { FormActions, FormSection, FullWidth } from "@/components/ui/form";
 import { CheckField, EmailField, Field, MultiSelectField, PasswordField, SelectField, TextAreaField } from "@/components/ui/field";
-import { initialFormValues, storedFormValues } from "./form-defaults.js";
+import { initialFormValues, prefilledFormValues, storedFormValues } from "./form-defaults.js";
 import { formPayload } from "./form-payload.js";
 import IconPicker from "@/components/ui/icon-picker";
 import JoditEditor from "jodit-react";
@@ -119,6 +119,7 @@ const CrudForm = ({ config, mode = "add" }) => {
     const isEdit = mode === "edit";
     const { id } = useParams();
     const navigate = useNavigate();
+    const { state: routeState } = useLocation();
     const { currentPagePermissions, currentUserId } = useContext(MenuContext);
 
     const initialState = useMemo(
@@ -126,7 +127,8 @@ const CrudForm = ({ config, mode = "add" }) => {
         [config.fields],
     );
 
-    const [values, setValues] = useState(initialState);
+    // `state.prefill`: values another screen handed over with the link here.
+    const [values, setValues] = useState(() => (isEdit ? initialState : prefilledFormValues(config.fields, initialState, routeState?.prefill)));
     const [errors, setErrors] = useState({});
     const [showErrors, setShowErrors] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -200,8 +202,13 @@ const CrudForm = ({ config, mode = "add" }) => {
         return found;
     };
 
+    // `canSave`: a record the server will no longer accept edits to (an
+    // approved leave) shows no save action, only its own actions.
+    const canSave = !isEdit || (config.canSave?.(values) ?? true);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!canSave) return;
         const found = validate();
         setErrors(found);
         setShowErrors(true);
@@ -288,10 +295,11 @@ const CrudForm = ({ config, mode = "add" }) => {
                             );
                         })}
 
-                        {config.renderExtra?.({ mode, id, values, setValues, lookups, currentUserId })}
+                        {config.renderExtra?.({ mode, id, values, setValues, lookups, currentUserId, navigate })}
 
                         <FormActions
                             onSubmit={handleSubmit}
+                            canSubmit={canSave}
                             cancelTo={config.path}
                             isLoading={isSaving}
                             submitLabel={isEdit ? "Save changes" : `Create ${config.singular.toLowerCase()}`}

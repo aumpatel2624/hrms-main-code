@@ -5208,3 +5208,33 @@ consumer; single-branch build
   `entities/request-decisions.test.js`, section 7 of `controllers/v1/payrollIntegrity.test.js`, section 8 of
   `controllers/v1/companyIntegrity.test.js` and `entities/picker-labels.test.js`; each fails on the old code.
 - **Deviates from convention**: no.
+
+### ADR-065 — An onboarded hire's employee links back; blank row dropdowns are unset; edit pages save only while editable
+
+- **Date**: 2026-10-28
+- **Status**: accepted
+- **Context**: the 2026-10-28 full re-test (section 4, P6 and P7). (P6) Create Employee on a completed onboarding
+  answered 200 with a prefilled payload that the screen never used, so HR retyped the hire on Add Employee and the
+  onboarding's `employeeId` stayed empty. (P7) A Training Event attendee row with Attendance and Status on "—" failed
+  with Mongoose's raw enum text; a Promotion's Revised CTC looked like it changed pay; leavers were offered as the
+  employee on Leave Application and Employee Separation; an approved leave's edit page offered "Save changes" the
+  server refuses; any user could open `/user-roles` and see the role picker and "Save Permissions".
+- **Decision**:
+  - Create Employee opens Add Employee prefilled (route state `prefill`, read by the CRUD add form). Saving an Employee
+    whose `jobApplicantId` has an onboarding sets that onboarding's `employeeId`. It is refused (400) under a company
+    other than the onboarding's, and (409) when the onboarding already has an Employee.
+  - A row dropdown in `SimpleArrayField` left on "—" is sent unset, not "", so the field's default applies (every row
+    editor, not only Training Event's).
+  - Promotion's Revised CTC carries a note that pay changes only with a new Salary Structure Assignment. Pay
+    calculation is unchanged.
+  - Leave Application and Employee Separation pick the employee from current staff (the approvers' picker; a saved
+    leaver still shows on edit, labelled). Exit Interview and Full and Final still list everyone.
+  - A CRUD config's optional `canSave(values)` hides the edit form's save action. Leave Application, Compensatory Leave
+    Request and Shift Request save only while `open`, the server's own rule.
+  - `/user-roles` shows a refusal to a role without read on that screen, asked of the menu rather than the current-page
+    permissions (which keep the last screen's when the user has no menu row for this one).
+- **Consequences**: no re-seed and no data change; no role or permission rows changed. Onboardings whose employee was
+  retyped before this fix stay unlinked. Tested by section 9 of `controllers/v1/companyIntegrity.test.js`,
+  `components/crud/array-rows.test.js`, `components/crud/form-defaults.test.js` and `entities/daily-use.test.js`; each
+  fails on the old code.
+- **Deviates from convention**: no.

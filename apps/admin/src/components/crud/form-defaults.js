@@ -35,3 +35,14 @@ export const storedFormValues = (fields, values) => {
     });
     return out;
 };
+
+/**
+ * A create form opened with values handed over from another screen (an
+ * onboarding's Create Employee opens Add Employee with the hire's details).
+ * Blank handed-over values keep the form's own defaults.
+ */
+export const prefilledFormValues = (fields, initial, prefill) => {
+    if (!prefill) return initial;
+    const given = Object.fromEntries(Object.entries(prefill).filter(([, value]) => value !== null && value !== undefined && value !== ""));
+    return storedFormValues(fields, { ...initial, ...given });
+};

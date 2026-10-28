@@ -5138,3 +5138,20 @@ consumer; single-branch build
   difference); left as it is. Tested by sections 7 and 12 of `controllers/v1/accessLifecycle.test.js`; each new
   check fails on the old code.
 - **Deviates from convention**: no.
+
+### ADR-062 — `NativeSelect` honours a passed `id` (vendored-component edit)
+
+- **Date**: 2026-10-28
+- **Status**: accepted
+- **Context**: found by the small-defects fix (PR #62). The vendored `NativeSelect`
+  (`apps/admin/src/components/base/select/select-native.tsx`) always overwrote the `id` a page passed with its own
+  generated one, gave its `Label` that same id, and pointed the select's `aria-labelledby` at it. On the Leave
+  Control Panel, Shift Assignment Tool, Employee Attendance Tool and Bulk Salary Structure Assignment Tool the page
+  renders its own `<label htmlFor="…">` and passes a matching `id`, so the label pointed at nothing, and the
+  self-referencing `aria-labelledby` would have overridden it anyway: screen readers lost every label.
+- **Decision**: a minimal edit to the vendored file, approved by the user on 2026-10-28. The select uses `props.id`
+  when given, else the generated id as before. The built-in `Label` gets its own id, and `aria-labelledby` points at
+  it only when the `label` prop is set. Nothing else in vendored code changes. A comment at the edit points here.
+- **Consequences**: each page label on the four bulk tools now names its dropdown. A `NativeSelect` with a `label`
+  prop is announced as before. Re-vendoring Untitled UI would drop this edit; re-apply it.
+- **Deviates from convention**: yes — AGENTS.md says never edit `apps/admin/src/components/base/`.

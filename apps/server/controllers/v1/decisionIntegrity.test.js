@@ -282,6 +282,9 @@ const hrReq = (body, params) => ({ user: { id: String(hema._id), role: "USER", d
   assert.equal(dhara.leaveApproverId ?? null, null, "nothing refused was saved");
   expectStatus(await save({ leaveApproverId: String(manju._id) }), 200, "a current colleague");
   assert.ok(same(dhara.leaveApproverId, manju._id));
+  // An emptied picker arrives as null and clears it (29 Oct verification run, N4).
+  expectStatus(await save({ leaveApproverId: null }), 200, "the approver emptied");
+  assert.equal(dhara.leaveApproverId, null, "back to the department's, else Reports To");
   delete dhara.leaveApproverId;
 
   const saveDept = async (body) => {

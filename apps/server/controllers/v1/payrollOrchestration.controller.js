@@ -91,7 +91,8 @@ const bulk = action => handle(async req => {
     for (const row of doc.employeeDetails) {
       if (action === "create" && row.status !== "pending") continue;
       if (action === "submit" && row.status !== "created") continue;
-      if (action === "cancel" && !row.salarySlipId) continue;
+      // A row never run is cancelled with its entry; a failed one keeps its reason.
+      if (action === "cancel" && !row.salarySlipId) { if (row.status === "pending") row.status = "cancelled"; continue; }
       try {
         if (action === "create") {
           const slip = await createSalarySlipForEmployee({ employeeId: row.employeeId, startDate: doc.startDate, endDate: doc.endDate });
@@ -102,7 +103,7 @@ const bulk = action => handle(async req => {
         } else {
           const slip = await SalarySlip.findById(row.salarySlipId);
           if (slip?.status !== "cancelled") await cancelSalarySlipById(row.salarySlipId, { companyId: doc.companyId });
-          summary.cancelled++;
+          row.status = "cancelled"; summary.cancelled++;
         }
         if (action !== "cancel") row.failureReason = "";
       } catch (error) {

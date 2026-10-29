@@ -4455,6 +4455,11 @@ export const gratuityConfig = {
                 <SimpleActionButton
                     label="Cancel"
                     description="Cancels the Gratuity and its linked Additional Salary."
+                    confirm={{
+                        title: "Cancel this gratuity?",
+                        description: "Its Additional Salary is cancelled too, so the gratuity is no longer paid through payroll. This cannot be undone.",
+                        confirmLabel: "Cancel gratuity and payroll line",
+                    }}
                     onRun={() => cancelGratuity(id)}
                     onResult={() => window.location.reload()}
                 />

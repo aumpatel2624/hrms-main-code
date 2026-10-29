@@ -17,6 +17,9 @@
 //   8. the payroll setup screens send only what they edit (the payloads are
 //      tested against the server in payrollIntegrity.test.js, section 8);
 //      Leave Allocation says its company is the employee's.
+// And the same run's smaller items:
+//   9. an emptied picker saves as blank (N4); Escape on a several-choice
+//      picker closes it without emptying it; cancelling a gratuity asks first.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
@@ -25,6 +28,8 @@ const source = read("./advanced.jsx");
 const form = read("../components/crud/crud-form.jsx");
 const userRoles = read("../pages/Setup/UserRoles.jsx");
 const payrollEntry = read("../pages/Payroll/PayrollEntry.jsx");
+const field = read("../components/ui/field.jsx");
+const actionButton = read("../components/crud/simple-action-button.jsx");
 
 const configOf = (name) => {
     const start = source.indexOf(`export const ${name}`);
@@ -95,5 +100,19 @@ for (const [name, payload] of [
     assert.ok(configOf(name).includes(`toPayload: ${payload},`), `${name} sends ${payload}`);
 }
 assert.match(configOf("leaveAllocationConfig"), /name: "companyId"[^}]*hint: "Always saved as the employee's company\."/, "Leave Allocation's company is the employee's");
+
+// 9. An emptied single-choice picker reports null, which the form keeps as
+// "" and formPayload sends as null on edit (form-payload.test.js).
+assert.match(field, /onChange\?\.\(picked \?\? null\)/, "an emptied picker reports nothing chosen");
+assert.match(form, /\[field\.name\]: option \? option\.value : ""/, "the form keeps it blank");
+// React Aria's list empties every choice on Escape; the field stops the key
+// before the list and closes through the trigger.
+assert.match(field, /<div ref=\{wrapper\} onKeyDownCapture=\{closeOnEscape\}>\s*<MultiSelect/, "Escape is caught around the several-choice picker");
+assert.match(field, /if \(e\.key !== "Escape" \|\| wrapper\.current\?\.contains\(e\.target\)\) return;\s*e\.stopPropagation\(\);/, "only inside the open list, and kept from it");
+assert.match(field, /wrapper\.current\?\.querySelector\("button"\)\?\.click\(\)/, "the list closes");
+const gratuity = configOf("gratuityConfig");
+assert.match(gratuity, /label="Cancel"[\s\S]*?confirm=\{\{[^}]*description: "Its Additional Salary is cancelled too[^"]*"/, "cancelling a gratuity asks first and names its payroll line");
+assert.match(actionButton, /onClick=\{confirm \? \(\) => setAsking\(true\) : run\}/, "an action with confirm asks before running");
+assert.match(actionButton, /<ConfirmModal isOpen=\{asking\}[^\n]*onConfirm=\{run\}/, "and runs on confirm");
 
 console.log("daily-use.test.js: all assertions passed");

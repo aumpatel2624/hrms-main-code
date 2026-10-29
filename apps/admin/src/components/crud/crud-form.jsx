@@ -204,8 +204,9 @@ const CrudForm = ({ config, mode = "add" }) => {
     };
 
     // `canSave`: a record the server will no longer accept edits to (an
-    // approved leave) shows no save action, only its own actions.
-    const canSave = !isEdit || (config.canSave?.(values) ?? true);
+    // approved leave) shows no save action, only its own actions. `allScope`:
+    // whether the viewer is HR on this screen.
+    const canSave = !isEdit || (config.canSave?.(values, { allScope: currentPagePermissions.dataScope === SCOPES.ALL }) ?? true);
 
     const handleSubmit = async (e) => {
         e.preventDefault();

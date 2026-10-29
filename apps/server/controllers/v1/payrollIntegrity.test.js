@@ -7,6 +7,10 @@
 //      not be run again, and they could not be deleted while linked,
 //   4. an entry whose slips all failed to submit was still marked "submitted".
 // And from the 28 Oct re-test (P2): a saved Payroll Correction would not open.
+// And from the 29 Oct verification run (N1): editing a Salary Component (so
+// Arrear component could never be ticked), Salary Structure, Payroll Period,
+// Gratuity Rule, Income Tax Slab or Tax Exemption Sub Category was refused
+// with "Unexpected fields in request body", like 2. was.
 // (Formula rows ignoring payment days is salarySlipCalc.test.js, Scenario C2.)
 // Drives the real mounted routes as an Admin over in-memory stand-ins, like
 // approvalIntegrity.test.js.
@@ -18,6 +22,7 @@ import EmployeeGrade from "../../models/EmployeeGrade.js";
 import PayrollCorrection from "../../models/PayrollCorrection.js";
 import PayrollEntry from "../../models/PayrollEntry.js";
 import SalarySlip from "../../models/SalarySlip.js";
+import SalaryComponent from "../../models/SalaryComponent.js";
 import SalaryStructure from "../../models/SalaryStructure.js";
 import SalaryStructureAssignment from "../../models/SalaryStructureAssignment.js";
 import SalaryWithholding from "../../models/SalaryWithholding.js";
@@ -25,8 +30,16 @@ import payrollBenefitsRoutes from "../../routes/v1/payrollBenefits.routes.js";
 import payrollRoutes from "../../routes/v1/payroll.routes.js";
 import payrollRunRoutes from "../../routes/v1/payrollRun.routes.js";
 import { resolveEligiblePayrollEmployees } from "./payrollOrchestration.controller.js";
+import { SALARYCOMPONENT_FIELDS, SALARYSTRUCTURE_FIELDS } from "./payroll.controller.js";
+import { PAYROLLPERIOD_FIELDS } from "./payrollRun.controller.js";
+import { GRATUITY_RULE_FIELDS } from "./gratuity.controller.js";
+import { EMPLOYEE_TAX_EXEMPTION_SUB_CATEGORY_FIELDS, INCOMETAXSLAB_FIELDS } from "./payrollTax.controller.js";
+import { allowOnlyFields } from "../../middlewares/inputValidator.js";
 import { formPayload } from "../../../admin/src/components/crud/form-payload.js";
 import { salaryStructureAssignmentPayload } from "../../../admin/src/entities/salary-structure-assignment-payload.js";
+import {
+  gratuityRulePayload, incomeTaxSlabPayload, payrollPeriodPayload, salaryComponentPayload, salaryStructurePayload, taxExemptionSubCategoryPayload,
+} from "../../../admin/src/entities/setup-payloads.js";
 
 // ---------------------------------------------------------------- stand-ins --
 const same = (a, b) => String(a) === String(b);
@@ -323,5 +336,71 @@ console.log("payrollIntegrity: deleting a cancelled entry deletes its cancelled 
   assert.equal(kept.remarks, "LWP reversed after review", "remarks are stored");
 }
 console.log("payrollIntegrity: a saved payroll correction opens");
+
+// ------------------------------------- 8. the payroll setup screens save (N1) --
+{
+  // What every edit screen holds besides its own fields: the saved record,
+  // through the config's toForm.
+  const saved = { _id: String(oid()), isDeleted: false, createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z", __v: 0 };
+
+  // HR Manager ticks Arrear component on "Basic Salary - APD": the real route.
+  const basicApd = asDoc({
+    _id: oid(), salaryComponentName: "Basic Salary - APD", abbreviation: "BS", type: "Earning", companyId, componentType: "",
+    isTaxApplicable: true, dependsOnPaymentDays: true, doNotIncludeInTotal: false, statisticalComponent: false, roundToNearestInteger: false,
+    exemptedFromIncomeTax: false, removeIfZeroValued: false, variableBasedOnTaxableSalary: false, arrearComponent: false, accrualComponent: false,
+    isFlexibleBenefit: false, maxBenefitAmount: 0, payoutMethod: "", finalCycleAccrualPayout: false, isActive: true,
+  });
+  stub(SalaryComponent, [basicApd]);
+  const formValues = { ...saved, ...basicApd.toObject(), _id: String(basicApd._id), companyId: String(companyId), arrearComponent: true };
+  const fields = [{ name: "type", type: "select" }, { name: "companyId", type: "select" }, { name: "componentType", type: "select" }];
+  const put = (body) => call(payrollRoutes, "put", "/salary-components/:salaryComponentId", { params: { salaryComponentId: String(basicApd._id) }, body });
+
+  const before = await put(formPayload(fields, formValues, "edit"));
+  expectStatus(before, 400, "the whole record, as the form sent it before");
+  assert.equal(before.body.message, "Unexpected fields in request body");
+  assert.equal(basicApd.arrearComponent, false);
+
+  const after = await put(formPayload(fields, salaryComponentPayload(formValues), "edit"));
+  expectStatus(after, 200, "only the fields the screen edits");
+  assert.equal(basicApd.arrearComponent, true, "Arrear component is ticked");
+
+  // The other five, each against the list its route enforces.
+  const accepts = (allowed, body) => {
+    const res = fakeRes();
+    let passed = false;
+    allowOnlyFields(allowed)({ body }, res, () => { passed = true; });
+    return passed || res.body.unexpectedFields;
+  };
+  const screens = [
+    ["Salary Structure", SALARYSTRUCTURE_FIELDS, salaryStructurePayload, {
+      salaryStructureName: "Staff", companyId: String(companyId), payrollFrequency: "Monthly", currency: "INR", leaveEncashmentAmountPerDay: 0,
+      isActive: true, earnings: [{ _id: String(oid()), salaryComponentId: String(basicApd._id), amount: 22500 }], deductions: [], employerContributions: [],
+      totalEarning: 22500, totalDeduction: 0, netPay: 22500, maxBenefits: 0, employeeBenefits: [],
+    }],
+    ["Payroll Period", PAYROLLPERIOD_FIELDS, payrollPeriodPayload, { companyId: String(companyId), startDate: "2026-10-01", endDate: "2026-10-31", isActive: true }],
+    ["Gratuity Rule", GRATUITY_RULE_FIELDS, gratuityRulePayload, {
+      name: "Indian Standard Gratuity Rule", disable: false, calculateGratuityAmountBasedOn: "Current Slab", totalWorkingDaysPerYear: 365,
+      workExperienceCalculationFunction: "Round off Work Experience", minimumYearForGratuity: 5,
+      applicableEarningsComponent: [{ salaryComponentId: String(basicApd._id) }], gratuityRuleSlabs: [],
+    }],
+    ["Income Tax Slab", INCOMETAXSLAB_FIELDS, incomeTaxSlabPayload, {
+      name: "New regime", companyId: String(companyId), effectiveFromDate: "2026-04-01", allowTaxExemption: false, standardDeduction: 75000,
+      taxReliefLimit: 0, marginalReliefLimit: null, disabled: false, currency: "INR", slabs: [], otherTaxesAndCharges: [],
+    }],
+    ["Tax Exemption Sub Category", EMPLOYEE_TAX_EXEMPTION_SUB_CATEGORY_FIELDS, taxExemptionSubCategoryPayload, {
+      name: "PPF", exemptionCategoryId: String(oid()), maxAmount: 150000, description: "", isActive: true,
+    }],
+  ];
+  for (const [screen, allowed, payload, record] of screens) {
+    const values = { ...saved, ...record };
+    assert.notEqual(accepts(allowed, values), true, `${screen}: the whole record is refused`);
+    const sent = payload(values);
+    assert.equal(accepts(allowed, sent), true, `${screen}: what the screen now sends is accepted`);
+    for (const key of Object.keys(record).filter((key) => allowed.includes(key) && !["maxBenefits", "employeeBenefits"].includes(key))) {
+      assert.ok(key in sent, `${screen}: ${key} is still sent`);
+    }
+  }
+}
+console.log("payrollIntegrity: the payroll setup screens' edits save (N1)");
 
 console.log("payrollIntegrity: all cases passed");

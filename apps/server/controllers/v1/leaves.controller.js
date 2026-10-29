@@ -1095,6 +1095,9 @@ export const createLeaveAllocation = async (req, res) => {
 
     const payload = {};
     for (const field of LEAVE_ALLOCATION_FIELDS) if (req.body[field] !== undefined) payload[field] = req.body[field];
+    // Always the employee's company: one left blank was saved with none, so
+    // HR could not see or open it while it still counted in the balance.
+    payload.companyId = (await Employee.findById(employeeId).select("companyId").lean()).companyId;
     payload.newLeavesAllocated = newLeavesAllocated;
     payload.unusedLeaves = unusedLeaves;
     payload.totalLeavesAllocated = newLeavesAllocated + unusedLeaves;
@@ -1151,6 +1154,7 @@ export const updateLeaveAllocation = async (req, res) => {
     if (companyError) return res.status(400).json({ isOk: false, status: 400, message: companyError });
 
     for (const field of LEAVE_ALLOCATION_FIELDS) if (req.body[field] !== undefined) doc[field] = req.body[field];
+    doc.companyId = (await Employee.findById(doc.employeeId).select("companyId").lean()).companyId;
     if (doc.status !== "cancelled") {
       const overlap = await overlappingAllocation({ ...doc.toObject(), exceptId: doc._id });
       if (overlap) {

@@ -8,7 +8,8 @@
 //   3. two decisions pressed at the same moment: one wins, the other is
 //      refused and nothing is written twice,
 //   4. only HR sets a grievance's status and its investigation and
-//      resolution; the complainant may withdraw it.
+//      resolution; the complainant may withdraw it, and once it is closed
+//      can no longer change it (29 Oct verification run, M2).
 // Drives the real mounted routes over in-memory stand-ins and the seeded
 // tier/functional matrices, like approvalIntegrity.test.js.
 import assert from "node:assert/strict";
@@ -385,6 +386,18 @@ const hrReq = (body, params) => ({ user: { id: String(hema._id), role: "USER", d
   grievance.status = "Resolved";
   expectStatus(await edit(dhara, { status: "Cancelled" }), 400, "withdrawing what HR has resolved");
   assert.equal(grievance.status, "Resolved");
+
+  // Closed: the complainant can neither reword it nor hide it from HR (M2).
+  for (const status of ["Resolved", "Invalid", "Cancelled"]) {
+    grievance.status = status;
+    const refused = await edit(dhara, { description: "Reworded after the fact", isActive: false });
+    expectStatus(refused, 400, `the complainant edits a ${status} grievance`);
+    assert.equal(refused.body.message, `A ${status} grievance can no longer be changed`);
+    assert.equal(grievance.description, "Unfair roster, again");
+    assert.notEqual(grievance.isActive, false);
+  }
+  expectStatus(await edit(hema, { isActive: false }), 200, "HR still can");
+  assert.equal(grievance.isActive, false);
 }
 
 console.log("decisionIntegrity.test.js passed");

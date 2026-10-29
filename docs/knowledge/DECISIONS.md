@@ -5467,8 +5467,40 @@ consumer; single-branch build
 - **Consequences**: no seed and no backfill. Existing data is not rewritten: overlapping allocations and duplicate
   onboardings already saved stay until HR removes them (an onboarding from a Rejected offer can no longer be edited or
   turned into an employee); an adjustment already posted keeps its date, so the 2027 reduction from the test still
-  counts today until HR reverses it with an Allocate of 15 on the 2027 allocation. Adjustments now count from their
+  counts today until HR reverses it with an Allocate of 15 with no allocation chosen, which counts from its posting
+  date (one entered on the 2027 allocation is dated 1 Jan 2027 and leaves today's balance short). Adjustments now count from their
   posting date rather than the day they were typed. Tested by `controllers/v1/leaveOnboardingIntegrity.test.js`, case
   6 of `utils/leaveBalancePeriod.test.js`, section 6 of `entities/daily-use.test.js` and the reordered section 2 of
   `controllers/v1/companyIntegrity.test.js`; each fails on the old code.
+- **Deviates from convention**: no.
+
+### ADR-071 — Payroll setup screens save; gratuity only on or before the relieving date; one full and final per leaver; allocations carry a company; closed grievances are HR's
+
+- **Status**: accepted (fix-bug, 2026-10-29)
+- **Context**: the 29 Oct verification run of the local app found: (N1) editing a Salary Component, Salary
+  Structure or Payroll Period was always refused with "Unexpected fields in request body", so Arrear component could
+  never be ticked and a Payroll Correction could never pay — the form is filled from the whole saved record (`_id`,
+  `isDeleted`, timestamps, totals) and these routes take only their allow-listed fields. Gratuity Rule, Income Tax
+  Slab and Tax Exemption Sub Category had the same fault. (N2) a gratuity dated after the relieving date was accepted
+  but no slip is ever made for that period, and the refusal for a covered date suggested choosing such a date. (N3) a
+  Leave Allocation with Company left blank was saved with none: missing from HR's list, unopenable, yet counted in
+  the balance. (M2) after HR closed a grievance the complainant could still reword it or untick Is Active, hiding it
+  from HR's list. (M3) a second full and final could be made for a leaver who had a Paid one. (M1) ADR-070's repair
+  advice did not repair the balance.
+- **Decision**:
+  - The six screens send only the fields they edit (`entities/setup-payloads.js`, the same approach as the Salary
+    Structure Assignment payload); the server allow-lists are unchanged.
+  - Gratuity submit refuses a payroll date after the relieving date; the covered-date refusal offers only cancelling
+    or deleting the slip and running it again.
+  - A Leave Allocation's company is taken from its employee on create and edit; the Company field says so.
+  - Below `all`, a Resolved, Invalid or Cancelled grievance cannot be changed; the form's `canSave` now also receives
+    whether the viewer has `all` scope, and the grievance screen offers Save to HR only once closed.
+  - A Full and Final Statement is refused for an employee who already has a non-cancelled one.
+  - ADR-070's advice is corrected: the reversal is an Allocate of 15 with no allocation chosen.
+- **Consequences**: no seed, no permission or menu change, no schema change, no backfill. Records already saved are
+  not rewritten: an allocation saved without a company gets one on its next edit; an Additional Salary already
+  created from a gratuity dated after the relieving date stays until HR cancels that gratuity. Tested by section 8 of
+  `controllers/v1/payrollIntegrity.test.js`, the P4 section of `controllers/v1/payrollPayouts.test.js`, section 1 of
+  `controllers/v1/leaveOnboardingIntegrity.test.js`, section 4 of `controllers/v1/decisionIntegrity.test.js` and
+  sections 7–8 of `entities/daily-use.test.js`; each fails on the old code.
 - **Deviates from convention**: no.

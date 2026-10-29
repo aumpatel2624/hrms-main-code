@@ -423,8 +423,13 @@ export const submitGratuity = async (req, res) => {
     }
 
     // ADR-031: gratuity is paid once, through payroll. A slip already made
-    // for the payroll date's period would never include it (ADR-069).
+    // for the payroll date's period would never include it (ADR-069), and no
+    // slip is made for a period after the employee has left.
     const payrollDate = new Date(doc.payrollDate);
+    if (payrollDate > new Date(employee.relievingDate)) {
+      const relieved = new Date(employee.relievingDate).toISOString().slice(0, 10);
+      throwError(400, `The payroll date is after ${employee.employeeName}'s relieving date (${relieved}), and no salary slip is made after an employee leaves, so this gratuity would never be paid. Set the payroll date on or before ${relieved}.`);
+    }
     const coveringSlip = await SalarySlip.findOne({
       employeeId: doc.employeeId,
       status: { $ne: "cancelled" },
@@ -433,7 +438,7 @@ export const submitGratuity = async (req, res) => {
     }).lean();
     if (coveringSlip) {
       const period = `${coveringSlip.startDate.toISOString().slice(0, 10)} – ${coveringSlip.endDate.toISOString().slice(0, 10)}`;
-      throwError(400, `${employee.employeeName} already has a salary slip for ${period}, so payroll would not pay this gratuity. Cancel or delete that slip, submit the gratuity, then create the slip again, or choose a payroll date in a period without a slip.`);
+      throwError(400, `${employee.employeeName} already has a salary slip for ${period}, so payroll would not pay this gratuity. Cancel or delete that slip, submit the gratuity, then create the slip again.`);
     }
 
     const latestSlip = await SalarySlip.findOne({ employeeId: doc.employeeId, status: "submitted" })

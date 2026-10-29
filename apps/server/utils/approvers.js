@@ -83,6 +83,27 @@ export const resolveApprovers = async (employeeId, approverType) => {
 };
 
 /**
+ * The one approver a request is routed to, down this chain: the employee's
+ * own configured approver, else their department chain's, else the manager
+ * they Report To — each only while that person can still act, and never the
+ * employee themself. null when the chain is empty: HR (the "all" scope) then
+ * decides it. Never the claimant's pick: a request body naming its own
+ * approver let an employee route a claim to a colleague who approved it
+ * (29 Oct S3, P1).
+ *
+ * @returns {Promise<string|null>} the approver's Employee _id string
+ */
+export const configuredApprover = async (employeeId, approverType) => {
+  const [approverId] = (await resolveApprovers(employeeId, approverType)).filter((id) => id !== String(employeeId));
+  if (approverId) return approverId;
+  const employee = await Employee.findById(employeeId).select("reportsToId").lean();
+  const managerId = employee?.reportsToId ? String(employee.reportsToId) : null;
+  if (!managerId || managerId === String(employeeId)) return null;
+  const [manager = null] = await currentApprovers([managerId]);
+  return manager;
+};
+
+/**
  * The inverse: which Employees does the given User (login account) approve
  * for, for a given approver dimension. Used by Leaves' own list screens to
  * resolve `scopeable.approverIds` for the "approver" data scope.

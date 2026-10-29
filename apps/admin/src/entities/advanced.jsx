@@ -206,6 +206,10 @@ const getCurrentEmployees = () => getAllEmployees({ current: true });
 // …but an edit form keeps showing the approver it saved who has since left,
 // labelled so, instead of a blank picker (the config lists the field in
 // `lookupDeps`, so this reruns once the record has loaded).
+// A request's approver is never picked on it (29 Oct S3): the server routes it
+// down this chain, and the form shows the result once saved.
+const APPROVER_HINT = "Set automatically: the employee's own approver, else their department's, else the manager they report to. HR decides when none is set.";
+
 const currentEmployeeOptions = (field) => (values) => {
     const saved = [].concat(values?.[field] ?? []).filter(Boolean).map((value) => String(value._id ?? value));
     return Promise.all([getCurrentEmployees(), saved.length ? getAllEmployees() : null]).then(([current, all]) =>
@@ -507,15 +511,15 @@ export const departmentConfig = {
     lookups: {
         companyId: asOptions(getAllCompanies, "companyName"),
         // ADR-024 (Department Approver): a department's own approver-chain
-        // parent. leaveApprovers/expenseApprovers/shiftRequestApprovers
-        // (plain User-ref arrays) are schema-ready and API-accessible but,
-        // like Recruitment's interviewers/defaultInterviewers before them,
-        // not given a form field — this admin has no multi-select field
-        // type yet (a known simplification, not an oversight).
+        // parent.
         parentDepartmentId: asOptions(getAllDepartments, "departmentName"),
+        // Approvers: current staff of the chosen company (29 Oct P5).
+        approvers: ofChosenCompany((companyId) => getAllEmployees({ companyId, current: true }), (x) => employeeLabel(x)),
     },
+    lookupDeps: ["companyId"],
     sections: [
         { id: "details", title: "Department details" },
+        { id: "approvers", title: "Approvers", description: "Decide the requests of anyone in this department (or a department under it) who has no approver of their own. Left blank, the manager they report to decides, else HR." },
         { id: "status", title: "Status" },
     ],
     fields: [
@@ -523,6 +527,9 @@ export const departmentConfig = {
         { name: "departmentName", icon: Building07, label: "Department Name", required: true, section: "details", error: "Department Name is required!", placeholder: "Enter department name" },
         { name: "departmentCode", icon: Hash02, label: "Department Code", section: "details", placeholder: "Enter department code (optional)" },
         { name: "parentDepartmentId", icon: Building07, label: "Parent Department", type: "select", section: "details", optionsFrom: "parentDepartmentId", hint: "Used to resolve a Leave/Expense/Shift Request approver when the employee's own department has none set." },
+        { name: "leaveApprovers", label: "Leave Approvers", type: "multiselect", section: "approvers", optionsFrom: "approvers", disabled: (v) => !v.companyId, hint: "Decide leave and compensatory leave." },
+        { name: "expenseApprovers", label: "Expense Approvers", type: "multiselect", section: "approvers", optionsFrom: "approvers", disabled: (v) => !v.companyId },
+        { name: "shiftRequestApprovers", label: "Shift Request Approvers", type: "multiselect", section: "approvers", optionsFrom: "approvers", disabled: (v) => !v.companyId, hint: "Decide shift and attendance requests." },
         ACTIVE,
     ],
     columns: [
@@ -644,6 +651,8 @@ export const employeeConfig = {
         designationId: ofChosenCompany(getAllDesignations, (x) => x.designationName),
         branchId: ofChosenCompany(getAllBranches, (x) => x.branchName),
         reportsToId: ofChosenCompany((companyId) => getAllEmployees({ companyId }), employeeLabel),
+        // Approvers: current staff of the chosen company (29 Oct P5).
+        approverId: ofChosenCompany((companyId) => getAllEmployees({ companyId, current: true }), employeeLabel),
         employmentTypeId: asOptions(getAllEmploymentTypes, "employmentTypeName"),
         gradeId: asOptions(getAllEmployeeGrades, "gradeName"),
         healthInsuranceProviderId: asOptions(getAllEmployeeHealthInsurances, "providerName"),
@@ -665,6 +674,7 @@ export const employeeConfig = {
         { id: "account", title: "Login account", description: "Every employee has exactly one login — set it here, not on a separate screen." },
         { id: "location", title: "Location" },
         { id: "organization", title: "Organization" },
+        { id: "approvers", title: "Approvers", description: "Who decides this employee's requests. Left blank, the department's approvers decide, else the manager they report to, else HR." },
         { id: "employment", title: "Employment" },
         { id: "regional", title: "Regional identity and banking" },
         { id: "other", title: "Other" },
@@ -690,11 +700,15 @@ export const employeeConfig = {
         { name: "cityId", icon: MarkerPin01, label: "City", type: "select", optionsFrom: "cities", section: "location", placeholder: "Search city...", disabled: (v) => !v.stateId },
         { name: "address", type: "textarea", label: "Address", section: "location", placeholder: "Enter address" },
 
-        { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "organization", error: "Company is required!", optionsFrom: "companyId", clears: ["departmentId", "designationId", "branchId", "reportsToId"] },
+        { name: "companyId", icon: Building07, label: "Company", type: "select", required: true, section: "organization", error: "Company is required!", optionsFrom: "companyId", clears: ["departmentId", "designationId", "branchId", "reportsToId", "leaveApproverId", "expenseApproverId", "shiftRequestApproverId"] },
         { name: "departmentId", icon: Building07, label: "Department", type: "select", required: true, section: "organization", error: "Department is required!", optionsFrom: "departmentId", disabled: (v) => !v.companyId },
         { name: "designationId", icon: User01, label: "Designation", type: "select", required: true, section: "organization", error: "Designation is required!", optionsFrom: "designationId", disabled: (v) => !v.companyId },
         { name: "branchId", icon: MarkerPin01, label: "Branch", type: "select", required: true, section: "organization", error: "Branch is required!", optionsFrom: "branchId", disabled: (v) => !v.companyId },
         { name: "reportsToId", icon: User01, label: "Reports To", type: "select", section: "organization", optionsFrom: "reportsToId", disabled: (v) => !v.companyId },
+
+        { name: "leaveApproverId", icon: User01, label: "Leave Approver", type: "select", section: "approvers", optionsFrom: "approverId", disabled: (v) => !v.companyId, hint: "Decides leave and compensatory leave." },
+        { name: "expenseApproverId", icon: User01, label: "Expense Approver", type: "select", section: "approvers", optionsFrom: "approverId", disabled: (v) => !v.companyId },
+        { name: "shiftRequestApproverId", icon: User01, label: "Shift Request Approver", type: "select", section: "approvers", optionsFrom: "approverId", disabled: (v) => !v.companyId, hint: "Decides shift and attendance requests." },
 
         { name: "status", label: "Status", type: "select", section: "employment", options: [{ value: "Active", label: "Active" }, { value: "Inactive", label: "Inactive" }, { value: "Suspended", label: "Suspended" }, { value: "Left", label: "Left" }] },
         { name: "dateOfJoining", label: "Date of Joining", type: "date", required: true, section: "employment", error: "Date of Joining is required!" },
@@ -729,6 +743,9 @@ export const employeeConfig = {
         designationId: refId(data.designationId),
         branchId: refId(data.branchId),
         reportsToId: refId(data.reportsToId),
+        leaveApproverId: refId(data.leaveApproverId),
+        expenseApproverId: refId(data.expenseApproverId),
+        shiftRequestApproverId: refId(data.shiftRequestApproverId),
         employmentTypeId: refId(data.employmentTypeId),
         gradeId: refId(data.gradeId),
         healthInsuranceProviderId: refId(data.healthInsuranceProviderId),
@@ -1559,7 +1576,7 @@ export const employeeGrievanceConfig = {
     section: "Employee Career Events",
     singular: "Employee Grievance",
     plural: "Employee Grievances",
-    description: "Cause of Grievance is required once Investigated/Resolved; Resolved By, Resolution Date and Resolution Detail are required once Resolved.",
+    description: "Cause of Grievance is required once Investigated/Resolved; Resolved By, Resolution Date and Resolution Detail are required once Resolved. Only HR sets the status and the investigation and resolution; the person who raised a grievance may withdraw it until HR closes it.",
     api: {
         search: searchEmployeeGrievances, getById: getEmployeeGrievanceById,
         create: createEmployeeGrievance, update: updateEmployeeGrievance, remove: deleteEmployeeGrievance,
@@ -1575,15 +1592,15 @@ export const employeeGrievanceConfig = {
         { name: "subject", icon: Type01, label: "Subject", type: "text", required: true, section: "details", error: "Subject is required!" },
         { name: "raisedByEmployeeId", icon: User01, label: "Raised By", type: "select", required: true, section: "details", error: "Raised By is required!", optionsFrom: "raisedByEmployeeId" },
         { name: "date", label: "Date", type: "date", required: true, section: "details", error: "Date is required!" },
-        { name: "status", label: "Status", type: "select", options: ["Open", "Investigated", "Resolved", "Invalid", "Cancelled"], default: "Open", section: "details" },
+        { name: "status", label: "Status", type: "select", options: ["Open", "Investigated", "Resolved", "Invalid", "Cancelled"], default: "Open", section: "details", allScopeOnly: true },
         { name: "grievanceTypeId", label: "Grievance Type", type: "select", required: true, section: "details", error: "Grievance Type is required!", optionsFrom: "grievanceTypeId" },
         { name: "grievanceAgainstEmployeeId", label: "Grievance Against (Employee)", type: "select", section: "details", optionsFrom: "grievanceAgainstEmployeeId" },
         { name: "grievanceAgainstText", label: "Grievance Against (free text, if not a specific employee)", type: "text", section: "details" },
         { name: "description", label: "Description", type: "textarea", required: true, section: "details", error: "Description is required!" },
-        { name: "causeOfGrievance", label: "Cause of Grievance", type: "textarea", section: "investigation" },
-        { name: "resolvedByUserId", label: "Resolved By", type: "select", section: "investigation", optionsFrom: "employeeResponsibleId" },
-        { name: "resolutionDate", label: "Resolution Date", type: "date", section: "investigation" },
-        { name: "resolutionDetail", label: "Resolution Detail", type: "textarea", section: "investigation" },
+        { name: "causeOfGrievance", label: "Cause of Grievance", type: "textarea", section: "investigation", allScopeOnly: true },
+        { name: "resolvedByUserId", label: "Resolved By", type: "select", section: "investigation", optionsFrom: "employeeResponsibleId", allScopeOnly: true },
+        { name: "resolutionDate", label: "Resolution Date", type: "date", section: "investigation", allScopeOnly: true },
+        { name: "resolutionDetail", label: "Resolution Detail", type: "textarea", section: "investigation", allScopeOnly: true },
         { name: "employeeResponsibleId", label: "Employee Responsible", type: "select", section: "investigation", optionsFrom: "employeeResponsibleId" },
         ACTIVE,
     ],
@@ -1593,6 +1610,16 @@ export const employeeGrievanceConfig = {
         { name: "Date", selector: (row) => row.date?.slice?.(0, 10) ?? "—", minWidth: "110px" },
     ],
     recordTitle: (r) => r.subject,
+    // The person who raised it may withdraw it while HR has not closed it.
+    renderExtra: ({ mode, id, values, currentUserId }) => (
+        mode === "edit" && id && ["Open", "Investigated"].includes(values.status) && String(values.raisedByEmployeeId) === String(currentUserId) && (
+            <SimpleActionButton
+                label="Withdraw" description="Withdraw this grievance. HR sees it as Cancelled."
+                onRun={() => updateEmployeeGrievance(id, { status: "Cancelled" })}
+                onResult={() => window.location.reload()}
+            />
+        )
+    ),
     toForm: (data) => ({
         ...data,
         raisedByEmployeeId: refId(data.raisedByEmployeeId),
@@ -2753,7 +2780,7 @@ export const leaveApplicationConfig = {
     section: "Leaves",
     singular: "Leave Application",
     plural: "Leave Applications",
-    description: "The centerpiece of Leaves. Total Leave Days and the Leave Approver (when left blank) are computed/resolved automatically on save. An Employee sees only their own applications; a Leave Approver sees their own plus everyone they approve for.",
+    description: "The centerpiece of Leaves. Total Leave Days and the Leave Approver are computed/resolved automatically on save. An Employee sees only their own applications; a Leave Approver sees their own plus everyone they approve for.",
     api: {
         search: searchLeaveApplications, getById: getLeaveApplicationById,
         create: createLeaveApplication, update: updateLeaveApplication,
@@ -2776,7 +2803,7 @@ export const leaveApplicationConfig = {
         { name: "halfDayDate", label: "Half Day Date", type: "date", section: "details", disabled: (values) => !values.halfDay },
         { name: "description", label: "Reason", type: "textarea", section: "details" },
         { name: "totalLeaveDays", label: "Total Leave Days (computed)", type: "number", section: "details", disabled: () => true, hint: "Always recomputed server-side on save — never trust a typed value here." },
-        { name: "leaveApproverId", label: "Leave Approver (leave blank to auto-resolve)", type: "select", section: "approval", optionsFrom: "leaveApproverId" },
+        { name: "leaveApproverId", label: "Leave Approver", type: "select", section: "approval", optionsFrom: "leaveApproverId", disabled: () => true, hideIn: ["add"], hint: APPROVER_HINT },
         { name: "postingDate", label: "Posting Date", type: "date", section: "approval" },
         { name: "status", label: "Status", type: "select", section: "status", options: ["open", "approved", "rejected", "cancelled"], disabled: () => true, hint: "Set by the Approve/Reject/Cancel actions below." },
     ],
@@ -3232,7 +3259,7 @@ const attendanceRequestDecision = (id, values) => values.status === "open" && va
 
 export const shiftRequestConfig = {
     key: "shift-request", path: "/shift-request", section: "Shift & Attendance", singular: "Shift Request", plural: "Shift Requests",
-    description: "Request a shift change for a date range. The Shift Approver is resolved automatically (your own Shift Approver, else your Department's) unless you set one explicitly. Approving creates the real Shift Assignment; rejecting has no side effects.",
+    description: "Request a shift change for a date range. The Shift Approver is resolved automatically (your own Shift Approver, else your Department's, else the manager you report to; HR when none). Approving creates the real Shift Assignment; rejecting has no side effects.",
     api: { search: searchShiftRequests, getById: getShiftRequestById, create: createShiftRequest, update: updateShiftRequest },
     canSave: (values) => values.status === "open",
     lookupDeps: ["approverId"],
@@ -3247,7 +3274,7 @@ export const shiftRequestConfig = {
         { name: "shiftTypeId", icon: Tag01, label: "Shift type", section: "details", type: "select", optionsFrom: "shiftTypeId", required: true, error: "Shift type is required" },
         { name: "fromDate", label: "From date", section: "details", type: "date", required: true, error: "From date is required" },
         { name: "toDate", label: "To date (leave blank for open-ended)", section: "details", type: "date" },
-        { name: "approverId", label: "Shift approver (leave blank to auto-resolve)", section: "details", type: "select", optionsFrom: "approverId" },
+        { name: "approverId", label: "Shift approver", section: "details", type: "select", optionsFrom: "approverId", disabled: () => true, hideIn: ["add"], hint: APPROVER_HINT },
         { name: "status", label: "Status", section: "status", type: "select", options: ["open", "approved", "rejected"], disabled: () => true, hint: "Set by the Approve/Reject actions below." },
     ],
     // `canDecide` comes from the server: false for the requester themself and
@@ -3275,12 +3302,12 @@ export const shiftRequestConfig = {
     ],
     recordTitle: employeeTitle("Shift Request"),
     toForm: (data) => ({ ...data, fromDate: data.fromDate?.slice(0, 10) || "", toDate: data.toDate?.slice(0, 10) || "", employeeId: refId(data.employeeId), shiftTypeId: refId(data.shiftTypeId), approverId: refId(data.approverId) }),
-    toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["shiftTypeId", "employeeId", "companyId", "approverId", "fromDate", "toDate"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
+    toPayload: (values) => Object.fromEntries(Object.entries(values).filter(([key]) => ["shiftTypeId", "employeeId", "companyId", "fromDate", "toDate"].includes(key)).map(([key, value]) => [key, value === "" ? (key.endsWith("Id") ? null : undefined) : value])),
 };
 
 export const attendanceRequestConfig = {
     key: "attendance-request", path: "/attendance-request", section: "Shift & Attendance", singular: "Attendance Request", plural: "Attendance Requests",
-    description: "A request stays open until the named approver (the employee's Shift Approver) or HR approves it. Approving writes or updates one Attendance record per day in the range (skipping holidays unless Include Holidays is checked, and skipping any day already covered by an approved leave). Cancel reverses exactly the Attendance rows this request created.",
+    description: "A request stays open until the named approver (the employee's Shift Approver, else their department's, else the manager they report to) or HR approves it. Approving writes or updates one Attendance record per day in the range (skipping holidays unless Include Holidays is checked, and skipping any day already covered by an approved leave). Cancel reverses exactly the Attendance rows this request created.",
     api: { search: searchAttendanceRequests, getById: getAttendanceRequestById, create: createAttendanceRequest, update: updateAttendanceRequest },
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
@@ -4447,7 +4474,7 @@ export const expenseClaimConfig = {
         rowExpenseTypeId: expenseTypeRowOptions,
     },
     sections: [{ id: "details", title: "Claim details" }, { id: "expenses", title: "Expenses" }, { id: "taxes", title: "Taxes and charges" }, { id: "totals", title: "Totals" }, { id: "status", title: "Status" }],
-    fields: [{ name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" }, { name: "postingDate", label: "Posting Date", section: "details", type: "date" }, { name: "expenseApproverId", label: "Expense Approver", section: "details", type: "select", optionsFrom: "expenseApproverId", hint: "Leave blank to use the employee or department approver." }, { name: "totalClaimedAmount", label: "Total Claimed", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "totalSanctionedAmount", label: "Total Sanctioned", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "totalTaxesAndCharges", label: "Total Taxes", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "grandTotal", label: "Grand Total", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "status", label: "Status", section: "status", type: "text", disabled: () => true, hideIn: ["add"] }, { name: "isPaid", label: "Paid", section: "status", type: "checkbox", disabled: () => true, hideIn: ["add"] }],
+    fields: [{ name: "employeeId", label: "Employee", section: "details", type: "select", optionsFrom: "employeeId", required: true, error: "Employee is required" }, { name: "postingDate", label: "Posting Date", section: "details", type: "date" }, { name: "expenseApproverId", label: "Expense Approver", section: "details", type: "select", optionsFrom: "expenseApproverId", disabled: () => true, hideIn: ["add"], hint: APPROVER_HINT }, { name: "totalClaimedAmount", label: "Total Claimed", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "totalSanctionedAmount", label: "Total Sanctioned", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "totalTaxesAndCharges", label: "Total Taxes", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "grandTotal", label: "Grand Total", section: "totals", type: "number", disabled: () => true, hideIn: ["add"] }, { name: "status", label: "Status", section: "status", type: "text", disabled: () => true, hideIn: ["add"] }, { name: "isPaid", label: "Paid", section: "status", type: "checkbox", disabled: () => true, hideIn: ["add"] }],
     // Nobody approves their own claim (the server refuses it), so the applicant is not offered the buttons.
     renderExtra: ({ mode, id, values, setValues, lookups, currentUserId }) => (
         <>
@@ -4459,7 +4486,7 @@ export const expenseClaimConfig = {
         </>
     ),
     filterFields: [{ name: "employeeId", label: "Employee", type: "objectId" }, { name: "departmentId", label: "Department", type: "objectId" }, { name: "status", label: "Status", type: "string" }, { name: "postingDate", label: "Posting Date", type: "date" }, { name: "isPaid", label: "Paid", type: "boolean" }], columns: [{ name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" }, { name: "Posting Date", selector: (r) => String(r.postingDate || "").slice(0, 10), sortable: true, sortField: "postingDate" }, { name: "Total", selector: (r) => r.grandTotal ?? 0 }, { name: "Status", selector: (r) => r.status, sortable: true, sortField: "status" }, { name: "Paid", selector: (r) => r.isPaid ? "Yes" : "No", sortable: true, sortField: "isPaid" }], recordTitle: (r) => `Expense Claim — ${r.grandTotal ?? 0}`,
-    toForm: (data) => ({ ...data, employeeId: refId(data.employeeId), expenseApproverId: refId(data.expenseApproverId), postingDate: data.postingDate?.slice(0, 10) || "", expenses: (data.expenses || []).map((r) => ({ ...r, expenseTypeId: refId(r.expenseTypeId), expenseDate: r.expenseDate?.slice(0, 10) || "" })) }), toPayload: (values) => ({ employeeId: values.employeeId, postingDate: values.postingDate, expenseApproverId: values.expenseApproverId || null, expenses: values.expenses, taxes: values.taxes }),
+    toForm: (data) => ({ ...data, employeeId: refId(data.employeeId), expenseApproverId: refId(data.expenseApproverId), postingDate: data.postingDate?.slice(0, 10) || "", expenses: (data.expenses || []).map((r) => ({ ...r, expenseTypeId: refId(r.expenseTypeId), expenseDate: r.expenseDate?.slice(0, 10) || "" })) }), toPayload: (values) => ({ employeeId: values.employeeId, postingDate: values.postingDate, expenses: values.expenses, taxes: values.taxes }),
 };
 
 // ============================================================================

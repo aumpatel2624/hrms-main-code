@@ -33,7 +33,7 @@ const AttendanceRequestSchema = new mongoose.Schema(
       enum: ["Work From Home", "On Duty"],
       required: true,
     },
-    explanation: { type: String, trim: true, default: "" },
+    explanation: { type: String, trim: true, default: "", maxlength: 2000 },
     approverId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",

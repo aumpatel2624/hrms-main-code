@@ -18,7 +18,7 @@ Use this screen when you need a different shift than the one you already have, f
 - **Shift type** *(required, chosen from a list)*
 - **From date** *(required, a date)*
 - **To date (leave blank for open-ended)** *(a date)*
-- **Shift approver (leave blank to auto-resolve)** *(chosen from a list)*
+- **Shift approver** *(chosen from a list)*
 
 ### Status
 
@@ -28,10 +28,10 @@ Use this screen when you need a different shift than the one you already have, f
 
 Use the search box for a quick look-up, or open the filter panel to narrow the list by:
 
-- Employee id
-- Shift type id
-- Company id
-- Approver id
+- Employee
+- Shift type
+- Company
+- Approver
 - Status
 - From date
 - To date

@@ -25,7 +25,7 @@ An employee (or someone on their behalf) creates one for a date range; their Lea
 
 ### Approval
 
-- **Leave Approver (leave blank to auto-resolve)** *(chosen from a list)*
+- **Leave Approver** *(chosen from a list)*
 - **Posting Date** *(a date)*
 
 ### Status

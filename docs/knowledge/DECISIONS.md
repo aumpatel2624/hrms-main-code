@@ -5331,3 +5331,55 @@ consumer; single-branch build
   `AuthThrottle` holds short-lived attempt counters, like `Otp` and the session store, which are not reporting
   sources either; it is also left out of the audit trail (`config/audit.js`). `passwordChangedAt` is not added to
   the `employees` source's date fields for the same reason.
+
+### ADR-068 — The configured approver decides; every decision happens once; only HR resolves a grievance
+
+- **Date**: 2026-10-29
+- **Status**: accepted
+- **Context**: the 2026-10-29 security test (S3, S4, S9 and Low items) and functional test (P1, P5). (S3/P1) An
+  employee named any colleague as Expense or Leave Approver and that colleague approved; the server checked a named
+  approver only when one was configured, and nothing was configured anywhere because (P5) no screen could set
+  approvers — the Employee form had no approver fields and the Department form's lists had no picker. (S4) Two
+  approvals pressed at the same moment both passed "is it still open?", so a 1-day leave wrote two −1 ledger entries;
+  compensatory leave and the payroll submits had the same shape. (S9) A complainant could file a grievance already
+  "Resolved by" the HR Manager and later overwrite HR's findings. (Low) "30 Feb 2026" was saved as 2 March and year
+  9999 accepted; free text had no length limit and a search returned 100,000 rows; error replies carried raw
+  database wording; the signature link began `undefined/`; email merge values went into HTML unescaped.
+- **Decision**:
+  - **The approver chain** (`utils/approvers.js` `configuredApprover`): the employee's own approver field, else their
+    department chain's approver lists (INV-28), else the manager they Report To — each only while that person can
+    still act, never the employee — else nobody, and HR (the `all` scope) decides. Leave, expense, shift and
+    attendance requests store that approver on create and edit; an approver in the request body is ignored. The
+    forms show it read-only once saved. A Compensatory Leave Request names nobody; its approver is the leave chain's
+    (the employee's Leave Approver, which is also who decides their leave), checked at decision time.
+  - **HR sets approvers**: Leave, Expense and Shift Request Approver pickers on the Employee form, and the three
+    approver lists as multi-selects on the Department form — current staff of the record's own company. The server
+    refuses another company's employee, someone Left/Inactive/Suspended, or the employee themself; a picker left as
+    saved is not re-checked, so an approver who has since left does not block other edits.
+  - **Decide once** (`utils/statusClaim.js` `decideOnce`): the status moves first, in one database step that matches
+    only the status the action read and checked; a second simultaneous decision gets 409 and writes nothing. If the
+    ledger or pay writes then fail, the status goes back. Used by Leave Application approve/reject/cancel,
+    Compensatory Leave Request approve/reject, and every submit that writes ledger or pay rows: Salary Slip (benefit
+    ledger), Payroll Correction, Employee Benefit Claim, Arrear, Retention Bonus, Employee Incentive and Gratuity.
+    Leave Policy Assignment's grant claims its `leavesAllocated` flag the same way. Payroll cancels only reverse rows
+    and were left as they are.
+  - **Grievances**: below `all`, status, Cause of Grievance, Resolved By, Resolution Date and Resolution Detail are
+    dropped from a create or edit; the complainant may still set Cancelled (Withdraw) while the grievance is Open or
+    Investigated. The form hides those fields from anyone below `all` (a field's new `allScopeOnly` flag, read from
+    the screen's data scope, which MenuContext now exposes) and offers the complainant a Withdraw button. Employee
+    Responsible stays the complainant's choice at creation (PERM-20).
+  - **Low items**: request dates (leave, compensatory leave, expense, shift, attendance) must be real calendar days in
+    2000–2100 (`utils/requestDates.js`); maxlength on the free text of those requests, grievances and travel, with a
+    message that does not echo the value; `runListQuery` pages are at most 500 rows (the largest any screen asks
+    for); in production, error replies with raw database wording are rewritten into a plain sentence and the original
+    is logged (`middlewares/plainErrorMessages.js`); the signature link uses `PUBLIC_SERVER_URL`, else the request's
+    host; email merge values are HTML-escaped in the body (`fillHtmlMergeFields`).
+- **Consequences**: no re-seed — no role, permission or menu row changed. No backfill: requests already saved keep
+  the approver they name until edited; a peer-named draft from before the deploy can still be decided by that peer,
+  so HR should review open requests naming a non-configured approver. Approvers must be set on Employee or Department
+  (or Reports To filled in) before go-live, or HR decides everything. `PUBLIC_SERVER_URL` should be set in production.
+  The Login Attempt Logs list paginates by itself and was left to the sign-in work. Tested by
+  `controllers/v1/decisionIntegrity.test.js`, `utils/requestDates.test.js`, `middlewares/plainErrorMessages.test.js`
+  and new checks in `listQuery.test.js`, `sendTriggeredEmail.test.js` and `validationMessages.test.js` — each fails
+  on the old code.
+- **Deviates from convention**: no.

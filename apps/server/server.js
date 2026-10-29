@@ -9,6 +9,7 @@ import "./models/validationMessages.js";
 
 import express from "express";
 import { stripCredentials } from "./utils/jsonSecrets.js";
+import { plainErrorMessages } from "./middlewares/plainErrorMessages.js";
 import mongoose from "mongoose";
 import morgan from "morgan";
 import bodyParser from "body-parser";
@@ -121,6 +122,9 @@ app.set("json replacer", stripCredentials);
 // the audit trail be fed a spoofed IP.
 if (process.env.NODE_ENV === "production") {
   app.set("trust proxy", 1);
+  // Error replies carry a plain sentence, never raw database wording; the
+  // original goes to the log. See middlewares/plainErrorMessages.js.
+  app.use(plainErrorMessages);
 }
 
 // ============ SECURITY MIDDLEWARE (Apply FIRST) ============

@@ -37,6 +37,18 @@ export const fillMergeFields = (text, values = {}) => {
   return result;
 };
 
+const HTML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+export const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => HTML_ESCAPES[char]);
+
+/**
+ * fillMergeFields for an HTML body: every value is escaped first, so an
+ * employee's name or any other merge value reaches the email as text, never
+ * as markup (29 Oct security test, low). The template itself is HTML the
+ * admin wrote and stays as written.
+ */
+export const fillHtmlMergeFields = (html, values = {}) =>
+  fillMergeFields(html, Object.fromEntries(Object.entries(values).map(([token, value]) => [token, escapeHtml(value)])));
+
 const buildTransporter = (emailSetup) => {
   if (emailSetup.host.toLowerCase().includes("gmail")) {
     return nodemailer.createTransport({
@@ -87,7 +99,7 @@ export const sendTriggeredEmail = async (triggerKey, { toEmail, mergeFields = {}
       cc: emailTemplate.emailCC || "",
       bcc: emailTemplate.emailBCC || "",
       subject: fillMergeFields(emailTemplate.emailSubject, mergeFields),
-      html: fillMergeFields(emailTemplate.emailSignature, mergeFields),
+      html: fillHtmlMergeFields(emailTemplate.emailSignature, mergeFields),
     });
     return { sent: true };
   } catch (error) {

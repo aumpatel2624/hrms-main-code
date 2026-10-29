@@ -18,8 +18,8 @@ import mongoose from "mongoose";
  */
 const TravelItinerarySchema = new mongoose.Schema(
   {
-    travelFrom: { type: String, trim: true },
-    travelTo: { type: String, trim: true },
+    travelFrom: { type: String, trim: true, maxlength: 200 },
+    travelTo: { type: String, trim: true, maxlength: 200 },
     modeOfTravel: {
       type: String,
       enum: ["", "Flight", "Train", "Taxi", "Rented Car"],
@@ -35,10 +35,10 @@ const TravelItinerarySchema = new mongoose.Schema(
     departureDate: { type: Date, default: null },
     arrivalDate: { type: Date, default: null },
     lodgingRequired: { type: Boolean, default: false },
-    preferredAreaForLodging: { type: String, trim: true },
+    preferredAreaForLodging: { type: String, trim: true, maxlength: 500 },
     checkInDate: { type: Date, default: null },
     checkOutDate: { type: Date, default: null },
-    otherDetails: { type: String, trim: true },
+    otherDetails: { type: String, trim: true, maxlength: 2000 },
   },
   { _id: false },
 );
@@ -51,7 +51,7 @@ const TravelRequestCostingSchema = new mongoose.Schema(
     // Not computed — source has no total_amount = sponsored + funded
     // formula despite the name. Preserve the gap, don't fix it.
     totalAmount: { type: Number, min: 0, default: null },
-    comments: { type: String, trim: true },
+    comments: { type: String, trim: true, maxlength: 2000 },
   },
   { _id: false },
 );
@@ -78,15 +78,15 @@ const TravelRequestSchema = new mongoose.Schema(
       ref: "PurposeOfTravel",
       required: true,
     },
-    detailsOfSponsor: { type: String, trim: true },
-    description: { type: String, trim: true },
+    detailsOfSponsor: { type: String, trim: true, maxlength: 2000 },
+    description: { type: String, trim: true, maxlength: 2000 },
     personalIdTypeId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "IdentificationDocumentType",
       required: false,
       default: null,
     },
-    personalIdNumber: { type: String, trim: true },
+    personalIdNumber: { type: String, trim: true, maxlength: 100 },
     itinerary: { type: [TravelItinerarySchema], default: [] },
     costings: { type: [TravelRequestCostingSchema], default: [] },
     status: {

@@ -5383,3 +5383,46 @@ consumer; single-branch build
   and new checks in `listQuery.test.js`, `sendTriggeredEmail.test.js` and `validationMessages.test.js` — each fails
   on the old code.
 - **Deviates from convention**: no.
+
+### ADR-069 — Joiners and leavers are paid on the month's working days; gratuity on the full Basic, paid once; a correction repays full days; the payslip lists its lines; no absences outside employment
+
+- **Date**: 2026-10-29
+- **Status**: accepted
+- **Context**: the 2026-10-29 functional test of the local app checked payslips by hand (report sections 3–4):
+  (P2) a leaver relieved on 26 Oct with no absences was paid ₹45,000 (20/20) instead of ₹36,000 (20/25), because
+  payment days were divided by the working days between joining and relieving; (P4) the four seeded gratuity rules
+  had no applicable component, a proper rule based gratuity on the last slip's prorated Basic (₹1,03,846.15 instead
+  of 15/26 × ₹22,500 × 10 = ₹1,29,807.69), and the gratuity was paid by both payroll's Additional Salary and the full
+  and final; (P7) a Payroll Correction submitted ₹0 without warning when no component was an arrear component, valued
+  a day at the prorated amount (₹288 instead of ₹400) and its View page showed neither its slip nor its status;
+  (P9) an employee's own payslip showed no earning or deduction lines; (P11) the nightly sweep marked leavers Absent
+  every day after relieving.
+- **Decision**:
+  - **Proration base** (`calculatePaymentDays`). `workingDays`/`totalWorkingDays` count the slip's whole period;
+    only the paid days are limited to joining–relieving. This reverses ADR-027's "As built" judgment call to clamp the
+    denominator too, and matches source. Full-month employees are unchanged.
+  - **A component's monthly amount** comes from one helper, `calculateFullPeriodAmounts` (`salarySlipCalc.js`): the
+    structure evaluated for a period worked in full. Gratuity uses the structure the last submitted slip was paid on;
+    a correction uses its slip's structure. A slip's own rows are never the base, since they may be prorated.
+  - **Gratuity is paid once, by payroll** (ADR-031's single payout path). Submit is refused while a non-cancelled slip
+    already covers the payroll date, because that slip would never include it — HR cancels or deletes the slip, submits
+    the gratuity and creates the slip again, or picks a later payroll date. The full and final's auto-suggested
+    Gratuity line is `Settled`, carries a new `paidThroughPayroll` flag (a "Paid through payroll (not in total)"
+    checkbox on the Payables rows) and is left out of `totalPayableAmount`. A rule with no applicable component is
+    refused by name. The seeded rules stay without a component (ADR-034's reason holds) but are seeded disabled, and
+    `npm run seed` disables existing ones that still have none; the demo seed re-enables the rules it completes.
+  - **Payroll Correction**: a day is the full monthly amount ÷ the slip's working days. Submit recomputes the arrears
+    (so marking the arrear component after saving the draft counts) and is refused with a message naming the
+    "Arrear component" tick when no component on the slip has it. The View page names the slip from the populated
+    record (employee and period; the detail populates only the slip's owner, dates and status) and shows the status.
+  - **Payslip View** lists each earning and deduction (statistical rows left out) with its amount, then gross, total
+    deduction and net — on the read-only View page every reader gets, so an employee's own slip shows it. Who can
+    see which slip is unchanged (ADR-043).
+  - **Absence sweep** marks a day only inside employment for someone not Left, Inactive or Suspended (`isEmployedOn`).
+- **Consequences**: run `npm run seed` once so the seeded gratuity rules stop being offered. No backfill: slips,
+  gratuities, full-and-final statements and Absent rows already saved keep their figures — the October slips of
+  TRP013/TRP014, Nikhil Kapadia's gratuity and statement, and the leavers' 27–28 Oct Absent rows need HR to redo or
+  remove them. Tested by `utils/payrollPaymentDays.test.js` (Case 5b), `controllers/v1/payrollPayouts.test.js`,
+  `utils/payrollBenefits.test.js` (case 4), `jobs/attendanceScheduler.test.js` and
+  `apps/admin/src/entities/payroll-views.test.js`; each fails on the old code.
+- **Deviates from convention**: no.

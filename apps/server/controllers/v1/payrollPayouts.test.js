@@ -60,6 +60,15 @@ const stub = (Model, rows) => {
   Model.find = (filter) => query(rows.filter((row) => matches(row, filter)));
   Model.findOne = (filter) => query(rows.find((row) => matches(row, filter)) ?? null);
   Model.findById = (id) => query(rows.find((row) => same(row._id, id)) ?? null);
+  // utils/statusClaim.js moves a status in one step.
+  Model.findOneAndUpdate = async (filter, update) => {
+    const found = rows.find((row) => matches(row, filter));
+    return found ? Object.assign(found, update.$set ?? update) : null;
+  };
+  Model.updateOne = async (filter, update) => {
+    const found = rows.find((row) => matches(row, filter));
+    if (found) Object.assign(found, update.$set ?? update);
+  };
   return rows;
 };
 const fakeRes = () => ({

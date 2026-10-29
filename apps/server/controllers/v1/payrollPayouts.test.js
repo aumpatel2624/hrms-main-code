@@ -9,6 +9,11 @@
 //     ever made for that period, and the refusal for a covered date suggested
 //     exactly that,
 //   - a second full and final could be made for a leaver who had one.
+// And from the 29 Oct re-check (G1, P1):
+//   - a second gratuity could be submitted for an employee already paid one,
+//     dated in a month with no slip, so that month's slip paid it again,
+//   - a Payroll Correction's arrears were dated the day it was submitted, so
+//     made after that month's slip they were never paid, with no warning.
 // (P2 proration is payrollPaymentDays.test.js, Case 5b; P11 is
 // jobs/attendanceScheduler.test.js.) Drives the real mounted routes as an
 // Admin over in-memory stand-ins, like payrollIntegrity.test.js.
@@ -203,8 +208,20 @@ const row = (component, extra) => ({
   expectStatus(res, 400, "a second full and final");
   assert.match(res.body.message, /Nikhil Kapadia already has a Full and Final Statement/);
   assert.equal(statements.length, 1);
+
+  // HR re-runs October; then a second gratuity dated 31 Aug, a month with no
+  // slip, would be paid again by an August slip (G1): refused.
+  october.status = "submitted";
+  const second = { _id: oid(), employeeId: nikhil._id, companyId, gratuityRuleId: indianRule._id,
+    payrollDate: new Date("2026-08-31"), salaryComponentId: basic._id, status: "draft" };
+  stub(Gratuity, [gratuity, second]);
+  res = await call(gratuityRoutes, "post", "/gratuities/:id/submit", { params: { id: String(second._id) } });
+  expectStatus(res, 400, "a second gratuity");
+  assert.match(res.body.message, /Nikhil Kapadia already has a submitted gratuity of 129807.69 \(payroll date 2026-10-31\)/);
+  assert.equal(second.status, "draft");
+  assert.equal(additionalSalaries.length, 1, "no second Additional Salary");
 }
-console.log("payrollPayouts: gratuity is based on the full Basic and paid once, through payroll (P4, N2, M3)");
+console.log("payrollPayouts: gratuity is based on the full Basic and paid once, through payroll (P4, N2, M3, G1)");
 
 // --------------------------------------- P7. a Payroll Correction pays something --
 {
@@ -221,7 +238,7 @@ console.log("payrollPayouts: gratuity is based on the full Basic and paid once, 
     earnings: [{ salaryComponentId: basic._id, abbreviation: "B", defaultAmount: 7200, amount: 7200 }], deductions: [] };
   stub(SalarySlip, [slip]);
   const correction = { _id: oid(), salarySlipId: slip._id, employeeId: harsh._id, companyId, daysToReverse: 1,
-    earningArrears: [], deductionArrears: [], accrualArrears: [], status: "draft" };
+    payrollDate: new Date("2026-11-01"), earningArrears: [], deductionArrears: [], accrualArrears: [], status: "draft" };
   stub(PayrollCorrection, [correction]);
   additionalSalaries.length = 0;
   const submit = () => call(payrollBenefitsRoutes, "post", "/payroll-corrections/:id/submit", { params: { id: String(correction._id) } });
@@ -235,12 +252,33 @@ console.log("payrollPayouts: gratuity is based on the full Basic and paid once, 
 
   // HR marks Basic as the arrear component; the draft's saved ₹0 is recomputed.
   components.find((c) => c === basic).arrearComponent = true;
+
+  // Dated inside October, whose slip is already made, the arrears would never
+  // be paid (P1): refused, pointing HR at the next period.
+  correction.payrollDate = new Date("2026-10-29");
+  res = await submit();
+  expectStatus(res, 400, "a slip already covers the correction's payroll date");
+  assert.match(res.body.message, /Harsh Pawar already has a salary slip for 2026-10-01 – 2026-10-31, so payroll would not pay this correction/);
+  assert.match(res.body.message, /Set the payroll date to a day after 2026-10-31/);
+  assert.equal(correction.status, "draft");
+  assert.equal(additionalSalaries.length, 0);
+
+  // A payroll date after he leaves: no slip is made then, so refused.
+  harsh.relievingDate = new Date("2026-10-31");
+  correction.payrollDate = new Date("2026-11-01");
+  res = await submit();
+  expectStatus(res, 400, "a correction dated after the relieving date");
+  assert.match(res.body.message, /after Harsh Pawar's relieving date \(2026-10-31\)/);
+  assert.equal(additionalSalaries.length, 0);
+  harsh.relievingDate = null;
+
   res = await submit();
   expectStatus(res, 200, "correction submits");
   assert.equal(correction.status, "submitted");
   assert.equal(additionalSalaries.length, 1);
   assert.equal(additionalSalaries[0].amount, 400, "₹10,000 ÷ 25 working days, not the prorated ₹7,200 ÷ 25 = ₹288");
+  assert.equal(additionalSalaries[0].payrollDate.toISOString().slice(0, 10), "2026-11-01", "dated on the correction's payroll date, so November's slip pays it");
 }
-console.log("payrollPayouts: a payroll correction repays a day of the full Basic, or says what to set (P7)");
+console.log("payrollPayouts: a payroll correction repays a day of the full Basic on its payroll date, or says what to set (P7, P1)");
 
 console.log("payrollPayouts: all cases passed");

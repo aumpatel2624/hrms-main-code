@@ -24,6 +24,7 @@ import { getCurrentSalaryStructureAssignment } from "../../utils/payrollAssignme
 import { calculateFullPeriodAmounts, previewCurrentCycleBenefitAccrual } from "../../utils/salarySlipCalc.js";
 import { calculatePayrollCorrectionBreakup } from "../../utils/payrollCorrectionCalc.js";
 import { decideOnce } from "../../utils/statusClaim.js";
+import { assertPayrollDateWillBePaid } from "../../utils/payrollDateCheck.js";
 
 const round2 = (val) => Math.round((Number(val || 0) + Number.EPSILON) * 100) / 100;
 
@@ -922,6 +923,7 @@ export const getEmployeeBenefitLedgerById = async (req, res) => {
 export const PAYROLL_CORRECTION_FIELDS = [
   "salarySlipId",
   "daysToReverse",
+  "payrollDate",
   "remarks",
 ];
 
@@ -1033,7 +1035,11 @@ export const createPayrollCorrection = async (req, res) => {
       isActive: true,
     }).lean();
 
-    const pDate = req.body.payrollDate ? new Date(req.body.payrollDate) : (salarySlip.endDate || new Date());
+    // The arrears are paid by the slip for this date, so it defaults to the
+    // day after the corrected slip ends: that slip is already made.
+    const pDate = req.body.payrollDate
+      ? new Date(req.body.payrollDate)
+      : new Date(new Date(salarySlip.endDate).getTime() + 24 * 60 * 60 * 1000);
 
     const doc = await PayrollCorrection.create({
       salarySlipId,
@@ -1080,6 +1086,7 @@ export const updatePayrollCorrection = async (req, res) => {
     doc.earningArrears = details.earningArrears;
     doc.deductionArrears = details.deductionArrears;
     doc.accrualArrears = details.accrualArrears;
+    if (req.body.payrollDate !== undefined) doc.payrollDate = new Date(req.body.payrollDate);
     if (req.body.remarks !== undefined) doc.remarks = req.body.remarks;
 
     await doc.save();
@@ -1186,7 +1193,16 @@ export const submitPayrollCorrection = async (req, res) => {
     doc.accrualArrears = details.accrualArrears;
 
     const employee = await Employee.findById(doc.employeeId).lean();
-    const currency = employee?.currency || "USD";
+    if (!employee) throwError(404, "Employee not found");
+    // The arrears are dated on the correction's payroll date, so the slip
+    // for that date's period pays them; refuse a date no slip will pay.
+    await assertPayrollDateWillBePaid({
+      employee,
+      payrollDate: doc.payrollDate,
+      what: "correction",
+      ifCovered: (slip) => `Set the payroll date to a day after ${new Date(slip.endDate).toISOString().slice(0, 10)} (the next payroll period), save, then submit again.`,
+    });
+    const currency = employee.currency || "USD";
     const now = new Date();
 
     // Moved draft → submitted in one step first, so a second Submit pressed
@@ -1201,7 +1217,7 @@ export const submitPayrollCorrection = async (req, res) => {
           type: "Earning",
           amount: ear.amount,
           isRecurring: false,
-          payrollDate: now,
+          payrollDate: doc.payrollDate,
           overwriteSalaryStructureAmount: false,
           deductFullTaxOnSelectedPayrollDate: false,
           currency,
@@ -1220,7 +1236,7 @@ export const submitPayrollCorrection = async (req, res) => {
           type: "Deduction",
           amount: ded.amount,
           isRecurring: false,
-          payrollDate: now,
+          payrollDate: doc.payrollDate,
           overwriteSalaryStructureAmount: false,
           deductFullTaxOnSelectedPayrollDate: false,
           currency,

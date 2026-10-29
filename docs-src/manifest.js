@@ -1155,6 +1155,7 @@ export const CONFIG_SCREENS = [
         gotchas: [
             "Days to reverse cannot exceed the available LWP days remaining on the target Salary Slip.",
             "Submitting creates Additional Salary adjustment rows and Benefit Ledger accrual rows; cancelling reverses both.",
+            "The arrears are paid by the salary slip for the Payroll Date (blank means the day after the corrected slip ends). Submitting is refused if that date already has a slip, or is after the employee's relieving date.",
         ],
         roles: "HR User and HR Manager manage records within their company.",
     },
@@ -1237,6 +1238,7 @@ export const CONFIG_SCREENS = [
         gotchas: [
             "Submitting requires the employee's relieving date to be set and a submitted Salary Slip to exist; it creates an Additional Salary for the payout.",
             "Cancelling a submitted Gratuity also cancels its linked Additional Salary.",
+            "An employee is paid one gratuity: a second is refused while another is submitted.",
         ],
         roles: "HR User and HR Manager manage records within their company.",
     },

@@ -32,6 +32,7 @@ import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
 import { getPayrollSettingsDoc } from "./payrollRun.controller.js";
 import { countLwpDaysInRange, getWorkExperience, getGratuityAmount } from "../../utils/gratuityCalc.js";
+import { assertPayrollDateWillBePaid } from "../../utils/payrollDateCheck.js";
 import { decideOnce } from "../../utils/statusClaim.js";
 
 const failure = (res, error) => {
@@ -422,24 +423,22 @@ export const submitGratuity = async (req, res) => {
       throwError(400, `Gratuity Rule "${rule.name}" has no applicable earning component. Open the rule, add the component gratuity is based on (for example Basic) and save it.`);
     }
 
-    // ADR-031: gratuity is paid once, through payroll. A slip already made
-    // for the payroll date's period would never include it (ADR-069), and no
-    // slip is made for a period after the employee has left.
-    const payrollDate = new Date(doc.payrollDate);
-    if (payrollDate > new Date(employee.relievingDate)) {
-      const relieved = new Date(employee.relievingDate).toISOString().slice(0, 10);
-      throwError(400, `The payroll date is after ${employee.employeeName}'s relieving date (${relieved}), and no salary slip is made after an employee leaves, so this gratuity would never be paid. Set the payroll date on or before ${relieved}.`);
-    }
-    const coveringSlip = await SalarySlip.findOne({
+    // ADR-031: gratuity is paid once, through payroll. A second submitted
+    // gratuity is a second Additional Salary, and the next slip pays both.
+    const submitted = await Gratuity.findOne({
       employeeId: doc.employeeId,
-      status: { $ne: "cancelled" },
-      startDate: { $lte: payrollDate },
-      endDate: { $gte: payrollDate },
+      status: "submitted",
+      _id: { $ne: doc._id },
     }).lean();
-    if (coveringSlip) {
-      const period = `${coveringSlip.startDate.toISOString().slice(0, 10)} – ${coveringSlip.endDate.toISOString().slice(0, 10)}`;
-      throwError(400, `${employee.employeeName} already has a salary slip for ${period}, so payroll would not pay this gratuity. Cancel or delete that slip, submit the gratuity, then create the slip again.`);
+    if (submitted) {
+      throwError(400, `${employee.employeeName} already has a submitted gratuity of ${submitted.amount} (payroll date ${new Date(submitted.payrollDate).toISOString().slice(0, 10)}), so a second one would pay it twice. Open that one instead; cancel it first if it is wrong.`);
     }
+    await assertPayrollDateWillBePaid({
+      employee,
+      payrollDate: doc.payrollDate,
+      what: "gratuity",
+      ifCovered: () => "Cancel or delete that slip, submit the gratuity, then create the slip again.",
+    });
 
     const latestSlip = await SalarySlip.findOne({ employeeId: doc.employeeId, status: "submitted" })
       .sort({ startDate: -1 })

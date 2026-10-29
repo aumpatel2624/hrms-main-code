@@ -45,6 +45,7 @@ export const ConfirmModal = ({
     title = "Are you sure?",
     description = "Are you sure you want to remove this record?",
     confirmLabel = "Remove",
+    cancelLabel = "Cancel",
     loadingLabel = "Removing...",
 }) => (
     <ModalOverlay isOpen={Boolean(isOpen)} onOpenChange={(open) => !open && !isLoading && onClose?.()} isDismissable={!isLoading}>
@@ -58,7 +59,7 @@ export const ConfirmModal = ({
                     </div>
                     <div className="mt-2 flex justify-end gap-3">
                         <Button color="secondary" onClick={onClose} isDisabled={isLoading}>
-                            Cancel
+                            {cancelLabel}
                         </Button>
                         <Button color="primary-destructive" onClick={onConfirm} isLoading={isLoading} isDisabled={isLoading}>
                             {isLoading ? loadingLabel : confirmLabel}

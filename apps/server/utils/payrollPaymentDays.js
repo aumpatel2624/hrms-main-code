@@ -16,15 +16,12 @@
  *
  * Confirmed from the real spec, not assumed:
  * - `totalWorkingDays` and `workingDays` are the SAME number (source: literally
- *   `self.total_working_days = working_days`) — both computed here from the
- *   already-clamped `[actualStartDate, actualEndDate]` range (a deliberate
- *   simplification of source, which computes `total_working_days` from the
- *   *nominal* `[startDate, endDate]` and only the payment-days numerator from
- *   the clamped range — recorded as a judgment call in DECISIONS.md ADR-027
- *   "As built"; the practical effect is identical for a full-period employee
- *   and only differs, by design, for a mid-period joiner/leaver, where this
- *   simpler model prorates the *denominator* too rather than just the
- *   numerator).
+ *   `self.total_working_days = working_days`), counted over the *nominal*
+ *   `[startDate, endDate]` period. Only the payment-days numerator is limited
+ *   to `[actualStartDate, actualEndDate]` (joining to relieving), so a joiner
+ *   or leaver is paid their days in employment out of the month's working
+ *   days. (Until ADR-069 the denominator was clamped too, which paid a leaver
+ *   relieved on the 26th a full month.)
  * - `paymentDays` stays a fractional Float throughout — source never rounds
  *   it to a whole number, only individual currency amounts get `flt(...,
  *   precision)` treatment. Rounded here to 2 decimal places only to avoid
@@ -129,9 +126,12 @@ export const calculatePaymentDays = ({
     ? new Set()
     : new Set((holidayDates || []).map((d) => dateKey(d)));
 
-  const workingDayList = listDays(actualStartDate, actualEndDate).filter((d) => !holidayKeys.has(dateKey(d)));
-  const workingDays = workingDayList.length;
+  const isWorkingDay = (d) => !holidayKeys.has(dateKey(d));
+  // The whole period's working days are the proration base; only days inside
+  // employment can be paid (ADR-069).
+  const workingDays = listDays(nominalStart, nominalEnd).filter(isWorkingDay).length;
   const totalWorkingDays = workingDays; // source: self.total_working_days = working_days (confirmed, section A.11)
+  const workingDayList = listDays(actualStartDate, actualEndDate).filter(isWorkingDay);
 
   let lwpDays = 0;
   let absentDays = 0;
@@ -186,7 +186,7 @@ export const calculatePaymentDays = ({
   }
 
   const fraction = settings.dailyWagesFractionForHalfDay ?? 0.5;
-  const rawPaymentDays = workingDays - lwpDays - absentDays - halfDayDays * fraction;
+  const rawPaymentDays = workingDayList.length - lwpDays - absentDays - halfDayDays * fraction;
   const paymentDays = round2(Math.max(0, rawPaymentDays));
 
   return { workingDays, totalWorkingDays, paymentDays, lwpDays, absentDays, halfDayDays, actualStartDate, actualEndDate };

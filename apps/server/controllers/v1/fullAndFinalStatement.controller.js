@@ -33,7 +33,9 @@ const failure = (res, error) => {
 };
 
 const computeTotals = (doc) => {
-  const totalPayableAmount = (doc.payables ?? []).reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+  const totalPayableAmount = (doc.payables ?? [])
+    .filter((r) => !r.paidThroughPayroll)
+    .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
   const totalAssetRecoveryCost = (doc.assetsAllocated ?? [])
     .filter((a) => a.action === "Recover Cost")
     .reduce((sum, a) => sum + (Number(a.cost) || 0), 0);
@@ -99,10 +101,18 @@ export const createFullAndFinalStatement = async (req, res) => {
     // (same "fetch once at creation" pattern as LeaveEncashment's
     // perDayEncashmentAmount default and SalaryStructureAssignment's fetched
     // currency, ADR-026). Additive/suggestive only — HR can still edit or
-    // delete this row afterward like any other manual line.
+    // delete this row afterward like any other manual line. Payroll pays a
+    // submitted Gratuity through its Additional Salary, so the line is shown
+    // as settled there and left out of this statement's total (ADR-069).
     const gratuity = await Gratuity.findOne({ employeeId, status: "submitted" }).lean();
     const suggestedPayables = gratuity
-      ? [{ component: "Gratuity", description: "Gratuity payout (auto-suggested)", amount: gratuity.amount, status: "Unsettled" }]
+      ? [{
+        component: "Gratuity",
+        description: `Paid through payroll (salary slip covering ${gratuity.payrollDate.toISOString().slice(0, 10)}) — not paid again here`,
+        amount: gratuity.amount,
+        status: "Settled",
+        paidThroughPayroll: true,
+      }]
       : [];
 
     fields.payables = [...suggestedPayables, ...(fields.payables ?? [])];

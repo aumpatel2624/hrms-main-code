@@ -14,6 +14,9 @@ const OutstandingLineSchema = new mongoose.Schema(
     description: { type: String, trim: true },
     amount: { type: Number, min: 0, default: 0 },
     status: { type: String, enum: ["Settled", "Unsettled"], default: "Unsettled" },
+    // Shown for the record, paid elsewhere: a submitted Gratuity is paid by
+    // payroll (ADR-031), so its line stays out of the statement's total (ADR-069).
+    paidThroughPayroll: { type: Boolean, default: false },
   },
   { _id: false },
 );

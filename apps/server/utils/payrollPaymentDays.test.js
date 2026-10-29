@@ -84,9 +84,8 @@ console.log("payrollPaymentDays: unmarked day passed (Absent -> 30, Present -> 3
 }
 console.log("payrollPaymentDays: half day passed (31 - 0.5 = 30.5)");
 
-// Case 5: a mid-period joiner — dateOfJoining clamps actualStartDate, which
-// shrinks BOTH workingDays and totalWorkingDays (this project's model — see
-// file-level comment on the deliberate simplification vs. source).
+// Case 5: a mid-period joiner — dateOfJoining clamps actualStartDate, so only
+// the 22 days from joining are paid, out of the month's 31 (ADR-069).
 {
   const dates = daysInRange("2026-01-10", "2026-01-31"); // 22 days
   const attendanceRows = dates.map((d) => ({ attendanceDate: d, status: "Present" }));
@@ -96,11 +95,53 @@ console.log("payrollPaymentDays: half day passed (31 - 0.5 = 30.5)");
     attendanceRows, settings: baseSettings,
   });
   assert.equal(result.actualStartDate.toISOString().slice(0, 10), "2026-01-10");
-  assert.equal(result.workingDays, 22);
-  assert.equal(result.totalWorkingDays, 22);
+  assert.equal(result.workingDays, 31);
+  assert.equal(result.totalWorkingDays, 31);
   assert.equal(result.paymentDays, 22);
 }
-console.log("payrollPaymentDays: mid-period joiner passed (clamped to 22 working days)");
+console.log("payrollPaymentDays: mid-period joiner passed (22 of 31 working days)");
+
+// Case 5b (29 Oct functional test, P2): October 2026 with Sundays and two
+// holidays off has 25 working days. A leaver is paid their working days up to
+// relieving out of those 25, not out of the days they were employed.
+{
+  const holidayDates = ["2026-10-04", "2026-10-11", "2026-10-18", "2026-10-25", "2026-10-02", "2026-10-20"];
+  const present = (toIso, absent = []) => daysInRange("2026-10-01", toIso)
+    .filter((d) => !holidayDates.includes(d))
+    .map((d) => ({ attendanceDate: d, status: absent.includes(d) ? "Absent" : "Present" }));
+  const october = { startDate: "2026-10-01", endDate: "2026-10-31", holidayDates, settings: baseSettings };
+
+  // Pratik Panchal TRP014: relieved 26 Oct, no absences -> 20 of 25.
+  const pratik = calculatePaymentDays({ ...october, relievingDate: "2026-10-26", attendanceRows: present("2026-10-26") });
+  assert.equal(pratik.totalWorkingDays, 25);
+  assert.equal(pratik.paymentDays, 20);
+  assert.equal(pratik.absentDays, 0); // days after relieving are not absences
+  assert.equal(45000 * pratik.paymentDays / pratik.totalWorkingDays, 36000);
+
+  // Mayank Trivedi TRP013: relieved 28 Oct, 2 absent -> 22 - 2 = 20 of 25.
+  const mayank = calculatePaymentDays({
+    ...october, relievingDate: "2026-10-28", attendanceRows: present("2026-10-28", ["2026-10-07", "2026-10-08"]),
+  });
+  assert.equal(mayank.totalWorkingDays, 25);
+  assert.equal(mayank.absentDays, 2);
+  assert.equal(mayank.paymentDays, 20);
+  assert.equal(45000 * mayank.paymentDays / mayank.totalWorkingDays, 36000);
+
+  // A joiner on the 16th with full attendance is paid 13 of 25, not a full month.
+  const joiner = calculatePaymentDays({
+    ...october, dateOfJoining: "2026-10-16",
+    attendanceRows: present("2026-10-31").filter((r) => r.attendanceDate >= "2026-10-16"),
+  });
+  assert.equal(joiner.totalWorkingDays, 25);
+  assert.equal(joiner.paymentDays, 13);
+  assert.equal(joiner.absentDays, 0); // days before joining are not absences
+
+  // A full-month employee is unchanged: 25 of 25.
+  const fullMonth = calculatePaymentDays({ ...october, attendanceRows: present("2026-10-31") });
+  assert.equal(fullMonth.paymentDays, 25);
+  assert.equal(fullMonth.totalWorkingDays, 25);
+}
+console.log("payrollPaymentDays: leavers and joiners are prorated on the month's 25 working days (P2)");
 
 // Case 6: a holiday included vs. excluded from the total working days.
 {

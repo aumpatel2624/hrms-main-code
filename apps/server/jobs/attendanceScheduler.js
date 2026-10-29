@@ -145,15 +145,28 @@ const processCheckinsForShiftType = async (shiftType, today) => {
   return { attempted, created, skipped, failed };
 };
 
+const NOT_WORKING_STATUSES = new Set(["Left", "Inactive", "Suspended"]);
+
+/**
+ * Whether `day` can be an absence for `employee`: they are not Left, Inactive
+ * or Suspended, and the day falls from joining to relieving. A leaver's shift
+ * assignment stays active after relieving, so the assignment alone does not
+ * say this (ADR-069).
+ */
+export const isEmployedOn = (employee, day) => !NOT_WORKING_STATUSES.has(employee.status)
+  && (!employee.dateOfJoining || dayStart(employee.dateOfJoining) <= day)
+  && (!employee.relievingDate || dayStart(employee.relievingDate) >= day);
+
 /**
  * Once per day, for exactly "yesterday" (ADR-025 — no separate watermark
  * needed, every daily run covers its own yesterday): for every currently-
  * active auto-attendance-enabled Shift Assignment with no Attendance row
  * yet for yesterday, create an Absent row — unless yesterday is a holiday
- * for that employee and the shift doesn't mark attendance on holidays.
+ * for that employee and the shift doesn't mark attendance on holidays, or
+ * yesterday is outside their employment (`isEmployedOn`).
  * Per-assignment failure isolation.
  */
-const processAbsenceSweep = async (today) => {
+export const processAbsenceSweep = async (today) => {
   let attempted = 0;
   let created = 0;
   let skipped = 0;
@@ -181,7 +194,7 @@ const processAbsenceSweep = async (today) => {
 
       // eslint-disable-next-line no-await-in-loop
       const employee = await Employee.findById(assignment.employeeId).lean();
-      if (!employee) { skipped += 1; continue; } // eslint-disable-line no-continue
+      if (!employee || !isEmployedOn(employee, yesterday)) { skipped += 1; continue; } // eslint-disable-line no-continue
 
       // eslint-disable-next-line no-await-in-loop
       await Attendance.create({

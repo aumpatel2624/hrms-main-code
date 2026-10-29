@@ -146,6 +146,10 @@ export const getWorkExperience = ({
 /**
  * Pure. Computes the final gratuity payout amount.
  *
+ * `latestSlipEarnings` are the full monthly earnings of the structure the
+ * employee's last slip was paid on (the controller evaluates them), not that
+ * slip's rows, which are prorated in a joining or leaving month (ADR-069).
+ *
  * `slabs` is re-sorted ascending by `fromYear` defensively (the caller is
  * expected to already store them in order, same as `validateGratuitySlabs`
  * assumes, but this function does not trust that).

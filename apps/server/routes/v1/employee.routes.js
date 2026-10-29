@@ -6,6 +6,7 @@ import {
   createEmployee, updateEmployee, deleteEmployee, getEmployeeById, listEmployees, listEmployeeByParams,
   resetEmployeePassword,
 } from "../../controllers/v1/employee.controller.js";
+import { setPasswordValidation } from "../../middlewares/inputValidator.js";
 
 const router = express.Router();
 
@@ -24,7 +25,7 @@ const router = express.Router();
  *     responses:
  *       201: { description: Employee created successfully }
  */
-router.post("/employees", authMiddleware(ANY_ROLE), checkPermission("/employee", "write"), createEmployee);
+router.post("/employees", authMiddleware(ANY_ROLE), checkPermission("/employee", "write"), setPasswordValidation, createEmployee);
 
 /**
  * @swagger
@@ -136,6 +137,7 @@ router.post("/employees/search", authMiddleware(ANY_ROLE), checkPermission("/emp
 router.post(
   "/employees/:employeeId/reset-password",
   authMiddleware(ADMIN_ONLY),
+  setPasswordValidation,
   resetEmployeePassword,
 );
 

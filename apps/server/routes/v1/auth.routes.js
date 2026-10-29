@@ -11,14 +11,18 @@ import {
   blockUser,
   unblockUser,
   listLoginAttempts,
+  changePassword,
 } from "../../controllers/v1/auth.controller.js";
 import { authMiddleware } from "../../middlewares/authMiddleware.js";
 import { ANY_ROLE, ADMIN_ONLY } from "@demo-panel/shared/roles";
 import {
   loginValidation,
+  changePasswordValidation,
   allowOnlyFields,
   allowedLoginFields,
+  allowedChangePasswordFields,
 } from "../../middlewares/inputValidator.js";
+import { loginLimiter, passwordChangeLimiter } from "../../utils/authThrottle.js";
 
 const router = express.Router();
 
@@ -50,11 +54,14 @@ const router = express.Router();
  *         description: Invalid credentials (unknown email or wrong password alike)
  *       423:
  *         description: Account locked
+ *       429:
+ *         description: Too many failed sign-ins from this address (ADR-067)
  */
 router.post(
   "/auth/login",
   allowOnlyFields(allowedLoginFields),
   loginValidation,
+  loginLimiter,
   login,
 );
 
@@ -100,9 +107,47 @@ router.post("/auth/logout", authMiddleware(ANY_ROLE), logout);
 
 /**
  * @swagger
+ * /auth/change-password:
+ *   post:
+ *     summary: Change the signed-in person's own password
+ *     description: >
+ *       Needs the current password; the new one must follow the password
+ *       rule. Ends every other session of the account (ADR-067).
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [currentPassword, newPassword]
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Password changed
+ *       400:
+ *         description: Current password wrong, or the new one breaks the rule
+ *       429:
+ *         description: Too many wrong current passwords
+ */
+router.post(
+  "/auth/change-password",
+  authMiddleware(ANY_ROLE),
+  allowOnlyFields(allowedChangePasswordFields),
+  changePasswordValidation,
+  passwordChangeLimiter,
+  changePassword,
+);
+
+/**
+ * @swagger
  * /auth/login-status/{userId}:
  *   get:
- *     summary: Get login attempt status for an account
+ *     summary: Admin - get login attempt status for an account
  *     tags: [Auth]
  *     parameters:
  *       - in: path
@@ -116,7 +161,7 @@ router.post("/auth/logout", authMiddleware(ANY_ROLE), logout);
  */
 router.get(
   "/auth/login-status/:userId",
-  authMiddleware(ANY_ROLE),
+  authMiddleware(ADMIN_ONLY),
   getLoginStatus,
 );
 

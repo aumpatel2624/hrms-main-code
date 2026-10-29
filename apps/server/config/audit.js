@@ -14,11 +14,14 @@
  *   live credentials.
  * - `LoginAttempt` — per-user lock state, rewritten on every login attempt.
  *   Authentication history already has its own screen.
+ * - `AuthThrottle` — failed-attempt counters, rewritten on every sign-in and
+ *   forgot-password request.
  */
 export const SKIP_MODELS = Object.freeze([
   "AuditLog",
   "Otp",
   "LoginAttempt",
+  "AuthThrottle",
 ]);
 
 /**

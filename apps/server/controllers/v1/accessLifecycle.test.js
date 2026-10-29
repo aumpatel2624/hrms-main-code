@@ -279,7 +279,7 @@ resetWrites();
   LoginAttempt.findOneAndUpdate = async () => ({});
   const signIn = async (employee) => {
     const res = fakeRes();
-    const req = { body: { email: employee.email, password, locationConsent: true, ipConsent: true }, headers: {}, ip: "127.0.0.1", session: {} };
+    const req = { body: { email: employee.email, password, locationConsent: true, ipConsent: true }, headers: {}, ip: "127.0.0.1", session: { regenerate: (done) => done() } };
     await login(req, res);
     return { res, req };
   };
@@ -291,7 +291,7 @@ resetWrites();
   asha.employeeCode = "DMY008";
   for (const code of ["DMY008", "dmy008"]) {
     const res = fakeRes();
-    const req = { body: { email: code, password, locationConsent: true, ipConsent: true }, headers: {}, ip: "127.0.0.1", session: {} };
+    const req = { body: { email: code, password, locationConsent: true, ipConsent: true }, headers: {}, ip: "127.0.0.1", session: { regenerate: (done) => done() } };
     await login(req, res);
     expectStatus(res, 200, `sign in with Employee Code ${code}`);
     assert.ok(same(req.session.user.id, asha._id), "as the employee with that code");

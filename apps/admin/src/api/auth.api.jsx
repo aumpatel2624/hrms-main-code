@@ -83,6 +83,20 @@ export const resetPassword = async (data) => {
 };
 
 /**
+ * Change the signed-in person's own password. A wrong current password or a
+ * new one that breaks the rule answers 400 with the reason in `message`.
+ * @param {Object} data - { currentPassword, newPassword }
+ * @returns {Promise}
+ */
+export const changePassword = async (data) => {
+    return api.post(ENDPOINTS.AUTH.CHANGE_PASSWORD, data, {
+        validateStatus: function (status) {
+            return status >= 200 && status <= 500;
+        },
+    });
+};
+
+/**
  * Logout - invalidates the session on the server and clears local storage
  */
 export const logout = async () => {
@@ -106,5 +120,6 @@ export default {
     sendOtp,
     verifyOtp,
     resetPassword,
+    changePassword,
     logout,
 };

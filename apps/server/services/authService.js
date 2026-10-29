@@ -174,43 +174,25 @@ const lockAccount = async (userId) => {
 };
 
 /**
+ * Every lockout row of one person. The login controller keys new rows by the
+ * account's own email (ADR-067), but rows written before that were keyed by
+ * whatever was typed — "SRT009", "srt009", an upper-case email — and each
+ * still carries the account's userId. Matching on either keeps one lock per
+ * person across all of them.
+ */
+const rowsFilter = (userId, email) => ({
+    $or: [userId && { userId }, email && { userEmail: email }].filter(Boolean),
+});
+
+/**
  * 3. Check if an account is locked
- * Returns true if locked AND lockUntil > now. Auto-unlocks if expired.
+ * True while any of the person's rows holds an unexpired lock.
  * @param {string} userId - The user's MongoDB ObjectId
- * @param {string} email - Optional email to check by email instead
+ * @param {string} email - The account's own email
  * @returns {boolean} Whether the account is locked
  */
-const isAccountLocked = async (userId, email = null) => {
-    try {
-        const query = email ? { userEmail: email } : { userId };
-        const attempt = await LoginAttempt.findOne(query);
-
-        if (!attempt || !attempt.isLocked) {
-            return false;
-        }
-
-        // Check if lock has expired
-        if (attempt.lockUntil && attempt.lockUntil < new Date()) {
-            // Auto-unlock expired lock
-            await LoginAttempt.findOneAndUpdate(
-                query,
-                {
-                    isLocked: false,
-                    lockUntil: null,
-                    attemptCount: 0,
-                    updatedAt: new Date(),
-                }
-            );
-            console.log(`Account auto-unlocked for ${email || userId}`);
-            return false;
-        }
-
-        return true;
-    } catch (error) {
-        console.error("Error checking account lock status:", error);
-        throw error;
-    }
-};
+const isAccountLocked = async (userId, email = null) =>
+    (await getLoginAttemptStatus(userId, email)).isLocked;
 
 /**
  * 4. Record a successful login
@@ -278,59 +260,34 @@ const recordSuccessfulLogin = async (userId, userEmail, ipAddress = null, client
 
 /**
  * 5. Get login attempt status
- * Returns {attemptCount, isLocked, lockUntil, remainingTimeMs}
+ * Returns {attemptCount, isLocked, lockUntil, remainingTimeMs} across all of
+ * the person's rows. Locks that have run out are cleared on the way.
  * @param {string} userId - The user's MongoDB ObjectId
- * @param {string} email - Optional email to check by email
+ * @param {string} email - The account's own email
  * @returns {Object} Login attempt status
  */
 const getLoginAttemptStatus = async (userId, email = null) => {
     try {
-        const query = email ? { userEmail: email } : { userId };
-        const attempt = await LoginAttempt.findOne(query);
+        const now = new Date();
+        const rows = await LoginAttempt.find(rowsFilter(userId, email));
 
-        if (!attempt) {
-            return {
-                attemptCount: 0,
-                isLocked: false,
-                lockUntil: null,
-                remainingTime: null,
-                attemptsRemaining: MAX_ATTEMPTS,
-            };
+        const expired = rows.filter((row) => row.isLocked && row.lockUntil && row.lockUntil <= now);
+        if (expired.length) {
+            await LoginAttempt.updateMany(
+                { _id: { $in: expired.map((row) => row._id) } },
+                { isLocked: false, lockUntil: null, attemptCount: 0, updatedAt: now }
+            );
         }
-
-        // Check if lock has expired
-        let isLocked = attempt.isLocked;
-        let lockUntil = attempt.lockUntil;
-        let remainingTime = null;
-        let attemptCount = attempt.attemptCount;
-
-        if (isLocked && lockUntil) {
-            const now = new Date();
-            if (lockUntil <= now) {
-                // Auto-unlock expired lock
-                await LoginAttempt.findOneAndUpdate(
-                    query,
-                    {
-                        isLocked: false,
-                        lockUntil: null,
-                        attemptCount: 0,
-                        updatedAt: new Date(),
-                    }
-                );
-
-                isLocked = false;
-                lockUntil = null;
-                attemptCount = 0;
-            } else {
-                remainingTime = lockUntil.getTime() - now.getTime();
-            }
-        }
+        const live = rows.filter((row) => !expired.includes(row));
+        const locks = live.filter((row) => row.isLocked).map((row) => row.lockUntil);
+        const lockUntil = locks.length ? locks.reduce((latest, until) => (until > latest ? until : latest)) : null;
+        const attemptCount = Math.max(0, ...live.map((row) => row.attemptCount || 0));
 
         return {
             attemptCount,
-            isLocked,
+            isLocked: locks.length > 0,
             lockUntil,
-            remainingTime,
+            remainingTime: lockUntil ? lockUntil.getTime() - now.getTime() : null,
             attemptsRemaining: Math.max(0, MAX_ATTEMPTS - attemptCount),
         };
     } catch (error) {
@@ -340,24 +297,25 @@ const getLoginAttemptStatus = async (userId, email = null) => {
 };
 
 /**
- * Admin: Unlock a user account
+ * Admin: Unlock a user account — every one of the person's rows, including
+ * rows keyed by another spelling from before ADR-067. The Unlock button and
+ * an admin password reset both land here.
  * @param {string} userId - The user's MongoDB ObjectId
- * @returns {Object} Updated login attempt record
+ * @returns {Object} The update result
  */
 const unlockAccount = async (userId) => {
     try {
-        const result = await LoginAttempt.findOneAndUpdate(
+        const result = await LoginAttempt.updateMany(
             { userId },
             {
                 isLocked: false,
                 lockUntil: null,
                 attemptCount: 0,
                 updatedAt: new Date(),
-            },
-            { new: true }
+            }
         );
 
-        if (result) {
+        if (result.modifiedCount) {
             console.log(`Account unlocked for userId ${userId}`);
         }
 
@@ -369,33 +327,11 @@ const unlockAccount = async (userId) => {
 };
 
 /**
- * Admin: Reset login attempts for a user
+ * Admin: Reset login attempts for a user — all of the person's rows, as above.
  * @param {string} userId - The user's MongoDB ObjectId
- * @returns {Object} Updated login attempt record
+ * @returns {Object} The update result
  */
-const resetLoginAttempts = async (userId) => {
-    try {
-        const result = await LoginAttempt.findOneAndUpdate(
-            { userId },
-            {
-                attemptCount: 0,
-                isLocked: false,
-                lockUntil: null,
-                updatedAt: new Date(),
-            },
-            { new: true }
-        );
-
-        if (result) {
-            console.log(`Login attempts reset for userId ${userId}`);
-        }
-
-        return result;
-    } catch (error) {
-        console.error("Error resetting login attempts:", error);
-        throw error;
-    }
-};
+const resetLoginAttempts = unlockAccount;
 
 export {
     recordFailedAttempt,

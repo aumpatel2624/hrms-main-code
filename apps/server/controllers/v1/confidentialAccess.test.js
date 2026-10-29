@@ -322,7 +322,7 @@ const rowsOf = (res) => {
   authService.recordFailedAttempt = async () => ({ isLocked: false, attemptsRemaining: 3 });
   const attempt = async (email, pass) => {
     const res = fakeRes();
-    await login({ body: { email, password: pass, locationConsent: true, ipConsent: true }, headers: {}, session: {} }, res);
+    await login({ body: { email, password: pass, locationConsent: true, ipConsent: true }, headers: {}, session: { regenerate: (done) => done() } }, res);
     return res;
   };
 

@@ -5274,3 +5274,60 @@ consumer; single-branch build
   `components/crud/array-rows.test.js`, `components/crud/form-defaults.test.js` and `entities/daily-use.test.js`; each
   fails on the old code.
 - **Deviates from convention**: no.
+
+### ADR-067 — One sign-in lock per person; limited guessing; a password change ends other sessions; production refuses unsafe settings
+
+- **Date**: 2026-10-29
+- **Status**: accepted
+- **Context**: the 2026-10-29 security test of the local app (S1, S2, S6, S7, S8, S10 and one Low item) found any
+  account, the admin's included, could be taken over from outside. (S1) The lockout was kept per spelling typed, so
+  after three wrong passwords locked an email the right password still signed in as `SRT009`, `srt009` or the email in
+  capitals; nothing limited guessing across accounts. (S2) A forgot-password code could be guessed without limit and
+  came from `Math.random`. (S6) A password reset ended no session and the session id was not renewed at sign-in.
+  (S7) Unlock cleared only one of a person's several lockout rows. (S8) With `.env.example` as it was, a deployed
+  server allowed any CORS origin with cookies, fell back to a public session secret, published `/api-docs` and logged
+  every query, password hashes included. (S10) The server enforced no password rule when HR or an admin set one, and
+  nobody could change their own password. (Low) Any signed-in person could read any account's lock state.
+- **Decision**:
+  - **One lock per person.** Sign-in resolves what was typed (an email in any case, the Employee Code in any case) to
+    the account first, and records failures and the lock under the account's own email. The lock check reads every
+    lockout row of the person (by `userId` or that email), so rows left by the old per-spelling code still count until
+    they expire or are cleared. Unknown logins keep the one "Invalid email or password" answer.
+  - **Attempt limits** (`utils/authThrottle.js`), counted in a new `AuthThrottle` collection (TTL-expired) so every
+    PM2 process shares them. Each attempt is counted before it runs (attempts sent together cannot slip under the
+    limit) and a successful one is given back, so correct sign-ins never count. Sign-in: 100 failures per client IP per
+    15 minutes. `/otp/send`: 5 requests per email and 30 per IP per hour, all counted. `/otp/verify` and
+    `/otp/reset-password` together: 10 wrong per email and 50 per IP per hour. Change password: 5 wrong current
+    passwords per account per 15 minutes. Over a limit answers 429 "Too many attempts". The client IP is `req.ip`,
+    correct behind nginx because production sets `trust proxy` to 1.
+  - **Forgot-password codes** come from `crypto.randomInt`. Each check claims one of the code's tries atomically; after
+    `OTP.MAX_WRONG_TRIES` (5) wrong ones the code is deleted and a new one must be requested. A right code gives its try
+    back, so verify-then-reset costs nothing. Every email still gets the same replies.
+  - **Sessions.** Sign-in regenerates the session id and stamps `signedInAt`. Every password set — the admin's reset
+    (employee or admin user), "Forgot password?" and the person's own change — goes through `utils/passwords.js`
+    `setPassword`, which stamps `passwordChangedAt` on the account; `authMiddleware` ends any session signed in before
+    it (401). The person changing their own password keeps their current session. Logout still ends only its own
+    session; a "sign out of all devices" button is a follow-up.
+  - **Unlock** and **Reset login attempts** clear every lockout row with the person's `userId`; the admin's password
+    reset does the same. Who may unlock is unchanged (admin only).
+  - **Production settings** (`config/production.js`): with `NODE_ENV=production` the server exits at start unless
+    `SESSION_SECRET` is at least 32 characters and not a published value; mongoose query logging is off; `/api-docs`
+    and `/api-docs.json` are off unless `API_DOCS_ENABLED=true`; CORS allows only `ALLOWED_ORIGINS` (no localhost
+    defaults). `.env.example` lists and explains each. Development behaviour is unchanged.
+  - **Password rule on the server** (8+ characters, upper, lower and a number): HR creating an employee's login, an
+    admin creating an admin user, both admin resets, "Forgot password?" and Change password. Signing in still accepts
+    older passwords that predate the rule.
+  - **Change password**: `POST /auth/change-password` (current + new), for every signed-in person, from a Change
+    password section on the Profile page (`/profile` needs no grant, so no menu row).
+  - `GET /auth/login-status/:userId` is admin-only, like the Login Attempt Logs screen.
+- **Consequences**: no re-seed (no role, permission or menu row changed) and no backfill: `passwordChangedAt` is null
+  until a password changes, and a forgot-password code issued before the deploy fails once (no try count) and is
+  requested again. Out of scope: forcing a change at first sign-in, S3/S4/S5/S9 and the Low input items. The per-IP
+  limit means one office address can make 100 failed sign-ins per 15 minutes before everyone on it waits out the
+  window. Tested by `controllers/v1/signinSecurity.test.js` (20 of its 21 sections fail on the old code; the 21st
+  checks a right code still works after typos), with `services/authService.test.js`,
+  `controllers/v1/confidentialAccess.test.js`, `accessLifecycle.test.js` and `approvalIntegrity.test.js`.
+- **Deviates from convention**: yes — AGENTS.md rule 6 (every new collection gets a `widgetSources` entry).
+  `AuthThrottle` holds short-lived attempt counters, like `Otp` and the session store, which are not reporting
+  sources either; it is also left out of the audit trail (`config/audit.js`). `passwordChangedAt` is not added to
+  the `employees` source's date fields for the same reason.

@@ -25,6 +25,8 @@ import { menuDataScope, resolveUserScope } from "../../middlewares/checkPermissi
 import { buildScopeFilter } from "../../utils/scope.js";
 import { employeeFieldsFor } from "../../utils/employeeFields.js";
 import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
+import authService from "../../services/authService.js";
+import { setPassword } from "../../utils/passwords.js";
 
 // Pre-launch, org-chart manager visibility (SCOPES.TEAM): a plain Employee
 // gets no grant on this screen at all (HR-only master data, INV-8c); a
@@ -313,11 +315,9 @@ export const listEmployeeByParams = async (req, res) => {
   }
 };
 
-// ADR-040: password reset lives here, not on a general profile update —
-// same "findByIdAndUpdate, not save()" reasoning the old User controller's
-// resetUserPassword used: save() re-validates the whole document, so an
-// employee record that predates a later-added required field could never
-// have its password reset over an unrelated validation error.
+// ADR-040: password reset lives here, not on a general profile update.
+// ADR-067: setPassword ends the employee's open sessions, and the reset also
+// clears their sign-in lock — the admin is handing them a working password.
 export const resetEmployeePassword = async (req, res) => {
   try {
     const { employeeId } = req.params;
@@ -331,8 +331,8 @@ export const resetEmployeePassword = async (req, res) => {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee not found" });
     }
 
-    const hashed = await bcrypt.hash(password, 10);
-    await employee.updateOne({ $set: { password: hashed } });
+    await setPassword(employee, password, req);
+    await authService.unlockAccount(employee._id);
 
     return res.status(200).json({ isOk: true, status: 200, message: "Password reset successfully" });
   } catch (error) {

@@ -9,4 +9,6 @@ export const OTP = Object.freeze({
     LENGTH: 6,
     TTL_MS: 10 * 60 * 1000,
     RESEND_COOLDOWN_MS: 60 * 1000,
+    /** Wrong codes a code survives; after this many it is discarded and a new one must be requested. */
+    MAX_WRONG_TRIES: 5,
 });

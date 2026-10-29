@@ -258,6 +258,7 @@ export const loginValidation = [
 export const createAdminUserValidation = [
     nameValidator('adminName'),
     emailValidator,
+    strongPasswordValidator,
     phoneValidator('mobileNumber'),
     booleanValidator('isActive'),
     handleValidationErrors,
@@ -274,6 +275,28 @@ export const otpValidation = [
         .isLength({ min: OTP.LENGTH, max: OTP.LENGTH })
         .withMessage(`OTP must be exactly ${OTP.LENGTH} digits`)
         .isNumeric().withMessage('OTP must contain only numbers'),
+    handleValidationErrors,
+];
+
+/**
+ * Any other route that sets `password`: HR creating an employee's login, an
+ * admin's password reset (ADR-067). The screens show the same rule.
+ */
+export const setPasswordValidation = [
+    strongPasswordValidator,
+    handleValidationErrors,
+];
+
+/**
+ * Change password — the person's own. The current password is checked
+ * against the stored one only, like a sign-in; the new one follows the rule.
+ */
+export const changePasswordValidation = [
+    body('currentPassword')
+        .notEmpty().withMessage('Current password is required')
+        .isLength({ max: PASSWORD.MAX_LENGTH })
+        .withMessage(`Password must not exceed ${PASSWORD.MAX_LENGTH} characters`),
+    strongPasswordFor('newPassword'),
     handleValidationErrors,
 ];
 
@@ -387,6 +410,8 @@ export const allowedAdminUserFields = [
     'adminName', 'email', 'password', 'mobileNumber', 'isActive'
 ];
 
+export const allowedChangePasswordFields = ['currentPassword', 'newPassword'];
+
 export const allowedSearchFields = [
     'skip', 'per_page', 'sorton', 'sortdir', 'match', 'isActive', 'filters', 'matchType'
 ];
@@ -468,6 +493,8 @@ export default {
     createAdminUserValidation,
     otpValidation,
     passwordResetValidation,
+    setPasswordValidation,
+    changePasswordValidation,
     searchValidation,
     allowOnlyFields,
     allowedLoginFields,

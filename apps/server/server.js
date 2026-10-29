@@ -20,6 +20,7 @@ import dotenv from "dotenv";
 import hpp from "hpp";
 import session from "express-session";
 import { setupSwagger } from "./config/swagger.js";
+import { apiDocsEnabled, productionConfigProblem, queryLoggingEnabled } from "./config/production.js";
 
 // ============ SECURITY IMPORTS ============
 // OWASP-compliant security middleware
@@ -43,6 +44,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 dotenv.config();
+
+// ADR-067: a production server with a public session secret is one anyone can
+// sign in to, so it does not start at all.
+const configProblem = productionConfigProblem();
+if (configProblem) {
+  console.error(`❌ ${configProblem}`);
+  process.exit(1);
+}
 
 // Redis is an optional query cache; it never replaces the MongoDB session store.
 import { initializeCache } from "./utils/cache.js";
@@ -175,7 +184,8 @@ app.use("/uploads", express.static("uploads"));
 // NOTE: Removed /log static serving for security - logs should not be publicly accessible
 
 mongoose.set("strictQuery", false);
-mongoose.set("debug", true);
+// Query logging prints every query, password hashes included — never in production.
+mongoose.set("debug", queryLoggingEnabled());
 
 const dbURI = process.env.DATABASE;
 
@@ -237,8 +247,8 @@ mongoose.connection.on("reconnected", () => {
 app.use(morgan("dev"));
 app.use(express.static("files"));
 
-// Setup Swagger documentation (consider disabling in production)
-setupSwagger(app);
+// Swagger documentation — off in production unless API_DOCS_ENABLED=true (ADR-067)
+if (apiDocsEnabled()) setupSwagger(app);
 
 // ============ V1 ROUTES ============
 // Import v1 routes

@@ -10,6 +10,7 @@ import {
   otpValidation,
   passwordResetValidation,
 } from "../../middlewares/inputValidator.js";
+import { otpCheckLimiter, otpSendLimiter } from "../../utils/authThrottle.js";
 
 const router = express.Router();
 
@@ -34,10 +35,12 @@ const router = express.Router();
  *     responses:
  *       200:
  *         description: The same reply for every email, whether or not it has an account (a real account gets the code unless it is inside the resend cooldown)
+ *       429:
+ *         description: Too many code requests for this email or from this address (ADR-067)
  *       500:
  *         description: Server error
  */
-router.post("/send", emailValidator, handleValidationErrors, createOtp);
+router.post("/send", emailValidator, handleValidationErrors, otpSendLimiter, createOtp);
 
 /**
  * @swagger
@@ -64,11 +67,13 @@ router.post("/send", emailValidator, handleValidationErrors, createOtp);
  *       200:
  *         description: OTP verified successfully
  *       400:
- *         description: Invalid or expired OTP
+ *         description: Invalid or expired OTP, or the code's wrong tries are used up
+ *       429:
+ *         description: Too many wrong codes for this email or from this address (ADR-067)
  *       500:
  *         description: Server error
  */
-router.post("/verify", otpValidation, verifyOtp);
+router.post("/verify", otpValidation, otpCheckLimiter, verifyOtp);
 
 /**
  * @swagger
@@ -94,15 +99,17 @@ router.post("/verify", otpValidation, verifyOtp);
  *                 type: string
  *               newPassword:
  *                 type: string
- *                 minLength: 6
+ *                 minLength: 8
  *     responses:
  *       200:
  *         description: Password reset successfully
  *       400:
  *         description: Invalid OTP or user not found
+ *       429:
+ *         description: Too many wrong codes for this email or from this address (ADR-067)
  *       500:
  *         description: Server error
  */
-router.post("/reset-password", passwordResetValidation, resetPassword);
+router.post("/reset-password", passwordResetValidation, otpCheckLimiter, resetPassword);
 
 export default router;

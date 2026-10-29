@@ -275,7 +275,7 @@ const expectStatus = (res, status, label) => assert.equal(res.statusCode, status
   LoginAttempt.findOneAndUpdate = async () => ({});
   const signIn = async (employee) => {
     const res = fakeRes();
-    const req = { body: { email: employee.email, password, locationConsent: true, ipConsent: true }, headers: {}, ip: "127.0.0.1", session: {} };
+    const req = { body: { email: employee.email, password, locationConsent: true, ipConsent: true }, headers: {}, ip: "127.0.0.1", session: { regenerate: (done) => done() } };
     await login(req, res);
     return { res, req };
   };

@@ -4,6 +4,7 @@ import AdminUser from "../../models/AdminUser.js";
 import Employee, { NO_ACCESS_STATUSES } from "../../models/Employee.js";
 import LoginAttempt from "../../models/LoginAttempt.js";
 import authService from "../../services/authService.js";
+import { setPassword } from "../../utils/passwords.js";
 
 /**
  * Resolve a login email to either an admin user or an employee (ADR-040:
@@ -13,13 +14,14 @@ import authService from "../../services/authService.js";
  * @returns {{ account: Object, role: "ADMIN"|"USER" }|null}
  */
 const findAccountByEmail = async (email) => {
-  const admin = await AdminUser.findOne({ email, isActive: true });
+  // Both emails are stored lowercase (schema transform), so an email matches
+  // in any case. The login field also takes the Employee Code (e.g. "A005",
+  // ADR-040's default credential), matched in either case, for employees
+  // whose email is a real address.
+  const typed = String(email || "").trim();
+  const admin = await AdminUser.findOne({ email: typed.toLowerCase(), isActive: true });
   if (admin) return { account: admin, role: ROLES.ADMIN };
 
-  // Employee.email is stored lowercase (schema transform). The login field
-  // also takes the Employee Code (e.g. "A005", ADR-040's default credential),
-  // matched in either case, for employees whose email is a real address.
-  const typed = String(email || "").trim();
   const employee = await Employee.findOne({
     $or: [{ email: typed.toLowerCase() }, { employeeCode: { $in: [typed, typed.toUpperCase()] } }],
     isActive: true,
@@ -85,10 +87,14 @@ export const login = async (req, res) => {
 
     const { account, role } = found;
     const userId = account._id;
+    // ADR-067: failures are counted and locked against the account, never the
+    // spelling typed — the email in any case and the Employee Code are one
+    // person with one lock.
+    const lockEmail = account.email;
 
     // Check lock BEFORE password verification
-    if (await authService.isAccountLocked(userId, email)) {
-      const status = await authService.getLoginAttemptStatus(userId, email);
+    if (await authService.isAccountLocked(userId, lockEmail)) {
+      const status = await authService.getLoginAttemptStatus(userId, lockEmail);
       return res.status(423).json({
         isOk: false,
         message: "Account locked due to multiple failed login attempts",
@@ -104,7 +110,7 @@ export const login = async (req, res) => {
     if (!isPasswordMatch) {
       const attempt = await authService.recordFailedAttempt(
         userId,
-        email,
+        lockEmail,
         ipAddress,
         clientLocation,
       );
@@ -137,16 +143,23 @@ export const login = async (req, res) => {
 
     await authService.recordSuccessfulLogin(
       userId,
-      email,
+      lockEmail,
       ipAddress,
       clientLocation,
     );
 
+    // A fresh session id at every sign-in, so an id handed out before it
+    // (a planted cookie) never becomes a signed-in session.
+    await new Promise((resolve, reject) => {
+      req.session.regenerate((error) => (error ? reject(error) : resolve()));
+    });
     req.session.user = {
       id: userId.toString(),
       role,
       email: account.email,
       name: account.adminName || account.employeeName,
+      // authMiddleware ends the session if the password changes after this.
+      signedInAt: Date.now(),
     };
 
     // checkPermission and buildScopeFilter read these; admins bypass both.
@@ -256,7 +269,41 @@ export const logout = async (req, res) => {
 };
 
 /**
- * GET /auth/login-status/:userId
+ * POST /auth/change-password — the signed-in person's own password. The new
+ * one follows the password rule (route validation); every other session of
+ * theirs ends, this one stays signed in.
+ */
+export const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const Model = req.user.role === ROLES.ADMIN ? AdminUser : Employee;
+    const account = await Model.findById(req.user.id);
+    if (!account || !(await bcrypt.compare(currentPassword, account.password))) {
+      return res.status(400).json({
+        isOk: false,
+        message: "Current password is incorrect",
+        status: 400,
+      });
+    }
+
+    await setPassword(account, newPassword, req);
+
+    return res.status(200).json({
+      isOk: true,
+      message: "Password changed. Any other device signed in to this account has been signed out.",
+      status: 200,
+    });
+  } catch (error) {
+    console.error("Error in changePassword:", error);
+    return res
+      .status(500)
+      .json({ isOk: false, message: "Internal server error", status: 500 });
+  }
+};
+
+/**
+ * GET /auth/login-status/:userId — admin only, like the Login Attempt Logs
+ * screen it belongs to.
  */
 export const getLoginStatus = async (req, res) => {
   try {

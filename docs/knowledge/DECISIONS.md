@@ -5426,3 +5426,49 @@ consumer; single-branch build
   `utils/payrollBenefits.test.js` (case 4), `jobs/attendanceScheduler.test.js` and
   `apps/admin/src/entities/payroll-views.test.js`; each fails on the old code.
 - **Deviates from convention**: no.
+
+### ADR-070 — One leave allocation per period; carry-forward, deletes and adjustments reach the ledger correctly; onboarding only from an Accepted offer
+
+- **Date**: 2026-10-29
+- **Status**: accepted
+- **Context**: the 2026-10-29 functional test of the local app (report section 4) found: (P6) HR could add a second,
+  overlapping 2026 Casual Leave allocation; "Add unused leaves from previous allocations" did nothing on a manual
+  allocation; deleting an allocation left its days in the ledger; a Leave Adjustment counted from the day it was
+  recorded, so reducing Ekta's 2027 allocation by 15 cut her current Earned Leave to 0; the reduction could not be
+  reversed ("Allocate +15" was refused against the maximum of 24, measured on her whole balance); the Leave Allocation
+  list showed neither leave type nor dates. (P8) an onboarding saved from a Rejected job offer, and one offer was
+  referenced by two onboardings. (P12) after cancelling a payroll entry, re-running failed for everyone until HR found
+  that the cancelled entry had to be deleted. (P13) a rejected Attendance Request offered Save; Grant Allocations looked
+  like an "Adjust Allocation" box; the onboarding did not show its linked employee and still offered Create Employee.
+- **Decision**:
+  - **One allocation per employee, leave type and day.** Create, edit and Grant Allocations refuse (or, for Grant,
+    skip with the reason) an allocation whose dates overlap another non-cancelled one of the same employee and leave
+    type.
+  - **Carry-forward on a manual allocation** uses the same calculation as Grant (`carriedForwardLeaves`): what was
+    left of the latest earlier allocation on its last day, capped at the leave type's maximum. A leave type that does
+    not carry forward refuses the tick.
+  - **Deleting an allocation soft-deletes its ledger rows** (grant, carry-forward, `/adjust`, expiry).
+  - **Adjustments are dated inside their allocation.** A Leave Adjustment with an allocation chosen is posted on its
+    posting date moved into that allocation's dates; an `/adjust` on an allocation counts from today or its start,
+    whichever is later. `getLeaveBalance` now counts every unexpired allocation row and every Leave Adjustment from its
+    `fromDate` (INV-27); a leave application's check does not count a reduction that takes effect in a later period.
+  - **Reversal is an equal opposite adjustment** on the same allocation: Allocate's maximum is checked against that
+    allocation's own total after its earlier adjustments, not the whole balance. No delete endpoint was added, so no
+    permission rows change. The allocation must be the same employee's, of the same leave type.
+  - **Onboarding**: only from an Accepted Job Offer, one onboarding per offer (create and edit); Create Employee is
+    refused while the offer is not Accepted or once the onboarding has an employee, and saving Add Employee for an
+    onboarded hire whose offer is not Accepted is refused (so the offer is no longer flipped to Accepted).
+  - **Payroll re-run**: re-running over cancelled slips keeps its existing rule (delete the cancelled entry first,
+    which deletes its slips). The cancelled entry's page now says so and offers "Delete entry and cancelled slips";
+    the per-employee failure says the same.
+  - **Screens**: Attendance Request never offers Save after creation (the server refuses every edit); Leave Policy
+    Assignment shows a "Grant Allocations" action until allocated; the onboarding shows its Employee and offers
+    Create Employee only until linked; the Leave Allocation list shows Leave Type, From and To.
+- **Consequences**: no seed and no backfill. Existing data is not rewritten: overlapping allocations and duplicate
+  onboardings already saved stay until HR removes them (an onboarding from a Rejected offer can no longer be edited or
+  turned into an employee); an adjustment already posted keeps its date, so the 2027 reduction from the test still
+  counts today until HR reverses it with an Allocate of 15 on the 2027 allocation. Adjustments now count from their
+  posting date rather than the day they were typed. Tested by `controllers/v1/leaveOnboardingIntegrity.test.js`, case
+  6 of `utils/leaveBalancePeriod.test.js`, section 6 of `entities/daily-use.test.js` and the reordered section 2 of
+  `controllers/v1/companyIntegrity.test.js`; each fails on the old code.
+- **Deviates from convention**: no.

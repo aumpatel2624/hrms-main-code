@@ -10,6 +10,7 @@ import { getLeaveBalance } from "./leaveBalance.js";
 
 const same = (a, b) => String(a) === String(b);
 const OPERATORS = {
+  $in: (value, arg) => arg.some((x) => same(value, x)),
   $ne: (value, arg) => !same(value ?? null, arg ?? null),
   $gt: (value, arg) => value > arg,
   $lt: (value, arg) => value < arg,
@@ -67,6 +68,18 @@ ledger = [
 ];
 assert.equal(await getLeaveBalance(employeeId, leaveTypeId, day("2025-12-31")), 8, "not expired yet on its last day");
 assert.equal(await getLeaveBalance(employeeId, leaveTypeId, day("2026-01-02")), 0, "expired once the expiry row is written");
+
+// 6. A Leave Adjustment counts from its own date (29 Oct P6): reducing
+//    next year's allocation, recorded now, leaves this year's balance and a
+//    this-year leave check alone.
+ledger = [
+  row(8, "2026-01-01", "2026-12-31", "2026-01-01T00:00:00Z"),
+  row(10, "2027-01-01", "2027-12-31", "2026-10-27T10:05:00Z"),
+  { ...row(-6, "2027-01-01", "2027-01-01", "2026-10-28T09:00:00Z"), transactionType: "LeaveAdjustment" },
+];
+assert.equal(await getLeaveBalance(employeeId, leaveTypeId, day("2026-11-01")), 8, "next year's reduction does not count this year");
+assert.equal(await sickLeave("2026-11-01"), 8, "nor in a this-year leave check");
+assert.equal(await getLeaveBalance(employeeId, leaveTypeId, day("2027-02-01")), 12, "it counts from its own date");
 
 // 5. Soft-deleted rows never count (ADR-024's aggregate trap).
 ledger = [row(8, "2026-01-01", "2026-12-31", "2026-01-01T00:00:00Z", { isDeleted: true })];

@@ -257,13 +257,16 @@ const expectRefused = (res, pattern, label) => {
   expectRefused(await onboard({ ...ids(kiranNuv, offerNuv), departmentId: String(engApd._id) }), /Department must belong to the Job Offer's company/, "the offer's company, another company's department");
   assert.equal(onboardings.length, 1, "nothing was saved");
 
-  expectStatus(await onboard(ids(kiranNuv, offerNuv)), 201, "the applicant's own offer");
-  assert.ok(same(onboardings.at(-1).companyId, nuva), "a blank company takes the offer's");
+  // One offer onboards one hire (29 Oct P8): not while the wrong record holds it.
+  expectRefused(await onboard(ids(kiranNuv, offerNuv)), /already has an Employee Onboarding/, "the applicant's own offer, still held by the wrong record");
 
   const edit = (body) => call(onboardingRoutes, "put", "/employee-onboardings/:onboardingId", admin, { params: { onboardingId: String(wrong._id) }, body });
   expectRefused(await edit({ activities: [] }), /same Job Applicant/, "editing the existing wrong record says what is wrong");
   expectStatus(await edit({ jobOfferId: String(offerApd._id) }), 200, "HR corrects it to the applicant's own offer");
   assert.ok(same(wrong.jobOfferId, offerApd._id), "corrected");
+
+  expectStatus(await onboard(ids(kiranNuv, offerNuv)), 201, "the applicant's own offer");
+  assert.ok(same(onboardings.at(-1).companyId, nuva), "a blank company takes the offer's");
 }
 
 // ------------------------------- 3. leave periods of the employee's company --
@@ -438,8 +441,9 @@ const expectRefused = (res, pattern, label) => {
 {
   const ravi = { _id: oid(), applicantName: "Ravi ApplicantTRP", status: "Open" };
   stub(JobApplicant, [ravi]);
-  stub(JobOffer, []);
-  const onboarding = { _id: oid(), jobApplicantId: ravi._id, companyId: apidel, employeeId: null, boardingStatus: "Completed", dateOfJoining: new Date("2026-11-02"),
+  const raviOffer = { _id: oid(), jobApplicantId: ravi._id, companyId: apidel, status: "Accepted" };
+  stub(JobOffer, [raviOffer]);
+  const onboarding = { _id: oid(), jobApplicantId: ravi._id, jobOfferId: raviOffer._id, companyId: apidel, employeeId: null, boardingStatus: "Completed", dateOfJoining: new Date("2026-11-02"),
     activities: [{ activityName: "Laptop", status: "Completed", requiredForEmployeeCreation: true }] };
   stub(EmployeeOnboarding, [onboarding]);
   stub(Department, [engApd, engNuv, approverDept]);

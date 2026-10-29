@@ -25,14 +25,15 @@ Use this screen instead of Employee Checkin when you were not able to check in/o
 
 ### Status
 
-- **Status** *(chosen from a list)* — Set by the Cancel action below.
+- **Status** *(chosen from a list)* — open until approved; active once approved and applied. Set by the actions below.
 
 ## Finding a record
 
 Use the search box for a quick look-up, or open the filter panel to narrow the list by:
 
-- Employee id
-- Company id
+- Employee
+- Company
+- Approver
 - Status
 - Reason
 - From date

@@ -110,6 +110,7 @@ const referenceGuardedDelete = async (Model, modelName, id, label) => {
   return { blocked: false };
 };
 
+const same = (a, b) => String(a) === String(b);
 const daysBetween = (a, b) => Math.round((new Date(a).getTime() - new Date(b).getTime()) / 86400000);
 const addDays = (date, days) => new Date(new Date(date).getTime() + days * 86400000);
 
@@ -118,6 +119,9 @@ const addDays = (date, days) => new Date(new Date(date).getTime() + days * 86400
 // LeaveLedgerEntry on create, no update/delete (immutable once written,
 // same append-only spirit as LeaveLedgerEntry itself). Does NOT touch
 // LeaveAllocation.totalLeavesAllocated — deliberate, matches source.
+// One chosen allocation (29 Oct P6) dates the adjustment inside its period
+// and caps Allocate at that allocation's own total, so a mistaken adjustment
+// is reversed by an equal opposite one on the same allocation.
 
 export const createLeaveAdjustment = async (req, res) => {
   try {
@@ -137,12 +141,36 @@ export const createLeaveAdjustment = async (req, res) => {
     const leaveType = await LeaveType.findById(leaveTypeId).lean();
     if (!leaveType) return res.status(404).json({ isOk: false, status: 404, message: "Leave Type not found" });
 
-    const postingDate = req.body.postingDate ? new Date(req.body.postingDate) : new Date();
+    let postingDate = req.body.postingDate ? new Date(req.body.postingDate) : new Date();
+    let allocation = null;
+    if (req.body.leaveAllocationId) {
+      allocation = await LeaveAllocation.findById(req.body.leaveAllocationId).lean();
+      if (!allocation) return res.status(404).json({ isOk: false, status: 404, message: "Leave Allocation not found" });
+      if (!same(allocation.employeeId, employeeId) || !same(allocation.leaveTypeId, leaveTypeId)) {
+        return res.status(400).json({ isOk: false, status: 400, message: "Leave Allocation must be this employee's allocation of this leave type" });
+      }
+      if (allocation.status === "cancelled") {
+        return res.status(400).json({ isOk: false, status: 400, message: "Cannot adjust a cancelled allocation" });
+      }
+      // Posted inside the allocation's period: reducing next year's
+      // allocation leaves this year's balance alone.
+      const from = new Date(allocation.fromDate).getTime();
+      const to = new Date(allocation.toDate).getTime();
+      postingDate = new Date(Math.min(Math.max(postingDate.getTime(), from), to));
+    }
     const currentBalance = await getLeaveBalance(employeeId, leaveTypeId, postingDate);
 
-    // Leave Adjustment.md Validation Rule #4 — over-allocation cap (Allocate only).
+    // Leave Adjustment.md Validation Rule #4 — over-allocation cap (Allocate
+    // only): the chosen allocation's own total after its earlier
+    // adjustments, else the balance on the posting date.
     if (adjustmentType === "Allocate" && leaveType.maxLeavesAllowed) {
-      const newAllocation = currentBalance + Number(leavesToAdjust);
+      let allocated = currentBalance;
+      if (allocation) {
+        const earlier = await LeaveAdjustment.find({ leaveAllocationId: allocation._id }).select("leavesToAdjust adjustmentType").lean();
+        allocated = (allocation.totalLeavesAllocated ?? 0)
+          + earlier.reduce((sum, row) => sum + (row.adjustmentType === "Allocate" ? row.leavesToAdjust : -row.leavesToAdjust), 0);
+      }
+      const newAllocation = allocated + Number(leavesToAdjust);
       if (newAllocation > leaveType.maxLeavesAllowed) {
         return res.status(400).json({
           isOk: false, status: 400,
@@ -156,11 +184,6 @@ export const createLeaveAdjustment = async (req, res) => {
         isOk: false, status: 400,
         message: `Reduction is more than ${employee.employeeName}'s available leave balance ${currentBalance} for leave type ${leaveType.leaveTypeName}`,
       });
-    }
-
-    if (req.body.leaveAllocationId) {
-      const allocation = await LeaveAllocation.findById(req.body.leaveAllocationId).lean();
-      if (!allocation) return res.status(404).json({ isOk: false, status: 404, message: "Leave Allocation not found" });
     }
 
     const signedLeaves = adjustmentType === "Allocate" ? Number(leavesToAdjust) : -Number(leavesToAdjust);

@@ -10,7 +10,8 @@
 // And from the 29 Oct verification run (N1): editing a Salary Component (so
 // Arrear component could never be ticked), Salary Structure, Payroll Period,
 // Gratuity Rule, Income Tax Slab or Tax Exemption Sub Category was refused
-// with "Unexpected fields in request body", like 2. was.
+// with "Unexpected fields in request body", like 2. was. A cancelled entry
+// still listed each employee's outcome as "submitted" (9.).
 // (Formula rows ignoring payment days is salarySlipCalc.test.js, Scenario C2.)
 // Drives the real mounted routes as an Admin over in-memory stand-ins, like
 // approvalIntegrity.test.js.
@@ -402,5 +403,25 @@ console.log("payrollIntegrity: a saved payroll correction opens");
   }
 }
 console.log("payrollIntegrity: the payroll setup screens' edits save (N1)");
+
+// ------------------- 9. a cancelled entry's rows say cancelled (29 Oct) --
+{
+  const slip = (employee) => ({ _id: oid(), employeeId: employee._id, companyId, startDate: sepStart, endDate: sepEnd, status: "cancelled" });
+  const paid = slip(asha);
+  stub(SalarySlip, [paid]);
+  const entry = {
+    _id: oid(), companyId, status: "submitted", startDate: sepStart, endDate: sepEnd,
+    employeeDetails: [
+      asDoc({ employeeId: asha._id, salarySlipId: paid._id, status: "submitted", failureReason: "" }),
+      asDoc({ employeeId: ravi._id, status: "pending", failureReason: "" }),
+    ],
+  };
+  stub(PayrollEntry, [entry]);
+  const res = await call(payrollRunRoutes, "post", "/payroll-entries/:id/cancel", { params: { id: String(entry._id) } });
+  expectStatus(res, 200, "cancel the entry");
+  assert.equal(entry.status, "cancelled");
+  assert.deepEqual(entry.employeeDetails.map((row) => row.status), ["cancelled", "cancelled"], "no row still says submitted or pending");
+}
+console.log("payrollIntegrity: a cancelled entry's rows say cancelled");
 
 console.log("payrollIntegrity: all cases passed");

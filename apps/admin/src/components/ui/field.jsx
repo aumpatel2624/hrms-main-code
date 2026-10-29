@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Eye, EyeOff, Lock01, Mail01 } from "@untitledui/icons";
 import { Input } from "@/components/base/input/input";
 import { TextArea } from "@/components/base/textarea/textarea";
@@ -129,26 +129,40 @@ export const SelectField = ({
 export const MultiSelectField = ({ options = [], value, onChange, error, hint, placeholder = "Select", isDisabled, ...rest }) => {
     const items = options.map(normalizeOption).map((o) => ({ id: String(o.value), label: o.label }));
     const selected = new Set((Array.isArray(value) ? value : []).map(String));
+    const wrapper = useRef(null);
+
+    // React Aria's list empties every choice on Escape (and then stays open).
+    // Here Escape only closes the open list, as clicking beside it does: stop
+    // the key before the list sees it and close through the trigger. The list
+    // is portalled, so a key inside the wrapper is the trigger's own.
+    const closeOnEscape = (e) => {
+        if (e.key !== "Escape" || wrapper.current?.contains(e.target)) return;
+        e.stopPropagation();
+        e.preventDefault();
+        wrapper.current?.querySelector("button")?.click();
+    };
 
     return (
-        <MultiSelect
-            items={items}
-            selectedKeys={selected}
-            onSelectionChange={(keys) => onChange?.(keys === "all" ? items.map((i) => i.id) : [...keys].map(String))}
-            onReset={() => onChange?.([])}
-            onSelectAll={() => onChange?.(items.map((i) => i.id))}
-            selectedCountFormatter={() => items.filter((i) => selected.has(i.id)).map((i) => i.label).join(", ") || `${selected.size} selected`}
-            placeholder={placeholder}
-            isDisabled={isDisabled}
-            isInvalid={Boolean(error)}
-            hint={error || hint}
-            {...rest}
-        >
-            {(item) => (
-                <SelectItem key={item.id} id={item.id}>
-                    {item.label}
-                </SelectItem>
-            )}
-        </MultiSelect>
+        <div ref={wrapper} onKeyDownCapture={closeOnEscape}>
+            <MultiSelect
+                items={items}
+                selectedKeys={selected}
+                onSelectionChange={(keys) => onChange?.(keys === "all" ? items.map((i) => i.id) : [...keys].map(String))}
+                onReset={() => onChange?.([])}
+                onSelectAll={() => onChange?.(items.map((i) => i.id))}
+                selectedCountFormatter={() => items.filter((i) => selected.has(i.id)).map((i) => i.label).join(", ") || `${selected.size} selected`}
+                placeholder={placeholder}
+                isDisabled={isDisabled}
+                isInvalid={Boolean(error)}
+                hint={error || hint}
+                {...rest}
+            >
+                {(item) => (
+                    <SelectItem key={item.id} id={item.id}>
+                        {item.label}
+                    </SelectItem>
+                )}
+            </MultiSelect>
+        </div>
     );
 };

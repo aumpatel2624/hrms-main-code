@@ -8,7 +8,7 @@ const EmployeeDetailSchema = new mongoose.Schema({
   designationId: ref("Designation"),
   isSalaryWithheld: { type: Boolean, default: false },
   salarySlipId: ref("SalarySlip"),
-  status: { type: String, enum: ["pending", "created", "failed", "submitted"], default: "pending" },
+  status: { type: String, enum: ["pending", "created", "failed", "submitted", "cancelled"], default: "pending" },
   failureReason: { type: String, trim: true, default: "" },
 });
 const schema = new mongoose.Schema({

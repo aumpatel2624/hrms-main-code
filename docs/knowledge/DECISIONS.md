@@ -5504,3 +5504,29 @@ consumer; single-branch build
   `controllers/v1/leaveOnboardingIntegrity.test.js`, section 4 of `controllers/v1/decisionIntegrity.test.js` and
   sections 7–8 of `entities/daily-use.test.js`; each fails on the old code.
 - **Deviates from convention**: no.
+
+### ADR-072 — Escape keeps a several-choice picker's choices; cancelling a gratuity asks first; a cancelled payroll entry's rows say cancelled
+
+- **Status**: accepted (fix-bug, 2026-10-29)
+- **Context**: the 29 Oct verification run reported (N4) that an emptied optional single-choice picker kept its old
+  value on save, and three Low items: Escape on the Department approver pickers threw the choices away; cancelling a
+  gratuity was one click with no confirmation, although it also cancels its Additional Salary; a cancelled payroll
+  entry still listed each employee's outcome as "submitted". N4 did not reproduce: the run's script found its picker
+  through the nearest `div.flex.flex-col` containing the label, which is the whole form, so it emptied **Gender** (its
+  screenshot shows Gender blank, Leave Approver untouched). Rendered under a DOM stand-in, `SelectField` reports `null`
+  when emptied, the form keeps `""`, the payload sends `null` and `updateEmployee` stores it.
+- **Decision**:
+  - N4: no code change; a regression check that an emptied approver saved as `null` clears it is added.
+  - React Aria's list clears every selection on Escape (`escapeKeyBehavior`, default `clearSelection`) and the
+    vendored `MultiSelect` does not pass the option through. Rather than edit the vendored file, `MultiSelectField`
+    catches Escape from inside the open list and closes it through its trigger, as clicking beside it does.
+  - `SimpleActionButton` takes an optional `confirm` ({ title, description, confirmLabel }) that opens the standard
+    `ConfirmModal` first; the gratuity's Cancel uses it and says its Additional Salary is cancelled too.
+  - Cancelling a payroll entry marks each row whose slip it cancelled, and each row never run, `cancelled`; a row
+    that failed to create a slip keeps `failed` and its reason. `cancelled` is added to the row status enum.
+- **Consequences**: no seed, permission, menu or reporting change; no backfill (entries cancelled before this keep
+  their old row labels). Escape no longer clears a several-choice picker's search text; it only closes the list.
+  Tested by section 9 of `controllers/v1/payrollIntegrity.test.js` and section 9 of `entities/daily-use.test.js`,
+  which fail on the old code; the N4 check in section 2 of `controllers/v1/decisionIntegrity.test.js` passes on both,
+  as there was no fault.
+- **Deviates from convention**: no.

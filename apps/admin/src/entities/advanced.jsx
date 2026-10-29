@@ -1456,6 +1456,11 @@ const OUTSTANDING_LINE_COLUMNS = [
     { name: "amount", label: "Amount", type: "number" },
     { name: "status", label: "Status", type: "select", options: ["Settled", "Unsettled"] },
 ];
+// A submitted Gratuity's line is paid by payroll, so it stays out of the total (ADR-069).
+const PAYABLE_LINE_COLUMNS = [
+    ...OUTSTANDING_LINE_COLUMNS,
+    { name: "paidThroughPayroll", label: "Paid through payroll (not in total)", type: "checkbox" },
+];
 const ASSET_COLUMNS = [
     { name: "assetName", label: "Asset", type: "text" },
     { name: "action", label: "Action", type: "select", options: ["Return", "Recover Cost"] },
@@ -1494,7 +1499,7 @@ export const fullAndFinalStatementConfig = {
     ],
     renderExtra: ({ mode, id, values, setValues }) => (
         <>
-            <SimpleArrayField title="Payables" description={`Total payable: ${values.totalPayableAmount ?? 0}`} fieldName="payables" columns={OUTSTANDING_LINE_COLUMNS} values={values} setValues={setValues} />
+            <SimpleArrayField title="Payables" description={`Total payable: ${values.totalPayableAmount ?? 0}`} fieldName="payables" columns={PAYABLE_LINE_COLUMNS} values={values} setValues={setValues} />
             <SimpleArrayField title="Receivables" description={`Total receivable: ${values.totalReceivableAmount ?? 0} (includes asset recovery cost)`} fieldName="receivables" columns={OUTSTANDING_LINE_COLUMNS} values={values} setValues={setValues} />
             <SimpleArrayField title="Assets Allocated" description={`Total asset recovery cost: ${values.totalAssetRecoveryCost ?? 0}`} fieldName="assetsAllocated" columns={ASSET_COLUMNS} values={values} setValues={setValues} />
             {mode === "edit" && id && (
@@ -3622,6 +3627,14 @@ const SALARY_DETAIL_VIEW_COLUMNS = [
     { label: "Skipped (condition false)", value: (row) => (row._skipped ? "Yes" : "No") },
 ];
 
+// What the slip pays, line by line, on its View page — the only page an
+// employee (read-only, own slips) can open (ADR-043, ADR-069).
+const PAYSLIP_LINE_COLUMNS = [
+    { label: "Component", value: (row) => row.salaryComponentId?.salaryComponentName || componentLabel(row) },
+    { label: "Amount", value: (row) => row.defaultAmount ?? row.amount ?? 0 },
+];
+const paidLines = (rows) => (rows ?? []).filter((row) => !row.statisticalComponent);
+
 export const salarySlipConfig = {
     key: "salary-slip",
     path: "/salary-slip",
@@ -3667,6 +3680,21 @@ export const salarySlipConfig = {
         { name: "netPay", label: "Net pay", section: "totals", type: "number" },
         { name: "displayStatus", label: "Status", section: "status", type: "text" },
     ],
+    renderViewExtra: ({ values }) => (
+        <>
+            <ReadOnlyRows title="Earnings" rows={paidLines(values.earnings)} columns={PAYSLIP_LINE_COLUMNS} />
+            <ReadOnlyRows title="Deductions" rows={paidLines(values.deductions)} columns={PAYSLIP_LINE_COLUMNS} />
+            <ReadOnlyRows
+                title="Totals"
+                rows={[
+                    { label: "Gross pay", amount: values.grossPay },
+                    { label: "Total deduction", amount: values.totalDeduction },
+                    { label: "Net pay", amount: values.netPay },
+                ]}
+                columns={[{ label: "Total", value: (row) => row.label }, { label: "Amount", value: (row) => row.amount ?? 0 }]}
+            />
+        </>
+    ),
     renderExtra: ({ mode, id, values }) => (
         <>
             {mode !== "add" && (
@@ -5423,6 +5451,20 @@ export const payrollCorrectionConfig = {
         { name: "daysToReverse", label: "Days to Reverse", section: "details", type: "number", required: true, error: "Days to reverse is required" },
         { name: "remarks", label: "Remarks", section: "details", type: "text" },
     ],
+    // The View page names the slip from the populated record and shows the
+    // status, rather than matching an id against the pickable slips (ADR-069).
+    viewFields: [
+        { name: "salarySlipLabel", label: "Salary Slip", section: "details", type: "text" },
+        { name: "daysToReverse", label: "Days to Reverse", section: "details", type: "number" },
+        { name: "remarks", label: "Remarks", section: "details", type: "text" },
+        { name: "status", label: "Status", section: "status", type: "text" },
+    ],
+    toView: (data) => ({
+        ...data,
+        salarySlipLabel: data.salarySlipId?.startDate
+            ? salarySlipLabel(data.salarySlipId, new Map([[String(data.salarySlipId.employeeId), data.employeeId?.employeeName]]))
+            : null,
+    }),
     columns: [
         { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
         // Search adds the slip's dates (salarySlipPeriod); the slip is the row's employee's.

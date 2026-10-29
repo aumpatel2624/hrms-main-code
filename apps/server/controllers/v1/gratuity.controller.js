@@ -10,8 +10,10 @@
  * NOT filter disabled rows, so HR can still find and re-enable one.
  *
  * Gratuity: folded-docstatus doctype (draft/submitted/cancelled). Submit
- * requires the employee's relievingDate to be set and a submitted Salary
- * Slip to exist, runs the full gratuityCalc.js pipeline, then creates an
+ * requires the employee's relievingDate to be set, a submitted Salary
+ * Slip to exist and no slip yet for the payroll date's period, bases the
+ * amount on the components' full monthly amounts (ADR-069), runs the full
+ * gratuityCalc.js pipeline, then creates an
  * active AdditionalSalary exactly like RetentionBonus/EmployeeIncentive
  * (ADR-028). Cancel cascades to cancel that linked AdditionalSalary — a
  * deliberate fix of a real source asymmetry (ADR-031).
@@ -23,6 +25,9 @@ import Employee from "../../models/Employee.js";
 import Company from "../../models/Company.js";
 import SalaryComponent from "../../models/SalaryComponent.js";
 import SalarySlip from "../../models/SalarySlip.js";
+import SalaryStructure from "../../models/SalaryStructure.js";
+import SalaryStructureAssignment from "../../models/SalaryStructureAssignment.js";
+import { calculateFullPeriodAmounts } from "../../utils/salarySlipCalc.js";
 import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
 import { getPayrollSettingsDoc } from "./payrollRun.controller.js";
@@ -412,6 +417,23 @@ export const submitGratuity = async (req, res) => {
 
     const rule = await GratuityRule.findById(doc.gratuityRuleId).lean();
     if (!rule) throwError(404, "Gratuity Rule not found");
+    if (!(rule.applicableEarningsComponent || []).length) {
+      throwError(400, `Gratuity Rule "${rule.name}" has no applicable earning component. Open the rule, add the component gratuity is based on (for example Basic) and save it.`);
+    }
+
+    // ADR-031: gratuity is paid once, through payroll. A slip already made
+    // for the payroll date's period would never include it (ADR-069).
+    const payrollDate = new Date(doc.payrollDate);
+    const coveringSlip = await SalarySlip.findOne({
+      employeeId: doc.employeeId,
+      status: { $ne: "cancelled" },
+      startDate: { $lte: payrollDate },
+      endDate: { $gte: payrollDate },
+    }).lean();
+    if (coveringSlip) {
+      const period = `${coveringSlip.startDate.toISOString().slice(0, 10)} – ${coveringSlip.endDate.toISOString().slice(0, 10)}`;
+      throwError(400, `${employee.employeeName} already has a salary slip for ${period}, so payroll would not pay this gratuity. Cancel or delete that slip, submit the gratuity, then create the slip again, or choose a payroll date in a period without a slip.`);
+    }
 
     const latestSlip = await SalarySlip.findOne({ employeeId: doc.employeeId, status: "submitted" })
       .sort({ startDate: -1 })
@@ -419,6 +441,14 @@ export const submitGratuity = async (req, res) => {
     if (!latestSlip) {
       throwError(400, `No Salary Slip found for Employee: ${employee.employeeName}`);
     }
+    // The base is the component's full monthly amount under the structure
+    // the last slip was paid on, not that slip's (possibly prorated) amount.
+    const assignment = await SalaryStructureAssignment.findById(latestSlip.salaryStructureAssignmentId).lean();
+    const structure = assignment && await SalaryStructure.findById(assignment.salaryStructureId).lean();
+    if (!structure) {
+      throwError(400, `The salary structure behind ${employee.employeeName}'s last salary slip no longer exists`);
+    }
+    const monthly = calculateFullPeriodAmounts({ structure, assignment });
 
     let currentWorkExperience;
     if (rule.workExperienceCalculationFunction === "Manual") {
@@ -449,7 +479,7 @@ export const submitGratuity = async (req, res) => {
     const amount = getGratuityAmount({
       workExperience: currentWorkExperience,
       applicableComponentIds,
-      latestSlipEarnings: latestSlip.earnings || [],
+      latestSlipEarnings: monthly.earnings,
       calculateGratuityAmountBasedOn: rule.calculateGratuityAmountBasedOn,
       slabs: rule.gratuityRuleSlabs || [],
     });

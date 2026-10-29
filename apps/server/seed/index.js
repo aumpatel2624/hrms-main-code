@@ -2183,7 +2183,10 @@ const seedExpenseRoles = async () => {
 };
 
 // ADR-034. These deliberately have no applicable component: salary components
-// are user-authored per company, so a seed cannot truthfully choose one.
+// are user-authored per company, so a seed cannot truthfully choose one. A
+// rule without one cannot compute gratuity, so it is seeded disabled — out of
+// the Gratuity rule picker until HR adds the component and re-enables it
+// (ADR-069). Rules seeded enabled before that are disabled here too.
 const seedRegionalGratuityRules = async () => {
   const rules = [
     { name: "Indian Standard Gratuity Rule", calculateGratuityAmountBasedOn: "Current Slab", workExperienceCalculationFunction: "Round off Work Experience", minimumYearForGratuity: 5, applicableEarningsComponent: [], gratuityRuleSlabs: [{ fromYear: 0, toYear: null, fractionOfApplicableEarnings: 15 / 26 }] },
@@ -2194,9 +2197,13 @@ const seedRegionalGratuityRules = async () => {
   let seeded = 0;
   for (const rule of rules) {
     const exists = await GratuityRule.findOne({ name: rule.name }).lean();
-    if (!exists) { await GratuityRule.create(rule); seeded += 1; }
+    if (!exists) { await GratuityRule.create({ ...rule, disable: true }); seeded += 1; }
   }
-  console.log(`⚠️ Seeded ${seeded} Regional Gratuity Rule(s) — add an applicable earning component to each before using it for a real Gratuity (GratuityRule.applicableEarningsComponent is empty).`);
+  const { modifiedCount } = await GratuityRule.updateMany(
+    { name: { $in: rules.map((r) => r.name) }, applicableEarningsComponent: { $size: 0 }, disable: false },
+    { $set: { disable: true } },
+  );
+  console.log(`⚠️ Seeded ${seeded} Regional Gratuity Rule(s), disabled ${modifiedCount} without a component — to use one, open it in Gratuity Rule, add the applicable earning component (for example Basic), untick Disable and save.`);
 };
 
 const run = async () => {

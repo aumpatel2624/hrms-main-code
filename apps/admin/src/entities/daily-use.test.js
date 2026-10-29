@@ -20,6 +20,7 @@
 // And the same run's smaller items:
 //   9. an emptied picker saves as blank (N4); Escape on a several-choice
 //      picker closes it without emptying it; cancelling a gratuity asks first.
+// And the 29 Oct re-check: the button that keeps the gratuity said "Cancel".
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
@@ -30,6 +31,7 @@ const userRoles = read("../pages/Setup/UserRoles.jsx");
 const payrollEntry = read("../pages/Payroll/PayrollEntry.jsx");
 const field = read("../components/ui/field.jsx");
 const actionButton = read("../components/crud/simple-action-button.jsx");
+const modal = read("../components/ui/modal.jsx");
 
 const configOf = (name) => {
     const start = source.indexOf(`export const ${name}`);
@@ -114,5 +116,7 @@ const gratuity = configOf("gratuityConfig");
 assert.match(gratuity, /label="Cancel"[\s\S]*?confirm=\{\{[^}]*description: "Its Additional Salary is cancelled too[^"]*"/, "cancelling a gratuity asks first and names its payroll line");
 assert.match(actionButton, /onClick=\{confirm \? \(\) => setAsking\(true\) : run\}/, "an action with confirm asks before running");
 assert.match(actionButton, /<ConfirmModal isOpen=\{asking\}[^\n]*onConfirm=\{run\}/, "and runs on confirm");
+assert.match(gratuity, /confirm=\{\{[^}]*cancelLabel: "Keep gratuity"/, "the button that keeps the gratuity says so");
+assert.match(modal, /cancelLabel = "Cancel"[\s\S]*?onClick=\{onClose\}[^>]*>\s*\{cancelLabel\}/, "the confirmation's keep button takes that label");
 
 console.log("daily-use.test.js: all assertions passed");

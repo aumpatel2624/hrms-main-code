@@ -98,6 +98,9 @@ Deleting hides the record rather than destroying it, so history and past reports
 > [!WARNING] Worth knowing
 > Cancelling a submitted Gratuity also cancels its linked Additional Salary.
 
+> [!WARNING] Worth knowing
+> An employee is paid one gratuity: a second is refused while another is submitted.
+
 ## What your role controls
 
 Each of these is granted separately for this screen on the **User Roles** screen:

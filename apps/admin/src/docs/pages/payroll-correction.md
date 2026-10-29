@@ -14,8 +14,9 @@ Attendance regularisation or approved late leave applications convert unpaid abs
 
 ### Correction Details
 
-- **Salary Slip ID** *(required)*
+- **Salary Slip** *(required, chosen from a list)*
 - **Days to Reverse** *(required, a number)*
+- **Payroll Date (blank = the day after the slip ends)** *(a date)*
 - **Remarks**
 
 ## Finding a record
@@ -91,6 +92,9 @@ Deleting hides the record rather than destroying it, so history and past reports
 
 > [!WARNING] Worth knowing
 > Submitting creates Additional Salary adjustment rows and Benefit Ledger accrual rows; cancelling reverses both.
+
+> [!WARNING] Worth knowing
+> The arrears are paid by the salary slip for the Payroll Date (blank means the day after the corrected slip ends). Submitting is refused if that date already has a slip, or is after the employee's relieving date.
 
 ## What your role controls
 

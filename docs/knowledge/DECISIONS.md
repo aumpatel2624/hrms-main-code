@@ -5530,3 +5530,31 @@ consumer; single-branch build
   which fail on the old code; the N4 check in section 2 of `controllers/v1/decisionIntegrity.test.js` passes on both,
   as there was no fault.
 - **Deviates from convention**: no.
+
+### ADR-073 — One submitted gratuity per employee; a correction's arrears are dated on its payroll date; the correction View names its slip and amounts
+
+- **Status**: accepted (fix-bug, 2026-10-29)
+- **Context**: the 29 Oct re-check of the local app found: (G1) a second gratuity for an employee already paid one,
+  dated in a month with no slip, was accepted, and that month's slip then paid it again. (P1) a Payroll Correction
+  dated every arrear the day it was submitted; submitted after that month's slip was made, the arrears fell inside a
+  period whose slip already existed and were never paid, with no warning. Its own `payrollDate` was ignored and
+  defaulted to the corrected slip's end date, inside that slip. And two Low items: the correction's View showed
+  "Salary Slip —" and no amounts (a second `toView` later in the config replaced the one that builds the slip label),
+  and the gratuity cancel pop-up's keep button said "Cancel".
+- **Decision**:
+  - Gratuity submit is refused while the employee has another submitted gratuity, naming its amount and date.
+  - Gratuity's two payroll-date checks (after the relieving date; a non-cancelled slip already covers the date) move
+    to `utils/payrollDateCheck.js` `assertPayrollDateWillBePaid`, and Payroll Correction submit uses the same one.
+    A covered date tells HR to set a date after that slip ends (gratuity keeps its cancel-and-re-run advice).
+  - A correction's earning and deduction arrears are dated on its `payrollDate`, which HR can now set on the form
+    (create and edit); left blank it defaults to the day after the corrected slip ends. Accrual ledger rows keep
+    their posting date.
+  - The correction View has one `toView`, shows the Payroll Date, and lists earning, deduction and accrual arrears
+    with their amounts, the payslip's line table.
+  - `ConfirmModal` takes an optional `cancelLabel`; the gratuity's cancel pop-up uses "Keep gratuity".
+- **Consequences**: no seed, permission, menu, schema or reporting change; no backfill. Drafts saved before this keep
+  the slip's end date as their payroll date, so their submit is refused until HR sets a later date. Gratuities and
+  corrections already submitted are not touched (the re-check's duplicate gratuity and its correction were already
+  put back). Tested by the P4 and P7 sections of `controllers/v1/payrollPayouts.test.js`, `entities/payroll-views.test.js`
+  and section 9 of `entities/daily-use.test.js`; each fails on the old code.
+- **Deviates from convention**: no.

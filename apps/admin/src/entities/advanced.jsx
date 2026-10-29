@@ -4459,6 +4459,7 @@ export const gratuityConfig = {
                         title: "Cancel this gratuity?",
                         description: "Its Additional Salary is cancelled too, so the gratuity is no longer paid through payroll. This cannot be undone.",
                         confirmLabel: "Cancel gratuity and payroll line",
+                        cancelLabel: "Keep gratuity",
                     }}
                     onRun={() => cancelGratuity(id)}
                     onResult={() => window.location.reload()}
@@ -5498,6 +5499,8 @@ export const payrollCorrectionConfig = {
     fields: [
         { name: "salarySlipId", label: "Salary Slip", section: "details", type: "select", optionsFrom: "salarySlipId", required: true, error: "Salary Slip is required", disabled: (values) => Boolean(values._id) },
         { name: "daysToReverse", label: "Days to Reverse", section: "details", type: "number", required: true, error: "Days to reverse is required" },
+        // The arrears are paid by the slip for this date (blank: the day after the corrected slip ends).
+        { name: "payrollDate", label: "Payroll Date (blank = the day after the slip ends)", section: "details", type: "date" },
         { name: "remarks", label: "Remarks", section: "details", type: "text" },
     ],
     // The View page names the slip from the populated record and shows the
@@ -5505,6 +5508,7 @@ export const payrollCorrectionConfig = {
     viewFields: [
         { name: "salarySlipLabel", label: "Salary Slip", section: "details", type: "text" },
         { name: "daysToReverse", label: "Days to Reverse", section: "details", type: "number" },
+        { name: "payrollDate", label: "Payroll Date", section: "details", type: "date" },
         { name: "remarks", label: "Remarks", section: "details", type: "text" },
         { name: "status", label: "Status", section: "status", type: "text" },
     ],
@@ -5514,6 +5518,14 @@ export const payrollCorrectionConfig = {
             ? salarySlipLabel(data.salarySlipId, new Map([[String(data.salarySlipId.employeeId), data.employeeId?.employeeName]]))
             : null,
     }),
+    // What the correction pays back, line by line (getById populates each component).
+    renderViewExtra: ({ values }) => (
+        <>
+            <ReadOnlyRows title="Earning arrears" rows={values.earningArrears} columns={PAYSLIP_LINE_COLUMNS} />
+            <ReadOnlyRows title="Deduction arrears" rows={values.deductionArrears} columns={PAYSLIP_LINE_COLUMNS} />
+            <ReadOnlyRows title="Accrual arrears" rows={values.accrualArrears} columns={PAYSLIP_LINE_COLUMNS} />
+        </>
+    ),
     columns: [
         { name: "Employee", selector: (r) => r.employeeId?.employeeName || r.employeeIdLabel || "—", sortable: true, sortField: "employeeId" },
         // Search adds the slip's dates (salarySlipPeriod); the slip is the row's employee's.
@@ -5555,22 +5567,20 @@ export const payrollCorrectionConfig = {
     toForm: (data) => ({
         ...data,
         salarySlipId: refId(data.salarySlipId),
+        payrollDate: data.payrollDate?.slice(0, 10) || "",
     }),
     toPayload: (values, mode) => (mode === "edit"
-        ? { daysToReverse: Number(values.daysToReverse), remarks: values.remarks }
+        ? {
+            daysToReverse: Number(values.daysToReverse),
+            remarks: values.remarks,
+            ...(values.payrollDate ? { payrollDate: values.payrollDate } : {}),
+        }
         : {
             salarySlipId: values.salarySlipId,
             daysToReverse: Number(values.daysToReverse),
             remarks: values.remarks,
+            ...(values.payrollDate ? { payrollDate: values.payrollDate } : {}),
         }),
-    // getById populates the slip; show its period, not whichever string field
-    // the generic renderer would pick (a raw startDate timestamp).
-    toView: (data) => ({
-        ...data,
-        salarySlipId: data.salarySlipId?.startDate
-            ? `${data.salarySlipId.startDate.slice(0, 10)} – ${data.salarySlipId.endDate?.slice(0, 10) ?? ""}`
-            : data.salarySlipId,
-    }),
 };
 
 // ============================================================================

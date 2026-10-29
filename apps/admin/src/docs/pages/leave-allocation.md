@@ -16,7 +16,7 @@ Usually created automatically by a Leave Policy Assignment's Grant Allocations a
 
 - **Employee** *(required, chosen from a list)*
 - **Leave Type** *(required, chosen from a list)*
-- **Company** *(chosen from a list)*
+- **Company** *(chosen from a list)* — Always saved as the employee's company.
 - **From Date** *(required, a date)*
 - **To Date** *(required, a date)*
 - **New Leaves Allocated** *(a number)* — Only used on create — use Adjust below to change it afterward.

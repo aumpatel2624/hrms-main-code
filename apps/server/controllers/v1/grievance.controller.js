@@ -291,6 +291,11 @@ export const updateEmployeeGrievance = async (req, res) => {
         }
         fields.status = "Cancelled";
       }
+      // Once HR has closed it, the complainant can no longer reword it or
+      // untick Is Active, which hid it from HR's list.
+      if (!WITHDRAWABLE_STATUSES.includes(doc.status)) {
+        return res.status(400).json({ isOk: false, status: 400, message: `A ${doc.status} grievance can no longer be changed` });
+      }
     }
     const merged = { ...doc.toObject(), ...fields };
     const conditionalError = validateConditionalFields(merged);

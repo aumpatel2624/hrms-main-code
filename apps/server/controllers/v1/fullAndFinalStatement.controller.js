@@ -69,6 +69,16 @@ const pickFields = (body) =>
     [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS].filter((k) => body[k] !== undefined).map((k) => [k, body[k]]),
   );
 
+// One statement per leaver: a second would settle the same dues again.
+const otherStatementMessage = async (employee, excludeId) => {
+  const other = await FullAndFinalStatement.findOne({
+    employeeId: employee._id,
+    status: { $ne: "Cancelled" },
+    ...(excludeId ? { _id: { $ne: excludeId } } : {}),
+  }).lean();
+  return other ? `${employee.employeeName} already has a Full and Final Statement. Open that one instead of making another.` : null;
+};
+
 export const createFullAndFinalStatement = async (req, res) => {
   try {
     const missing = REQUIRED_FIELDS.filter((k) => !req.body[k]);
@@ -83,6 +93,10 @@ export const createFullAndFinalStatement = async (req, res) => {
     }
     if (!employee.relievingDate) {
       return res.status(400).json({ isOk: false, status: 400, message: `Please set the relieving date for employee ${employee.employeeName} first` });
+    }
+    const duplicate = await otherStatementMessage(employee);
+    if (duplicate) {
+      return res.status(400).json({ isOk: false, status: 400, message: duplicate });
     }
 
     const fields = pickFields(req.body);
@@ -137,6 +151,16 @@ export const updateFullAndFinalStatement = async (req, res) => {
       return res.status(404).json({ isOk: false, status: 404, message: "Full and Final Statement not found" });
     }
     const fields = pickFields(req.body);
+    if (fields.employeeId && String(fields.employeeId) !== String(doc.employeeId)) {
+      const employee = await Employee.findById(fields.employeeId);
+      if (!employee) {
+        return res.status(404).json({ isOk: false, status: 404, message: "Employee not found" });
+      }
+      const duplicate = await otherStatementMessage(employee, doc._id);
+      if (duplicate) {
+        return res.status(400).json({ isOk: false, status: 400, message: duplicate });
+      }
+    }
     const costError = validateAssetCostRule(fields.assetsAllocated ?? doc.assetsAllocated);
     if (costError) {
       return res.status(400).json({ isOk: false, status: 400, message: costError });

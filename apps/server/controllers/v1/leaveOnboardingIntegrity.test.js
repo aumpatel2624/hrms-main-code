@@ -9,6 +9,8 @@
 //   3. an onboarding, and Create Employee from it, needs an Accepted Job Offer;
 //      one offer onboards one hire; a linked onboarding makes no second employee,
 //   4. a re-run blocked by cancelled slips says how to clear them.
+// And from the 29 Oct verification run (N3): an allocation with Company left
+// blank was saved with none, hidden from HR while counted in the balance.
 // Calls the real controllers over in-memory stand-ins, like decisionIntegrity.test.js.
 import assert from "node:assert/strict";
 import mongoose from "mongoose";
@@ -26,7 +28,7 @@ import LeaveType from "../../models/LeaveType.js";
 import SalarySlip from "../../models/SalarySlip.js";
 import { getLeaveBalance } from "../../utils/leaveBalance.js";
 import {
-  adjustLeaveAllocation, createLeaveAllocation, deleteLeaveAllocation, listLeaveAllocationByParams,
+  adjustLeaveAllocation, createLeaveAllocation, deleteLeaveAllocation, listLeaveAllocationByParams, updateLeaveAllocation,
 } from "./leaves.controller.js";
 import { createLeaveAdjustment } from "./leavesTransactions.controller.js";
 import {
@@ -183,6 +185,15 @@ let pipeline = null;
 LeaveAllocation.aggregate = async (stages) => { pipeline = stages; return [{ count: 0, data: [] }]; };
 await call(listLeaveAllocationByParams, { body: {} });
 assert.ok(pipeline.some((stage) => stage.$addFields?.leaveTypeName), "the Leave Allocation list adds leaveTypeName");
+
+// Company left blank: the employee's company, on the allocation and its ledger rows (N3).
+const { res: blankCompany, allocation: sick2095 } = await allocate(sick, "2095-01-01", "2095-12-31", 30);
+assert.equal(blankCompany.statusCode, 201, blankCompany.body?.message);
+assert.ok(same(sick2095.companyId, companyId), "saved with the employee's company");
+assert.ok(ledger.filter((row) => same(row.transactionId, sick2095._id)).every((row) => same(row.companyId, companyId)));
+const clearedCompany = await call(updateLeaveAllocation, { params: { leaveAllocationId: sick2095._id }, body: { companyId: null } });
+assert.equal(clearedCompany.statusCode, 200, clearedCompany.body?.message);
+assert.ok(same(sick2095.companyId, companyId), "an edit with Company cleared keeps the employee's company");
 
 // ------------------------------------------------- 2. adjustments (P6 c, d) --
 // Reduce next year's allocation by 15, posted this year.

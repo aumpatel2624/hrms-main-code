@@ -4,6 +4,11 @@
 //   P7. a Payroll Correction submitted with ₹0 arrears and no warning when no
 //       component was an arrear component, and valued a reversed day off the
 //       slip's prorated amount.
+// And from the 29 Oct verification run (N2, M3):
+//   - a gratuity dated after the relieving date was accepted though no slip is
+//     ever made for that period, and the refusal for a covered date suggested
+//     exactly that,
+//   - a second full and final could be made for a leaver who had one.
 // (P2 proration is payrollPaymentDays.test.js, Case 5b; P11 is
 // jobs/attendanceScheduler.test.js.) Drives the real mounted routes as an
 // Admin over in-memory stand-ins, like payrollIntegrity.test.js.
@@ -152,7 +157,17 @@ const row = (component, extra) => ({
   res = await submit();
   expectStatus(res, 400, "a slip already covers the payroll date");
   assert.match(res.body.message, /Nikhil Kapadia already has a salary slip for 2026-10-01 – 2026-10-31/);
+  assert.doesNotMatch(res.body.message, /choose a payroll date/, "no later period is offered: none would pay it (N2)");
   assert.equal(additionalSalaries.length, 0, "no Additional Salary that payroll would never pay");
+
+  // A payroll date after he left: no slip is ever made then, so refused (N2).
+  gratuity.payrollDate = new Date("2026-11-30");
+  res = await submit();
+  expectStatus(res, 400, "a payroll date after the relieving date");
+  assert.match(res.body.message, /after Nikhil Kapadia's relieving date \(2026-10-31\)/);
+  assert.equal(gratuity.status, "draft");
+  assert.equal(additionalSalaries.length, 0, "no Additional Salary dated after he left");
+  gratuity.payrollDate = new Date("2026-10-31");
 
   // HR cancels October's slip, submits the gratuity, then re-runs October.
   october.status = "cancelled";
@@ -167,11 +182,13 @@ const row = (component, extra) => ({
 
   // The full and final shows it as paid through payroll, outside its total.
   let saved = null;
-  FullAndFinalStatement.prototype.save = async function save() { saved = this; return this; };
-  res = await call(separationRoutes, "post", "/full-and-final-statements", {
+  const statements = stub(FullAndFinalStatement, []);
+  FullAndFinalStatement.prototype.save = async function save() { saved = this; statements.push(this); return this; };
+  const createStatement = () => call(separationRoutes, "post", "/full-and-final-statements", {
     body: { employeeId: String(nikhil._id), transactionDate: "2026-11-05",
       payables: [{ component: "Leave encashment", amount: 15000, status: "Unsettled" }] },
   });
+  res = await createStatement();
   expectStatus(res, 201, "full and final created");
   const gratuityLine = saved.payables.find((line) => line.component === "Gratuity");
   assert.equal(gratuityLine.amount, 129807.69);
@@ -179,8 +196,15 @@ const row = (component, extra) => ({
   assert.equal(gratuityLine.status, "Settled");
   assert.match(gratuityLine.description, /Paid through payroll/);
   assert.equal(saved.totalPayableAmount, 15000, "the gratuity is not paid a second time by the statement");
+
+  // Settled once; a second statement would pay his dues again (M3).
+  saved.status = "Paid";
+  res = await createStatement();
+  expectStatus(res, 400, "a second full and final");
+  assert.match(res.body.message, /Nikhil Kapadia already has a Full and Final Statement/);
+  assert.equal(statements.length, 1);
 }
-console.log("payrollPayouts: gratuity is based on the full Basic and paid once, through payroll (P4)");
+console.log("payrollPayouts: gratuity is based on the full Basic and paid once, through payroll (P4, N2, M3)");
 
 // --------------------------------------- P7. a Payroll Correction pays something --
 {

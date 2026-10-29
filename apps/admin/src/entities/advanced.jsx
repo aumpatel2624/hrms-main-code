@@ -174,6 +174,7 @@ import MarkEncashmentPaidPanel from "@/components/crud/mark-encashment-paid-pane
 import { employeePayload } from "./employee-payload";
 import { holidayListAssignmentPayload } from "./holiday-list-assignment-payload";
 import { salaryStructureAssignmentPayload } from "./salary-structure-assignment-payload";
+import { gratuityRulePayload, incomeTaxSlabPayload, payrollPeriodPayload, salaryComponentPayload, salaryStructurePayload, taxExemptionSubCategoryPayload } from "./setup-payloads";
 import { taxDeclarationPayload, taxProofSubmissionPayload } from "./tax-declaration-payload";
 
 const ACTIVE = { name: "isActive", label: "Is Active", type: "checkbox", section: "status" };
@@ -1620,6 +1621,8 @@ export const employeeGrievanceConfig = {
         { name: "Date", selector: (row) => row.date?.slice?.(0, 10) ?? "—", minWidth: "110px" },
     ],
     recordTitle: (r) => r.subject,
+    // Once HR closes it, only HR edits it.
+    canSave: (values, { allScope }) => allScope || ["Open", "Investigated"].includes(values.status),
     // The person who raised it may withdraw it while HR has not closed it.
     renderExtra: ({ mode, id, values, currentUserId }) => (
         mode === "edit" && id && ["Open", "Investigated"].includes(values.status) && String(values.raisedByEmployeeId) === String(currentUserId) && (
@@ -2543,7 +2546,7 @@ export const leaveAllocationConfig = {
     fields: [
         { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
         { name: "leaveTypeId", icon: Tag01, label: "Leave Type", type: "select", required: true, section: "details", error: "Leave Type is required!", optionsFrom: "leaveTypeId" },
-        { name: "companyId", icon: Building07, label: "Company", type: "select", section: "details", optionsFrom: "companyId" },
+        { name: "companyId", icon: Building07, label: "Company", type: "select", section: "details", optionsFrom: "companyId", hint: "Always saved as the employee's company." },
         { name: "fromDate", label: "From Date", type: "date", required: true, section: "details", error: "From Date is required!" },
         { name: "toDate", label: "To Date", type: "date", required: true, section: "details", error: "To Date is required!" },
         { name: "newLeavesAllocated", label: "New Leaves Allocated", type: "number", section: "details", hint: "Only used on create — use Adjust below to change it afterward.", disabled: (values) => Boolean(values?._id) },
@@ -3451,6 +3454,7 @@ export const salaryComponentConfig = {
     ],
     recordTitle: (r) => r.salaryComponentName,
     toForm: (data) => ({ ...data, companyId: refId(data.companyId) }),
+    toPayload: salaryComponentPayload,
 };
 
 export const salaryStructureConfig = {
@@ -3518,6 +3522,7 @@ export const salaryStructureConfig = {
         deductions: (data.deductions || []).map((row) => ({ ...row, salaryComponentId: refId(row.salaryComponentId) })),
         employerContributions: (data.employerContributions || []).map((row) => ({ ...row, salaryComponentId: refId(row.salaryComponentId) })),
     }),
+    toPayload: salaryStructurePayload,
 };
 
 export const salaryStructureAssignmentConfig = {
@@ -3629,6 +3634,7 @@ export const payrollPeriodConfig = {
     ],
     recordTitle: (r) => `Payroll Period — ${String(r.startDate ?? "").slice(0, 10)} to ${String(r.endDate ?? "").slice(0, 10)}`,
     toForm: (data) => ({ ...data, companyId: refId(data.companyId), startDate: data.startDate?.slice(0, 10) || "", endDate: data.endDate?.slice(0, 10) || "" }),
+    toPayload: payrollPeriodPayload,
 };
 
 const ReadOnlyRows = ({ title, rows, columns }) => (
@@ -4393,6 +4399,7 @@ export const gratuityRuleConfig = {
             salaryComponentId: refId(row.salaryComponentId),
         })),
     }),
+    toPayload: gratuityRulePayload,
 };
 
 export const gratuityConfig = {
@@ -5651,6 +5658,7 @@ export const incomeTaxSlabConfig = {
         companyId: refId(data.companyId),
         effectiveFromDate: data.effectiveFromDate?.slice(0, 10) || "",
     }),
+    toPayload: incomeTaxSlabPayload,
 };
 
 export const employeeTaxExemptionCategoryConfig = {
@@ -5736,6 +5744,7 @@ export const employeeTaxExemptionSubCategoryConfig = {
         ...data,
         exemptionCategoryId: refId(data.exemptionCategoryId),
     }),
+    toPayload: taxExemptionSubCategoryPayload,
 };
 
 const EXEMPTION_DECLARATION_COLUMNS = [

@@ -11,6 +11,12 @@
 //      it does; the onboarding shows its employee and stops offering Create
 //      Employee once linked; the Leave Allocation list shows leave type and
 //      dates; a cancelled payroll entry says how to run the period again.
+// And the 29 Oct verification run (N1, N3, M2):
+//   7. a closed grievance's edit page offers no save to the complainant;
+//      HR keeps it,
+//   8. the payroll setup screens send only what they edit (the payloads are
+//      tested against the server in payrollIntegrity.test.js, section 8);
+//      Leave Allocation says its company is the employee's.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
@@ -52,7 +58,7 @@ for (const name of ["exitInterviewConfig", "fullAndFinalStatementConfig"]) {
 for (const name of ["leaveApplicationConfig", "compensatoryLeaveRequestConfig", "shiftRequestConfig"]) {
     assert.match(configOf(name), /canSave: \(values\) => values\.status === "open"/, `${name}: saves only while open`);
 }
-assert.match(form, /const canSave = !isEdit \|\| \(config\.canSave\?\.\(values\) \?\? true\);/, "the form asks the config");
+assert.match(form, /const canSave = !isEdit \|\| \(config\.canSave\?\.\(values, \{ allScope: currentPagePermissions\.dataScope === SCOPES\.ALL \}\) \?\? true\);/, "the form asks the config");
 assert.match(form, /canSubmit=\{canSave\}/, "and hides its save action");
 assert.match(form, /if \(!canSave\) return;/, "and does not submit");
 
@@ -75,5 +81,19 @@ for (const column of ["row.leaveTypeName", "row.fromDate", "row.toDate"]) {
 }
 assert.match(payrollEntry, /entry\.status === "cancelled" && <p[^>]*>[^<]*delete this entry \(its cancelled slips are deleted with it\), then create a new entry/, "a cancelled entry says how to run again");
 assert.match(payrollEntry, /deletePayrollEntry\(id\)/, "and offers the delete there");
+
+// 7. The same rule the server applies: below HR, only Open or Investigated.
+assert.match(configOf("employeeGrievanceConfig"), /canSave: \(values, \{ allScope \}\) => allScope \|\| \["Open", "Investigated"\]\.includes\(values\.status\)/,
+    "a closed grievance offers save to HR only");
+
+// 8.
+for (const [name, payload] of [
+    ["salaryComponentConfig", "salaryComponentPayload"], ["salaryStructureConfig", "salaryStructurePayload"],
+    ["payrollPeriodConfig", "payrollPeriodPayload"], ["gratuityRuleConfig", "gratuityRulePayload"],
+    ["incomeTaxSlabConfig", "incomeTaxSlabPayload"], ["employeeTaxExemptionSubCategoryConfig", "taxExemptionSubCategoryPayload"],
+]) {
+    assert.ok(configOf(name).includes(`toPayload: ${payload},`), `${name} sends ${payload}`);
+}
+assert.match(configOf("leaveAllocationConfig"), /name: "companyId"[^}]*hint: "Always saved as the employee's company\."/, "Leave Allocation's company is the employee's");
 
 console.log("daily-use.test.js: all assertions passed");

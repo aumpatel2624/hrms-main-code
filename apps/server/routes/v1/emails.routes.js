@@ -30,6 +30,7 @@ import {
 import fs from "fs";
 // ============ SECURITY IMPORTS ============
 import { createSecureImageUpload } from "../../middlewares/secureUpload.js";
+import { publicServerUrl } from "../../utils/publicServerUrl.js";
 
 const router = express.Router();
 
@@ -667,7 +668,7 @@ router.post(
       });
     }
 
-    const imageUrl = `${process.env.REACT_APP_API_URL}/uploads/cms/email-template/signature/${req.file.filename}`;
+    const imageUrl = `${publicServerUrl(req)}/uploads/cms/email-template/signature/${req.file.filename}`;
 
     return res.status(200).json({
       isOk: true,

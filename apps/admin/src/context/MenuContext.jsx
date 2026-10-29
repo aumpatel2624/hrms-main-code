@@ -2,6 +2,7 @@ import { createContext, useEffect, useState, useContext, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ROLES } from "@demo-panel/shared/roles";
+import { SCOPES } from "@demo-panel/shared/scopes";
 import { permissions, pickPermissions } from "@demo-panel/shared/permissions";
 import { getCurrentUser } from "../api/auth.api";
 import { fetchMenusByGroups } from "../api/menus.api";
@@ -59,10 +60,13 @@ const MenuProvider = ({ children }) => {
         queryClient.removeQueries({ queryKey: ["menus", "tree"] });
         queryClient.removeQueries({ queryKey: ["user-roles"] });
     };
+    // `dataScope`: the menu row's own scope, else the role's — as the server
+    // resolves it (checkPermission's menuDataScope). "all" is HR's.
     const getPermissionsForMenu = (menuId) => {
-        if (isAdmin) return { menuId, ...permissions(true) };
+        if (isAdmin) return { menuId, ...permissions(true), dataScope: SCOPES.ALL };
         const role = menuId && userRoles?.roles?.find((entry) => entry.menuId === menuId);
-        return role ? { menuId, ...pickPermissions(role) } : { menuId, ...permissions() };
+        const dataScope = role?.dataScope || userRoles?.dataScope || SCOPES.ALL;
+        return role ? { menuId, ...pickPermissions(role), dataScope } : { menuId, ...permissions(), dataScope };
     };
     const updateCurrentPagePermissions = (menuId) => setCurrentPagePermissions(getPermissionsForMenu(menuId));
     const findMenuIdByUrl = (url) => {

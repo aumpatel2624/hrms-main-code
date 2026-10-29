@@ -40,7 +40,7 @@ const CompensatoryLeaveRequestSchema = new mongoose.Schema(
     workEndDate: { type: Date, required: true },
     halfDay: { type: Boolean, default: false },
     halfDayDate: { type: Date, required: false, default: null },
-    reason: { type: String, trim: true, required: true },
+    reason: { type: String, trim: true, required: true, maxlength: 2000 },
     status: {
       type: String,
       enum: ["open", "approved", "rejected"],

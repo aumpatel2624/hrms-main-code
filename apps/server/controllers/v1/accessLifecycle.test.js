@@ -108,6 +108,17 @@ const stub = (Model, rows) => {
   Model.findOne = (filter) => query(rows.find((row) => matches(row, filter)) ?? null);
   Model.findById = (id) => query(rows.find((row) => same(row._id, id)) ?? null);
   Model.exists = async (filter) => (rows.find((row) => matches(row, filter)) ? { _id: oid() } : null);
+  // A decision's single-step status change (utils/statusClaim.js), on the row itself.
+  Model.findOneAndUpdate = async (filter, update) => {
+    const row = rows.find((candidate) => matches(candidate, filter)) ?? null;
+    if (row) Object.assign(row, update.$set ?? update);
+    return row;
+  };
+  Model.updateOne = async (filter, update) => {
+    const row = rows.find((candidate) => matches(candidate, filter));
+    if (row) Object.assign(row, update.$set ?? update);
+    return { matchedCount: row ? 1 : 0 };
+  };
   Model.updateMany = async () => ({});
   Model.aggregate = async (pipeline) => {
     let found = rows;

@@ -1,6 +1,7 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
+import { SCOPES } from "@demo-panel/shared/scopes";
 import { MenuContext } from "../../context/MenuContext";
 import { Card, PageHeader } from "@/components/ui/page";
 import { FormActions, FormSection, FullWidth } from "@/components/ui/form";
@@ -251,7 +252,9 @@ const CrudForm = ({ config, mode = "add" }) => {
             title: id === "default" ? `${config.singular} details` : id.charAt(0).toUpperCase() + id.slice(1),
         }));
     const sections = [...declaredSections, ...autoSections];
-    const visible = config.fields.filter((f) => !f.hideIn?.includes(mode));
+    // `allScopeOnly`: a field only HR sets (the screen's "all" scope); hidden
+    // from everyone else, whose value the server ignores anyway.
+    const visible = config.fields.filter((f) => !f.hideIn?.includes(mode) && !(f.allScopeOnly && currentPagePermissions.dataScope !== SCOPES.ALL));
 
     document.title = `${isEdit ? "Edit" : "Add"} ${config.singular} | Apidel HRMS`;
 

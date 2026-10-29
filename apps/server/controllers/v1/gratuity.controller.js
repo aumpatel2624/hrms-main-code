@@ -27,6 +27,7 @@ import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
 import { getPayrollSettingsDoc } from "./payrollRun.controller.js";
 import { countLwpDaysInRange, getWorkExperience, getGratuityAmount } from "../../utils/gratuityCalc.js";
+import { decideOnce } from "../../utils/statusClaim.js";
 
 const failure = (res, error) => {
   if (error.status) {
@@ -457,25 +458,28 @@ export const submitGratuity = async (req, res) => {
     const company = await Company.findById(doc.companyId).lean();
     const currency = company?.defaultCurrency || "USD";
 
-    const addSal = await AdditionalSalary.create({
-      employeeId: doc.employeeId,
-      companyId: doc.companyId,
-      salaryComponentId: doc.salaryComponentId,
-      type: "Earning",
-      amount,
-      isRecurring: false,
-      payrollDate: doc.payrollDate,
-      overwriteSalaryStructureAmount: false,
-      currency,
-      status: "active",
-      refDoctype: "Gratuity",
-      refDocnameId: doc._id,
-    });
+    // Moved draft → submitted in one step first, so a second Submit pressed
+    // at the same moment is refused and creates nothing twice (S4).
+    await decideOnce(Gratuity, doc, "submitted", "Gratuity", async () => {
+      const addSal = await AdditionalSalary.create({
+        employeeId: doc.employeeId,
+        companyId: doc.companyId,
+        salaryComponentId: doc.salaryComponentId,
+        type: "Earning",
+        amount,
+        isRecurring: false,
+        payrollDate: doc.payrollDate,
+        overwriteSalaryStructureAmount: false,
+        currency,
+        status: "active",
+        refDoctype: "Gratuity",
+        refDocnameId: doc._id,
+      });
 
-    doc.currentWorkExperience = currentWorkExperience;
-    doc.amount = amount;
-    doc.additionalSalaryId = addSal._id;
-    doc.status = "submitted";
+      doc.currentWorkExperience = currentWorkExperience;
+      doc.amount = amount;
+      doc.additionalSalaryId = addSal._id;
+    });
     await doc.save();
 
     return res.json({ isOk: true, status: 200, message: "Gratuity submitted", data: doc });

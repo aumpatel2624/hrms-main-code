@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { extractTokens, validateMergeTokens, fillMergeFields } from "./sendTriggeredEmail.js";
+import { extractTokens, validateMergeTokens, fillMergeFields, fillHtmlMergeFields } from "./sendTriggeredEmail.js";
 
 // extractTokens finds every {{TOKEN}}, including repeats.
 assert.deepEqual(extractTokens("Hi {{USERNAME}}, code {{OTP_CODE}}"), ["USERNAME", "OTP_CODE"]);
@@ -49,5 +49,15 @@ assert.equal(fillMergeFields("", { USERNAME: "Dev" }), "");
 // A token with no entry in `values` is left as the literal placeholder —
 // only tokens actually supplied are replaced.
 assert.equal(fillMergeFields("Hi {{USERNAME}}", {}), "Hi {{USERNAME}}");
+
+// The HTML body escapes every merge value: an employee named
+// `<img src=x onerror=alert(1)>` reaches the email as text (29 Oct security
+// test, low). The template's own markup stays as the admin wrote it.
+assert.equal(
+  fillHtmlMergeFields("<p>Hi {{USERNAME}}</p>", { USERNAME: `<img src=x onerror="alert(1)"> & 'co'` }),
+  "<p>Hi &lt;img src=x onerror=&quot;alert(1)&quot;&gt; &amp; &#39;co&#39;</p>",
+);
+assert.equal(fillHtmlMergeFields("Code {{OTP_CODE}}", { OTP_CODE: 123456 }), "Code 123456");
+assert.equal(fillHtmlMergeFields("Hi {{USERNAME}}", { USERNAME: null }), "Hi ");
 
 console.log("sendTriggeredEmail: all checks passed");

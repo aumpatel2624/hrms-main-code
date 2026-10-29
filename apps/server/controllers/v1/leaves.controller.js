@@ -878,119 +878,137 @@ export const grantAllocationsForAssignment = async (leavePolicyAssignmentId) => 
   const toDate = new Date(assignment.effectiveTo);
   const dateOfJoining = employee.dateOfJoining ? new Date(employee.dateOfJoining) : null;
 
+  // Marked allocated in one step first, so a second Grant pressed at the
+  // same moment is refused and allocates nothing twice (S4).
+  const claimed = await LeavePolicyAssignment.findOneAndUpdate(
+    { _id: assignment._id, leavesAllocated: { $ne: true } },
+    { $set: { leavesAllocated: true } },
+  );
+  if (!claimed) {
+    const error = new Error("Leave already has been assigned for this Leave Policy Assignment");
+    error.status = 400;
+    throw error;
+  }
+
   const created = [];
   const skipped = [];
 
-  for (const detail of policy.leavePolicyDetails) {
-    // eslint-disable-next-line no-await-in-loop
-    const leaveType = await LeaveType.findById(detail.leaveTypeId).lean();
-    if (!leaveType || leaveType.isLwp) continue; // LWP types are never allocated via this flow
-
-    let newLeavesAllocated = 0;
-    let earnedLeaveSchedule = [];
-
-    if (leaveType.isCompensatory) {
-      newLeavesAllocated = 0; // compensatory leave is never allocated up front
-    } else if (leaveType.isEarnedLeave) {
-      earnedLeaveSchedule = buildEarnedLeaveSchedule({
-        annualAllocation: detail.annualAllocation,
-        frequency: leaveType.earnedLeaveFrequency,
-        rounding: leaveType.rounding,
-        fromDate,
-        toDate,
-        dateOfJoining,
-        today,
-      });
-      newLeavesAllocated = earnedLeaveSchedule
-        .filter((row) => row.isAllocated)
-        .reduce((sum, row) => sum + row.numberOfLeaves, 0);
-    } else {
-      newLeavesAllocated = prorateTenureLeaves(detail.annualAllocation, dateOfJoining, fromDate, toDate);
-    }
-
-    // Annual allocation is a hard ceiling, except Yearly-frequency earned leave.
-    if (
-      newLeavesAllocated > detail.annualAllocation
-      && !(leaveType.isEarnedLeave && leaveType.earnedLeaveFrequency === "Yearly")
-    ) {
-      newLeavesAllocated = detail.annualAllocation;
-    }
-
-    if (newLeavesAllocated === 0 && !leaveType.isEarnedLeave && !leaveType.allowNegative) {
-      skipped.push({ leaveTypeId: String(detail.leaveTypeId), reason: "computed allocation is 0" });
-      continue; // eslint-disable-line no-continue
-    }
-
-    // Carry-forward: sum of the previous allocation's balance as of its
-    // own end date, clamped to LeaveType.maximumCarryForwardedLeaves.
-    let unusedLeaves = 0;
-    if (assignment.carryForward && leaveType.isCarryForward) {
+  try {
+    for (const detail of policy.leavePolicyDetails) {
       // eslint-disable-next-line no-await-in-loop
-      const previousAllocation = await LeaveAllocation.findOne({
-        employeeId: employee._id,
-        leaveTypeId: leaveType._id,
-        toDate: { $lt: fromDate },
-      }).sort({ toDate: -1 });
-      if (previousAllocation) {
+      const leaveType = await LeaveType.findById(detail.leaveTypeId).lean();
+      if (!leaveType || leaveType.isLwp) continue; // LWP types are never allocated via this flow
+
+      let newLeavesAllocated = 0;
+      let earnedLeaveSchedule = [];
+
+      if (leaveType.isCompensatory) {
+        newLeavesAllocated = 0; // compensatory leave is never allocated up front
+      } else if (leaveType.isEarnedLeave) {
+        earnedLeaveSchedule = buildEarnedLeaveSchedule({
+          annualAllocation: detail.annualAllocation,
+          frequency: leaveType.earnedLeaveFrequency,
+          rounding: leaveType.rounding,
+          fromDate,
+          toDate,
+          dateOfJoining,
+          today,
+        });
+        newLeavesAllocated = earnedLeaveSchedule
+          .filter((row) => row.isAllocated)
+          .reduce((sum, row) => sum + row.numberOfLeaves, 0);
+      } else {
+        newLeavesAllocated = prorateTenureLeaves(detail.annualAllocation, dateOfJoining, fromDate, toDate);
+      }
+
+      // Annual allocation is a hard ceiling, except Yearly-frequency earned leave.
+      if (
+        newLeavesAllocated > detail.annualAllocation
+        && !(leaveType.isEarnedLeave && leaveType.earnedLeaveFrequency === "Yearly")
+      ) {
+        newLeavesAllocated = detail.annualAllocation;
+      }
+
+      if (newLeavesAllocated === 0 && !leaveType.isEarnedLeave && !leaveType.allowNegative) {
+        skipped.push({ leaveTypeId: String(detail.leaveTypeId), reason: "computed allocation is 0" });
+        continue; // eslint-disable-line no-continue
+      }
+
+      // Carry-forward: sum of the previous allocation's balance as of its
+      // own end date, clamped to LeaveType.maximumCarryForwardedLeaves.
+      let unusedLeaves = 0;
+      if (assignment.carryForward && leaveType.isCarryForward) {
         // eslint-disable-next-line no-await-in-loop
-        const balance = await getLeaveBalance(employee._id, leaveType._id, previousAllocation.toDate);
-        unusedLeaves = Math.max(balance, 0);
-        if (leaveType.maximumCarryForwardedLeaves && unusedLeaves > leaveType.maximumCarryForwardedLeaves) {
-          unusedLeaves = leaveType.maximumCarryForwardedLeaves;
+        const previousAllocation = await LeaveAllocation.findOne({
+          employeeId: employee._id,
+          leaveTypeId: leaveType._id,
+          toDate: { $lt: fromDate },
+        }).sort({ toDate: -1 });
+        if (previousAllocation) {
+          // eslint-disable-next-line no-await-in-loop
+          const balance = await getLeaveBalance(employee._id, leaveType._id, previousAllocation.toDate);
+          unusedLeaves = Math.max(balance, 0);
+          if (leaveType.maximumCarryForwardedLeaves && unusedLeaves > leaveType.maximumCarryForwardedLeaves) {
+            unusedLeaves = leaveType.maximumCarryForwardedLeaves;
+          }
         }
       }
-    }
 
-    const totalLeavesAllocated = unusedLeaves + newLeavesAllocated;
+      const totalLeavesAllocated = unusedLeaves + newLeavesAllocated;
 
-    // eslint-disable-next-line no-await-in-loop
-    const allocation = await LeaveAllocation.create({
-      employeeId: employee._id,
-      leaveTypeId: leaveType._id,
-      companyId: employee.companyId,
-      fromDate,
-      toDate,
-      newLeavesAllocated,
-      carryForward: Boolean(assignment.carryForward && leaveType.isCarryForward),
-      unusedLeaves,
-      totalLeavesAllocated,
-      leavePeriodId: assignment.leavePeriodId || null,
-      leavePolicyId: assignment.leavePolicyId,
-      leavePolicyAssignmentId: assignment._id,
-      status: "active",
-      earnedLeaveSchedule,
-    });
-
-    if (unusedLeaves > 0) {
       // eslint-disable-next-line no-await-in-loop
-      await LeaveLedgerEntry.create({
+      const allocation = await LeaveAllocation.create({
         employeeId: employee._id,
         leaveTypeId: leaveType._id,
-        transactionType: "LeaveAllocation",
-        transactionId: allocation._id,
-        leaves: unusedLeaves,
+        companyId: employee.companyId,
         fromDate,
         toDate,
-        isCarryForward: true,
-        companyId: employee.companyId,
+        newLeavesAllocated,
+        carryForward: Boolean(assignment.carryForward && leaveType.isCarryForward),
+        unusedLeaves,
+        totalLeavesAllocated,
+        leavePeriodId: assignment.leavePeriodId || null,
+        leavePolicyId: assignment.leavePolicyId,
+        leavePolicyAssignmentId: assignment._id,
+        status: "active",
+        earnedLeaveSchedule,
       });
-    }
-    if (newLeavesAllocated !== 0) {
-      // eslint-disable-next-line no-await-in-loop
-      await LeaveLedgerEntry.create({
-        employeeId: employee._id,
-        leaveTypeId: leaveType._id,
-        transactionType: "LeaveAllocation",
-        transactionId: allocation._id,
-        leaves: newLeavesAllocated,
-        fromDate,
-        toDate,
-        isCarryForward: false,
-        companyId: employee.companyId,
-      });
-    }
 
-    created.push({ leaveTypeId: String(leaveType._id), allocationId: String(allocation._id), newLeavesAllocated, unusedLeaves });
+      if (unusedLeaves > 0) {
+        // eslint-disable-next-line no-await-in-loop
+        await LeaveLedgerEntry.create({
+          employeeId: employee._id,
+          leaveTypeId: leaveType._id,
+          transactionType: "LeaveAllocation",
+          transactionId: allocation._id,
+          leaves: unusedLeaves,
+          fromDate,
+          toDate,
+          isCarryForward: true,
+          companyId: employee.companyId,
+        });
+      }
+      if (newLeavesAllocated !== 0) {
+        // eslint-disable-next-line no-await-in-loop
+        await LeaveLedgerEntry.create({
+          employeeId: employee._id,
+          leaveTypeId: leaveType._id,
+          transactionType: "LeaveAllocation",
+          transactionId: allocation._id,
+          leaves: newLeavesAllocated,
+          fromDate,
+          toDate,
+          isCarryForward: false,
+          companyId: employee.companyId,
+        });
+      }
+
+      created.push({ leaveTypeId: String(leaveType._id), allocationId: String(allocation._id), newLeavesAllocated, unusedLeaves });
+    }
+  } catch (error) {
+    // Nothing written yet: let it be granted again once the cause is fixed.
+    if (created.length === 0) await LeavePolicyAssignment.updateOne({ _id: assignment._id }, { $set: { leavesAllocated: false } });
+    throw error;
   }
 
   assignment.leavesAllocated = true;

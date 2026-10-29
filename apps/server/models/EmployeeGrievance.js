@@ -13,6 +13,7 @@ const EmployeeGrievanceSchema = new mongoose.Schema(
   {
     subject: {
       type: String,
+      maxlength: 200,
       required: true,
       trim: true,
     },
@@ -44,10 +45,12 @@ const EmployeeGrievanceSchema = new mongoose.Schema(
     },
     grievanceAgainstText: {
       type: String,
+      maxlength: 200,
       trim: true,
     },
     description: {
       type: String,
+      maxlength: 5000,
       required: true,
       trim: true,
     },
@@ -55,6 +58,7 @@ const EmployeeGrievanceSchema = new mongoose.Schema(
     // controller (mandatory_depends_on has no schema-level equivalent).
     causeOfGrievance: {
       type: String,
+      maxlength: 5000,
       trim: true,
     },
     resolvedByUserId: {
@@ -70,6 +74,7 @@ const EmployeeGrievanceSchema = new mongoose.Schema(
     },
     resolutionDetail: {
       type: String,
+      maxlength: 5000,
       trim: true,
     },
     employeeResponsibleId: {

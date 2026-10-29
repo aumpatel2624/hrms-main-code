@@ -5,12 +5,13 @@ import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { attendanceScope } from "../../utils/attendanceScope.js";
 import { namesOnlyList } from "../../utils/lookupOptions.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
-import { resolveApprovers, getEmployeesApprovedBy } from "../../utils/approvers.js";
+import { configuredApprover, getEmployeesApprovedBy } from "../../utils/approvers.js";
 import { buildScopeFilter } from "../../utils/scope.js";
 import { SCOPES } from "@demo-panel/shared/scopes";
 import { ROLES } from "@demo-panel/shared/roles";
 import mongoose from "mongoose";
 import { computeExpenseTotals, computeTaxAmount } from "../../utils/expenseClaimCalc.js";
+import { requestDatesProblem } from "../../utils/requestDates.js";
 
 const failure = (res, error) => {
   if (error.status) return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
@@ -61,6 +62,8 @@ const canAct = async (req, doc) => {
   const approved = await getEmployeesApprovedBy(req.user.id, "expense");
   return approved.some((id) => String(id) === String(doc.employeeId));
 };
+const claimDatesProblem = (postingDate, expenses = []) => requestDatesProblem({ postingDate }, { postingDate: "Posting Date" })
+  || (expenses || []).map((row, index) => requestDatesProblem(row, { expenseDate: `Expense Date on row ${index + 1}` })).find(Boolean) || null;
 const normalizeRows = async (expenses = [], taxes = []) => {
   const normalizedExpenses = await Promise.all((expenses || []).map(async (row) => {
     const next = typeof row.toObject === "function" ? row.toObject() : { ...row };
@@ -96,16 +99,18 @@ export const createExpenseClaim = async (req, res) => { try {
   if (req.user?.dataScope && req.user.dataScope !== SCOPES.ALL) { const employee = await resolveRequestEmployee(req); if (!employee) throwError(403, "No employee record linked to this user"); employeeId = employee._id; }
   if (!employeeId) throwError(400, "Employee is required");
   const employee = await Employee.findById(employeeId).lean(); if (!employee) throwError(404, "Employee not found");
+  const dateProblem = claimDatesProblem(req.body.postingDate, req.body.expenses); if (dateProblem) throwError(400, dateProblem);
   const { expenses, taxes, totals } = await normalizeRows(req.body.expenses, req.body.taxes);
   if (expenses.length === 0) throwError(400, "An Expense Claim must have at least one expense row");
-  const resolved = req.body.expenseApproverId || (await resolveApprovers(employeeId, "expense"))[0] || null;
+  // The configured approver, never one named in the body (S3); null leaves it to HR.
+  const resolved = await configuredApprover(employeeId, "expense");
   const data = await ExpenseClaim.create({ employeeId, companyId: employee.companyId, departmentId: employee.departmentId, postingDate: req.body.postingDate || new Date(), expenseApproverId: resolved, expenses, taxes, status: "draft", ...totals });
   return res.status(201).json({ isOk: true, status: 201, data });
 } catch (error) { return failure(res, error); } };
 export const listExpenseClaims = async (req, res) => { try { const data = await runListQuery(ExpenseClaim, req.query, { scopeFilter: await visibleClaimScope(req), filterable: EXPENSE_CLAIM_FILTERABLE, stages: STAGES }); return res.json({ isOk: true, status: 200, data }); } catch (error) { return failure(res, error); } };
 export const searchExpenseClaims = async (req, res) => { try { const data = await runListQuery(ExpenseClaim, req.body, { searchRefs: [employeeSearch()], scopeFilter: await visibleClaimScope(req), filterable: EXPENSE_CLAIM_FILTERABLE, stages: STAGES }); return res.json({ isOk: true, status: 200, data }); } catch (error) { return failure(res, error); } };
 export const getExpenseClaimById = async (req, res) => { try { const data = await ExpenseClaim.findById(req.params.id).populate("employeeId", "employeeName employeeCode").populate("departmentId", "departmentName").populate("expenseApproverId", "employeeName employeeCode").populate("expenses.expenseTypeId", "name description"); if (!data) throwError(404, "Expense Claim not found"); await ensureReadable(req, data, visibleClaimScope); return res.json({ isOk: true, status: 200, data }); } catch (error) { return failure(res, error); } };
-export const updateExpenseClaim = async (req, res) => { try { const doc = await ExpenseClaim.findById(req.params.id); if (!doc) throwError(404, "Expense Claim not found"); await ensureReadable(req, doc); if (doc.status !== "draft") throwError(400, "Only draft Expense Claim documents can be edited"); const rows = await normalizeRows(req.body.expenses ?? doc.expenses, req.body.taxes ?? doc.taxes); if (rows.expenses.length === 0) throwError(400, "An Expense Claim must have at least one expense row"); doc.expenses = rows.expenses; doc.taxes = rows.taxes; Object.assign(doc, rows.totals); if (req.body.postingDate !== undefined) doc.postingDate = req.body.postingDate; if (req.body.expenseApproverId !== undefined) doc.expenseApproverId = req.body.expenseApproverId || null; await doc.save(); return res.json({ isOk: true, status: 200, data: doc }); } catch (error) { return failure(res, error); } };
+export const updateExpenseClaim = async (req, res) => { try { const doc = await ExpenseClaim.findById(req.params.id); if (!doc) throwError(404, "Expense Claim not found"); await ensureReadable(req, doc); if (doc.status !== "draft") throwError(400, "Only draft Expense Claim documents can be edited"); const dateProblem = claimDatesProblem(req.body.postingDate, req.body.expenses); if (dateProblem) throwError(400, dateProblem); const rows = await normalizeRows(req.body.expenses ?? doc.expenses, req.body.taxes ?? doc.taxes); if (rows.expenses.length === 0) throwError(400, "An Expense Claim must have at least one expense row"); doc.expenses = rows.expenses; doc.taxes = rows.taxes; Object.assign(doc, rows.totals); if (req.body.postingDate !== undefined) doc.postingDate = req.body.postingDate; doc.expenseApproverId = await configuredApprover(doc.employeeId, "expense"); await doc.save(); return res.json({ isOk: true, status: 200, data: doc }); } catch (error) { return failure(res, error); } };
 export const deleteExpenseClaim = async (req, res) => { try { const doc = await ExpenseClaim.findById(req.params.id); if (!doc) throwError(404, "Expense Claim not found"); await ensureReadable(req, doc); if (doc.status === "submitted") throwError(400, "Submitted documents must be cancelled before deletion"); doc.isDeleted = true; await doc.save(); return res.json({ isOk: true, status: 200, message: "Expense Claim deleted successfully" }); } catch (error) { return failure(res, error); } };
 // `decision` (approve/reject): nobody decides their own claim, even when named as its approver.
 const act = (action, { decision = false } = {}) => async (req, res) => { try { const doc = await ExpenseClaim.findById(req.params.id); if (!doc) throwError(404, "Expense Claim not found"); if (decision && req.user?.role !== ROLES.ADMIN && String(doc.employeeId) === String(req.user?.id)) throwError(403, "You cannot approve or reject your own Expense Claim"); if (!(await canAct(req, doc))) throwError(403, "You do not have permission to act on this Expense Claim"); await action(doc); await doc.save(); return res.json({ isOk: true, status: 200, data: doc }); } catch (error) { return failure(res, error); } };

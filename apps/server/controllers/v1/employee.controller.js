@@ -14,6 +14,7 @@ import Department from "../../models/Department.js";
 import Designation from "../../models/Designation.js";
 import Branch from "../../models/Branch.js";
 import { companyMismatch } from "../../utils/companyMatch.js";
+import { approverChoiceProblem, EMPLOYEE_APPROVER_FIELDS } from "../../utils/approverChoice.js";
 import {
   getReferencingCounts,
   formatReferenceMessage,
@@ -108,6 +109,19 @@ const organizationMismatch = (fields) => companyMismatch(fields.companyId, [
   { Model: Branch, id: fields.branchId, label: "Branch" },
 ]);
 
+// The approvers HR picks (29 Oct P5): current staff of the employee's own
+// company, never the employee. `saved` is the stored record on an edit — a
+// picker left as it was is not re-checked, so an approver who has since left
+// does not block saving anything else.
+const approverMismatch = async (fields, saved = null) => {
+  for (const [field, label] of Object.entries(EMPLOYEE_APPROVER_FIELDS)) {
+    if (!fields[field] || String(fields[field]) === String(saved?.[field] ?? "")) continue;
+    const problem = await approverChoiceProblem(fields[field], { companyId: fields.companyId, label, whose: "the employee's company", selfId: saved?._id });
+    if (problem) return problem;
+  }
+  return null;
+};
+
 const pickFields = (body) =>
   Object.fromEntries(
     [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS]
@@ -135,7 +149,7 @@ export const createEmployee = async (req, res) => {
     }
 
     const fields = pickFields(req.body);
-    const mismatch = await organizationMismatch(fields);
+    const mismatch = await organizationMismatch(fields) || await approverMismatch(fields);
     if (mismatch) return res.status(400).json({ isOk: false, status: 400, message: mismatch });
     // An employee made from a completed onboarding (its Create Employee
     // button prefills this form) is linked back to it: once, and only in the
@@ -184,7 +198,8 @@ export const updateEmployee = async (req, res) => {
     const fields = pickFields(req.body);
     delete fields.password;
     const { companyId, departmentId, designationId, branchId } = employee;
-    const mismatch = await organizationMismatch({ companyId, departmentId, designationId, branchId, ...fields });
+    const mismatch = await organizationMismatch({ companyId, departmentId, designationId, branchId, ...fields })
+      || await approverMismatch({ companyId, ...fields }, employee);
     if (mismatch) return res.status(400).json({ isOk: false, status: 400, message: mismatch });
     Object.assign(employee, fields);
     await employee.save();

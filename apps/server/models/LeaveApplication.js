@@ -38,7 +38,7 @@ const LeaveApplicationSchema = new mongoose.Schema(
     // Server-computed, see file-level comment — never accepted verbatim from
     // the client on create/update.
     totalLeaveDays: { type: Number, default: 0 },
-    description: { type: String, trim: true, default: "" },
+    description: { type: String, trim: true, default: "", maxlength: 2000 },
     // Resolved via resolveApprovers(employeeId, "leave") at creation when not
     // explicitly set, or validated against that resolved set when supplied —
     // see leavesTransactions.controller.js. Self-approval (the approver's

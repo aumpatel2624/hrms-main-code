@@ -11,3 +11,7 @@ export const fieldLabel = (path) => path.split(".").pop()
   .replace(/^./, (first) => first.toUpperCase());
 
 mongoose.Error.messages.general.required = ({ path }) => `${fieldLabel(path)} is required`;
+// Mongoose's maxlength wording echoes the whole value back — a 200,000
+// character reason came back in full inside "Path `description` (`…`) is
+// longer than the maximum allowed length (2000).".
+mongoose.Error.messages.String.maxlength = ({ path, maxlength }) => `${fieldLabel(path)} can be at most ${maxlength} characters`;

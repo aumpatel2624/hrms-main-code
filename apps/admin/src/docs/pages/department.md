@@ -19,6 +19,14 @@ Add a department when a new team is formed. Mark one inactive when a team is wou
 - **Department Code**
 - **Parent Department** *(chosen from a list)* — Used to resolve a Leave/Expense/Shift Request approver when the employee's own department has none set.
 
+### Approvers
+
+Decide the requests of anyone in this department (or a department under it) who has no approver of their own. Left blank, the manager they report to decides, else HR.
+
+- **Leave Approvers** — Decide leave and compensatory leave.
+- **Expense Approvers**
+- **Shift Request Approvers** — Decide shift and attendance requests.
+
 ### Status
 
 - **Is Active** *(a yes/no tick box)* — Inactive records stay in the system and keep their history, but stop being offered in dropdowns on other screens.

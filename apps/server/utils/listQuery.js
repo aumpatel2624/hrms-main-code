@@ -25,6 +25,15 @@ export const OPERATORS = {
     enum: ["eq", "ne", "in"],
 };
 
+/**
+ * The most rows one page returns. A search asked for 100,000 at once and got
+ * them (29 Oct security test, low); the largest page any screen asks for is
+ * 500 (the Shift Assignment Tool's open requests).
+ */
+export const MAX_PER_PAGE = 500;
+/** A page size or offset from the client as a whole number from `min` to `max`. */
+const clampInt = (value, fallback, min, max) => Math.min(Math.max(Math.trunc(Number(value)) || fallback, min), max);
+
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Coerce a client-supplied value to the type the field is declared as. */
@@ -225,7 +234,7 @@ export const runListQuery = async (model, body = {}, { searchFields = [], search
     const alwaysHidden = { __v: 0, isDeleted: 0 };
     const hidden = hiddenPaths(model);
     const exclusions = { ...alwaysHidden, ...hidden, ...(project ?? {}) };
-    const pageStages = [{ $skip: Number(skip) || 0 }, { $limit: Number(per_page) || 100 }];
+    const pageStages = [{ $skip: clampInt(skip, 0, 0, Number.MAX_SAFE_INTEGER) }, { $limit: clampInt(per_page, 100, 1, MAX_PER_PAGE) }];
     if (Object.keys(exclusions).length) pageStages.push({ $project: exclusions });
 
     pipeline.push({

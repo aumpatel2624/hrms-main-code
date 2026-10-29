@@ -23,6 +23,7 @@ import { getBenefitsDetailsParent } from "../../utils/employeeBenefitSource.js";
 import { getCurrentSalaryStructureAssignment } from "../../utils/payrollAssignment.js";
 import { calculateFullPeriodAmounts, previewCurrentCycleBenefitAccrual } from "../../utils/salarySlipCalc.js";
 import { calculatePayrollCorrectionBreakup } from "../../utils/payrollCorrectionCalc.js";
+import { decideOnce } from "../../utils/statusClaim.js";
 
 const round2 = (val) => Math.round((Number(val || 0) + Number.EPSILON) * 100) / 100;
 
@@ -746,25 +747,28 @@ export const submitEmployeeBenefitClaim = async (req, res) => {
       );
     }
 
-    // Create the AdditionalSalary record
-    const addSal = await AdditionalSalary.create({
-      employeeId: doc.employeeId,
-      companyId: doc.companyId,
-      salaryComponentId: doc.salaryComponentId,
-      type: "Earning",
-      amount: doc.claimedAmount,
-      isRecurring: false,
-      payrollDate: doc.claimDate,
-      overwriteSalaryStructureAmount: false,
-      deductFullTaxOnSelectedPayrollDate: false,
-      currency: employee.currency || "USD",
-      status: "active",
-      refDoctype: "EmployeeBenefitClaim",
-      refDocnameId: doc._id,
-    });
+    // Moved draft → submitted in one step first, so a second Submit pressed
+    // at the same moment is refused and creates nothing twice (S4).
+    await decideOnce(EmployeeBenefitClaim, doc, "submitted", "Employee Benefit Claim", async () => {
+      // Create the AdditionalSalary record
+      const addSal = await AdditionalSalary.create({
+        employeeId: doc.employeeId,
+        companyId: doc.companyId,
+        salaryComponentId: doc.salaryComponentId,
+        type: "Earning",
+        amount: doc.claimedAmount,
+        isRecurring: false,
+        payrollDate: doc.claimDate,
+        overwriteSalaryStructureAmount: false,
+        deductFullTaxOnSelectedPayrollDate: false,
+        currency: employee.currency || "USD",
+        status: "active",
+        refDoctype: "EmployeeBenefitClaim",
+        refDocnameId: doc._id,
+      });
 
-    doc.additionalSalaryId = addSal._id;
-    doc.status = "submitted";
+      doc.additionalSalaryId = addSal._id;
+    });
     await doc.save();
 
     return res.json({
@@ -1185,65 +1189,67 @@ export const submitPayrollCorrection = async (req, res) => {
     const currency = employee?.currency || "USD";
     const now = new Date();
 
-    // 1. Create AdditionalSalary for earning arrears
-    for (const ear of doc.earningArrears || []) {
-      await AdditionalSalary.create({
-        employeeId: doc.employeeId,
-        companyId: doc.companyId,
-        salaryComponentId: ear.salaryComponentId,
-        type: "Earning",
-        amount: ear.amount,
-        isRecurring: false,
-        payrollDate: now,
-        overwriteSalaryStructureAmount: false,
-        deductFullTaxOnSelectedPayrollDate: false,
-        currency,
-        status: "active",
-        refDoctype: "PayrollCorrection",
-        refDocnameId: doc._id,
-      });
-    }
-
-    // 2. Create AdditionalSalary for deduction arrears
-    for (const ded of doc.deductionArrears || []) {
-      await AdditionalSalary.create({
-        employeeId: doc.employeeId,
-        companyId: doc.companyId,
-        salaryComponentId: ded.salaryComponentId,
-        type: "Deduction",
-        amount: ded.amount,
-        isRecurring: false,
-        payrollDate: now,
-        overwriteSalaryStructureAmount: false,
-        deductFullTaxOnSelectedPayrollDate: false,
-        currency,
-        status: "active",
-        refDoctype: "PayrollCorrection",
-        refDocnameId: doc._id,
-      });
-    }
-
-    // 3. Create EmployeeBenefitLedger entries for accrual arrears
-    if (doc.payrollPeriodId && (doc.accrualArrears || []).length > 0) {
-      for (const acc of doc.accrualArrears) {
-        await createBenefitLedgerEntry({
-          postingDate: now,
+    // Moved draft → submitted in one step first, so a second Submit pressed
+    // at the same moment is refused and creates nothing twice (S4).
+    await decideOnce(PayrollCorrection, doc, "submitted", "Payroll Correction", async () => {
+      // 1. Create AdditionalSalary for earning arrears
+      for (const ear of doc.earningArrears || []) {
+        await AdditionalSalary.create({
           employeeId: doc.employeeId,
           companyId: doc.companyId,
-          salaryComponentId: acc.salaryComponentId,
-          payrollPeriodId: doc.payrollPeriodId,
-          transactionType: "Accrual",
-          amount: acc.amount,
-          yearlyBenefit: 0,
-          flexibleBenefit: true,
+          salaryComponentId: ear.salaryComponentId,
+          type: "Earning",
+          amount: ear.amount,
+          isRecurring: false,
+          payrollDate: now,
+          overwriteSalaryStructureAmount: false,
+          deductFullTaxOnSelectedPayrollDate: false,
+          currency,
+          status: "active",
           refDoctype: "PayrollCorrection",
           refDocnameId: doc._id,
-          remarks: "Payroll Correction LWP reversal accrual",
         });
       }
-    }
 
-    doc.status = "submitted";
+      // 2. Create AdditionalSalary for deduction arrears
+      for (const ded of doc.deductionArrears || []) {
+        await AdditionalSalary.create({
+          employeeId: doc.employeeId,
+          companyId: doc.companyId,
+          salaryComponentId: ded.salaryComponentId,
+          type: "Deduction",
+          amount: ded.amount,
+          isRecurring: false,
+          payrollDate: now,
+          overwriteSalaryStructureAmount: false,
+          deductFullTaxOnSelectedPayrollDate: false,
+          currency,
+          status: "active",
+          refDoctype: "PayrollCorrection",
+          refDocnameId: doc._id,
+        });
+      }
+
+      // 3. Create EmployeeBenefitLedger entries for accrual arrears
+      if (doc.payrollPeriodId && (doc.accrualArrears || []).length > 0) {
+        for (const acc of doc.accrualArrears) {
+          await createBenefitLedgerEntry({
+            postingDate: now,
+            employeeId: doc.employeeId,
+            companyId: doc.companyId,
+            salaryComponentId: acc.salaryComponentId,
+            payrollPeriodId: doc.payrollPeriodId,
+            transactionType: "Accrual",
+            amount: acc.amount,
+            yearlyBenefit: 0,
+            flexibleBenefit: true,
+            refDoctype: "PayrollCorrection",
+            refDocnameId: doc._id,
+            remarks: "Payroll Correction LWP reversal accrual",
+          });
+        }
+      }
+    });
     await doc.save();
 
     return res.json({

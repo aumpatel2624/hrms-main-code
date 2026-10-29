@@ -18,7 +18,7 @@
  */
 import mongoose from "mongoose";
 import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
-import { resolveApprovers } from "../../utils/approvers.js";
+import { configuredApprover } from "../../utils/approvers.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { buildScopeFilter } from "../../utils/scope.js";
 import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
@@ -38,6 +38,7 @@ import ShiftAssignment from "../../models/ShiftAssignment.js";
 import ShiftScheduleAssignment from "../../models/ShiftScheduleAssignment.js";
 import Employee from "../../models/Employee.js";
 import Attendance from "../../models/Attendance.js";
+import { requestDatesProblem } from "../../utils/requestDates.js";
 
 const addDays = (date, days) => new Date(new Date(date).getTime() + days * 86400000);
 
@@ -171,6 +172,8 @@ const runShiftRequestValidation = async (data, { excludeId = null } = {}) => {
   if (!employeeId || !shiftTypeId || !fromDate) {
     return { error: { status: 400, message: "Employee, Shift Type and From Date are required" } };
   }
+  const dateProblem = requestDatesProblem(data, { fromDate: "From Date", toDate: "To Date" });
+  if (dateProblem) return { error: { status: 400, message: dateProblem } };
   const toDate = data.toDate ? new Date(data.toDate) : null;
   const from = new Date(fromDate);
   if (toDate && from > toDate) {
@@ -202,19 +205,10 @@ const runShiftRequestValidation = async (data, { excludeId = null } = {}) => {
     return { error: { status: 400, message: "Employee already has an active Shift Assignment that overlaps with this period" } };
   }
 
-  // Approver resolution — reuses resolveApprovers("shiftRequest") AS-IS
-  // (ADR-024/025): direct-field-wins-else-department-ancestor-chain-union,
-  // not a narrower single-level rule.
-  let approverId = data.approverId || null;
-  const resolvedApprovers = await resolveApprovers(employeeId, "shiftRequest");
-  if (!approverId) {
-    if (resolvedApprovers.length === 0) {
-      return { error: { status: 400, message: "Please set a Shift Approver for this Employee or their Department" } };
-    }
-    [approverId] = resolvedApprovers;
-  } else if (resolvedApprovers.length > 0 && !resolvedApprovers.includes(String(approverId))) {
-    return { error: { status: 400, message: "The supplied Shift Approver is not a resolved approver for this Employee" } };
-  }
+  // Approver: always the configured one (ADR-024/025's resolveApprovers),
+  // never one named in the body (S3); with nobody configured it is null and
+  // HR decides.
+  const approverId = await configuredApprover(employeeId, "shiftRequest");
 
   return { companyId: employee.companyId, approverId };
 };
@@ -428,6 +422,8 @@ const runAttendanceRequestValidation = async (data, { excludeId = null } = {}) =
   if (!employeeId || !fromDate || !toDate || !reason) {
     return { error: { status: 400, message: "Employee, From Date, To Date and Reason are required" } };
   }
+  const dateProblem = requestDatesProblem(data, { fromDate: "From Date", toDate: "To Date", halfDayDate: "Half Day Date" });
+  if (dateProblem) return { error: { status: 400, message: dateProblem } };
   if (!["Work From Home", "On Duty"].includes(reason)) {
     return { error: { status: 400, message: "Reason must be Work From Home or On Duty" } };
   }
@@ -465,7 +461,7 @@ const runAttendanceRequestValidation = async (data, { excludeId = null } = {}) =
     return { error: { status: 400, message: `Employee ${employee.employeeName} already has an Attendance Request that overlaps with this period` } };
   }
 
-  const [approverId = null] = (await resolveApprovers(employeeId, "shiftRequest")).filter((id) => id !== String(employeeId));
+  const approverId = await configuredApprover(employeeId, "shiftRequest");
   return { companyId: employee.companyId, approverId };
 };
 

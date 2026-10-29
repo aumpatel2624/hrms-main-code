@@ -3,13 +3,13 @@ import mongoose from "mongoose";
 const ExpenseClaimDetailSchema = new mongoose.Schema({
   expenseDate: { type: Date, default: Date.now },
   expenseTypeId: { type: mongoose.Schema.Types.ObjectId, ref: "ExpenseClaimType", required: true },
-  description: { type: String, trim: true, default: "" },
+  description: { type: String, trim: true, default: "", maxlength: 1000 },
   amount: { type: Number, required: true, min: 0 },
   sanctionedAmount: { type: Number, min: 0, default: null },
 }, { _id: true });
 
 const ExpenseTaxAndChargeSchema = new mongoose.Schema({
-  description: { type: String, required: true, trim: true },
+  description: { type: String, required: true, trim: true, maxlength: 500 },
   rate: { type: Number, default: null, min: 0 },
   taxAmount: { type: Number, default: 0, min: 0 },
 }, { _id: true });

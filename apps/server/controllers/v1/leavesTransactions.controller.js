@@ -18,7 +18,8 @@ import mongoose from "mongoose";
 import { employeeSearch, runListQuery } from "../../utils/listQuery.js";
 import { getReferencingCounts, formatReferenceMessage } from "../../utils/referenceHelper.js";
 import { getLeaveBalance } from "../../utils/leaveBalance.js";
-import { resolveApprovers, getEmployeesApprovedBy } from "../../utils/approvers.js";
+import { configuredApprover, resolveApprovers, getEmployeesApprovedBy } from "../../utils/approvers.js";
+import { decideOnce } from "../../utils/statusClaim.js";
 import { getSubordinateEmployeeIds } from "../../utils/subordinates.js";
 import { resolveRequestEmployee } from "../../utils/requestEmployee.js";
 import { attendanceEmployeeScope, departmentEmployeeIds, inCallerDepartment } from "../../utils/attendanceScope.js";
@@ -45,6 +46,7 @@ import LeavePeriod from "../../models/LeavePeriod.js";
 import HolidayList from "../../models/HolidayList.js";
 import Employee from "../../models/Employee.js";
 import Attendance from "../../models/Attendance.js";
+import { requestDatesProblem } from "../../utils/requestDates.js";
 
 // The admin list columns read `employeeName`; without this join they fell
 // back to printing the raw employeeId.
@@ -233,6 +235,7 @@ export const listLeaveAdjustmentByParams = async (req, res) => {
 // ==================================================== CompensatoryLeaveRequest --
 
 const CLR_UPDATABLE_FIELDS = ["workFromDate", "workEndDate", "halfDay", "halfDayDate", "reason", "leaveTypeId"];
+const COMP_LEAVE_DATES = { workFromDate: "Work From Date", workEndDate: "Work End Date", halfDayDate: "Half Day Date" };
 
 // Issue #34 security fix: this doctype had NO ownership check anywhere —
 // create trusted employeeId from the body, and update/get/delete never
@@ -253,7 +256,11 @@ const leaveDecisionRefusal = async (req, doc) => {
   if ((req.user.dataScope || SCOPES.ALL) === SCOPES.ALL) return null;
   if (String(doc.leaveApproverId || "") === String(req.user.id)) return null;
   const approvers = await resolveApprovers(doc.employeeId, "leave");
-  return approvers.includes(String(req.user.id)) ? null : "Only the named Leave Approver or HR can approve or reject this leave request";
+  if (approvers.includes(String(req.user.id))) return null;
+  // A Compensatory Leave Request names nobody: its approver is the chain's,
+  // the Reports To manager included.
+  return String(await configuredApprover(doc.employeeId, "leave")) === String(req.user.id)
+    ? null : "Only the named Leave Approver or HR can approve or reject this leave request";
 };
 
 /**
@@ -281,6 +288,8 @@ export const createCompensatoryLeaveRequest = async (req, res) => {
     if (!employeeId || !leaveTypeId || !workFromDate || !workEndDate || !reason) {
       return res.status(400).json({ isOk: false, status: 400, message: "Employee, Leave Type, Work From/End Date and Reason are required" });
     }
+    const dateProblem = requestDatesProblem(req.body, COMP_LEAVE_DATES);
+    if (dateProblem) return res.status(400).json({ isOk: false, status: 400, message: dateProblem });
 
     const employee = await Employee.findById(employeeId).lean();
     if (!employee) return res.status(404).json({ isOk: false, status: 404, message: "Employee not found" });
@@ -338,6 +347,8 @@ export const updateCompensatoryLeaveRequest = async (req, res) => {
     if (doc.status !== "open") {
       return res.status(400).json({ isOk: false, status: 400, message: `Cannot edit a ${doc.status} Compensatory Leave Request` });
     }
+    const dateProblem = requestDatesProblem(req.body, COMP_LEAVE_DATES);
+    if (dateProblem) return res.status(400).json({ isOk: false, status: 400, message: dateProblem });
     for (const field of CLR_UPDATABLE_FIELDS) if (req.body[field] !== undefined) doc[field] = req.body[field];
     await doc.save();
     return res.status(200).json({ isOk: true, status: 200, message: "Compensatory Leave Request updated successfully" });
@@ -496,48 +507,52 @@ export const approveCompensatoryLeaveRequest = async (req, res) => {
       });
     }
 
-    let allocation = await LeaveAllocation.findOne({
-      employeeId: doc.employeeId,
-      leaveTypeId: doc.leaveTypeId,
-      status: "active",
-      fromDate: { $lte: compLeaveValidFrom },
-      toDate: { $gte: compLeaveValidFrom },
-    });
-
-    if (allocation) {
-      allocation.newLeavesAllocated += dateDifference;
-      allocation.totalLeavesAllocated = allocation.unusedLeaves + allocation.newLeavesAllocated;
-      await allocation.save();
-    } else {
-      allocation = await LeaveAllocation.create({
+    // Moved open → approved in one step first, so a second approval pressed
+    // at the same moment is refused and credits nothing twice (S4).
+    let allocation = null;
+    await decideOnce(CompensatoryLeaveRequest, doc, "approved", "Compensatory Leave Request", async () => {
+      allocation = await LeaveAllocation.findOne({
         employeeId: doc.employeeId,
         leaveTypeId: doc.leaveTypeId,
-        companyId: employee.companyId,
-        fromDate: compLeaveValidFrom,
-        toDate: leavePeriod.toDate,
-        newLeavesAllocated: dateDifference,
-        unusedLeaves: 0,
-        totalLeavesAllocated: dateDifference,
-        carryForward: Boolean(leaveType?.isCarryForward),
-        leavePeriodId: leavePeriod._id,
         status: "active",
+        fromDate: { $lte: compLeaveValidFrom },
+        toDate: { $gte: compLeaveValidFrom },
       });
-    }
 
-    await LeaveLedgerEntry.create({
-      employeeId: doc.employeeId,
-      leaveTypeId: doc.leaveTypeId,
-      transactionType: "LeaveAllocation",
-      transactionId: allocation._id,
-      leaves: dateDifference,
-      fromDate: compLeaveValidFrom,
-      toDate: compLeaveValidFrom,
-      isCarryForward: false,
-      companyId: employee.companyId,
+      if (allocation) {
+        allocation.newLeavesAllocated += dateDifference;
+        allocation.totalLeavesAllocated = allocation.unusedLeaves + allocation.newLeavesAllocated;
+        await allocation.save();
+      } else {
+        allocation = await LeaveAllocation.create({
+          employeeId: doc.employeeId,
+          leaveTypeId: doc.leaveTypeId,
+          companyId: employee.companyId,
+          fromDate: compLeaveValidFrom,
+          toDate: leavePeriod.toDate,
+          newLeavesAllocated: dateDifference,
+          unusedLeaves: 0,
+          totalLeavesAllocated: dateDifference,
+          carryForward: Boolean(leaveType?.isCarryForward),
+          leavePeriodId: leavePeriod._id,
+          status: "active",
+        });
+      }
+
+      await LeaveLedgerEntry.create({
+        employeeId: doc.employeeId,
+        leaveTypeId: doc.leaveTypeId,
+        transactionType: "LeaveAllocation",
+        transactionId: allocation._id,
+        leaves: dateDifference,
+        fromDate: compLeaveValidFrom,
+        toDate: compLeaveValidFrom,
+        isCarryForward: false,
+        companyId: employee.companyId,
+      });
     });
 
     doc.leaveAllocationId = allocation._id;
-    doc.status = "approved";
     await doc.save();
 
     return res.status(200).json({ isOk: true, status: 200, message: "Compensatory Leave Request approved successfully", data: { leaveAllocationId: allocation._id } });
@@ -556,8 +571,7 @@ export const rejectCompensatoryLeaveRequest = async (req, res) => {
     if (doc.status !== "open") {
       return res.status(400).json({ isOk: false, status: 400, message: `Only an open request can be rejected (current status: ${doc.status})` });
     }
-    doc.status = "rejected";
-    await doc.save();
+    await decideOnce(CompensatoryLeaveRequest, doc, "rejected", "Compensatory Leave Request");
     return res.status(200).json({ isOk: true, status: 200, message: "Compensatory Leave Request rejected" });
   } catch (error) {
     console.log("Error in rejectCompensatoryLeaveRequest", error);
@@ -605,6 +619,8 @@ const runLeaveApplicationValidation = async (data, { excludeId = null, actingUse
   if (!employeeId || !leaveTypeId || !fromDate || !toDate) {
     return { error: { status: 400, message: "Employee, Leave Type, From Date and To Date are required" } };
   }
+  const dateProblem = requestDatesProblem(data, { fromDate: "From Date", toDate: "To Date", halfDayDate: "Half Day Date", postingDate: "Posting Date" });
+  if (dateProblem) return { error: { status: 400, message: dateProblem } };
   if (new Date(fromDate) > new Date(toDate)) {
     return { error: { status: 400, message: "To date cannot be before from date" } };
   }
@@ -745,21 +761,10 @@ const runLeaveApplicationValidation = async (data, { excludeId = null, actingUse
     }
   }
 
-  // Leave Approver resolution + self-approval prevention.
-  let leaveApproverId = data.leaveApproverId || null;
-  const resolvedApprovers = await resolveApprovers(employeeId, "leave");
-  if (!leaveApproverId) {
-    if (resolvedApprovers.length === 0) {
-      return { error: { status: 400, message: "Please set a Leave Approver for this Employee or their Department" } };
-    }
-    leaveApproverId = resolvedApprovers.find((id) => id !== String(employeeId)) ?? resolvedApprovers[0];
-  } else if (resolvedApprovers.length > 0 && !resolvedApprovers.includes(String(leaveApproverId))) {
-    return { error: { status: 400, message: "The supplied Leave Approver is not a resolved approver for this Employee" } };
-  }
-  // ADR-040: an approver id is the approver's own Employee id.
-  if (String(leaveApproverId) === String(employeeId)) {
-    return { error: { status: 400, message: "Self-approval for leaves is not allowed" } };
-  }
+  // Leave Approver: always the configured one, never the applicant (S3).
+  // Whatever the body names is ignored; with nobody configured it is null
+  // and HR decides.
+  const leaveApproverId = await configuredApprover(employeeId, "leave");
 
   return {
     totalLeaveDays,
@@ -831,7 +836,7 @@ export const updateLeaveApplication = async (req, res) => {
     const result = await runLeaveApplicationValidation(merged, { excludeId: leaveApplicationId, actingUserId: req.user?.id });
     if (result.error) return res.status(result.error.status).json({ isOk: false, status: result.error.status, message: result.error.message });
 
-    const EDITABLE_FIELDS = ["employeeId", "leaveTypeId", "fromDate", "toDate", "halfDay", "halfDayDate", "description", "leaveApproverId", "postingDate"];
+    const EDITABLE_FIELDS = ["employeeId", "leaveTypeId", "fromDate", "toDate", "halfDay", "halfDayDate", "description", "postingDate"];
     for (const field of EDITABLE_FIELDS) if (body[field] !== undefined) doc[field] = body[field];
     doc.totalLeaveDays = result.totalLeaveDays;
     doc.leaveApproverId = result.leaveApproverId;
@@ -984,71 +989,72 @@ export const approveLeaveApplication = async (req, res) => {
       }
     }
 
-    // Attendance rows — one per calendar day, skipping holidays unless the
-    // leave type includes them.
-    const holidayDates = leaveType.includeHoliday ? [] : await getHolidayDatesInRange(doc.employeeId, from, to);
-    let cursor = new Date(from);
-    while (cursor <= to) {
-      const isHoliday = holidayDates.some((d) => sameCalendarDay(d, cursor));
-      if (!isHoliday) {
-        const isHalfDay = doc.halfDay && doc.halfDayDate && sameCalendarDay(doc.halfDayDate, cursor);
-        await Attendance.findOneAndUpdate( // eslint-disable-line no-await-in-loop
-          { employeeId: doc.employeeId, attendanceDate: cursor },
-          {
-            employeeId: doc.employeeId,
-            companyId: employee.companyId,
-            attendanceDate: cursor,
-            status: isHalfDay ? "Half Day" : "On Leave",
-            leaveApplicationId: doc._id,
-            leaveTypeId: doc.leaveTypeId,
-            isActive: true,
-          },
-          { upsert: true, setDefaultsOnInsert: true },
-        );
+    // One step moves it open → approved; a second approval pressed at the
+    // same moment is refused there and writes no second ledger entry (S4).
+    await decideOnce(LeaveApplication, doc, "approved", "Leave Application", async () => {
+      // Attendance rows — one per calendar day, skipping holidays unless the
+      // leave type includes them.
+      const holidayDates = leaveType.includeHoliday ? [] : await getHolidayDatesInRange(doc.employeeId, from, to);
+      let cursor = new Date(from);
+      while (cursor <= to) {
+        const isHoliday = holidayDates.some((d) => sameCalendarDay(d, cursor));
+        if (!isHoliday) {
+          const isHalfDay = doc.halfDay && doc.halfDayDate && sameCalendarDay(doc.halfDayDate, cursor);
+          await Attendance.findOneAndUpdate( // eslint-disable-line no-await-in-loop
+            { employeeId: doc.employeeId, attendanceDate: cursor },
+            {
+              employeeId: doc.employeeId,
+              companyId: employee.companyId,
+              attendanceDate: cursor,
+              status: isHalfDay ? "Half Day" : "On Leave",
+              leaveApplicationId: doc._id,
+              leaveTypeId: doc.leaveTypeId,
+              isActive: true,
+            },
+            { upsert: true, setDefaultsOnInsert: true },
+          );
+        }
+        cursor = addDays(cursor, 1);
       }
-      cursor = addDays(cursor, 1);
-    }
 
-    // Ledger entries — split across an allocation boundary when the range
-    // crosses one (fromAlloc's toDate !== toAlloc's fromDate - 1 is treated
-    // as "not consecutive" and simply produces two entries covering only
-    // what each allocation actually spans, rather than throwing — a
-    // deliberate relaxation of source's hard non-consecutive-allocations
-    // error, documented in DECISIONS.md, since blocking approval entirely
-    // over a gap between two allocations is worse than posting what can be
-    // posted).
-    const fromAlloc = await findAllocationCovering(doc.employeeId, doc.leaveTypeId, from);
-    const toAlloc = await findAllocationCovering(doc.employeeId, doc.leaveTypeId, to);
+      // Ledger entries — split across an allocation boundary when the range
+      // crosses one (fromAlloc's toDate !== toAlloc's fromDate - 1 is treated
+      // as "not consecutive" and simply produces two entries covering only
+      // what each allocation actually spans, rather than throwing — a
+      // deliberate relaxation of source's hard non-consecutive-allocations
+      // error, documented in DECISIONS.md, since blocking approval entirely
+      // over a gap between two allocations is worse than posting what can be
+      // posted).
+      const fromAlloc = await findAllocationCovering(doc.employeeId, doc.leaveTypeId, from);
+      const toAlloc = await findAllocationCovering(doc.employeeId, doc.leaveTypeId, to);
 
-    const writeLedgerEntry = (entryFrom, entryTo) => {
-      const days = countLeaveDays({
-        fromDate: entryFrom, toDate: entryTo, halfDay: doc.halfDay, halfDayDate: doc.halfDayDate,
-        holidayDates, includeHoliday: leaveType.includeHoliday,
-      });
-      if (!days) return Promise.resolve(null);
-      return LeaveLedgerEntry.create({
-        employeeId: doc.employeeId,
-        leaveTypeId: doc.leaveTypeId,
-        transactionType: "LeaveApplication",
-        transactionId: doc._id,
-        leaves: -days,
-        fromDate: entryFrom,
-        toDate: entryTo,
-        isCarryForward: false,
-        isLwp: Boolean(leaveType.isLwp),
-        companyId: employee.companyId,
-      });
-    };
+      const writeLedgerEntry = (entryFrom, entryTo) => {
+        const days = countLeaveDays({
+          fromDate: entryFrom, toDate: entryTo, halfDay: doc.halfDay, halfDayDate: doc.halfDayDate,
+          holidayDates, includeHoliday: leaveType.includeHoliday,
+        });
+        if (!days) return Promise.resolve(null);
+        return LeaveLedgerEntry.create({
+          employeeId: doc.employeeId,
+          leaveTypeId: doc.leaveTypeId,
+          transactionType: "LeaveApplication",
+          transactionId: doc._id,
+          leaves: -days,
+          fromDate: entryFrom,
+          toDate: entryTo,
+          isCarryForward: false,
+          isLwp: Boolean(leaveType.isLwp),
+          companyId: employee.companyId,
+        });
+      };
 
-    if (fromAlloc && toAlloc && String(fromAlloc._id) !== String(toAlloc._id)) {
-      await writeLedgerEntry(from, fromAlloc.toDate);
-      await writeLedgerEntry(addDays(fromAlloc.toDate, 1), to);
-    } else {
-      await writeLedgerEntry(from, to);
-    }
-
-    doc.status = "approved";
-    await doc.save();
+      if (fromAlloc && toAlloc && String(fromAlloc._id) !== String(toAlloc._id)) {
+        await writeLedgerEntry(from, fromAlloc.toDate);
+        await writeLedgerEntry(addDays(fromAlloc.toDate, 1), to);
+      } else {
+        await writeLedgerEntry(from, to);
+      }
+    });
 
     return res.status(200).json({ isOk: true, status: 200, message: "Leave Application approved successfully" });
   } catch (error) {
@@ -1069,8 +1075,7 @@ export const rejectLeaveApplication = async (req, res) => {
     if (doc.status !== "open") {
       return res.status(400).json({ isOk: false, status: 400, message: `Only an open application can be rejected (current status: ${doc.status})` });
     }
-    doc.status = "rejected";
-    await doc.save();
+    await decideOnce(LeaveApplication, doc, "rejected", "Leave Application");
     return res.status(200).json({ isOk: true, status: 200, message: "Leave Application rejected" });
   } catch (error) {
     console.log("Error in rejectLeaveApplication", error);
@@ -1094,17 +1099,16 @@ export const cancelLeaveApplication = async (req, res) => {
       return res.status(400).json({ isOk: false, status: 400, message: `Only an approved application can be cancelled (current status: ${doc.status})` });
     }
 
-    await LeaveLedgerEntry.updateMany(
-      { transactionType: "LeaveApplication", transactionId: doc._id },
-      { isDeleted: true },
-    );
-    await Attendance.updateMany(
-      { leaveApplicationId: doc._id },
-      { isDeleted: true },
-    );
-
-    doc.status = "cancelled";
-    await doc.save();
+    await decideOnce(LeaveApplication, doc, "cancelled", "Leave Application", async () => {
+      await LeaveLedgerEntry.updateMany(
+        { transactionType: "LeaveApplication", transactionId: doc._id },
+        { isDeleted: true },
+      );
+      await Attendance.updateMany(
+        { leaveApplicationId: doc._id },
+        { isDeleted: true },
+      );
+    });
 
     return res.status(200).json({ isOk: true, status: 200, message: "Leave Application cancelled successfully" });
   } catch (error) {

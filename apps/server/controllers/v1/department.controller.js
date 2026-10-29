@@ -1,5 +1,6 @@
 import { runListQuery } from "../../utils/listQuery.js";
 import DepartmentModels from "../../models/Department.js";
+import { approverChoiceProblem, DEPARTMENT_APPROVER_FIELDS } from "../../utils/approverChoice.js";
 import {
   getReferencingCounts,
   formatReferenceMessage,
@@ -18,6 +19,19 @@ const failure = (res, error) => {
   }
   console.error("Department request failed", error);
   return res.status(500).json({ isOk: false, status: 500, message: "Internal server error" });
+};
+
+// The approvers HR picks (29 Oct P5): current staff of the department's own
+// company. On an edit only the newly added ones are checked, so an approver
+// who has since left does not block saving anything else.
+const departmentApproverMismatch = async (body, companyId, saved = null) => {
+  for (const [field, label] of Object.entries(DEPARTMENT_APPROVER_FIELDS)) {
+    const kept = new Set((saved?.[field] ?? []).map(String));
+    const added = [].concat(body[field] ?? []).filter((id) => !kept.has(String(id)));
+    const problem = await approverChoiceProblem(added, { companyId, label, whose: "the department's company" });
+    if (problem) return problem;
+  }
+  return null;
 };
 
 export const createDepartment = async (req, res) => {
@@ -49,6 +63,9 @@ export const createDepartment = async (req, res) => {
         status: 400,
       });
     }
+
+    const approverProblem = await departmentApproverMismatch(req.body, companyId);
+    if (approverProblem) return res.status(400).json({ message: approverProblem, isOk: false, status: 400 });
 
     const department = new DepartmentModels({
       departmentName,
@@ -101,6 +118,9 @@ export const updateDepartment = async (req, res) => {
         status: 400,
       });
     }
+
+    const approverProblem = await departmentApproverMismatch(req.body, companyId ?? department.companyId, department);
+    if (approverProblem) return res.status(400).json({ message: approverProblem, isOk: false, status: 400 });
 
     department.departmentName = departmentName;
     department.departmentCode = departmentCode;

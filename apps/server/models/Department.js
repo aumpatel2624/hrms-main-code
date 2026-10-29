@@ -38,12 +38,9 @@ const DepartmentSchema = new mongoose.Schema(
       required: false,
       default: null,
     },
-    // Three approver fallback lists (ADR-024) — plain arrays of User refs,
-    // not embedded objects. Matches this project's existing precedent for a
-    // bare ref array (Recruitment's Interviewer.interviewers/
-    // defaultInterviewers): schema-ready and API-accessible, but not given a
-    // multi-select field on the Department form — this admin has no
-    // multi-select field type yet, a known simplification, not an oversight.
+    // Three approver fallback lists (ADR-024) — plain arrays of Employee
+    // refs, not embedded objects. Set on the Department form's multi-select
+    // pickers: current staff of the department's company (29 Oct P5).
     leaveApprovers: {
       type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Employee" }],
       default: [],

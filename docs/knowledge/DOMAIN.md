@@ -570,10 +570,10 @@ balance" error. The Leave Ledger itself stays HR-only.
 `Department` (ADR-017) gained `parentDepartmentId` (optional self-ref, depth-10-bounded walk, no
 protection against anything but a direct self-cycle) and three approver arrays
 (`leaveApprovers`/`expenseApprovers`/`shiftRequestApprovers`, plain `Employee` ref arrays since ADR-040
-merged the login identity into Employee — schema-ready,
-not given a form field yet, same precedent as Recruitment's `interviewers`). `utils/approvers.js`
-resolves an employee's approver: their own direct field if set, otherwise the union of the matching
-array across their whole department ancestor chain.
+merged the login identity into Employee — set on the Department form's multi-selects since ADR-068).
+`utils/approvers.js` resolves an employee's approver: their own direct field if set, otherwise the
+union of the matching array across their whole department ancestor chain; a request's single
+approver (`configuredApprover`) falls back further to the Reports To manager, then to HR.
 
 `Attendance` — a deliberately minimal one-row-per-employee-per-day model (module 9, Shift &
 Attendance, extends it with shift/check-in/geolocation later), built by the foundation fork only
@@ -594,9 +594,8 @@ writes a ledger entry; `/reject` has no side effects.
 
 `LeaveApplication` — the module's centerpiece, an employee's request for time off.
 `totalLeaveDays` is always server-recomputed (new `utils/leaveDayCalculation.js`), never trusted from
-the client. `leaveApproverId` auto-resolves via `resolveApprovers` when omitted, or is validated
-against that resolved set when supplied — either way, the resolved/supplied approver's own linked
-Employee can never be the applicant themself (self-approval prevention). Create validates, in order:
+the client. `leaveApproverId` is always the configured chain's approver (`configuredApprover`, ADR-068) —
+never one the applicant names, never the applicant themself — or none, and HR decides. Create validates, in order:
 active-employee, half-day date sanity, balance sufficiency (`allowNegative` override), overlap with a
 half-day-adjacency carve-out, max-consecutive-days (a one-hop adjacency merge — a documented
 simplification of source's full recursive chain walk), block-date enforcement (`LeaveBlockList`,

@@ -1,7 +1,7 @@
 // ponytail: one runnable check, no framework. `node apps/server/utils/listQuery.test.js`
 import assert from "node:assert/strict";
 import mongoose from "mongoose";
-import { buildFilterMatch, employeeSearch, OPERATORS, runListQuery } from "./listQuery.js";
+import { buildFilterMatch, employeeSearch, MAX_PER_PAGE, OPERATORS, runListQuery } from "./listQuery.js";
 
 const allow = { countryName: "string", isActive: "boolean", sequence: "number", createdAt: "date", roleId: "objectId" };
 
@@ -112,5 +112,17 @@ assert.deepEqual(pipeline[1], { $match: { $or: [{ remarks: { $regex: "as\\.ha", 
 RefTarget.find = () => ({ lean: async () => [] });
 await runListQuery(WithRef, { match: "nobody" }, { searchRefs: [{ ...employeeSearch(), model: "ListQueryRefTargetTest" }] });
 assert.deepEqual(pipeline[1], { $match: { $or: [{ employeeId: { $in: [] } }] } });
+
+// A page is at most MAX_PER_PAGE rows: a search asking for 100,000 got them
+// all (29 Oct security test, low). A negative or junk size or offset falls
+// back to the defaults instead of reaching Mongo.
+const pageOf = () => pipeline.find((stage) => stage.$facet).$facet.stage2;
+await runListQuery(HasIsActive, { per_page: 100000 });
+assert.deepEqual(pageOf().slice(0, 2), [{ $skip: 0 }, { $limit: MAX_PER_PAGE }]);
+assert.equal(MAX_PER_PAGE, 500, "the largest page a screen asks for");
+await runListQuery(HasIsActive, { per_page: -5, skip: -20 });
+assert.deepEqual(pageOf().slice(0, 2), [{ $skip: 0 }, { $limit: 1 }]);
+await runListQuery(HasIsActive, { per_page: "lots", skip: "x" });
+assert.deepEqual(pageOf().slice(0, 2), [{ $skip: 0 }, { $limit: 100 }]);
 
 console.log("listQuery: all checks passed");

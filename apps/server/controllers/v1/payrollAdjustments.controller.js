@@ -17,6 +17,7 @@ import SalaryStructure from "../../models/SalaryStructure.js";
 import SalaryStructureAssignment from "../../models/SalaryStructureAssignment.js";
 import { calculateArrears } from "../../utils/arrearCalc.js";
 import { getCurrentSalaryStructureAssignment } from "../../utils/payrollAssignment.js";
+import { decideOnce } from "../../utils/statusClaim.js";
 
 const failure = (res, error) => {
   if (error.status) {
@@ -540,44 +541,46 @@ export const submitArrear = async (req, res) => {
     const company = await Company.findById(doc.companyId).lean();
     const currency = company?.defaultCurrency || "USD";
 
-    // Create an active AdditionalSalary for each non-zero arrear row
-    for (const row of doc.earningArrears || []) {
-      if (!row.amount || row.amount <= 0) continue;
-      await AdditionalSalary.create({
-        employeeId: doc.employeeId,
-        companyId: doc.companyId,
-        salaryComponentId: row.salaryComponentId,
-        type: "Earning",
-        amount: row.amount,
-        isRecurring: false,
-        payrollDate: doc.payrollDate,
-        overwriteSalaryStructureAmount: false,
-        currency,
-        status: "active",
-        refDoctype: "Arrear",
-        refDocnameId: doc._id,
-      });
-    }
+    // Moved draft → submitted in one step first, so a second Submit pressed
+    // at the same moment is refused and creates nothing twice (S4).
+    await decideOnce(Arrear, doc, "submitted", "Arrear", async () => {
+      // Create an active AdditionalSalary for each non-zero arrear row
+      for (const row of doc.earningArrears || []) {
+        if (!row.amount || row.amount <= 0) continue;
+        await AdditionalSalary.create({
+          employeeId: doc.employeeId,
+          companyId: doc.companyId,
+          salaryComponentId: row.salaryComponentId,
+          type: "Earning",
+          amount: row.amount,
+          isRecurring: false,
+          payrollDate: doc.payrollDate,
+          overwriteSalaryStructureAmount: false,
+          currency,
+          status: "active",
+          refDoctype: "Arrear",
+          refDocnameId: doc._id,
+        });
+      }
 
-    for (const row of doc.deductionArrears || []) {
-      if (!row.amount || row.amount <= 0) continue;
-      await AdditionalSalary.create({
-        employeeId: doc.employeeId,
-        companyId: doc.companyId,
-        salaryComponentId: row.salaryComponentId,
-        type: "Deduction",
-        amount: row.amount,
-        isRecurring: false,
-        payrollDate: doc.payrollDate,
-        overwriteSalaryStructureAmount: false,
-        currency,
-        status: "active",
-        refDoctype: "Arrear",
-        refDocnameId: doc._id,
-      });
-    }
-
-    doc.status = "submitted";
+      for (const row of doc.deductionArrears || []) {
+        if (!row.amount || row.amount <= 0) continue;
+        await AdditionalSalary.create({
+          employeeId: doc.employeeId,
+          companyId: doc.companyId,
+          salaryComponentId: row.salaryComponentId,
+          type: "Deduction",
+          amount: row.amount,
+          isRecurring: false,
+          payrollDate: doc.payrollDate,
+          overwriteSalaryStructureAmount: false,
+          currency,
+          status: "active",
+          refDoctype: "Arrear",
+          refDocnameId: doc._id,
+        });
+      }
+    });
     await doc.save();
     return res.json({ isOk: true, status: 200, message: "Arrear submitted", data: doc });
   } catch (error) {
@@ -768,23 +771,26 @@ export const submitRetentionBonus = async (req, res) => {
     const company = await Company.findById(doc.companyId).lean();
     const currency = company?.defaultCurrency || "USD";
 
-    const addSal = await AdditionalSalary.create({
-      employeeId: doc.employeeId,
-      companyId: doc.companyId,
-      salaryComponentId: doc.salaryComponentId,
-      type: "Earning",
-      amount: doc.bonusAmount,
-      isRecurring: false,
-      payrollDate: doc.bonusPaymentDate,
-      overwriteSalaryStructureAmount: false,
-      currency,
-      status: "active",
-      refDoctype: "RetentionBonus",
-      refDocnameId: doc._id,
-    });
+    // Moved draft → submitted in one step first, so a second Submit pressed
+    // at the same moment is refused and creates nothing twice (S4).
+    await decideOnce(RetentionBonus, doc, "submitted", "Retention Bonus", async () => {
+      const addSal = await AdditionalSalary.create({
+        employeeId: doc.employeeId,
+        companyId: doc.companyId,
+        salaryComponentId: doc.salaryComponentId,
+        type: "Earning",
+        amount: doc.bonusAmount,
+        isRecurring: false,
+        payrollDate: doc.bonusPaymentDate,
+        overwriteSalaryStructureAmount: false,
+        currency,
+        status: "active",
+        refDoctype: "RetentionBonus",
+        refDocnameId: doc._id,
+      });
 
-    doc.additionalSalaryId = addSal._id;
-    doc.status = "submitted";
+      doc.additionalSalaryId = addSal._id;
+    });
     await doc.save();
 
     return res.json({ isOk: true, status: 200, message: "Retention Bonus submitted", data: doc });
@@ -966,23 +972,26 @@ export const submitEmployeeIncentive = async (req, res) => {
     const company = await Company.findById(doc.companyId).lean();
     const currency = company?.defaultCurrency || "USD";
 
-    const addSal = await AdditionalSalary.create({
-      employeeId: doc.employeeId,
-      companyId: doc.companyId,
-      salaryComponentId: doc.salaryComponentId,
-      type: "Earning",
-      amount: doc.incentiveAmount,
-      isRecurring: false,
-      payrollDate: doc.incentiveDate,
-      overwriteSalaryStructureAmount: false,
-      currency,
-      status: "active",
-      refDoctype: "EmployeeIncentive",
-      refDocnameId: doc._id,
-    });
+    // Moved draft → submitted in one step first, so a second Submit pressed
+    // at the same moment is refused and creates nothing twice (S4).
+    await decideOnce(EmployeeIncentive, doc, "submitted", "Employee Incentive", async () => {
+      const addSal = await AdditionalSalary.create({
+        employeeId: doc.employeeId,
+        companyId: doc.companyId,
+        salaryComponentId: doc.salaryComponentId,
+        type: "Earning",
+        amount: doc.incentiveAmount,
+        isRecurring: false,
+        payrollDate: doc.incentiveDate,
+        overwriteSalaryStructureAmount: false,
+        currency,
+        status: "active",
+        refDoctype: "EmployeeIncentive",
+        refDocnameId: doc._id,
+      });
 
-    doc.additionalSalaryId = addSal._id;
-    doc.status = "submitted";
+      doc.additionalSalaryId = addSal._id;
+    });
     await doc.save();
 
     return res.json({ isOk: true, status: 200, message: "Employee Incentive submitted", data: doc });

@@ -43,6 +43,14 @@ Every employee has exactly one login — set it here, not on a separate screen.
 - **Branch** *(required, chosen from a list)*
 - **Reports To** *(chosen from a list)*
 
+### Approvers
+
+Who decides this employee's requests. Left blank, the department's approvers decide, else the manager they report to, else HR.
+
+- **Leave Approver** *(chosen from a list)* — Decides leave and compensatory leave.
+- **Expense Approver** *(chosen from a list)*
+- **Shift Request Approver** *(chosen from a list)* — Decides shift and attendance requests.
+
 ### Employment
 
 - **Status** *(chosen from a list)*

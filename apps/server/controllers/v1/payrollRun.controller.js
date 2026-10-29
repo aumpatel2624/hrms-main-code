@@ -38,6 +38,7 @@ import {
   deleteBenefitLedgerEntriesBySalarySlip,
 } from "../../utils/employeeBenefitLedger.js";
 import { getBenefitsDetailsParent } from "../../utils/employeeBenefitSource.js";
+import { decideOnce } from "../../utils/statusClaim.js";
 
 const failure = (res, error) => {
   if (error.status) return res.status(error.status).json({ isOk: false, status: error.status, message: error.message });
@@ -406,8 +407,9 @@ export const submitSalarySlipById = async (salarySlipId, scopeFilter = {}) => {
     if (doc.status !== "draft") throwError(400, "Only a draft Salary Slip can be submitted");
     if (doc.netPay < 0) throwError(400, "Net Pay cannot be less than 0");
 
-    doc.status = "submitted";
-    await doc.save();
+    // One step moves it draft → submitted, so a second Submit pressed at the
+    // same moment is refused and posts no benefit ledger rows twice (S4).
+    await decideOnce(SalarySlip, doc, "submitted", "Salary Slip");
 
     // ADR-029 (Payroll — Benefits): Post Accrual and Payout rows to EmployeeBenefitLedger
     try {

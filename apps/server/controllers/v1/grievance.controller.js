@@ -141,6 +141,16 @@ const pickFields = (body) =>
     [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS].filter((k) => body[k] !== undefined).map((k) => [k, body[k]]),
   );
 
+// Set only by HR — the "all" scope (29 Oct S9): the status, and what HR's
+// investigation and resolution found. Below "all" a complainant could file a
+// grievance already "Resolved by" the HR Manager, or rewrite HR's findings
+// later. They still see these fields; they never set them, except to
+// withdraw (Cancelled) their own grievance before HR closes it.
+const HR_ONLY_FIELDS = ["status", "causeOfGrievance", "resolvedByUserId", "resolutionDate", "resolutionDetail"];
+const WITHDRAWABLE_STATUSES = ["Open", "Investigated"];
+const belowAll = (req) => Boolean(req.user?.dataScope && req.user.dataScope !== SCOPES.ALL);
+const dropHrOnlyFields = (fields) => HR_ONLY_FIELDS.forEach((key) => delete fields[key]);
+
 // mandatory_depends_on has no Mongoose-schema equivalent — enforced here.
 const validateConditionalFields = (fields) => {
   const status = fields.status ?? "Open";
@@ -237,6 +247,7 @@ export const createEmployeeGrievance = async (req, res) => {
       return res.status(400).json({ isOk: false, status: 400, message: `Missing required field(s): ${missing.join(", ")}` });
     }
     const fields = { ...pickFields(body), raisedByEmployeeId };
+    if (belowAll(req)) dropHrOnlyFields(fields);
     const conditionalError = validateConditionalFields(fields);
     if (conditionalError) {
       return res.status(400).json({ isOk: false, status: 400, message: conditionalError });
@@ -268,6 +279,18 @@ export const updateEmployeeGrievance = async (req, res) => {
       delete fields.grievanceAgainstEmployeeId;
       delete fields.grievanceAgainstText;
       delete fields.employeeResponsibleId;
+      const withdrawing = fields.status === "Cancelled" && doc.status !== "Cancelled";
+      dropHrOnlyFields(fields);
+      if (withdrawing) {
+        const ownEmployee = await resolveRequestEmployee(req);
+        if (!ownEmployee || String(doc.raisedByEmployeeId) !== String(ownEmployee._id)) {
+          return res.status(403).json({ isOk: false, status: 403, message: "Only the person who raised a grievance can withdraw it" });
+        }
+        if (!WITHDRAWABLE_STATUSES.includes(doc.status)) {
+          return res.status(400).json({ isOk: false, status: 400, message: `A ${doc.status} grievance can no longer be withdrawn` });
+        }
+        fields.status = "Cancelled";
+      }
     }
     const merged = { ...doc.toObject(), ...fields };
     const conditionalError = validateConditionalFields(merged);

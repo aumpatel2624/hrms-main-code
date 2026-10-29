@@ -12,6 +12,7 @@ import { authMiddleware } from "../../middlewares/authMiddleware.js";
 import { ADMIN_ONLY } from "@demo-panel/shared/roles";
 import {
   createAdminUserValidation,
+  setPasswordValidation,
   searchValidation,
   allowOnlyFields,
   allowedAdminUserFields,
@@ -177,6 +178,7 @@ router.delete(
 router.post(
   "/admin-users/:adminUserId/reset-password",
   authMiddleware(ADMIN_ONLY),
+  setPasswordValidation,
   resetAdminUserPassword,
 );
 

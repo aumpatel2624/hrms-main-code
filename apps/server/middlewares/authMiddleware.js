@@ -13,8 +13,15 @@ import Employee, { NO_ACCESS_STATUSES } from '../models/Employee.js';
  * next sign-in. Null when the account is gone.
  */
 const currentAccount = (sessionUser) => (sessionUser.role === ROLES.ADMIN
-  ? AdminUser.findById(sessionUser.id, { isActive: 1 }).lean()
-  : Employee.findById(sessionUser.id, { isActive: 1, status: 1, roleId: 1, departmentId: 1 }).lean());
+  ? AdminUser.findById(sessionUser.id, { isActive: 1, passwordChangedAt: 1 }).lean()
+  : Employee.findById(sessionUser.id, { isActive: 1, status: 1, roleId: 1, departmentId: 1, passwordChangedAt: 1 }).lean());
+
+/**
+ * A session signed in before the account's last password change (ADR-067).
+ * Sessions from before `signedInAt` existed count as older than any change.
+ */
+const signedInBeforePasswordChange = (sessionUser, account) => Boolean(account.passwordChangedAt)
+  && !(sessionUser.signedInAt >= new Date(account.passwordChangedAt).getTime());
 
 export const authMiddleware = (roles) => {
   return async (req, res, next) => {
@@ -61,6 +68,16 @@ export const authMiddleware = (roles) => {
           success: false,
           message: "Your account is no longer active. Please contact HR.",
           error: "Account inactive",
+          status: 401,
+        });
+      }
+      if (signedInBeforePasswordChange(sessionUser, account)) {
+        req.session.destroy?.(() => {});
+        res.clearCookie('sessionId');
+        return res.status(401).json({
+          success: false,
+          message: "Your password was changed. Please sign in again.",
+          error: "Session ended",
           status: 401,
         });
       }

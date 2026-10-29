@@ -19,6 +19,12 @@ const AdminUserSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    // Set whenever the password is; sessions signed in before it are
+    // ended (authMiddleware, ADR-067). Null for a password never changed.
+    passwordChangedAt: {
+      type: Date,
+      default: null,
+    },
     mobileNumber: {
       type: String,
       trim: true,

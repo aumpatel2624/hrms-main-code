@@ -13,6 +13,12 @@ const OtpSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    // Checks made against this code; at OTP.MAX_WRONG_TRIES it is deleted
+    // (otp.controller.js checkCode).
+    attempts: {
+      type: Number,
+      default: 0,
+    },
     createdAt: {
       type: Date,
       default: Date.now,

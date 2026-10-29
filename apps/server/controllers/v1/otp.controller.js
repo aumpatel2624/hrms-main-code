@@ -1,9 +1,10 @@
+import crypto from "node:crypto";
 import { OTP } from "@demo-panel/shared/auth";
 import Otp from "../../models/Otp.js";
 import Employee from "../../models/Employee.js";
 import AdminUser from "../../models/AdminUser.js";
-import bcrypt from "bcrypt";
 import { sendTriggeredEmail } from "../../utils/sendTriggeredEmail.js";
+import { setPassword } from "../../utils/passwords.js";
 
 // One reply for every email (re-check N1): an unknown address, a real one, a
 // real one still inside the resend cooldown and a real one whose email failed
@@ -41,8 +42,9 @@ export const createOtp = async (req, res) => {
       await Otp.deleteOne({ email });
     }
 
-    // Generate OTP
-    const otp = String(Math.floor(Math.random() * 10 ** OTP.LENGTH)).padStart(
+    // Generate OTP — from the cryptographic generator, never Math.random,
+    // whose output can be predicted from earlier output.
+    const otp = String(crypto.randomInt(10 ** OTP.LENGTH)).padStart(
       OTP.LENGTH,
       "0",
     );
@@ -76,38 +78,51 @@ export const createOtp = async (req, res) => {
   }
 };
 
+const NO_CODE = {
+  isOk: false,
+  message: "OTP not found or expired. Please request a new OTP.",
+};
+const WRONG_CODE = { isOk: false, message: "Invalid OTP" };
+const CODE_USED_UP = {
+  isOk: false,
+  message: "Too many wrong codes. Please request a new OTP.",
+};
+
+/**
+ * Check a code against the email's pending one (ADR-067). Every check claims
+ * one of the code's tries in a single atomic update, so guesses sent together
+ * cannot share a try; once OTP.MAX_WRONG_TRIES are wrong the code is deleted
+ * and a new one must be requested. A right code gives its try back, so
+ * verifying and then resetting with it costs nothing.
+ * @returns {Object|null} the reply to refuse with, or null for a right code
+ */
+const checkCode = async (email, otp) => {
+  const record = await Otp.findOneAndUpdate(
+    { email, attempts: { $lt: OTP.MAX_WRONG_TRIES } },
+    { $inc: { attempts: 1 } },
+    { new: true },
+  );
+  if (!record || Date.now() - record.createdAt.getTime() > OTP.TTL_MS) {
+    await Otp.deleteOne({ email });
+    return NO_CODE;
+  }
+  if (record.otp === otp) {
+    await Otp.updateOne({ _id: record._id }, { $inc: { attempts: -1 } });
+    return null;
+  }
+  if (record.attempts >= OTP.MAX_WRONG_TRIES) {
+    await Otp.deleteOne({ email });
+    return CODE_USED_UP;
+  }
+  return WRONG_CODE;
+};
+
 export const verifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
 
-    const otpRecord = await Otp.findOne({ email });
-
-    if (!otpRecord) {
-      return res.status(400).json({
-        isOk: false,
-        message: "OTP not found or expired. Please request a new OTP.",
-      });
-    }
-
-    // Check if OTP is expired (older than 10 minutes)
-    const otpAge = Date.now() - otpRecord.createdAt.getTime();
-    if (otpAge > OTP.TTL_MS) {
-      // 10 minutes in milliseconds
-      // Delete expired OTP
-      await Otp.deleteOne({ email });
-
-      return res.status(400).json({
-        isOk: false,
-        message: "OTP has expired. Please request a new OTP.",
-      });
-    }
-
-    if (otpRecord.otp !== otp) {
-      return res.status(400).json({
-        isOk: false,
-        message: "Invalid OTP",
-      });
-    }
+    const refused = await checkCode(email, otp);
+    if (refused) return res.status(400).json(refused);
 
     // OTP is valid
     return res.status(200).json({
@@ -129,14 +144,8 @@ export const resetPassword = async (req, res) => {
     const { email, otp, newPassword } = req.body;
 
     // Verify OTP again for security
-    const otpRecord = await Otp.findOne({ email });
-
-    if (!otpRecord || otpRecord.otp !== otp) {
-      return res.status(400).json({
-        isOk: false,
-        message: "Invalid OTP",
-      });
-    }
+    const refused = await checkCode(email, otp);
+    if (refused) return res.status(400).json(refused);
 
     // Admin users first, then users
     let user = await AdminUser.findOne({ email });
@@ -152,13 +161,8 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
-
-    // Update password
-    user.password = hashedPassword;
-    await user.save();
+    // Also ends every session signed in with the old password.
+    await setPassword(user, newPassword);
 
     // Delete OTP after successful password reset
     await Otp.deleteOne({ email });

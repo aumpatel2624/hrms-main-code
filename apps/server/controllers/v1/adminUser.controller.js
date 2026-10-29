@@ -1,6 +1,8 @@
 import { runListQuery } from "../../utils/listQuery.js";
 import bcrypt from "bcrypt";
 import AdminUser from "../../models/AdminUser.js";
+import authService from "../../services/authService.js";
+import { setPassword } from "../../utils/passwords.js";
 
 export const createAdminUser = async (req, res) => {
   try {
@@ -180,11 +182,9 @@ export const resetAdminUserPassword = async (req, res) => {
         .json({ isOk: false, message: "Admin user not found", status: 404 });
     }
 
-    // findByIdAndUpdate semantics, not save(): save() re-validates the whole
-    // document, so a record missing a later-added required field could never
-    // have its password reset. A password reset must only touch the password.
-    adminUser.password = await bcrypt.hash(password, 10);
-    await adminUser.updateOne({ $set: { password: adminUser.password } });
+    // ADR-067: ends the account's other sessions and clears its sign-in lock.
+    await setPassword(adminUser, password, req);
+    await authService.unlockAccount(adminUser._id);
 
     return res.status(200).json({
       isOk: true,

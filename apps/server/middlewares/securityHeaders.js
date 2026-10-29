@@ -98,10 +98,11 @@ export const additionalSecurityHeaders = (req, res, next) => {
 /**
  * CORS configuration for production
  * @param {string[]} allowedOrigins - Array of allowed origins
+ * @param {string} nodeEnv - NODE_ENV; production allows ALLOWED_ORIGINS only (ADR-067)
  * @returns {Object} CORS configuration object
  */
-export const getCorsConfig = (allowedOrigins = []) => {
-    const defaultOrigins = [
+export const getCorsConfig = (allowedOrigins = [], nodeEnv = process.env.NODE_ENV) => {
+    const defaultOrigins = nodeEnv === 'production' ? [] : [
         'http://localhost:3000',
         'http://localhost:3001',
         'http://localhost:7001',
@@ -119,7 +120,7 @@ export const getCorsConfig = (allowedOrigins = []) => {
             }
 
             // In development, allow all origins
-            if (process.env.NODE_ENV === 'development') {
+            if (nodeEnv === 'development') {
                 return callback(null, true);
             }
 

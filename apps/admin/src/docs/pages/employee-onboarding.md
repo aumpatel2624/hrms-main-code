@@ -23,6 +23,7 @@ Create one as soon as a Job Offer is accepted.
 - **Employee Grade** *(chosen from a list)*
 - **Date of Joining** *(required, a date)*
 - **Onboarding Begins On** *(required, a date)*
+- **Employee** *(chosen from a list)* — Set when Create Employee's form is saved.
 
 ## Finding a record
 

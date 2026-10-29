@@ -13,17 +13,19 @@ import LeaveLedgerEntry from "../models/LeaveLedgerEntry.js";
  * it is for a plain list query.
  *
  * Which rows count as of `asOfDate`:
- * - an allocation's grant (a positive, unexpired `LeaveAllocation` row)
- *   counts from the start of the period it covers (`fromDate`), whenever it
- *   was recorded — so 2026's allocation, entered after go-live, covers leave
- *   dated earlier in 2026, and next year's, entered early, does not count yet;
- * - every other row (applications, encashments, adjustments, expiry) counts
- *   once it was recorded (`createdAt`) — "the ledger as it stood at that
- *   point", unchanged, so expiry and carry-forward behave as before;
+ * - an allocation's own rows (its grant and `/adjust` deltas) and Leave
+ *   Adjustments, unexpired, count from the date they take effect
+ *   (`fromDate`), whenever they were recorded — so 2026's allocation, entered
+ *   after go-live, covers leave dated earlier in 2026, and next year's, or a
+ *   reduction of next year's, entered early, does not count yet;
+ * - every other row (applications, encashments, expiry) counts once it was
+ *   recorded (`createdAt`) — "the ledger as it stood at that point",
+ *   unchanged, so expiry and carry-forward behave as before;
  * - `forConsumption` (a leave application's sufficiency check) also counts
  *   every debit recorded so far, whatever its date: leave already taken or
  *   booked is gone, even when it was recorded after — or is dated after —
- *   the leave being checked.
+ *   the leave being checked. A reduction that takes effect in a later
+ *   period is not "taken" yet, so it still waits for its date.
  *
  * @param {string|ObjectId} employeeId
  * @param {string|ObjectId} leaveTypeId
@@ -32,15 +34,16 @@ import LeaveLedgerEntry from "../models/LeaveLedgerEntry.js";
  * @returns {Promise<number>}
  */
 export const getLeaveBalance = async (employeeId, leaveTypeId, asOfDate = new Date(), { forConsumption = false } = {}) => {
-  const grant = { transactionType: "LeaveAllocation", isExpired: { $ne: true }, leaves: { $gt: 0 } };
+  const dated = { transactionType: { $in: ["LeaveAllocation", "LeaveAdjustment"] }, isExpired: { $ne: true } };
+  const takenBy = new Date(Math.max(new Date(asOfDate).getTime(), Date.now()));
   const match = {
     isDeleted: { $ne: true }, // manual — aggregate bypasses the soft-delete plugin
     employeeId: new mongoose.Types.ObjectId(String(employeeId)),
     leaveTypeId: new mongoose.Types.ObjectId(String(leaveTypeId)),
     $or: [
-      { ...grant, fromDate: { $lte: asOfDate } },
-      { $nor: [grant], createdAt: { $lte: asOfDate } },
-      ...(forConsumption ? [{ leaves: { $lt: 0 }, isExpired: { $ne: true } }] : []),
+      { ...dated, fromDate: { $lte: asOfDate } },
+      { $nor: [dated], createdAt: { $lte: asOfDate } },
+      ...(forConsumption ? [{ leaves: { $lt: 0 }, isExpired: { $ne: true }, $nor: [{ ...dated, fromDate: { $gt: takenBy } }] }] : []),
     ],
   };
 

@@ -248,7 +248,7 @@ export const createSalarySlipForEmployee = async ({ employeeId, startDate, endDa
     const duplicate = await SalarySlip.findOne({ employeeId, startDate: start, endDate: end });
     if (duplicate) {
       throwError(400, duplicate.status === "cancelled"
-        ? `Salary Slip of employee ${employee.employeeName} for this period is cancelled; delete it before creating a new one`
+        ? `${employee.employeeName}'s Salary Slip for this period is cancelled but not deleted. To run this period again, delete the cancelled Payroll Entry from Payroll Entries (its cancelled slips are deleted with it), or delete this slip from Salary Slips, then create the slips again`
         : `Salary Slip of employee ${employee.employeeName} already created for this period`);
     }
 

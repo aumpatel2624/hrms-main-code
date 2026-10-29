@@ -6,6 +6,11 @@
 //   3. HR's Leave Application and Employee Separation offer only current staff,
 //   4. an approved / rejected / cancelled request's edit page has no save,
 //   5. /user-roles is refused to a role without that screen.
+// And the 29 Oct functional test (P6, P12, P13):
+//   6. a rejected Attendance Request has no save; Grant Allocations says what
+//      it does; the onboarding shows its employee and stops offering Create
+//      Employee once linked; the Leave Allocation list shows leave type and
+//      dates; a cancelled payroll entry says how to run the period again.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
@@ -13,6 +18,7 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const source = read("./advanced.jsx");
 const form = read("../components/crud/crud-form.jsx");
 const userRoles = read("../pages/Setup/UserRoles.jsx");
+const payrollEntry = read("../pages/Payroll/PayrollEntry.jsx");
 
 const configOf = (name) => {
     const start = source.indexOf(`export const ${name}`);
@@ -53,5 +59,21 @@ assert.match(form, /if \(!canSave\) return;/, "and does not submit");
 // 5. Asked of the menu, not the possibly stale current-page permissions.
 assert.match(userRoles, /const canManageRoles = isAdmin \|\| getPermissionsForMenu\(findMenuIdForPath\("\/user-roles"\)\)\.read;/, "a role without the screen");
 assert.match(userRoles, /if \(!canManageRoles\) \{\s*return \(/, "is refused");
+
+// 6.
+assert.match(configOf("attendanceRequestConfig"), /canSave: \(\) => false/, "an Attendance Request is never saved after creation");
+const grant = configOf("leavePolicyAssignmentConfig");
+assert.match(grant, /<SimpleActionButton\s+label="Grant Allocations"/, "Grant Allocations is labelled as itself");
+assert.doesNotMatch(grant, /AdjustAllocationPanel/, "not as an Adjust Allocation box");
+const onboarding = configOf("employeeOnboardingConfig");
+assert.match(onboarding, /name: "employeeId"[^}]*disabled: \(\) => true/, "the onboarding shows its linked employee");
+assert.match(onboarding, /\{!values\.employeeId && \(\s*<SimpleActionButton\s+label="Create Employee"/, "Create Employee only while unlinked");
+assert.match(onboarding, /employeeId: refId\(data\.employeeId\)/, "the populated employee loads as its id");
+const allocationColumns = configOf("leaveAllocationConfig");
+for (const column of ["row.leaveTypeName", "row.fromDate", "row.toDate"]) {
+    assert.ok(allocationColumns.includes(`selector: (row) => ${column}`), `the Leave Allocation list shows ${column}`);
+}
+assert.match(payrollEntry, /entry\.status === "cancelled" && <p[^>]*>[^<]*delete this entry \(its cancelled slips are deleted with it\), then create a new entry/, "a cancelled entry says how to run again");
+assert.match(payrollEntry, /deletePayrollEntry\(id\)/, "and offers the delete there");
 
 console.log("daily-use.test.js: all assertions passed");

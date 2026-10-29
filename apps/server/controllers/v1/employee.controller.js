@@ -158,6 +158,10 @@ export const createEmployee = async (req, res) => {
     if (onboarding?.employeeId) {
       return res.status(409).json({ isOk: false, status: 409, message: "This hire's onboarding already has an Employee" });
     }
+    const onboardingOffer = onboarding ? await JobOffer.findById(onboarding.jobOfferId).select("status").lean() : null;
+    if (onboarding && onboardingOffer?.status !== "Accepted") {
+      return res.status(409).json({ isOk: false, status: 409, message: `Only a hire whose Job Offer is Accepted can be made an Employee; this one is ${onboardingOffer?.status ?? "missing"}` });
+    }
     if (onboarding?.companyId && String(onboarding.companyId) !== String(fields.companyId)) {
       return res.status(400).json({ isOk: false, status: 400, message: "Company must be the company of this hire's onboarding" });
     }

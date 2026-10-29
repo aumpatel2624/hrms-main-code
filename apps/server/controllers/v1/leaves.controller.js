@@ -831,6 +831,37 @@ export const listLeavePolicyAssignmentByParams = async (req, res) => {
   }
 };
 
+const day = (date) => new Date(date).toISOString().slice(0, 10);
+
+// One allocation per employee, leave type and day (29 Oct P6): a second one
+// over the same dates would count its days twice. Cancelled ones do not count.
+const overlappingAllocation = ({ employeeId, leaveTypeId, fromDate, toDate, exceptId = null }) => LeaveAllocation.findOne({
+  employeeId,
+  leaveTypeId,
+  status: { $ne: "cancelled" },
+  fromDate: { $lte: new Date(toDate) },
+  toDate: { $gte: new Date(fromDate) },
+  ...(exceptId ? { _id: { $ne: exceptId } } : {}),
+});
+const overlapMessage = (leaveType, overlap) =>
+  `This employee already has ${leaveType.leaveTypeName} allocated for ${day(overlap.fromDate)} – ${day(overlap.toDate)}; change that allocation instead of adding another over the same dates`;
+
+// "Add unused leaves from previous allocations": what was left of the
+// latest earlier allocation of this leave type on its own last day, never
+// below zero, capped at the leave type's maximumCarryForwardedLeaves.
+const carriedForwardLeaves = async (employeeId, leaveType, fromDate) => {
+  const previousAllocation = await LeaveAllocation.findOne({
+    employeeId,
+    leaveTypeId: leaveType._id,
+    status: { $ne: "cancelled" },
+    toDate: { $lt: new Date(fromDate) },
+  }).sort({ toDate: -1 });
+  if (!previousAllocation) return 0;
+  const balance = await getLeaveBalance(employeeId, leaveType._id, previousAllocation.toDate);
+  const unused = Math.max(balance, 0);
+  return leaveType.maximumCarryForwardedLeaves ? Math.min(unused, leaveType.maximumCarryForwardedLeaves) : unused;
+};
+
 /**
  * Business logic behind POST /leave-policy-assignments/:id/grant-allocations
  * — ADR-024's fold of source's `grant_leave_alloc_for_employee` (on_submit).
@@ -934,25 +965,16 @@ export const grantAllocationsForAssignment = async (leavePolicyAssignmentId) => 
         continue; // eslint-disable-line no-continue
       }
 
-      // Carry-forward: sum of the previous allocation's balance as of its
-      // own end date, clamped to LeaveType.maximumCarryForwardedLeaves.
-      let unusedLeaves = 0;
-      if (assignment.carryForward && leaveType.isCarryForward) {
-        // eslint-disable-next-line no-await-in-loop
-        const previousAllocation = await LeaveAllocation.findOne({
-          employeeId: employee._id,
-          leaveTypeId: leaveType._id,
-          toDate: { $lt: fromDate },
-        }).sort({ toDate: -1 });
-        if (previousAllocation) {
-          // eslint-disable-next-line no-await-in-loop
-          const balance = await getLeaveBalance(employee._id, leaveType._id, previousAllocation.toDate);
-          unusedLeaves = Math.max(balance, 0);
-          if (leaveType.maximumCarryForwardedLeaves && unusedLeaves > leaveType.maximumCarryForwardedLeaves) {
-            unusedLeaves = leaveType.maximumCarryForwardedLeaves;
-          }
-        }
+      // eslint-disable-next-line no-await-in-loop
+      const overlap = await overlappingAllocation({ employeeId: employee._id, leaveTypeId: leaveType._id, fromDate, toDate });
+      if (overlap) {
+        skipped.push({ leaveTypeId: String(detail.leaveTypeId), reason: overlapMessage(leaveType, overlap) });
+        continue; // eslint-disable-line no-continue
       }
+
+      const unusedLeaves = assignment.carryForward && leaveType.isCarryForward
+        ? await carriedForwardLeaves(employee._id, leaveType, fromDate) // eslint-disable-line no-await-in-loop
+        : 0;
 
       const totalLeavesAllocated = unusedLeaves + newLeavesAllocated;
 
@@ -1060,9 +1082,16 @@ export const createLeaveAllocation = async (req, res) => {
     if (leaveType.isLwp) {
       return res.status(400).json({ isOk: false, status: 400, message: `Leave Type ${leaveType.leaveTypeName} cannot be allocated since it is leave without pay` });
     }
+    const overlap = await overlappingAllocation({ employeeId, leaveTypeId, fromDate, toDate });
+    if (overlap) return res.status(409).json({ isOk: false, status: 409, message: overlapMessage(leaveType, overlap) });
+    if (req.body.carryForward && !leaveType.isCarryForward) {
+      return res.status(400).json({ isOk: false, status: 400, message: `Unused ${leaveType.leaveTypeName} cannot be carried forward; untick "Add unused leaves from previous allocations"` });
+    }
 
     const newLeavesAllocated = Number(req.body.newLeavesAllocated) || 0;
-    const unusedLeaves = Number(req.body.unusedLeaves) || 0;
+    const unusedLeaves = req.body.carryForward
+      ? await carriedForwardLeaves(employeeId, leaveType, fromDate)
+      : Number(req.body.unusedLeaves) || 0;
 
     const payload = {};
     for (const field of LEAVE_ALLOCATION_FIELDS) if (req.body[field] !== undefined) payload[field] = req.body[field];
@@ -1122,6 +1151,13 @@ export const updateLeaveAllocation = async (req, res) => {
     if (companyError) return res.status(400).json({ isOk: false, status: 400, message: companyError });
 
     for (const field of LEAVE_ALLOCATION_FIELDS) if (req.body[field] !== undefined) doc[field] = req.body[field];
+    if (doc.status !== "cancelled") {
+      const overlap = await overlappingAllocation({ ...doc.toObject(), exceptId: doc._id });
+      if (overlap) {
+        const leaveType = await LeaveType.findById(doc.leaveTypeId).lean();
+        return res.status(409).json({ isOk: false, status: 409, message: overlapMessage(leaveType ?? { leaveTypeName: "this leave" }, overlap) });
+      }
+    }
     await doc.save();
     return res.status(200).json({ isOk: true, status: 200, message: "Leave Allocation updated successfully" });
   } catch (error) {
@@ -1137,6 +1173,9 @@ export const deleteLeaveAllocation = async (req, res) => {
     if (!doc) return res.status(404).json({ isOk: false, status: 404, message: "Leave Allocation not found" });
     const result = await referenceGuardedDelete(LeaveAllocation, "LeaveAllocation", leaveAllocationId, "leave allocation");
     if (result.blocked) return res.status(409).json(result.body);
+    // Its days leave the balance with it (29 Oct P6): the grant, carry-forward,
+    // /adjust and expiry rows it wrote.
+    await LeaveLedgerEntry.updateMany({ transactionType: "LeaveAllocation", transactionId: doc._id }, { isDeleted: true });
     return res.status(200).json({ isOk: true, status: 200, message: "Leave Allocation deleted successfully" });
   } catch (error) {
     console.log("Error in deleteLeaveAllocation", error);
@@ -1182,11 +1221,18 @@ export const listLeaveAllocationByParams = async (req, res) => {
     const list = await runListQuery(LeaveAllocation, req.body, {
       searchRefs: [employeeSearch()],
       scopeFilter: await attendanceScope(req, true),
-      // The admin column shows employeeName; without this it fell back to the raw id.
+      // The admin columns show employeeName and leaveTypeName; without these
+      // they fell back to the raw id, or (leave type) showed nothing.
       stages: [
         { $lookup: { from: "employees", localField: "employeeId", foreignField: "_id", as: "employee" } },
-        { $addFields: { employeeName: { $arrayElemAt: ["$employee.employeeName", 0] } } },
-        { $project: { employee: 0 } },
+        { $lookup: { from: "leavetypes", localField: "leaveTypeId", foreignField: "_id", as: "leaveType" } },
+        {
+          $addFields: {
+            employeeName: { $arrayElemAt: ["$employee.employeeName", 0] },
+            leaveTypeName: { $arrayElemAt: ["$leaveType.leaveTypeName", 0] },
+          },
+        },
+        { $project: { employee: 0, leaveType: 0 } },
       ],
       searchFields: [],
       filterable: {
@@ -1245,13 +1291,15 @@ export const adjustLeaveAllocation = async (req, res) => {
       }
     }
 
+    // Takes effect inside the allocation's own period, so changing next
+    // year's allocation leaves this year's balance alone (29 Oct P6).
     await LeaveLedgerEntry.create({
       employeeId: allocation.employeeId,
       leaveTypeId: allocation.leaveTypeId,
       transactionType: "LeaveAllocation",
       transactionId: allocation._id,
       leaves: delta,
-      fromDate: new Date(),
+      fromDate: new Date(Math.max(Date.now(), new Date(allocation.fromDate).getTime())),
       toDate: allocation.toDate,
       isCarryForward: false,
       companyId: allocation.companyId,

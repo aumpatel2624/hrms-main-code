@@ -14,8 +14,8 @@ Use this for a one-off correction the normal allocation/application flow doesn't
 
 - **Employee** *(required, chosen from a list)*
 - **Leave Type** *(required, chosen from a list)*
-- **Allocation to Adjust (optional)** *(chosen from a list)*
-- **Posting Date** *(a date)*
+- **Allocation to Adjust (optional)** *(chosen from a list)* — With an allocation chosen, the adjustment counts inside that allocation's dates, so changing next year's allocation leaves this year's balance alone.
+- **Posting Date** *(a date)* — Moved into the chosen allocation's dates if it falls outside them.
 - **Leaves to Adjust** *(required, a number)*
 - **Adjustment Type** *(required, chosen from a list)*
 - **Reason for Adjustment** *(free text)*

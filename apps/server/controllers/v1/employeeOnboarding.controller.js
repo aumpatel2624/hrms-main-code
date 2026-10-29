@@ -53,19 +53,25 @@ const pickFields = (body) =>
     [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS].filter((k) => body[k] !== undefined).map((k) => [k, body[k]]),
   );
 
-// The Job Offer is this applicant's, and the onboarding's company, department
-// and designation are the offer's company. A blank company takes the offer's.
-// Returns an error message or null; fills `fields.companyId`.
-const checkOffer = async (fields) => {
-  const offer = await JobOffer.findById(fields.jobOfferId).select("jobApplicantId companyId").lean();
+// The Job Offer is this applicant's, Accepted, and onboards one hire only
+// (29 Oct P8); the onboarding's company, department and designation are the
+// offer's company. A blank company takes the offer's. `selfId` is the
+// onboarding being edited. Returns an error message or null; fills
+// `fields.companyId`.
+const checkOffer = async (fields, selfId = null) => {
+  const offer = await JobOffer.findById(fields.jobOfferId).select("jobApplicantId companyId status").lean();
   if (!offer) return "Job Offer not found";
   if (String(offer.jobApplicantId) !== String(fields.jobApplicantId)) return "Job Offer must be for the same Job Applicant";
+  if (offer.status !== "Accepted") return `Only an Accepted Job Offer can be onboarded; this one is ${offer.status}`;
   if (!fields.companyId) fields.companyId = offer.companyId;
   if (String(fields.companyId) !== String(offer.companyId)) return "Company must be the Job Offer's company";
-  return companyMismatch(offer.companyId, [
+  const mismatch = await companyMismatch(offer.companyId, [
     { Model: Department, id: fields.departmentId, label: "Department" },
     { Model: Designation, id: fields.designationId, label: "Designation" },
   ], "the Job Offer's company");
+  if (mismatch) return mismatch;
+  const other = await EmployeeOnboarding.findOne({ jobOfferId: fields.jobOfferId, ...(selfId ? { _id: { $ne: selfId } } : {}) });
+  return other ? "This Job Offer already has an Employee Onboarding" : null;
 };
 
 // ------------------------------------------------------------ Employee Onboarding --
@@ -134,7 +140,7 @@ export const updateEmployeeOnboarding = async (req, res) => {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee Onboarding not found" });
     }
     const fields = { ...doc.toObject(), ...pickFields(req.body) };
-    const offerError = await checkOffer(fields);
+    const offerError = await checkOffer(fields, doc._id);
     if (offerError) return res.status(400).json({ isOk: false, status: 400, message: offerError });
     Object.assign(doc, pickFields(req.body), { companyId: fields.companyId });
     doc.boardingStatus = deriveBoardingStatus(doc.activities);
@@ -171,7 +177,8 @@ export const deleteEmployeeOnboarding = async (req, res) => {
 
 export const getEmployeeOnboardingById = async (req, res) => {
   try {
-    const doc = await EmployeeOnboarding.findById(req.params.onboardingId);
+    // The linked employee is shown by name on the form (29 Oct P13).
+    const doc = await EmployeeOnboarding.findById(req.params.onboardingId).populate("employeeId", "employeeName employeeCode");
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee Onboarding not found" });
     }
@@ -231,6 +238,13 @@ export const makeEmployeeFromOnboarding = async (req, res) => {
     const doc = await EmployeeOnboarding.findById(req.params.onboardingId);
     if (!doc) {
       return res.status(404).json({ isOk: false, status: 404, message: "Employee Onboarding not found" });
+    }
+    if (doc.employeeId) {
+      return res.status(409).json({ isOk: false, status: 409, message: "This onboarding already has an Employee" });
+    }
+    const offer = await JobOffer.findById(doc.jobOfferId).select("status").lean();
+    if (offer?.status !== "Accepted") {
+      return res.status(409).json({ isOk: false, status: 409, message: `Only a hire whose Job Offer is Accepted can be made an Employee; this one is ${offer?.status ?? "missing"}` });
     }
     const incomplete = doc.activities.filter((a) => a.requiredForEmployeeCreation && a.status !== "Completed");
     if (incomplete.length) {

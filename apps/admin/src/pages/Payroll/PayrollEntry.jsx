@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { MenuContext } from "../../context/MenuContext";
 import { getAllCompanies } from "../../api/organizationSetup.api";
-import { createPayrollEntry, getPayrollEntry, createPayrollSlips, submitPayrollSlips, cancelPayrollEntry } from "../../api/payrollRun.api";
+import { createPayrollEntry, getPayrollEntry, createPayrollSlips, submitPayrollSlips, cancelPayrollEntry, deletePayrollEntry } from "../../api/payrollRun.api";
 import { Card, PageHeader } from "@/components/ui/page";
 import { Button } from "@/components/base/buttons/button";
 import { NativeSelect } from "@/components/base/select/select-native";
@@ -20,6 +20,7 @@ export default function PayrollEntry() {
     const [entry, setEntry] = useState(null);
     const [busy, setBusy] = useState(false);
     const [confirmCancel, setConfirmCancel] = useState(false);
+    const [confirmDelete, setConfirmDelete] = useState(false);
     const [form, setForm] = useState({ companyId: "", startDate: "", endDate: "", payrollFrequency: "Monthly", validateAttendance: false });
     const change = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
     useEffect(() => {
@@ -41,6 +42,15 @@ export default function PayrollEntry() {
         } catch (error) { toast.error(error.response?.data?.message || "Payroll action failed"); }
         finally { setBusy(false); }
     };
+    const remove = async () => {
+        setBusy(true);
+        try {
+            await deletePayrollEntry(id);
+            toast.success("Payroll entry and its cancelled slips deleted. You can now run this period again.");
+            navigate("/payroll-entry");
+        } catch (error) { toast.error(error.response?.data?.message || "Could not delete this payroll entry"); }
+        finally { setBusy(false); }
+    };
     document.title = "Payroll Entry | Apidel HRMS";
     if (!permissions.read || (!id && !permissions.write)) return <Card className="p-5">You do not have access to this payroll entry.</Card>;
     return <>
@@ -59,6 +69,11 @@ export default function PayrollEntry() {
                 <p className="text-sm text-primary">{companies.find(row => row._id === entry.companyId)?.companyName} · {entry.payrollFrequency} · {entry.startDate.slice(0, 10)} to {entry.endDate.slice(0, 10)} · {entry.status}</p>
                 <p className="text-sm text-tertiary">{entry.employeeDetails.length} employees. Failed rows are final for this entry; read the reason before starting another run.</p>
                 {entry.status === "failed" && <p className="text-sm text-error-primary">No slip in this entry could be submitted, so nobody was paid. Read each reason below and correct it. Then cancel this entry, delete it from Payroll Entries (its cancelled slips are deleted with it), and start another run.</p>}
+                {/* 29 Oct P12: a cancelled entry's slips still hold the period until deleted. */}
+                {entry.status === "cancelled" && <p className="text-sm text-warning-primary">This entry and its slips are cancelled, but they still hold this period: running it again fails for these employees until they are deleted. To run the period again, delete this entry (its cancelled slips are deleted with it), then create a new entry.</p>}
+                {entry.status === "cancelled" && permissions.delete && <div className="flex flex-wrap gap-3">
+                    <Button color="secondary-destructive" isDisabled={busy} onClick={() => setConfirmDelete(true)}>Delete entry and cancelled slips</Button>
+                </div>}
                 {permissions.edit && <div className="flex flex-wrap gap-3">
                     {entry.status === "draft" && <>
                         <Button isDisabled={busy || !entry.employeeDetails.some(row => row.status === "pending")} onClick={() => run(() => createPayrollSlips(id))}>Create slips</Button>
@@ -82,6 +97,14 @@ export default function PayrollEntry() {
             title="Cancel this payroll entry?"
             description={`Every salary slip it created (${entry?.employeeDetails.filter(row => row.salarySlipId).length ?? 0}) is cancelled too, including submitted ones. This cannot be undone.`}
             confirmLabel="Cancel entry and slips"
+        />
+        <ConfirmModal
+            isOpen={confirmDelete}
+            onClose={() => setConfirmDelete(false)}
+            onConfirm={() => { setConfirmDelete(false); remove(); }}
+            title="Delete this cancelled payroll entry?"
+            description="The entry and its cancelled salary slips are removed from the lists, so this period can be run again."
+            confirmLabel="Delete entry and slips"
         />
     </>;
 }

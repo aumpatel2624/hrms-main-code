@@ -21,7 +21,7 @@ Usually created automatically by a Leave Policy Assignment's Grant Allocations a
 - **To Date** *(required, a date)*
 - **New Leaves Allocated** *(a number)* — Only used on create — use Adjust below to change it afterward.
 - **Unused Leaves (carried forward)** *(a number)*
-- **Add unused leaves from previous allocations** *(a yes/no tick box)*
+- **Add unused leaves from previous allocations** *(a yes/no tick box)* — On create, fills Unused Leaves with what was left of this employee's previous allocation of this leave type (only for leave types that allow carry-forward).
 - **Leave Period** *(chosen from a list)*
 - **Leave Policy** *(chosen from a list)*
 

@@ -1274,6 +1274,7 @@ export const employeeOnboardingConfig = {
         departmentId: ofChosenCompany(getAllDepartments, (x) => x.departmentName),
         designationId: ofChosenCompany(getAllDesignations, (x) => x.designationName),
         employeeGradeId: asOptions(getAllEmployeeGrades, "gradeName"),
+        employeeId: asOptions(getAllEmployees, "employeeName"),
     },
     sections: [{ id: "details", title: "Details" }, { id: "activities", title: "Activities" }, { id: "actions", title: "Actions" }],
     fields: [
@@ -1286,6 +1287,7 @@ export const employeeOnboardingConfig = {
         { name: "employeeGradeId", label: "Employee Grade", type: "select", section: "details", optionsFrom: "employeeGradeId" },
         { name: "dateOfJoining", label: "Date of Joining", type: "date", required: true, section: "details", error: "Date of Joining is required!" },
         { name: "boardingBeginsOn", label: "Onboarding Begins On", type: "date", required: true, section: "details", error: "Onboarding Begins On is required!" },
+        { name: "employeeId", icon: User01, label: "Employee", type: "select", section: "details", optionsFrom: "employeeId", disabled: () => true, hint: "Set when Create Employee's form is saved." },
         ACTIVE,
     ],
     renderExtra: ({ mode, id, values, setValues, navigate }) => (
@@ -1301,11 +1303,13 @@ export const employeeOnboardingConfig = {
                         onRun={() => markOnboardingAsCompleted(id)}
                         onResult={() => window.location.reload()}
                     />
-                    <SimpleActionButton
-                        label="Create Employee" description="Opens Add Employee prefilled from this onboarding (once every required activity is Completed). Add the login and branch, then save: the new employee is linked to this onboarding."
-                        onRun={() => makeEmployeeFromOnboarding(id)}
-                        onResult={(res) => navigate("/employee/add", { state: { prefill: res.data?.data } })}
-                    />
+                    {!values.employeeId && (
+                        <SimpleActionButton
+                            label="Create Employee" description="Opens Add Employee prefilled from this onboarding (once every required activity is Completed). Add the login and branch, then save: the new employee is linked to this onboarding."
+                            onRun={() => makeEmployeeFromOnboarding(id)}
+                            onResult={(res) => navigate("/employee/add", { state: { prefill: res.data?.data } })}
+                        />
+                    )}
                 </>
             )}
         </>
@@ -1320,6 +1324,7 @@ export const employeeOnboardingConfig = {
         ...data, jobApplicantId: refId(data.jobApplicantId), jobOfferId: refId(data.jobOfferId),
         employeeOnboardingTemplateId: refId(data.employeeOnboardingTemplateId), companyId: refId(data.companyId),
         departmentId: refId(data.departmentId), designationId: refId(data.designationId), employeeGradeId: refId(data.employeeGradeId),
+        employeeId: refId(data.employeeId),
     }),
 };
 
@@ -2479,10 +2484,10 @@ export const leavePolicyAssignmentConfig = {
         ACTIVE,
     ],
     renderExtra: ({ mode, id, values }) => (
-        mode === "edit" && id && (
-            <AdjustAllocationPanel
-                currentValue={undefined}
-                onAdjust={() => grantLeavePolicyAssignmentAllocations(id)}
+        mode === "edit" && id && values.status !== "allocated" && (
+            <SimpleActionButton
+                label="Grant Allocations" description="Creates this employee's Leave Allocations for every leave type in the policy, for the dates above. A leave type already allocated over those dates is skipped."
+                onRun={() => grantLeavePolicyAssignmentAllocations(id)}
                 onResult={() => window.location.reload()}
             />
         )
@@ -2537,8 +2542,8 @@ export const leaveAllocationConfig = {
         { name: "fromDate", label: "From Date", type: "date", required: true, section: "details", error: "From Date is required!" },
         { name: "toDate", label: "To Date", type: "date", required: true, section: "details", error: "To Date is required!" },
         { name: "newLeavesAllocated", label: "New Leaves Allocated", type: "number", section: "details", hint: "Only used on create — use Adjust below to change it afterward.", disabled: (values) => Boolean(values?._id) },
-        { name: "unusedLeaves", label: "Unused Leaves (carried forward)", type: "number", section: "details", disabled: (values) => Boolean(values?._id) },
-        { name: "carryForward", label: "Add unused leaves from previous allocations", type: "checkbox", section: "details" },
+        { name: "unusedLeaves", label: "Unused Leaves (carried forward)", type: "number", section: "details", disabled: (values) => Boolean(values?._id) || Boolean(values?.carryForward) },
+        { name: "carryForward", label: "Add unused leaves from previous allocations", type: "checkbox", section: "details", disabled: (values) => Boolean(values?._id), hint: "On create, fills Unused Leaves with what was left of this employee's previous allocation of this leave type (only for leave types that allow carry-forward)." },
         { name: "leavePeriodId", label: "Leave Period", type: "select", section: "details", optionsFrom: "leavePeriodId" },
         { name: "leavePolicyId", label: "Leave Policy", type: "select", section: "details", optionsFrom: "leavePolicyId" },
         { name: "status", label: "Status", type: "select", section: "status", options: ["active", "expired", "cancelled"] },
@@ -2555,6 +2560,9 @@ export const leaveAllocationConfig = {
     ),
     columns: [
         { name: "Employee", selector: (row) => row.employeeName || "—", minWidth: "200px" },
+        { name: "Leave Type", selector: (row) => row.leaveTypeName || "—", minWidth: "150px" },
+        { name: "From", selector: (row) => row.fromDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
+        { name: "To", selector: (row) => row.toDate?.slice?.(0, 10) ?? "—", minWidth: "110px" },
         { name: "New Leaves", selector: (row) => row.newLeavesAllocated, minWidth: "110px" },
         { name: "Total (cached)", selector: (row) => row.totalLeavesAllocated, minWidth: "120px" },
         { name: "Status", selector: (row) => row.status, minWidth: "100px" },
@@ -2672,7 +2680,7 @@ export const leaveAdjustmentConfig = {
     section: "Leaves",
     singular: "Leave Adjustment",
     plural: "Leave Adjustments",
-    description: "A one-off manual correction to an employee's leave balance. Create is the action — saving writes one signed entry to the Leave Ledger immediately; there is nothing to edit or delete afterward.",
+    description: "A one-off manual correction to an employee's leave balance. Create is the action — saving writes one signed entry to the Leave Ledger immediately; there is nothing to edit or delete afterward. To undo one, add the opposite adjustment (Allocate for a Reduce, or Reduce for an Allocate) of the same number of leaves on the same allocation.",
     api: { search: searchLeaveAdjustments, getById: getLeaveAdjustmentById, create: createLeaveAdjustment },
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
@@ -2682,8 +2690,8 @@ export const leaveAdjustmentConfig = {
     fields: [
         { name: "employeeId", icon: User01, label: "Employee", type: "select", required: true, section: "details", error: "Employee is required!", optionsFrom: "employeeId" },
         { name: "leaveTypeId", icon: Tag01, label: "Leave Type", type: "select", required: true, section: "details", error: "Leave Type is required!", optionsFrom: "leaveTypeId" },
-        { name: "leaveAllocationId", label: "Allocation to Adjust (optional)", type: "select", section: "details", optionsFrom: "leaveAllocationId" },
-        { name: "postingDate", label: "Posting Date", type: "date", section: "details" },
+        { name: "leaveAllocationId", label: "Allocation to Adjust (optional)", type: "select", section: "details", optionsFrom: "leaveAllocationId", hint: "With an allocation chosen, the adjustment counts inside that allocation's dates, so changing next year's allocation leaves this year's balance alone." },
+        { name: "postingDate", label: "Posting Date", type: "date", section: "details", hint: "Moved into the chosen allocation's dates if it falls outside them." },
         { name: "leavesToAdjust", label: "Leaves to Adjust", type: "number", required: true, section: "details", error: "Leaves to Adjust is required!" },
         { name: "adjustmentType", label: "Adjustment Type", type: "select", required: true, section: "details", error: "Adjustment Type is required!", options: ["Allocate", "Reduce"] },
         { name: "reasonForAdjustment", label: "Reason for Adjustment", type: "textarea", section: "details" },
@@ -3309,6 +3317,8 @@ export const attendanceRequestConfig = {
     key: "attendance-request", path: "/attendance-request", section: "Shift & Attendance", singular: "Attendance Request", plural: "Attendance Requests",
     description: "A request stays open until the named approver (the employee's Shift Approver, else their department's, else the manager they report to) or HR approves it. Approving writes or updates one Attendance record per day in the range (skipping holidays unless Include Holidays is checked, and skipping any day already covered by an approved leave). Cancel reverses exactly the Attendance rows this request created.",
     api: { search: searchAttendanceRequests, getById: getAttendanceRequestById, create: createAttendanceRequest, update: updateAttendanceRequest },
+    // The server refuses every edit after creation; cancel and re-create instead.
+    canSave: () => false,
     lookups: {
         employeeId: asOptions(getAllEmployees, "employeeName"),
     },

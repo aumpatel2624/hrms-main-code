@@ -113,4 +113,23 @@ console.log("Running payrollBenefits.test.js...");
   assert.strictEqual(breakup.deductionArrears[0].amount, 300);
 }
 
+// 4. A reversed day is worth the full monthly amount ÷ working days (ADR-069).
+// Harsh Pawar (29 Oct functional test, P7): Basic ₹10,000, paid 18 of 25
+// days, so the slip holds ₹7,200; one day back is ₹400, not ₹7,200 ÷ 25 = ₹288.
+{
+  const breakup = calculatePayrollCorrectionBreakup({
+    salarySlip: {
+      totalWorkingDays: 25,
+      paymentDays: 18,
+      earnings: [{ salaryComponentId: "comp-basic", amount: 7200, defaultAmount: 7200 }],
+      deductions: [{ salaryComponentId: "comp-pf", amount: 864, defaultAmount: 864 }],
+    },
+    daysToReverse: 1,
+    eligibleComponentsMap: { "comp-basic": { arrearComponent: true }, "comp-pf": { arrearComponent: true } },
+    fullMonthlyAmounts: { "comp-basic": 10000, "comp-pf": 1200 },
+  });
+  assert.strictEqual(breakup.earningArrears[0].amount, 400);
+  assert.strictEqual(breakup.deductionArrears[0].amount, 48);
+}
+
 console.log("payrollBenefits.test.js: all tests passed!");

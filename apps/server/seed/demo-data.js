@@ -809,6 +809,8 @@ const seedPayrollData = async (companyId, employees) => {
             $push: {
               applicableEarningsComponent: { salaryComponentId: gratuityComp._id },
             },
+            // The base seed disables rules without a component (ADR-069).
+            $set: { disable: false },
           },
         );
         gratuityRulesFixed += 1;

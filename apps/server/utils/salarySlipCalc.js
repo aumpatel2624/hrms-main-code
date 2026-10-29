@@ -284,6 +284,21 @@ export const calculateSalarySlip = ({
 };
 
 /**
+ * A structure's earnings and deductions for a period worked in full — what a
+ * prorated slip row is a share of. Gratuity and Payroll Correction read a
+ * component's monthly amount here, never off a slip whose rows may be
+ * prorated for a joiner, a leaver or LWP (ADR-069).
+ */
+export const calculateFullPeriodAmounts = ({ structure, assignment }) => {
+  const { earnings, deductions } = calculateSalarySlip({
+    structure,
+    assignment,
+    paymentDaysResult: { paymentDays: 1, totalWorkingDays: 1 },
+  });
+  return { earnings, deductions };
+};
+
+/**
  * Convenience wrapper: resolves payment days via the DB-backed
  * `computePaymentDays`, queries active `AdditionalSalary` rows matching the period,
  * and runs `calculateSalarySlip`. Used by the controller.

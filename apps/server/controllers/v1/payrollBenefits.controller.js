@@ -21,7 +21,7 @@ import {
 } from "../../utils/employeeBenefitLedger.js";
 import { getBenefitsDetailsParent } from "../../utils/employeeBenefitSource.js";
 import { getCurrentSalaryStructureAssignment } from "../../utils/payrollAssignment.js";
-import { previewCurrentCycleBenefitAccrual } from "../../utils/salarySlipCalc.js";
+import { calculateFullPeriodAmounts, previewCurrentCycleBenefitAccrual } from "../../utils/salarySlipCalc.js";
 import { calculatePayrollCorrectionBreakup } from "../../utils/payrollCorrectionCalc.js";
 import { decideOnce } from "../../utils/statusClaim.js";
 
@@ -981,14 +981,25 @@ export const calculatePayrollCorrectionDetails = async ({ salarySlipId, daysToRe
     eligibleComponentsMap[String(c._id)] = c;
   }
 
+  // A reversed day is worth the full monthly amount ÷ working days, not the
+  // slip's amount, which the LWP being reversed already cut (ADR-069).
+  const assignment = await SalaryStructureAssignment.findById(salarySlip.salaryStructureAssignmentId).lean();
+  const structure = assignment && await SalaryStructure.findById(assignment.salaryStructureId).lean();
+  if (!structure) throwError(400, "The salary structure this slip was paid on no longer exists");
+  const monthly = calculateFullPeriodAmounts({ structure, assignment });
+  const fullMonthlyAmounts = Object.fromEntries([...monthly.earnings, ...monthly.deductions]
+    .map((row) => [String(row.salaryComponentId?._id || row.salaryComponentId), row.defaultAmount]));
+
   const breakup = calculatePayrollCorrectionBreakup({
     salarySlip,
     daysToReverse: days,
     eligibleComponentsMap,
+    fullMonthlyAmounts,
   });
 
   return {
     salarySlip,
+    hasArrearComponent: components.some((c) => c.arrearComponent),
     daysToReverse: days,
     previouslyReversedDays,
     remainingLwpDays: round2(slipLwpDays - totalAfterReversal),
@@ -1082,7 +1093,8 @@ export const getPayrollCorrectionById = async (req, res) => {
   try {
     const doc = await PayrollCorrection.findById(req.params.id)
       .populate("employeeId")
-      .populate("salarySlipId")
+      // The slip's period and owner name it on the View page; its pay stays put.
+      .populate("salarySlipId", "employeeId startDate endDate status")
       .populate("companyId")
       .populate("payrollPeriodId")
       .populate("earningArrears.salaryComponentId")
@@ -1163,6 +1175,15 @@ export const submitPayrollCorrection = async (req, res) => {
       daysToReverse: doc.daysToReverse,
       excludeId: doc._id,
     });
+    // Without an arrear component nothing is paid back (ADR-069).
+    if (!details.hasArrearComponent) {
+      throwError(400, "No salary component on this slip is marked as an arrear component, so this correction would pay nothing back. In Salary Component, tick \"Arrear component\" on the components to repay (for example Basic), then submit again.");
+    }
+    // Post what the slip and components say now, not what the draft held
+    // when it was saved (HR may have just marked the arrear component).
+    doc.earningArrears = details.earningArrears;
+    doc.deductionArrears = details.deductionArrears;
+    doc.accrualArrears = details.accrualArrears;
 
     const employee = await Employee.findById(doc.employeeId).lean();
     const currency = employee?.currency || "USD";

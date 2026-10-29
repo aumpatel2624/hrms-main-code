@@ -4,6 +4,11 @@
  * Pure calculation logic for Payroll Correction (LWP Reversals).
  * Computes earningArrears, deductionArrears, and accrualArrears given a
  * historical Salary Slip and the number of days to reverse.
+ *
+ * A reversed day is worth the component's full monthly amount ÷ the period's
+ * working days. `fullMonthlyAmounts` (componentId -> amount, from
+ * `calculateFullPeriodAmounts`) carries that monthly amount; the slip's own
+ * row is already cut by the very LWP being reversed (ADR-069).
  */
 const round2 = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
 
@@ -11,6 +16,7 @@ export const calculatePayrollCorrectionBreakup = ({
   salarySlip,
   daysToReverse,
   eligibleComponentsMap = {}, // componentId -> { arrearComponent, accrualComponent, type }
+  fullMonthlyAmounts = {}, // componentId -> full monthly amount
 }) => {
   if (!salarySlip) throw new Error("Salary Slip is required");
   const days = Number(daysToReverse);
@@ -40,7 +46,7 @@ export const calculatePayrollCorrectionBreakup = ({
         accrualArrears.push({ salaryComponentId: compId, amount });
       }
     } else {
-      const baseAmount = Number(row.defaultAmount ?? row.amount) || 0;
+      const baseAmount = Number(fullMonthlyAmounts[compId] ?? row.defaultAmount ?? row.amount) || 0;
       const perDay = baseAmount / totalWorkingDays;
       const amount = round2(perDay * days);
       if (amount > 0) {
@@ -58,7 +64,7 @@ export const calculatePayrollCorrectionBreakup = ({
       continue;
     }
 
-    const baseAmount = Number(row.defaultAmount ?? row.amount) || 0;
+    const baseAmount = Number(fullMonthlyAmounts[compId] ?? row.defaultAmount ?? row.amount) || 0;
     const perDay = baseAmount / totalWorkingDays;
     const amount = round2(perDay * days);
     if (amount > 0) {
